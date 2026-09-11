@@ -89,7 +89,10 @@ func main() {
 
 	errCh := make(chan error, 2)
 
-	if stdinIsPipe() {
+	// stdio is served only on an explicit opt-in. In a pod stdin is never a
+	// real MCP client, and sniffing for a pipe made the process treat /dev/null
+	// as a closed session and exit.
+	if os.Getenv("NOVAFORGE_MCP_STDIO") == "1" {
 		go func() {
 			log.Printf("mcp-server: serving MCP over stdio")
 			if err := mcpServer.ServeStdio(ctx, os.Stdin, os.Stdout); err != nil {
@@ -104,10 +107,6 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mcp", mcpServer.ServeHTTP)
-	mux.Handle("/healthz", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, "ok")
-	}))
 	httpSrv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.HTTPPort),
 		Handler:           mux,
@@ -120,9 +119,21 @@ func main() {
 		}
 	}()
 
+	// Readiness lives on HEALTH_PORT like every other service, because that is
+	// the port the chart probes; serving it only on the MCP port left the pod
+	// permanently unready while the server itself was fine.
+	go func() {
+		if err := service.Serve(ctx, cfg, nil, func(context.Context) error { return nil }); err != nil {
+			errCh <- fmt.Errorf("health: %w", err)
+		}
+	}()
+
 	if err := <-errCh; err != nil {
 		log.Fatalf("mcp-server: %v", err)
 	}
+	shutCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	_ = httpSrv.Shutdown(shutCtx)
 }
 
 // stdinIsPipe reports whether stdin is not a TTY — the platform's own

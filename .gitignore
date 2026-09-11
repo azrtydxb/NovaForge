@@ -10,3 +10,17 @@
 .procoder/index/
 .lycheecache
 .claude/worktrees/
+
+# binaries a bare `go build ./cmd/...` drops in the repo root
+/agent-runtime
+/ci-runner
+/edge
+/engineering-graph
+/gates
+/gen-openapi
+/git-platform
+/identity
+/mcp-server
+/nf
+/runner
+/work-reviews
