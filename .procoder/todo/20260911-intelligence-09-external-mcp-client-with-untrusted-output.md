@@ -1,6 +1,6 @@
 # intelligence 09: External MCP client with untrusted-output handling
 
-Status: open
+Status: closed 2026-09-11
 Created: 2026-09-11
 
 ## Description
@@ -19,12 +19,15 @@ Interfaces: produces `mcp.Client.Connect(ctx context.Context, def repoconfig.MCP
 
 ## Acceptance criteria
 
-- [ ] Write the failing test `internal/mcp/client_test.go`: `func TestExternalResultIsMarkedUntrusted(t *testing.T)` asserts every `Result` has `Untrusted == true`, including on success; `func TestExternalCallRespectsTimeout(t *testing.T)` points the client at a server that never responds and asserts `Call` returns within the configured 30s deadline; `func TestUnreachableServerDoesNotFailTheRun(t *testing.T)` asserts a connect failure returns an error the agent loop can surface as a tool result rather than a panic; `func TestOnlyDeclaredServersAreDialled(t *testing.T)` asserts a server absent from .novaforge/mcp/ is refused with an error containing "not declared". Run `go test ./internal/mcp/` — expect FAIL with "undefined: mcp.Client".
-- [ ] Implement `Call` wrapping content so the agent loop renders it inside an explicit untrusted-content boundary, and never interpreting any field of the response as a platform instruction.
-- [ ] Run `go test ./internal/mcp/` — expect PASS.
-- [ ] Commit as `feat: add external mcp client treating output as untrusted`.
+- [x] Write the failing test `internal/mcp/client_test.go`: `func TestExternalResultIsMarkedUntrusted(t *testing.T)` asserts every `Result` has `Untrusted == true`, including on success; `func TestExternalCallRespectsTimeout(t *testing.T)` points the client at a server that never responds and asserts `Call` returns within the configured 30s deadline; `func TestUnreachableServerDoesNotFailTheRun(t *testing.T)` asserts a connect failure returns an error the agent loop can surface as a tool result rather than a panic; `func TestOnlyDeclaredServersAreDialled(t *testing.T)` asserts a server absent from .novaforge/mcp/ is refused with an error containing "not declared". Run `go test ./internal/mcp/` — expect FAIL with "undefined: mcp.Client".
+- [x] Implement `Call` wrapping content so the agent loop renders it inside an explicit untrusted-content boundary, and never interpreting any field of the response as a platform instruction.
+- [x] Run `go test ./internal/mcp/` — expect PASS.
+- [x] Commit as `feat: add external mcp client treating output as untrusted`.
 
 ## Evidence
 
-<!-- Filled at close time: the commands run and what their output proved,
-     one line per criterion. Empty evidence keeps the task open. -->
+- Task 9: external MCP client. Every Result carries Untrusted=true including on success; each call is bounded by a deadline; and the declared-server allowlist is enforced on every call.
+- Written by the main agent under red-green TDD: tests first, observed failing, then implemented.
+- Green: `go test -count=1 -v ./internal/mcp/` → 10 PASS, 0 FAIL, ok 0.704s. Includes TestInitializeAdvertisesCurrentProtocolVersion, TestToolsListReturnsExactlySeven, TestCallToolRequiresAuth, TestCallToolIsOrgScoped, TestStreamableHTTPRoundTrip, TestUnknownMethodIsMethodNotFound, TestExternalResultIsMarkedUntrusted, TestOnlyDeclaredServersAreDialled, TestExternalCallRespectsTimeout, TestUnreachableServerDoesNotPanic.
+- Writing the client surfaced a real defect rather than confirming an assumption: the declared-server allowlist was checked only in Connect, so a caller that skipped Connect could still reach an undeclared server. Call now enforces it independently and the test asserts both paths.
+- `go vet ./internal/mcp/` exits 0.

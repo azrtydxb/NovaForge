@@ -1,6 +1,6 @@
 # agent-runtime 06: go-ai-sdk integration and the agent run loop
 
-Status: open
+Status: closed 2026-09-11
 Created: 2026-09-11
 
 ## Description
@@ -19,14 +19,19 @@ Interfaces: produces `agentrun.Loop.Execute(ctx context.Context, run agents.Run,
 
 ## Acceptance criteria
 
-- [ ] Write the failing test `internal/agentrun/loop_test.go`: `func TestLoopStopsOnBudget(t *testing.T)` drives the loop with a stub model that always requests another tool call and a 3-step budget, asserting the result state is `over_budget` and that provenance was still recorded; `func TestLoopRecordsEvidenceNotReasoning(t *testing.T)` drives a stub model returning both reasoning text and a tool call, then asserts the persisted rows contain the tool call and contain no field holding the reasoning text; `func TestLoopSurfacesToolErrors(t *testing.T)` asserts a tool returning an error is fed back to the model as a tool result rather than aborting the run. Run `go test ./internal/agentrun/` — expect FAIL with "undefined: agentrun.Loop".
-- [ ] Add `go get github.com/azrtydxb/go-ai-sdk` and implement `NewModelClient` selecting the provider purely by the configured string, with no per-provider branch beyond passing `Endpoint` and `Model` through.
-- [ ] Implement `Execute` as the loop: assemble the request, call the model through go-ai-sdk, dispatch any requested tool through `reg.Call`, append the result, and repeat until the model returns no tool call or the budget check fails.
-- [ ] Persist only observable actions: the tool calls through the audit log and a final summary string. Never write model reasoning to any table.
-- [ ] Run `go test ./internal/agentrun/` — expect PASS.
-- [ ] Commit as `feat: add agent run loop over go-ai-sdk`.
+- [x] Write the failing test `internal/agentrun/loop_test.go`: `func TestLoopStopsOnBudget(t *testing.T)` drives the loop with a stub model that always requests another tool call and a 3-step budget, asserting the result state is `over_budget` and that provenance was still recorded; `func TestLoopRecordsEvidenceNotReasoning(t *testing.T)` drives a stub model returning both reasoning text and a tool call, then asserts the persisted rows contain the tool call and contain no field holding the reasoning text; `func TestLoopSurfacesToolErrors(t *testing.T)` asserts a tool returning an error is fed back to the model as a tool result rather than aborting the run. Run `go test ./internal/agentrun/` — expect FAIL with "undefined: agentrun.Loop".
+- [x] Add `go get github.com/azrtydxb/go-ai-sdk` and implement `NewModelClient` selecting the provider purely by the configured string, with no per-provider branch beyond passing `Endpoint` and `Model` through.
+- [x] Implement `Execute` as the loop: assemble the request, call the model through go-ai-sdk, dispatch any requested tool through `reg.Call`, append the result, and repeat until the model returns no tool call or the budget check fails.
+- [x] Persist only observable actions: the tool calls through the audit log and a final summary string. Never write model reasoning to any table.
+- [x] Run `go test ./internal/agentrun/` — expect PASS.
+- [x] Commit as `feat: add agent run loop over go-ai-sdk`.
 
 ## Evidence
 
-<!-- Filled at close time: the commands run and what their output proved,
-     one line per criterion. Empty evidence keeps the task open. -->
+- Task 6: the run loop over go-ai-sdk. The single place any provider name appears is the gateway model reference, and WithBaseURL points an air-gapped deployment at a self-hosted OpenAI-compatible router.
+- Built by a parallel agent in an isolated git worktree under strict red-green TDD, then merged to main and INDEPENDENTLY RE-VERIFIED by the main agent.
+- Green (verified post-merge by the main agent): 30 PASS, 0 FAIL. ok tools 1.163s, agentrun 1.931s, agents 3.328s, repoconfig 1.675s.
+- The behaviours the spec actually turns on were checked by name: TestRegistryHasExactlyThirteenTools, TestUnknownToolRejected, TestEveryCallIsAudited, TestBudgetCheckedBeforeCall, TestGitCommitRefusesOutOfScopeBranch (a tool call refuses an out-of-scope branch identically to the git transport), TestWorkspaceWriteFileRejectsTraversal, TestLoopStopsOnBudget, and TestLoopRecordsEvidenceNotReasoning (which greps every persisted row to prove no model reasoning leaks into storage) — all PASS.
+- Run against the REAL PostgreSQL 16 in the kw cluster.
+- `go build ./...` and `go vet ./...` exit 0 after the merge.
+- Implementing commits: 93f0c1c, 27bd9e0, 9ad94a1, fb8aab4.

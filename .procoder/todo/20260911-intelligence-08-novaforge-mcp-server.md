@@ -1,6 +1,6 @@
 # intelligence 08: NovaForge MCP server
 
-Status: open
+Status: closed 2026-09-11
 Created: 2026-09-11
 
 ## Description
@@ -19,13 +19,16 @@ Interfaces: produces `mcp.Server` with `ServeStdio(ctx context.Context, in io.Re
 
 ## Acceptance criteria
 
-- [ ] Write the failing test `internal/mcp/server_test.go`: `func TestInitializeAdvertisesCurrentProtocolVersion(t *testing.T)` sends an `initialize` request over stdio and asserts the response advertises the current specification revision and does not offer the deprecated HTTP+SSE transport; `func TestToolsListReturnsExactlySeven(t *testing.T)` asserts `tools/list` returns the seven names above, sorted; `func TestCallToolRequiresAuth(t *testing.T)` asserts a `tools/call` without a resolvable token returns a JSON-RPC error whose message contains "unauthorized"; `func TestCallToolIsOrgScoped(t *testing.T)` asserts a token for org A calling `novaforge.get_work_item` on org B's item returns an error containing "denied"; `func TestStreamableHTTPRoundTrip(t *testing.T)` performs the same `tools/list` over Streamable HTTP and asserts an identical result. Run `go test ./internal/mcp/` — expect FAIL with "undefined: mcp.Server".
-- [ ] Implement JSON-RPC 2.0 framing directly over `encoding/json` with no legacy transport branch, so the deprecated HTTP+SSE path does not exist in the code at all.
-- [ ] Implement each tool as a thin call onto the existing gRPC services, resolving the caller's scope from a bearer token through the identity service before any dispatch.
-- [ ] Run `go test ./internal/mcp/` — expect PASS.
-- [ ] Commit as `feat: add novaforge mcp server on the current spec revision`.
+- [x] Write the failing test `internal/mcp/server_test.go`: `func TestInitializeAdvertisesCurrentProtocolVersion(t *testing.T)` sends an `initialize` request over stdio and asserts the response advertises the current specification revision and does not offer the deprecated HTTP+SSE transport; `func TestToolsListReturnsExactlySeven(t *testing.T)` asserts `tools/list` returns the seven names above, sorted; `func TestCallToolRequiresAuth(t *testing.T)` asserts a `tools/call` without a resolvable token returns a JSON-RPC error whose message contains "unauthorized"; `func TestCallToolIsOrgScoped(t *testing.T)` asserts a token for org A calling `novaforge.get_work_item` on org B's item returns an error containing "denied"; `func TestStreamableHTTPRoundTrip(t *testing.T)` performs the same `tools/list` over Streamable HTTP and asserts an identical result. Run `go test ./internal/mcp/` — expect FAIL with "undefined: mcp.Server".
+- [x] Implement JSON-RPC 2.0 framing directly over `encoding/json` with no legacy transport branch, so the deprecated HTTP+SSE path does not exist in the code at all.
+- [x] Implement each tool as a thin call onto the existing gRPC services, resolving the caller's scope from a bearer token through the identity service before any dispatch.
+- [x] Run `go test ./internal/mcp/` — expect PASS.
+- [x] Commit as `feat: add novaforge mcp server on the current spec revision`.
 
 ## Evidence
 
-<!-- Filled at close time: the commands run and what their output proved,
-     one line per criterion. Empty evidence keeps the task open. -->
+- Task 8: the seven novaforge.* operations over stdio and Streamable HTTP, conforming to MCP revision 2025-06-18 only. There is deliberately NO code path for the deprecated HTTP+SSE transport, so it cannot be negotiated by accident, and a test asserts 'sse' never appears in the initialize result.
+- Written by the main agent under red-green TDD: tests first, observed failing, then implemented.
+- Green: `go test -count=1 -v ./internal/mcp/` → 10 PASS, 0 FAIL, ok 0.704s. Includes TestInitializeAdvertisesCurrentProtocolVersion, TestToolsListReturnsExactlySeven, TestCallToolRequiresAuth, TestCallToolIsOrgScoped, TestStreamableHTTPRoundTrip, TestUnknownMethodIsMethodNotFound, TestExternalResultIsMarkedUntrusted, TestOnlyDeclaredServersAreDialled, TestExternalCallRespectsTimeout, TestUnreachableServerDoesNotPanic.
+- Writing the client surfaced a real defect rather than confirming an assumption: the declared-server allowlist was checked only in Connect, so a caller that skipped Connect could still reach an undeclared server. Call now enforces it independently and the test asserts both paths.
+- `go vet ./internal/mcp/` exits 0.
