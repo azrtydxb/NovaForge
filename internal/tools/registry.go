@@ -129,6 +129,16 @@ func (r *Registry) registerWithCap(name string, capCheck CapCheck, h Handler) {
 	r.tools[name] = toolEntry{handler: h, capCheck: capCheck}
 }
 
+// KnownToolNames returns the thirteen registered tool names, sorted,
+// without requiring a live Runtime or audit log. It exists for validating
+// configuration — see internal/repoconfig, which checks a repository's
+// .novaforge/agents/*.yaml tool lists against it — against the tools the
+// platform actually implements, without those callers needing to assemble
+// a real dispatchable Registry.
+func KnownToolNames() []string {
+	return NewRegistry(Runtime{}, nil).Names()
+}
+
 // Names returns every registered tool name, sorted.
 func (r *Registry) Names() []string {
 	names := make([]string, 0, len(r.tools))
