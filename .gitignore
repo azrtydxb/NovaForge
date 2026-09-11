@@ -9,3 +9,4 @@
 /dist/
 .procoder/index/
 .lycheecache
+.claude/worktrees/
