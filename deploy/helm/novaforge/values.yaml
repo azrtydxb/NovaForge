@@ -1,0 +1,85 @@
+# Image coordinates. Nexus is a push/pull split: images are pushed to the
+# :5000 hosted connector but the nodes pull from 443, so the registry written
+# into pod specs is the pull address.
+image:
+  registry: 192.168.10.131
+  repository: novaforge
+  tag: dev
+  pullPolicy: IfNotPresent
+  pullSecret: nexus-pull
+
+# Bare repositories must be ReadWriteMany so any git-platform replica can serve
+# any repository.
+repos:
+  storageClass: nfs-v3
+  size: 50Gi
+
+datastores:
+  enabled: true
+  postgres:
+    image: pgvector/pgvector:pg16
+    storageClass: longhorn
+    size: 20Gi
+  redis:
+    image: redis:7-alpine
+  minio:
+    image: minio/minio:latest
+    storageClass: longhorn
+    size: 20Gi
+
+secrets:
+  jwtSecret: "change-me-in-production"
+  hmacSecret: "change-me-in-production"
+  secretsKek: "change-me-in-production-32byteslong"
+  postgresPassword: novaforge
+  minioAccessKey: minioadmin
+  minioSecretKey: minioadmin
+
+# Model access goes through go-ai-sdk pointed at the cluster's FastLLM proxy,
+# so no hosted provider is reachable and air-gapped operation holds.
+ai:
+  endpoint: "http://fastllm-proxy.fastllm.svc.cluster.local:4000/v1"
+  model: "qwen"
+  embedEndpoint: "http://fastllm-proxy.fastllm.svc.cluster.local:4000/v1"
+  embedModel: "qwen-embed"
+
+resources:
+  requests: {cpu: 100m, memory: 128Mi}
+  limits: {cpu: "2", memory: 1Gi}
+
+services:
+  identity:
+    grpcPort: 9091
+    schema: identity
+  git-platform:
+    grpcPort: 9092
+    httpPort: 8081
+    sshPort: 2222
+    schema: gitplatform
+    needsRepos: true
+    extraServiceType: LoadBalancer
+  work-reviews:
+    grpcPort: 9093
+    schema: work
+  ci-runner:
+    grpcPort: 9094
+    schema: ci
+  agent-runtime:
+    grpcPort: 9095
+    schema: agents
+    rbac: true
+  gates:
+    grpcPort: 9096
+    schema: gates
+  engineering-graph:
+    grpcPort: 9097
+    schema: graph
+    resources: {requests: {cpu: 200m, memory: 1Gi}, limits: {cpu: "2", memory: 2Gi}}
+  mcp-server:
+    grpcPort: 9098
+    httpPort: 8084
+    schema: mcp
+  edge:
+    httpPort: 8080
+    schema: edge
+    extraServiceType: LoadBalancer

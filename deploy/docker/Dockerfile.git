@@ -1,0 +1,20 @@
+# Runtime image for services that shell out to the git binary. The spec makes
+# git compatibility absolute and forbids a pure-Go implementation, so git must
+# be present and its version is asserted at service startup.
+ARG GO_VERSION=1.27
+FROM golang:${GO_VERSION} AS build
+ARG SERVICE
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath \
+      -ldflags "-s -w" \
+      -o /out/app ./cmd/${SERVICE}
+
+FROM debian:13-slim
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git ca-certificates openssh-client \
+ && rm -rf /var/lib/apt/lists/*
+COPY --from=build /out/app /app
+ENTRYPOINT ["/app"]

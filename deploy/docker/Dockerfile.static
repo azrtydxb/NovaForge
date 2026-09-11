@@ -1,0 +1,19 @@
+# Runtime image for services that never shell out to another binary.
+# One parameterised Dockerfile rather than one per service: the services differ
+# only in which main package is built, and duplicating that seven times would
+# mean seven places to fix a base-image CVE.
+ARG GO_VERSION=1.27
+FROM golang:${GO_VERSION} AS build
+ARG SERVICE
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath \
+      -ldflags "-s -w" \
+      -o /out/app ./cmd/${SERVICE}
+
+FROM gcr.io/distroless/static-debian12:nonroot
+COPY --from=build /out/app /app
+USER nonroot:nonroot
+ENTRYPOINT ["/app"]

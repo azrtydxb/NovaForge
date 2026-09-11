@@ -1,0 +1,6 @@
+apiVersion: v2
+name: novaforge
+description: NovaForge — self-hosted Git platform where humans and AI agents build software together
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
