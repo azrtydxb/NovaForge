@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package novaforge.ci.v1;
+
+// RunnerService lets a runner register once, then hold a single persistent
+// outbound stream that the platform pushes jobs down — a runner never needs
+// inbound network reachability.
+service RunnerService {
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+  rpc Connect(stream ConnectRequest) returns (stream ConnectResponse);
+  rpc ReportStatus(ReportStatusRequest) returns (ReportStatusResponse);
+}
+
+message RegisterRequest {
+  string org_id = 1;
+  string name = 2;
+  repeated string labels = 3;
+}
+
+message RegisterResponse {
+  string runner_id = 1;
+  string token = 2;
+}
+
+// Heartbeat carries no payload beyond its timestamp; its presence on the
+// stream is what keeps the connection live.
+message Heartbeat {
+  string at = 1;
+}
+
+// LogChunk is one line of live job output, forwarded by the runner as it is
+// produced.
+message LogChunk {
+  string job_id = 1;
+  string line = 2;
+}
+
+// ConnectRequest is one frame a runner sends up its Connect stream, always
+// naming the runner it came from.
+message ConnectRequest {
+  string runner_id = 1;
+  oneof payload {
+    Heartbeat heartbeat = 2;
+    LogChunk log_chunk = 3;
+  }
+}
+
+// ConnectResponse is one job pushed down a runner's Connect stream.
+message ConnectResponse {
+  string job_id = 1;
+  string run_id = 2;
+  string repo_clone_url = 3;
+  string commit_sha = 4;
+  string run_cmd = 5;
+  string agent_role = 6;
+  string image = 7;
+  map<string, string> env = 8;
+}
+
+message ReportStatusRequest {
+  string runner_id = 1;
+  string job_id = 2;
+  string status = 3;
+  int32 exit_code = 4;
+  string detail = 5;
+}
+
+message ReportStatusResponse {
+  bool ok = 1;
+}

@@ -1,0 +1,16 @@
+# The runner clones repositories and shells out to `git`, so — unlike the
+# distroless services in deploy/docker/Dockerfile.static — its runtime image
+# needs a real userland: git and CA certificates for HTTPS clones.
+FROM golang:1.26 AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath \
+      -ldflags "-s -w" \
+      -o /out/runner ./cmd/runner
+
+FROM alpine:3.21
+RUN apk add --no-cache git ca-certificates
+COPY --from=build /out/runner /usr/local/bin/runner
+ENTRYPOINT ["/usr/local/bin/runner"]
