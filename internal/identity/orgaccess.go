@@ -14,7 +14,7 @@ func (s *Store) OrgByNameOrID(ctx context.Context, ref string) (Org, error) {
 	if id, err := uuid.Parse(ref); err == nil {
 		var o Org
 		err := s.pool.QueryRow(ctx,
-			`SELECT id, name FROM organizations WHERE id = $1`, id).Scan(&o.ID, &o.Name)
+			`SELECT id, name FROM identity.organizations WHERE id = $1`, id).Scan(&o.ID, &o.Name)
 		if err != nil {
 			return Org{}, fmt.Errorf("organization %s not found: %w", ref, err)
 		}
@@ -22,7 +22,7 @@ func (s *Store) OrgByNameOrID(ctx context.Context, ref string) (Org, error) {
 	}
 	var o Org
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, name FROM organizations WHERE name = $1`, ref).Scan(&o.ID, &o.Name)
+		`SELECT id, name FROM identity.organizations WHERE name = $1`, ref).Scan(&o.ID, &o.Name)
 	if err != nil {
 		return Org{}, fmt.Errorf("organization %q not found: %w", ref, err)
 	}

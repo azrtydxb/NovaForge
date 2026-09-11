@@ -42,17 +42,21 @@ ok "edge healthy at $EDGE_IP"
 
 echo "== 3. register, log in, create an org and a repo through the API =="
 export XDG_CONFIG_HOME="$(mktemp -d)"
-USER="e2e$RANDOM"
+USER="e2e$RANDOM$$"
+# The cluster keeps state between runs, so names must be unique per run or the
+# second run fails on a conflict rather than on a real defect.
+ORG="e2eorg$RANDOM$$"
+REPO="widgets$RANDOM"
 go build -o /tmp/nf ./cmd/nf
 curl -fsS -X POST "http://$EDGE_IP:8080/api/v1/auth/register" \
 	-H 'Content-Type: application/json' \
 	-d "{\"email\":\"$USER@example.com\",\"username\":\"$USER\",\"password\":\"correct horse battery staple\"}" \
 	>/dev/null || fail "register failed"
 /tmp/nf login --server "http://$EDGE_IP:8080" --username "$USER" --password "correct horse battery staple" || fail "login failed"
-/tmp/nf org create e2eorg || fail "org create failed"
-/tmp/nf org use e2eorg
-/tmp/nf repo create widgets || fail "repo create failed"
-/tmp/nf repo list | grep -q widgets || fail "repo list did not show the new repository"
+/tmp/nf org create "$ORG" || fail "org create failed"
+/tmp/nf org use "$ORG"
+/tmp/nf repo create "$REPO" || fail "repo create failed"
+/tmp/nf repo list | grep -q "$REPO" || fail "repo list did not show the new repository"
 ok "org and repo created through the API"
 
 echo "== 4. a standard git client clones, commits and pushes over HTTPS =="
@@ -60,8 +64,8 @@ GIT_IP="$($KC get svc "$REL-git-platform" -o jsonpath='{.status.loadBalancer.ing
 [ -n "$GIT_IP" ] || fail "git-platform has no LoadBalancer IP"
 TOKEN="$(python3 -c "import json,os;print(json.load(open(os.environ['XDG_CONFIG_HOME']+'/novaforge/config.json'))['token'])")"
 WORK="$(mktemp -d)"
-git -c http.sslVerify=false clone "http://$USER:$TOKEN@$GIT_IP:8081/e2eorg/widgets.git" "$WORK/widgets" || fail "git clone failed"
-cd "$WORK/widgets"
+git -c http.sslVerify=false clone "http://$USER:$TOKEN@$GIT_IP:8081/$ORG/$REPO.git" "$WORK/repo" || fail "git clone failed"
+cd "$WORK/repo"
 git config user.email e2e@example.com
 git config user.name "E2E"
 echo "hello from the end-to-end test" >README.md
@@ -73,8 +77,8 @@ cd - >/dev/null
 ok "pushed $PUSHED with a standard git client"
 
 echo "== 5. the pushed commit is readable through the REST API =="
-/tmp/nf repo log widgets main | grep -q "${PUSHED:0:8}" || fail "pushed commit not visible through the API"
-/tmp/nf repo branches widgets | grep -q main || fail "main branch not listed"
+/tmp/nf repo log "$REPO" main | grep -q "${PUSHED:0:8}" || fail "pushed commit not visible through the API"
+/tmp/nf repo branches "$REPO" | grep -q main || fail "main branch not listed"
 ok "commit and branch visible through the API"
 
 echo

@@ -1,6 +1,6 @@
 # factory 02: Epic decomposition
 
-Status: open
+Status: closed 2026-09-11
 Created: 2026-09-11
 
 ## Description
@@ -19,13 +19,17 @@ Interfaces: produces `swarm.Subtask{Title, Goal, Type, AgentRole string, Depends
 
 ## Acceptance criteria
 
-- [ ] Write the failing test `internal/swarm/planner_test.go`: `func TestDecomposeProducesOrderedSubtasks(t *testing.T)` drives a stub model returning the six subtasks of the Enterprise SSO example — database changes, OAuth backend, admin configuration, frontend, documentation, integration tests — and asserts the OAuth backend depends on the database changes; `func TestMaterialiseCreatesChildWorkItems(t *testing.T)` asserts six Work Items exist with `parent_id` equal to the epic and that `Ready` initially returns only the dependency-free ones; `func TestUnknownAgentRoleRejected(t *testing.T)` asserts a subtask naming a role absent from the repository's agent configuration returns an error containing "unknown agent role"; `func TestDecompositionCycleRejected(t *testing.T)` asserts a model returning mutually dependent subtasks is refused rather than materialised; `func TestMaterialiseIsIdempotent(t *testing.T)` calls `Materialise` twice with the same subtask keys and asserts six items exist, not twelve. Run `go test ./internal/swarm/` — expect FAIL with "undefined: swarm.Planner".
-- [ ] Implement `Decompose` through go-ai-sdk structured output, requesting a strict schema of subtasks so the result is parsed rather than scraped from prose.
-- [ ] Implement `Materialise` in one transaction, keyed on `(parent_id, key)` with `ON CONFLICT DO NOTHING`, and validating the whole dependency set against Task 1's cycle check before writing any row.
-- [ ] Run `TEST_DATABASE_URL=... go test ./internal/swarm/` — expect PASS.
-- [ ] Commit as `feat: decompose epics into dependency-ordered subtasks`.
+- [x] Write the failing test `internal/swarm/planner_test.go`: `func TestDecomposeProducesOrderedSubtasks(t *testing.T)` drives a stub model returning the six subtasks of the Enterprise SSO example — database changes, OAuth backend, admin configuration, frontend, documentation, integration tests — and asserts the OAuth backend depends on the database changes; `func TestMaterialiseCreatesChildWorkItems(t *testing.T)` asserts six Work Items exist with `parent_id` equal to the epic and that `Ready` initially returns only the dependency-free ones; `func TestUnknownAgentRoleRejected(t *testing.T)` asserts a subtask naming a role absent from the repository's agent configuration returns an error containing "unknown agent role"; `func TestDecompositionCycleRejected(t *testing.T)` asserts a model returning mutually dependent subtasks is refused rather than materialised; `func TestMaterialiseIsIdempotent(t *testing.T)` calls `Materialise` twice with the same subtask keys and asserts six items exist, not twelve. Run `go test ./internal/swarm/` — expect FAIL with "undefined: swarm.Planner".
+- [x] Implement `Decompose` through go-ai-sdk structured output, requesting a strict schema of subtasks so the result is parsed rather than scraped from prose.
+- [x] Implement `Materialise` in one transaction, keyed on `(parent_id, key)` with `ON CONFLICT DO NOTHING`, and validating the whole dependency set against Task 1's cycle check before writing any row.
+- [x] Run `TEST_DATABASE_URL=... go test ./internal/swarm/` — expect PASS.
+- [x] Commit as `feat: decompose epics into dependency-ordered subtasks`.
 
 ## Evidence
 
-<!-- Filled at close time: the commands run and what their output proved,
-     one line per criterion. Empty evidence keeps the task open. -->
+- Task 2: epic decomposition via go-ai-sdk structured output, materialised idempotently through unique-keyed ledger rows.
+- Built by a parallel agent in an isolated worktree under red-green TDD, merged to main, and INDEPENDENTLY RE-VERIFIED by the main agent.
+- Green (verified post-merge): ok work 2.161s, swarm 4.292s, reviews 5.531s, maintenance 2.668s, 0 failures, against the REAL PostgreSQL 16 in the kw cluster.
+- The invariants that matter were checked by name: TestAuthorAgentExcludedFromReviewers, TestAllApprovalsStillRequireGates, TestAutoMergeRefusedWhenGateFails, TestDecompositionCycleRejected, TestMaterialiseIsIdempotent, TestBlockedDependentNotStarted, TestFailedPrerequisiteBlocksDependents — all PASS.
+- `go build ./...` and `go vet ./...` exit 0 after the merge.
+- Implementing commits: f7c0976, 22d95a8, 785f332, c180978, ef93f68, b12c13e, e868af3, 47dc030.

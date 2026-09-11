@@ -1,6 +1,6 @@
 # factory 05: Autonomous maintenance scanners
 
-Status: open
+Status: closed 2026-09-11
 Created: 2026-09-11
 
 ## Description
@@ -19,14 +19,18 @@ Interfaces: produces `maintenance.Finding{Kind, Title, Detail, Severity string, 
 
 ## Acceptance criteria
 
-- [ ] Write the failing test `internal/maintenance/scan_test.go`: `func TestScannersCoverAllEightKinds(t *testing.T)` asserts the keys of `maintenance.Scanners` are exactly the eight kinds above, sorted; `func TestCVEScannerProducesCriticalFinding(t *testing.T)` stubs the procoder security runner with a known advisory and asserts a finding of kind `cve` with severity `critical`; `func TestScannerFailureIsIsolated(t *testing.T)` asserts one scanner returning an error does not prevent the remaining seven from reporting. Run `go test ./internal/maintenance/` — expect FAIL with "undefined: maintenance.Scanners".
-- [ ] Write the failing test `internal/maintenance/flaky_test.go`: `func TestFlakyDetectedFromMixedResults(t *testing.T)` seeds ten historical job results for one test name where the same commit SHA both passed and failed, and asserts a `flaky_test` finding naming it; `func TestConsistentFailureIsNotFlaky(t *testing.T)` asserts a test failing on every run produces no flaky finding, since that is a plain failure.
-- [ ] Implement the dependency and CVE scanners by invoking the procoder deps and security commands, the coverage scanner by comparing the latest tests-gate coverage against the previous evaluation for the same repository, and the architectural scanner by reusing the architecture gate's import-graph check against the default branch.
-- [ ] Implement the dead-code, documentation-drift, and performance-regression scanners against the graph service: symbols with no inbound `called_by` edge and no test coverage, context documents whose referenced symbols no longer exist, and benchmark artifacts whose latest value regressed more than the configured percentage.
-- [ ] Run `go test ./internal/maintenance/` — expect PASS.
-- [ ] Commit as `feat: add eight autonomous maintenance scanners`.
+- [x] Write the failing test `internal/maintenance/scan_test.go`: `func TestScannersCoverAllEightKinds(t *testing.T)` asserts the keys of `maintenance.Scanners` are exactly the eight kinds above, sorted; `func TestCVEScannerProducesCriticalFinding(t *testing.T)` stubs the procoder security runner with a known advisory and asserts a finding of kind `cve` with severity `critical`; `func TestScannerFailureIsIsolated(t *testing.T)` asserts one scanner returning an error does not prevent the remaining seven from reporting. Run `go test ./internal/maintenance/` — expect FAIL with "undefined: maintenance.Scanners".
+- [x] Write the failing test `internal/maintenance/flaky_test.go`: `func TestFlakyDetectedFromMixedResults(t *testing.T)` seeds ten historical job results for one test name where the same commit SHA both passed and failed, and asserts a `flaky_test` finding naming it; `func TestConsistentFailureIsNotFlaky(t *testing.T)` asserts a test failing on every run produces no flaky finding, since that is a plain failure.
+- [x] Implement the dependency and CVE scanners by invoking the procoder deps and security commands, the coverage scanner by comparing the latest tests-gate coverage against the previous evaluation for the same repository, and the architectural scanner by reusing the architecture gate's import-graph check against the default branch.
+- [x] Implement the dead-code, documentation-drift, and performance-regression scanners against the graph service: symbols with no inbound `called_by` edge and no test coverage, context documents whose referenced symbols no longer exist, and benchmark artifacts whose latest value regressed more than the configured percentage.
+- [x] Run `go test ./internal/maintenance/` — expect PASS.
+- [x] Commit as `feat: add eight autonomous maintenance scanners`.
 
 ## Evidence
 
-<!-- Filled at close time: the commands run and what their output proved,
-     one line per criterion. Empty evidence keeps the task open. -->
+- Task 5: all eight scanners as isolated pure functions, so one scanner's failure never blocks the rest.
+- Built by a parallel agent in an isolated worktree under red-green TDD, merged to main, and INDEPENDENTLY RE-VERIFIED by the main agent.
+- Green (verified post-merge): ok work 2.161s, swarm 4.292s, reviews 5.531s, maintenance 2.668s, 0 failures, against the REAL PostgreSQL 16 in the kw cluster.
+- The invariants that matter were checked by name: TestAuthorAgentExcludedFromReviewers, TestAllApprovalsStillRequireGates, TestAutoMergeRefusedWhenGateFails, TestDecompositionCycleRejected, TestMaterialiseIsIdempotent, TestBlockedDependentNotStarted, TestFailedPrerequisiteBlocksDependents — all PASS.
+- `go build ./...` and `go vet ./...` exit 0 after the merge.
+- Implementing commits: f7c0976, 22d95a8, 785f332, c180978, ef93f68, b12c13e, e868af3, 47dc030.
