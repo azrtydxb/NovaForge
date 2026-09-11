@@ -18,6 +18,8 @@ import (
 
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
+	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
+	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
 )
 
 // Config carries the service clients the edge fans out to. Any may be nil in
@@ -25,6 +27,8 @@ import (
 type Config struct {
 	Identity identityv1.IdentityServiceClient
 	Git      gitv1.GitServiceClient
+	Work     workv1.WorkServiceClient
+	Reviews  reviewsv1.ReviewsServiceClient
 	Handlers map[string]http.HandlerFunc
 }
 

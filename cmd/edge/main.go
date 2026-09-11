@@ -16,6 +16,8 @@ import (
 
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
+	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
+	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
 	"github.com/novaforge/novaforge/internal/edge"
 	"github.com/novaforge/novaforge/internal/service"
 )
@@ -38,9 +40,17 @@ func main() {
 	}
 	defer gitConn.Close()
 
+	workConn, err := dial(cfg.WorkAddr)
+	if err != nil {
+		log.Fatalf("edge: dial work-reviews: %v", err)
+	}
+	defer workConn.Close()
+
 	ecfg := edge.Config{
 		Identity: identityv1.NewIdentityServiceClient(identityConn),
 		Git:      gitv1.NewGitServiceClient(gitConn),
+		Work:     workv1.NewWorkServiceClient(workConn),
+		Reviews:  reviewsv1.NewReviewsServiceClient(workConn),
 	}
 	ecfg.Handlers = edge.Handlers(ecfg)
 
@@ -62,7 +72,7 @@ func main() {
 	// ready while identity is unreachable would send traffic to a 500.
 	check := func(ctx context.Context) error {
 		for name, conn := range map[string]*grpc.ClientConn{
-			"identity": identityConn, "git-platform": gitConn,
+			"identity": identityConn, "git-platform": gitConn, "work-reviews": workConn,
 		} {
 			if s := conn.GetState().String(); s == "TRANSIENT_FAILURE" || s == "SHUTDOWN" {
 				return fmt.Errorf("%s connection is %s", name, s)
