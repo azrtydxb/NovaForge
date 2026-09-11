@@ -357,6 +357,45 @@ func (s *Store) RunningJobsForRunner(ctx context.Context, runnerID uuid.UUID) ([
 	return ids, rows.Err()
 }
 
+// RegisterRunner inserts a new runner row and returns its id.
+func (s *Store) RegisterRunner(ctx context.Context, orgID uuid.UUID, name string, labels []string, tokenHash []byte) (uuid.UUID, error) {
+	id := uuid.New()
+	if labels == nil {
+		labels = []string{}
+	}
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO ci.runners (id, org_id, name, labels, token_hash, last_seen_at)
+		VALUES ($1, $2, $3, $4, $5, now())`,
+		id, orgID, name, labels, tokenHash,
+	)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("register runner: %w", err)
+	}
+	return id, nil
+}
+
+// RunnerLabels returns the labels a registered runner announced at
+// RegisterRunner time.
+func (s *Store) RunnerLabels(ctx context.Context, runnerID uuid.UUID) ([]string, error) {
+	var labels []string
+	err := s.pool.QueryRow(ctx, `SELECT labels FROM ci.runners WHERE id = $1`, runnerID).Scan(&labels)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("runner %s not found: %w", runnerID, err)
+		}
+		return nil, fmt.Errorf("runner labels: %w", err)
+	}
+	return labels, nil
+}
+
+// TouchRunner records that runnerID is still alive.
+func (s *Store) TouchRunner(ctx context.Context, runnerID uuid.UUID) error {
+	if _, err := s.pool.Exec(ctx, `UPDATE ci.runners SET last_seen_at = now() WHERE id = $1`, runnerID); err != nil {
+		return fmt.Errorf("touch runner: %w", err)
+	}
+	return nil
+}
+
 func nullString(s string) *string {
 	if s == "" {
 		return nil
