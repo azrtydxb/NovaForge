@@ -92,7 +92,15 @@ func main() {
 		}
 		rdb = redis.NewClient(redisOpts)
 		defer rdb.Close()
-		gitops.WireRedisPushEvents(rdb)
+		// Resolve the repository id for each event: a push event with a nil id
+		// is useless to the CI scheduler, which looks the repository up by it.
+		gitops.WireRedisPushEventsWithRepoID(rdb, func(ctx context.Context, orgID uuid.UUID, repo string) (uuid.UUID, error) {
+			var id uuid.UUID
+			err := pool.QueryRow(ctx,
+				`SELECT id FROM gitplatform.repositories WHERE org_id = $1 AND name = $2`,
+				orgID, repo).Scan(&id)
+			return id, err
+		})
 	}
 
 	identityConn, err := grpc.NewClient(cfg.IdentityAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
