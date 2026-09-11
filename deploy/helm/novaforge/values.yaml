@@ -60,6 +60,29 @@ services:
     schema: gitplatform
     needsRepos: true
     extraServiceType: LoadBalancer
+  work-reviews:
+    grpcPort: 9093
+    schema: work
+  ci-runner:
+    grpcPort: 9094
+    schema: ci
+  gates:
+    grpcPort: 9096
+    schema: gates
+  agent-runtime:
+    grpcPort: 9095
+    schema: agents
+    rbac: true
+  engineering-graph:
+    grpcPort: 9097
+    schema: graph
+    resources:
+      requests: { cpu: 200m, memory: 1Gi }
+      limits: { cpu: "2", memory: 2Gi }
+  mcp-server:
+    grpcPort: 9098
+    httpPort: 8084
+    schema: mcp
   edge:
     httpPort: 8080
     schema: edge
