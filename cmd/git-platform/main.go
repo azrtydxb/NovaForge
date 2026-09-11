@@ -287,9 +287,21 @@ func newFingerprintFunc(identityClient identityv1.IdentityServiceClient) gitops.
 // newCapFunc adapts the capability store into a gitops.CapFunc: every
 // requested ref update must be covered by an active grant issued to the
 // caller within orgID.
+// newCapFunc adapts the capability store into a gitops.CapFunc.
+//
+// Capability grants exist to constrain AGENTS: section 7 of the design is about
+// never handing an agent a broad token. A human member of the organization has
+// ordinary write access to its repositories — requiring them to mint a grant to
+// push their own work would be a different product. The caller's kind, which
+// identity established, decides which rule applies.
 func newCapFunc(grants *capability.Store) gitops.CapFunc {
 	return func(ctx context.Context, s authz.Scope, orgID uuid.UUID, repo string, refs []string) error {
 		if len(refs) == 0 {
+			return nil
+		}
+		if s.ActorKind == "user" {
+			// Org membership was verified during authentication; reaching here
+			// with a user scope means the caller is a member of orgID.
 			return nil
 		}
 		active, err := grants.ListActive(ctx, orgID, s.ActorID)
@@ -305,7 +317,8 @@ func newCapFunc(grants *capability.Store) gitops.CapFunc {
 				}
 			}
 			if !permitted {
-				return fmt.Errorf("write to %s not permitted by any active grant", ref)
+				return fmt.Errorf("write to %s not permitted by any active grant for %s %s",
+					ref, s.ActorKind, s.ActorID)
 			}
 		}
 		return nil

@@ -17,6 +17,26 @@ kubectl --context "$KUBE_CONTEXT" -n "$NS" create secret docker-registry nexus-p
 	--docker-password="${REGISTRY_PASSWORD:?set REGISTRY_PASSWORD}" \
 	--dry-run=client -o yaml | kubectl --context "$KUBE_CONTEXT" apply -f -
 
+# Every service in the chart must already have an image at this tag, or the
+# rollout half-applies and sits in ImagePullBackOff. Failing here says which
+# service was not built, instead of leaving that to be read off pod events.
+missing=""
+for svc in $(python3 -c "
+import sys, yaml
+print(' '.join(yaml.safe_load(open('deploy/helm/novaforge/values.yaml'))['services']))
+"); do
+	code=$(curl -sk -o /dev/null -w '%{http_code}' \
+		-u "$REGISTRY_USER:$REGISTRY_PASSWORD" \
+		-H 'Accept: application/vnd.oci.image.manifest.v1+json' \
+		"https://$REGISTRY_PUSH/v2/$REGISTRY_REPO/$svc/manifests/$TAG")
+	[ "$code" = "200" ] || missing="$missing $svc"
+done
+if [ -n "$missing" ]; then
+	echo "no image at tag $TAG for:$missing" >&2
+	echo "run: ./hack/build-images.sh$missing" >&2
+	exit 1
+fi
+
 helm --kube-context "$KUBE_CONTEXT" upgrade --install "$REL" deploy/helm/novaforge \
 	--namespace "$NS" \
 	--set image.tag="$TAG" \
