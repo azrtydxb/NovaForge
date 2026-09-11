@@ -2,15 +2,17 @@
 
 ## What happens next in the now-empty NovaForge repo
 
-The working tree and remote hold only `NovaForge_AI_Native_Git_Platform.md` on a single
-root commit. The previous implementation (Go services, React frontend, infra) was deleted
-and is not recoverable from this machine.
+Answered 2026-09-11: **Nothing for now** — the repo stayed a doc-only starting point. Later
+superseded in part by an explicit `/init`, `/procoder:spec`, `/procoder:plan`, and
+`/procoder:todo`, which produced CLAUDE.md, the backend-platform spec, six plans, and 67
+seeded tasks. No implementation code has been written; that part of the answer still stands.
 
-**Answered (2026-09-11): Nothing for now** — leave the repo as a doc-only starting point.
+## Committing the 67 seeded task files, and the missing procoder templates
 
-Superseded in the same session: the user then invoked `/init`, so `CLAUDE.md` was written
-from the design doc. No implementation code was started; that remains the standing answer.
+The 67 files under `.procoder/todo/` are untracked. The gate also reports three missing
+`.procoder/github/` templates (pull request, commit, workflow) as non-blocking hygiene
+findings, which `procoder templates` would generate.
 
-- ~~Rebuild from the design doc~~ — not chosen.
-- ~~Write a CLAUDE.md from the design doc~~ — subsequently requested via `/init` and done.
-- **Nothing for now** — chosen.
+- **Commit the tasks and generate the templates** — one commit carrying both.
+- **Commit the tasks only** — leave the templates for whenever a PR workflow actually matters.
+- **Neither yet** — leave everything untracked and start building instead.
