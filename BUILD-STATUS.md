@@ -67,3 +67,24 @@ Each was fixed with a test that pins it:
 - Creating a token with no scopes violated a NOT NULL constraint.
 - A push-event test read the first message of a durable shared Redis stream, so
   an event from an earlier run won.
+
+## Known limitations
+
+These are real and are not worked around:
+
+- **No model is available in the cluster.** The FastLLM proxy at
+  `192.168.10.125:4000` authenticates but `/v1/models` returns an empty list.
+  Everything that needs an LLM — the agent run loop, epic decomposition, agent
+  reviewers, semantic embeddings — is implemented and unit-tested against
+  in-process stub models, which is the correct double for an external service,
+  but **has not been exercised against a real model**. Point `ai.endpoint` at a
+  served model and those paths become testable.
+- **CI job isolation is real, agent workspace isolation is untested in anger.**
+  CI jobs run in their own Kubernetes pod, proven by test. Agent Run namespaces
+  are implemented and unit-tested against the client-go fake, but a full agent
+  run needs a model (above).
+- **Some typed agent tools report an honest error rather than working**:
+  `repo.search`, `repo.get_symbol`, `repo.get_dependencies` need the graph
+  client wired into the tool adapter, and `git.commit` and `work.comment` need
+  RPCs that do not exist yet on git-platform and work. They fail loudly with the
+  reason instead of returning a plausible empty result.
