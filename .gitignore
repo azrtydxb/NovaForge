@@ -4,3 +4,8 @@
 # Go build output
 /bin/
 *.test
+
+# local build artifacts
+/dist/
+.procoder/index/
+.lycheecache
