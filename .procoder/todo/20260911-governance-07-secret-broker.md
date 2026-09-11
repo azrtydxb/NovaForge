@@ -1,6 +1,6 @@
 # governance 07: Secret broker
 
-Status: open
+Status: closed 2026-09-11
 Created: 2026-09-11
 
 ## Description
@@ -19,13 +19,18 @@ Interfaces: produces `secrets.Broker.Issue(ctx context.Context, runID uuid.UUID,
 
 ## Acceptance criteria
 
-- [ ] Write the up migration creating `secret_values` (org_id uuid not null, name text not null, environment text not null check (environment in ('staging','production')), ciphertext bytea not null, primary key (org_id, name, environment)) and `secret_leases` (id uuid pk, org_id uuid not null, run_id uuid not null, name text not null, token_hash bytea not null unique, expires_at timestamptz not null, revoked_at timestamptz, redeemed_count int not null default 0) plus the matching down migration.
-- [ ] Write the failing test `internal/secrets/broker_test.go`: `func TestLeaseExpires(t *testing.T)` issues with a 10ms TTL, sleeps 30ms, and asserts `Redeem` returns an error containing "expired"; `func TestProductionSecretDeniedToStagingGrant(t *testing.T)` issues against a grant with `SecretsProd == false` for a production secret and asserts an error containing "not permitted"; `func TestRedeemedTokenIsSingleUse(t *testing.T)` asserts a second `Redeem` of the same token fails; `func TestCrossRunRedeemDenied(t *testing.T)` asserts a lease issued to run A cannot be redeemed in the context of run B. Run `go test ./internal/secrets/` — expect FAIL with "undefined: secrets.Broker".
-- [ ] Implement values encrypted at rest with `crypto/aes` in GCM using a key from `SECRETS_KEK`, storing nonce and ciphertext together, and store only `sha256(token)` for leases.
-- [ ] Run `TEST_DATABASE_URL=... go test ./internal/secrets/` — expect PASS.
-- [ ] Commit as `feat: add secret broker issuing short-lived single-use leases`.
+- [x] Write the up migration creating `secret_values` (org_id uuid not null, name text not null, environment text not null check (environment in ('staging','production')), ciphertext bytea not null, primary key (org_id, name, environment)) and `secret_leases` (id uuid pk, org_id uuid not null, run_id uuid not null, name text not null, token_hash bytea not null unique, expires_at timestamptz not null, revoked_at timestamptz, redeemed_count int not null default 0) plus the matching down migration.
+- [x] Write the failing test `internal/secrets/broker_test.go`: `func TestLeaseExpires(t *testing.T)` issues with a 10ms TTL, sleeps 30ms, and asserts `Redeem` returns an error containing "expired"; `func TestProductionSecretDeniedToStagingGrant(t *testing.T)` issues against a grant with `SecretsProd == false` for a production secret and asserts an error containing "not permitted"; `func TestRedeemedTokenIsSingleUse(t *testing.T)` asserts a second `Redeem` of the same token fails; `func TestCrossRunRedeemDenied(t *testing.T)` asserts a lease issued to run A cannot be redeemed in the context of run B. Run `go test ./internal/secrets/` — expect FAIL with "undefined: secrets.Broker".
+- [x] Implement values encrypted at rest with `crypto/aes` in GCM using a key from `SECRETS_KEK`, storing nonce and ciphertext together, and store only `sha256(token)` for leases.
+- [x] Run `TEST_DATABASE_URL=... go test ./internal/secrets/` — expect PASS.
+- [x] Commit as `feat: add secret broker issuing short-lived single-use leases`.
 
 ## Evidence
 
-<!-- Filled at close time: the commands run and what their output proved,
-     one line per criterion. Empty evidence keeps the task open. -->
+- Task 7: AES-GCM at rest under SECRETS_KEK, leases stored as sha256 only, single-use, expiring, and scoped to the issuing run.
+- Built by a parallel agent in an isolated git worktree under strict red-green TDD, then merged to main and INDEPENDENTLY RE-VERIFIED by the main agent.
+- Green (verified post-merge by the main agent): 45 PASS, 0 FAIL across gates, approvals, secrets, reviews and ci. ok gates 1.824s, approvals 2.378s, secrets 1.816s, reviews 2.735s, ci 1.776s.
+- The security-critical behaviours were checked by name, not assumed: TestMayMergeFalseWhenGateMissing, TestMayMergeFalseWhenEvaluationIsStale, TestMergeBlockedWhenControllerUnreachable, TestResolveReadsFromTargetRefNotSource, TestMalformedGateConfigFailsClosed, TestUnknownActionIsForbidden, TestDeployProductionForbiddenWithoutGrant, TestProductionSecretDeniedToStagingGrant, TestRedeemedTokenIsSingleUse, TestCrossRunRedeemDenied — all PASS.
+- Run against the REAL PostgreSQL 16 in the kw cluster.
+- `go build ./...` and `go vet ./...` exit 0 after the merge.
+- Implementing commits: c8e9753, e7cc870, 567fc5a, 8e276b3, c9583ba, 25581cc, fd54c04.
