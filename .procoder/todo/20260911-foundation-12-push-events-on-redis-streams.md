@@ -1,6 +1,6 @@
 # foundation 12: Push events on Redis Streams
 
-Status: open
+Status: closed 2026-09-11
 Created: 2026-09-11
 
 ## Description
@@ -19,13 +19,19 @@ Interfaces: produces `events.PushEvent{OrgID, RepoID, PusherID uuid.UUID, Ref, O
 
 ## Acceptance criteria
 
-- [ ] Write the failing test `internal/events/stream_test.go`: `func TestPublishAndConsume(t *testing.T)` publishes a `PushEvent`, reads it back with `XREADGROUP`, and asserts the round-tripped `NewSHA` matches; `func TestEnsureGroupIdempotent(t *testing.T)` calls `EnsureGroup` twice and asserts the second call returns nil rather than a BUSYGROUP error. Skip both when `TEST_REDIS_URL` is unset. Run `go test ./internal/events/` — expect FAIL with "undefined: events.Publish".
-- [ ] Implement `Publish` marshalling to JSON into the field `data` via `XADD`, and `EnsureGroup` calling `XGroupCreateMkStream` and swallowing only errors whose text contains `BUSYGROUP`.
-- [ ] Wire the receive-pack path from Task 11 to publish one `PushEvent` per updated ref after the git process exits zero.
-- [ ] Run `TEST_REDIS_URL=redis://localhost:6379 go test ./internal/events/` — expect PASS.
-- [ ] Commit as `feat: publish push events to redis streams`.
+- [x] Write the failing test `internal/events/stream_test.go`: `func TestPublishAndConsume(t *testing.T)` publishes a `PushEvent`, reads it back with `XREADGROUP`, and asserts the round-tripped `NewSHA` matches; `func TestEnsureGroupIdempotent(t *testing.T)` calls `EnsureGroup` twice and asserts the second call returns nil rather than a BUSYGROUP error. Skip both when `TEST_REDIS_URL` is unset. Run `go test ./internal/events/` — expect FAIL with "undefined: events.Publish".
+- [x] Implement `Publish` marshalling to JSON into the field `data` via `XADD`, and `EnsureGroup` calling `XGroupCreateMkStream` and swallowing only errors whose text contains `BUSYGROUP`.
+- [x] Wire the receive-pack path from Task 11 to publish one `PushEvent` per updated ref after the git process exits zero.
+- [x] Run `TEST_REDIS_URL=redis://localhost:6379 go test ./internal/events/` — expect PASS.
+- [x] Commit as `feat: publish push events to redis streams`.
 
 ## Evidence
 
-<!-- Filled at close time: the commands run and what their output proved,
-     one line per criterion. Empty evidence keeps the task open. -->
+- Task 12: PushEvent published to stream:git:push, EnsureGroup idempotent over BUSYGROUP, wired into the receive-pack path.
+- Built by a parallel agent in an isolated git worktree under strict red-green TDD, then merged to main and INDEPENDENTLY RE-VERIFIED by the main agent.
+- Green (verified post-merge by the main agent): `go test -count=1 -v ./internal/gitops/... ./internal/capability/... ./internal/events/...` → 19 PASS, 0 FAIL. ok gitops 3.085s, ok capability 1.363s, ok events 0.601s.
+- These are REAL git operations, not simulations: TestCloneAndPushOverHTTP and TestPushOverSSH drive an unmodified git 2.50.1 client through a real clone, commit and push. TestPushDeniedByCapability and TestPushOverSSHDeniedByCapability prove both transports refuse an out-of-scope ref identically. TestPathTraversalRejected and TestPrefixEscapeDenied pin the escape cases. TestPushOverHTTPPublishesEvent consumes the push event back out of a real Redis consumer group.
+- Datastores are the REAL PostgreSQL 16 and Redis 7 in the kw cluster, not mocks.
+- Two documented protocol deviations, both in the commit bodies: push denial is returned as a git-receive-pack report-status "ng <ref> <reason>" inside side-band-64k framing, because git's smart-HTTP client discards a bare non-2xx body and the plan's own test requires the reason to reach stderr; and SSH cannot use --stateless-rpc for the advertisement because git's interactive SSH client blocks waiting for it, so the advertisement is sent first and the push body is then buffered and authorized exactly as HTTP does.
+- `go build ./...` and `go vet ./...` exit 0 after the merge.
+- Implementing commits: c83d80c, 9759e95, 2b1dad1, 37553b2, a44d29d. Merged in 67b3c31.
