@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	civ1 "github.com/novaforge/novaforge/gen/novaforge/ci/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
 	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
@@ -46,11 +47,18 @@ func main() {
 	}
 	defer workConn.Close()
 
+	ciConn, err := dial(cfg.CIAddr)
+	if err != nil {
+		log.Fatalf("edge: dial ci-runner: %v", err)
+	}
+	defer ciConn.Close()
+
 	ecfg := edge.Config{
 		Identity: identityv1.NewIdentityServiceClient(identityConn),
 		Git:      gitv1.NewGitServiceClient(gitConn),
 		Work:     workv1.NewWorkServiceClient(workConn),
 		Reviews:  reviewsv1.NewReviewsServiceClient(workConn),
+		CI:       civ1.NewCIServiceClient(ciConn),
 	}
 	ecfg.Handlers = edge.Handlers(ecfg)
 

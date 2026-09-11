@@ -59,6 +59,13 @@ func Routes() []Route {
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}/reviews", "submitReview", "Submit a review verdict"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}/merge", "mergeRun", "Merge, if the gates allow it"},
 
+		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/ci/runs", "listCIRuns", "CI runs for a repository"},
+		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/ci/runs/{id}", "getCIRun", "One CI run and its jobs"},
+		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/ci/logs", "getLatestJobLogs", "The newest run's first job log"},
+		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/ci/jobs/{id}/logs", "getJobLogs", "One job's log"},
+		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/ci/artifacts", "listLatestArtifacts", "The newest run's artifacts"},
+		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/ci/jobs/{id}/artifacts", "listJobArtifacts", "One job's artifacts"},
+
 		{http.MethodGet, "/healthz", "healthz", "Readiness"},
 	}
 }

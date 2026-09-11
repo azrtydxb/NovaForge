@@ -131,3 +131,20 @@ func (s *LogSink) Seal(ctx context.Context, jobID uuid.UUID) (string, error) {
 	}
 	return objectKey, nil
 }
+
+// Snapshot returns the log lines buffered so far for a job that has not been
+// sealed yet. Tail follows a running job; this answers "what has it printed",
+// which is what a request for a log wants when the job may still be going.
+func (s *LogSink) Snapshot(ctx context.Context, jobID uuid.UUID) ([]string, error) {
+	msgs, err := s.rdb.XRange(ctx, logStreamKey(jobID), "-", "+").Result()
+	if err != nil {
+		return nil, fmt.Errorf("read job log: %w", err)
+	}
+	out := make([]string, 0, len(msgs))
+	for _, m := range msgs {
+		if line, ok := m.Values["line"].(string); ok {
+			out = append(out, line)
+		}
+	}
+	return out, nil
+}

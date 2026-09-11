@@ -1,0 +1,210 @@
+package ci
+
+import (
+	"context"
+	"io"
+
+	"github.com/google/uuid"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
+	civ1 "github.com/novaforge/novaforge/gen/novaforge/ci/v1"
+	"github.com/novaforge/novaforge/internal/authz"
+	"github.com/novaforge/novaforge/internal/blobstore"
+)
+
+// QueryServer answers questions about runs, jobs, logs and artifacts for a
+// person or a tool, as opposed to RunnerService, which serves runners.
+type QueryServer struct {
+	civ1.UnimplementedCIServiceServer
+
+	store     *Store
+	logs      *LogSink
+	artifacts *ArtifactStore
+	blobs     *blobstore.Client
+}
+
+// NewQueryServer wires the read side of CI.
+func NewQueryServer(store *Store, logs *LogSink, artifacts *ArtifactStore, blobs *blobstore.Client) *QueryServer {
+	return &QueryServer{store: store, logs: logs, artifacts: artifacts, blobs: blobs}
+}
+
+func (q *QueryServer) scope(ctx context.Context) (authz.Scope, error) {
+	s, err := authz.FromContext(ctx)
+	if err != nil || s.OrgID == uuid.Nil {
+		return authz.Scope{}, status.Error(codes.Unauthenticated, "authentication required")
+	}
+	return s, nil
+}
+
+// ListRuns returns the workflow runs of one repository, within the caller's
+// organization.
+func (q *QueryServer) ListRuns(ctx context.Context, req *civ1.ListRunsRequest) (*civ1.ListRunsResponse, error) {
+	sc, err := q.scope(ctx)
+	if err != nil {
+		return nil, err
+	}
+	repoID, err := uuid.Parse(req.GetRepoId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid repo id")
+	}
+	runs, err := q.store.ListRuns(ctx, sc.OrgID, repoID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "list runs: %v", err)
+	}
+	out := make([]*civ1.WorkflowRunSummary, 0, len(runs))
+	for _, r := range runs {
+		out = append(out, runSummary(r))
+	}
+	return &civ1.ListRunsResponse{Runs: out}, nil
+}
+
+// GetRun returns one run and its jobs.
+func (q *QueryServer) GetRun(ctx context.Context, req *civ1.GetRunRequest) (*civ1.GetRunResponse, error) {
+	sc, err := q.scope(ctx)
+	if err != nil {
+		return nil, err
+	}
+	id, err := uuid.Parse(req.GetId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid run id")
+	}
+	run, err := q.store.GetRun(ctx, id)
+	if err != nil {
+		return nil, status.Error(codes.NotFound, "no such run")
+	}
+	// The org predicate is applied here rather than trusted from the request:
+	// a run id from another organization must read as absent.
+	if run.OrgID != sc.OrgID {
+		return nil, status.Error(codes.NotFound, "no such run")
+	}
+	jobs, err := q.store.ListJobsForRun(ctx, id)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "list jobs: %v", err)
+	}
+	outJobs := make([]*civ1.WorkflowJobSummary, 0, len(jobs))
+	for _, j := range jobs {
+		outJobs = append(outJobs, &civ1.WorkflowJobSummary{
+			Id: j.ID.String(), RunId: j.RunID.String(),
+			Name: j.Name, Status: j.Status, Detail: j.Detail,
+		})
+	}
+	return &civ1.GetRunResponse{Run: runSummary(run), Jobs: outJobs}, nil
+}
+
+// GetJobLogs returns a finished job's sealed log, or the live tail if it has
+// not been sealed yet. With no job id, the first job of the given run is used,
+// which is what "did my push build" usually means.
+func (q *QueryServer) GetJobLogs(ctx context.Context, req *civ1.GetJobLogsRequest) (*civ1.GetJobLogsResponse, error) {
+	sc, err := q.scope(ctx)
+	if err != nil {
+		return nil, err
+	}
+	jobID, err := q.resolveJob(ctx, sc, req.GetJobId(), req.GetRunId())
+	if err != nil {
+		return nil, err
+	}
+
+	// Sealed first: a finished job's log lives in object storage, and reading
+	// Redis for it would return nothing.
+	if rc, err := q.blobs.Get(ctx, sealedObjectKey(jobID)); err == nil {
+		defer rc.Close()
+		body, err := io.ReadAll(rc)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "read sealed log: %v", err)
+		}
+		return &civ1.GetJobLogsResponse{Lines: splitLines(string(body))}, nil
+	}
+
+	lines, err := q.logs.Snapshot(ctx, jobID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "read live log: %v", err)
+	}
+	return &civ1.GetJobLogsResponse{Lines: lines}, nil
+}
+
+// ListArtifacts returns a run's artifacts.
+func (q *QueryServer) ListArtifacts(ctx context.Context, req *civ1.ListArtifactsRequest) (*civ1.ListArtifactsResponse, error) {
+	sc, err := q.scope(ctx)
+	if err != nil {
+		return nil, err
+	}
+	runID, err := q.resolveRun(ctx, sc, req.GetRunId())
+	if err != nil {
+		return nil, err
+	}
+	arts, err := q.artifacts.List(ctx, runID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "list artifacts: %v", err)
+	}
+	out := make([]*civ1.ArtifactSummary, 0, len(arts))
+	for _, a := range arts {
+		out = append(out, &civ1.ArtifactSummary{
+			Id: a.ID.String(), JobId: a.JobID.String(),
+			Name: a.Name, SizeBytes: a.SizeBytes,
+		})
+	}
+	return &civ1.ListArtifactsResponse{Artifacts: out}, nil
+}
+
+func (q *QueryServer) resolveRun(ctx context.Context, sc authz.Scope, id string) (uuid.UUID, error) {
+	runID, err := uuid.Parse(id)
+	if err != nil {
+		return uuid.Nil, status.Error(codes.InvalidArgument, "invalid run id")
+	}
+	run, err := q.store.GetRun(ctx, runID)
+	if err != nil || run.OrgID != sc.OrgID {
+		return uuid.Nil, status.Error(codes.NotFound, "no such run")
+	}
+	return runID, nil
+}
+
+func (q *QueryServer) resolveJob(ctx context.Context, sc authz.Scope, jobID, runID string) (uuid.UUID, error) {
+	if jobID != "" {
+		id, err := uuid.Parse(jobID)
+		if err != nil {
+			return uuid.Nil, status.Error(codes.InvalidArgument, "invalid job id")
+		}
+		job, err := q.store.GetJob(ctx, id)
+		if err != nil {
+			return uuid.Nil, status.Error(codes.NotFound, "no such job")
+		}
+		run, err := q.store.GetRun(ctx, job.RunID)
+		if err != nil || run.OrgID != sc.OrgID {
+			return uuid.Nil, status.Error(codes.NotFound, "no such job")
+		}
+		return id, nil
+	}
+	rid, err := q.resolveRun(ctx, sc, runID)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	jobs, err := q.store.ListJobsForRun(ctx, rid)
+	if err != nil || len(jobs) == 0 {
+		return uuid.Nil, status.Error(codes.NotFound, "the run has no jobs")
+	}
+	return jobs[0].ID, nil
+}
+
+func runSummary(r Run) *civ1.WorkflowRunSummary {
+	return &civ1.WorkflowRunSummary{
+		Id: r.ID.String(), RepoId: r.RepoID.String(),
+		CommitSha: r.CommitSHA, Ref: r.Ref, Status: r.Status,
+		CreatedAt: r.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+}
+
+func splitLines(s string) []string {
+	out := []string{}
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\n' {
+			out = append(out, s[start:i])
+			start = i + 1
+		}
+	}
+	if start < len(s) {
+		out = append(out, s[start:])
+	}
+	return out
+}

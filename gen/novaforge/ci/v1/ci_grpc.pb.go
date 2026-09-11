@@ -19,6 +19,236 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
+	CIService_ListRuns_FullMethodName      = "/novaforge.ci.v1.CIService/ListRuns"
+	CIService_GetRun_FullMethodName        = "/novaforge.ci.v1.CIService/GetRun"
+	CIService_GetJobLogs_FullMethodName    = "/novaforge.ci.v1.CIService/GetJobLogs"
+	CIService_ListArtifacts_FullMethodName = "/novaforge.ci.v1.CIService/ListArtifacts"
+)
+
+// CIServiceClient is the client API for CIService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// RunnerService lets a runner register once, then hold a single persistent
+// outbound stream that the platform pushes jobs down — a runner never needs
+// inbound network reachability.
+// CIService answers questions about runs, jobs, logs and artifacts. It is
+// separate from RunnerService because runners and humans are different callers
+// with different authorization: a runner presents a runner credential, a person
+// presents theirs.
+type CIServiceClient interface {
+	ListRuns(ctx context.Context, in *ListRunsRequest, opts ...grpc.CallOption) (*ListRunsResponse, error)
+	GetRun(ctx context.Context, in *GetRunRequest, opts ...grpc.CallOption) (*GetRunResponse, error)
+	GetJobLogs(ctx context.Context, in *GetJobLogsRequest, opts ...grpc.CallOption) (*GetJobLogsResponse, error)
+	ListArtifacts(ctx context.Context, in *ListArtifactsRequest, opts ...grpc.CallOption) (*ListArtifactsResponse, error)
+}
+
+type cIServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewCIServiceClient(cc grpc.ClientConnInterface) CIServiceClient {
+	return &cIServiceClient{cc}
+}
+
+func (c *cIServiceClient) ListRuns(ctx context.Context, in *ListRunsRequest, opts ...grpc.CallOption) (*ListRunsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRunsResponse)
+	err := c.cc.Invoke(ctx, CIService_ListRuns_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *cIServiceClient) GetRun(ctx context.Context, in *GetRunRequest, opts ...grpc.CallOption) (*GetRunResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRunResponse)
+	err := c.cc.Invoke(ctx, CIService_GetRun_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *cIServiceClient) GetJobLogs(ctx context.Context, in *GetJobLogsRequest, opts ...grpc.CallOption) (*GetJobLogsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetJobLogsResponse)
+	err := c.cc.Invoke(ctx, CIService_GetJobLogs_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *cIServiceClient) ListArtifacts(ctx context.Context, in *ListArtifactsRequest, opts ...grpc.CallOption) (*ListArtifactsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListArtifactsResponse)
+	err := c.cc.Invoke(ctx, CIService_ListArtifacts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// CIServiceServer is the server API for CIService service.
+// All implementations should embed UnimplementedCIServiceServer
+// for forward compatibility.
+//
+// RunnerService lets a runner register once, then hold a single persistent
+// outbound stream that the platform pushes jobs down — a runner never needs
+// inbound network reachability.
+// CIService answers questions about runs, jobs, logs and artifacts. It is
+// separate from RunnerService because runners and humans are different callers
+// with different authorization: a runner presents a runner credential, a person
+// presents theirs.
+type CIServiceServer interface {
+	ListRuns(context.Context, *ListRunsRequest) (*ListRunsResponse, error)
+	GetRun(context.Context, *GetRunRequest) (*GetRunResponse, error)
+	GetJobLogs(context.Context, *GetJobLogsRequest) (*GetJobLogsResponse, error)
+	ListArtifacts(context.Context, *ListArtifactsRequest) (*ListArtifactsResponse, error)
+}
+
+// UnimplementedCIServiceServer should be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedCIServiceServer struct{}
+
+func (UnimplementedCIServiceServer) ListRuns(context.Context, *ListRunsRequest) (*ListRunsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRuns not implemented")
+}
+func (UnimplementedCIServiceServer) GetRun(context.Context, *GetRunRequest) (*GetRunResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRun not implemented")
+}
+func (UnimplementedCIServiceServer) GetJobLogs(context.Context, *GetJobLogsRequest) (*GetJobLogsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetJobLogs not implemented")
+}
+func (UnimplementedCIServiceServer) ListArtifacts(context.Context, *ListArtifactsRequest) (*ListArtifactsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListArtifacts not implemented")
+}
+func (UnimplementedCIServiceServer) testEmbeddedByValue() {}
+
+// UnsafeCIServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to CIServiceServer will
+// result in compilation errors.
+type UnsafeCIServiceServer interface {
+	mustEmbedUnimplementedCIServiceServer()
+}
+
+func RegisterCIServiceServer(s grpc.ServiceRegistrar, srv CIServiceServer) {
+	// If the following call panics, it indicates UnimplementedCIServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&CIService_ServiceDesc, srv)
+}
+
+func _CIService_ListRuns_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRunsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CIServiceServer).ListRuns(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CIService_ListRuns_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CIServiceServer).ListRuns(ctx, req.(*ListRunsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CIService_GetRun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRunRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CIServiceServer).GetRun(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CIService_GetRun_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CIServiceServer).GetRun(ctx, req.(*GetRunRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CIService_GetJobLogs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetJobLogsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CIServiceServer).GetJobLogs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CIService_GetJobLogs_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CIServiceServer).GetJobLogs(ctx, req.(*GetJobLogsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CIService_ListArtifacts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListArtifactsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CIServiceServer).ListArtifacts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CIService_ListArtifacts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CIServiceServer).ListArtifacts(ctx, req.(*ListArtifactsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// CIService_ServiceDesc is the grpc.ServiceDesc for CIService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var CIService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "novaforge.ci.v1.CIService",
+	HandlerType: (*CIServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ListRuns",
+			Handler:    _CIService_ListRuns_Handler,
+		},
+		{
+			MethodName: "GetRun",
+			Handler:    _CIService_GetRun_Handler,
+		},
+		{
+			MethodName: "GetJobLogs",
+			Handler:    _CIService_GetJobLogs_Handler,
+		},
+		{
+			MethodName: "ListArtifacts",
+			Handler:    _CIService_ListArtifacts_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "novaforge/ci/v1/ci.proto",
+}
+
+const (
 	RunnerService_Register_FullMethodName     = "/novaforge.ci.v1.RunnerService/Register"
 	RunnerService_Connect_FullMethodName      = "/novaforge.ci.v1.RunnerService/Connect"
 	RunnerService_ReportStatus_FullMethodName = "/novaforge.ci.v1.RunnerService/ReportStatus"
@@ -27,10 +257,6 @@ const (
 // RunnerServiceClient is the client API for RunnerService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-//
-// RunnerService lets a runner register once, then hold a single persistent
-// outbound stream that the platform pushes jobs down — a runner never needs
-// inbound network reachability.
 type RunnerServiceClient interface {
 	Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterResponse, error)
 	Connect(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ConnectRequest, ConnectResponse], error)
@@ -81,10 +307,6 @@ func (c *runnerServiceClient) ReportStatus(ctx context.Context, in *ReportStatus
 // RunnerServiceServer is the server API for RunnerService service.
 // All implementations should embed UnimplementedRunnerServiceServer
 // for forward compatibility.
-//
-// RunnerService lets a runner register once, then hold a single persistent
-// outbound stream that the platform pushes jobs down — a runner never needs
-// inbound network reachability.
 type RunnerServiceServer interface {
 	Register(context.Context, *RegisterRequest) (*RegisterResponse, error)
 	Connect(grpc.BidiStreamingServer[ConnectRequest, ConnectResponse]) error

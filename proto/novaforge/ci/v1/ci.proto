@@ -5,6 +5,17 @@ package novaforge.ci.v1;
 // RunnerService lets a runner register once, then hold a single persistent
 // outbound stream that the platform pushes jobs down — a runner never needs
 // inbound network reachability.
+// CIService answers questions about runs, jobs, logs and artifacts. It is
+// separate from RunnerService because runners and humans are different callers
+// with different authorization: a runner presents a runner credential, a person
+// presents theirs.
+service CIService {
+  rpc ListRuns(ListRunsRequest) returns (ListRunsResponse);
+  rpc GetRun(GetRunRequest) returns (GetRunResponse);
+  rpc GetJobLogs(GetJobLogsRequest) returns (GetJobLogsResponse);
+  rpc ListArtifacts(ListArtifactsRequest) returns (ListArtifactsResponse);
+}
+
 service RunnerService {
   rpc Register(RegisterRequest) returns (RegisterResponse);
   rpc Connect(stream ConnectRequest) returns (stream ConnectResponse);
@@ -67,4 +78,59 @@ message ReportStatusRequest {
 
 message ReportStatusResponse {
   bool ok = 1;
+}
+
+message WorkflowRunSummary {
+  string id = 1;
+  string repo_id = 2;
+  string commit_sha = 3;
+  string ref = 4;
+  string status = 5;
+  string created_at = 6;
+}
+
+message WorkflowJobSummary {
+  string id = 1;
+  string run_id = 2;
+  string name = 3;
+  string status = 4;
+  string detail = 5;
+}
+
+message ArtifactSummary {
+  string id = 1;
+  string job_id = 2;
+  string name = 3;
+  int64 size_bytes = 4;
+}
+
+message ListRunsRequest {
+  string repo_id = 1;
+}
+message ListRunsResponse {
+  repeated WorkflowRunSummary runs = 1;
+}
+
+message GetRunRequest {
+  string id = 1;
+}
+message GetRunResponse {
+  WorkflowRunSummary run = 1;
+  repeated WorkflowJobSummary jobs = 2;
+}
+
+message GetJobLogsRequest {
+  string job_id = 1;
+  string run_id = 2;
+}
+message GetJobLogsResponse {
+  repeated string lines = 1;
+}
+
+message ListArtifactsRequest {
+  string run_id = 1;
+  string job_id = 2;
+}
+message ListArtifactsResponse {
+  repeated ArtifactSummary artifacts = 1;
 }

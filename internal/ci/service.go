@@ -28,6 +28,7 @@ type Service struct {
 	Logs         *LogSink
 	Artifacts    *ArtifactStore
 	Server       *Server
+	Query        *QueryServer
 	Scheduler    *Scheduler
 	Sweeper      *retention.Sweeper
 	SweepEvery   time.Duration
@@ -44,6 +45,7 @@ func NewService(pool *pgxpool.Pool, rdb *redis.Client, blobs *blobstore.Client, 
 	logs := NewLogSink(rdb, blobs)
 	artifacts := NewArtifactStore(pool, blobs)
 
+	query := NewQueryServer(store, logs, artifacts, blobs)
 	server := NewServer(store, dispatcher)
 	server.SetLogSink(logs)
 
@@ -52,6 +54,7 @@ func NewService(pool *pgxpool.Pool, rdb *redis.Client, blobs *blobstore.Client, 
 
 	return &Service{
 		Store:      store,
+		Query:      query,
 		Dispatcher: dispatcher,
 		Logs:       logs,
 		Artifacts:  artifacts,

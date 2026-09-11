@@ -7,6 +7,8 @@ package main
 import (
 	"context"
 	"fmt"
+	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
+	"github.com/novaforge/novaforge/internal/svcauth"
 	"log"
 
 	"github.com/redis/go-redis/v9"
@@ -94,8 +96,21 @@ func main() {
 	// explicitly (rather than calling grpc.NewServer with no options) so
 	// every RPC's outcome is logged the same way across every service
 	// binary in this codebase.
-	srv := grpc.NewServer(grpc.UnaryInterceptor(logInterceptor))
+	// The query surface serves people, so it needs the caller's scope; the
+	// runner surface serves runners and resolves them separately.
+	identityConn, err := grpc.NewClient(cfg.IdentityAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatalf("ci-runner: dial identity: %v", err)
+	}
+	defer identityConn.Close()
+
+	srv := grpc.NewServer(grpc.ChainUnaryInterceptor(
+		logInterceptor,
+		svcauth.UnaryServerInterceptor(identityv1.NewIdentityServiceClient(identityConn), cfg.HMACSecret),
+	))
 	civ1.RegisterRunnerServiceServer(srv, svc.Server)
+	civ1.RegisterCIServiceServer(srv, svc.Query)
 
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()

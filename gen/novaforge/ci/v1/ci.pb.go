@@ -546,6 +546,610 @@ func (x *ReportStatusResponse) GetOk() bool {
 	return false
 }
 
+type WorkflowRunSummary struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	RepoId        string                 `protobuf:"bytes,2,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	CommitSha     string                 `protobuf:"bytes,3,opt,name=commit_sha,json=commitSha,proto3" json:"commit_sha,omitempty"`
+	Ref           string                 `protobuf:"bytes,4,opt,name=ref,proto3" json:"ref,omitempty"`
+	Status        string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
+	CreatedAt     string                 `protobuf:"bytes,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WorkflowRunSummary) Reset() {
+	*x = WorkflowRunSummary{}
+	mi := &file_novaforge_ci_v1_ci_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WorkflowRunSummary) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WorkflowRunSummary) ProtoMessage() {}
+
+func (x *WorkflowRunSummary) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_ci_v1_ci_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WorkflowRunSummary.ProtoReflect.Descriptor instead.
+func (*WorkflowRunSummary) Descriptor() ([]byte, []int) {
+	return file_novaforge_ci_v1_ci_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *WorkflowRunSummary) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *WorkflowRunSummary) GetRepoId() string {
+	if x != nil {
+		return x.RepoId
+	}
+	return ""
+}
+
+func (x *WorkflowRunSummary) GetCommitSha() string {
+	if x != nil {
+		return x.CommitSha
+	}
+	return ""
+}
+
+func (x *WorkflowRunSummary) GetRef() string {
+	if x != nil {
+		return x.Ref
+	}
+	return ""
+}
+
+func (x *WorkflowRunSummary) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *WorkflowRunSummary) GetCreatedAt() string {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return ""
+}
+
+type WorkflowJobSummary struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	RunId         string                 `protobuf:"bytes,2,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Status        string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	Detail        string                 `protobuf:"bytes,5,opt,name=detail,proto3" json:"detail,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WorkflowJobSummary) Reset() {
+	*x = WorkflowJobSummary{}
+	mi := &file_novaforge_ci_v1_ci_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WorkflowJobSummary) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WorkflowJobSummary) ProtoMessage() {}
+
+func (x *WorkflowJobSummary) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_ci_v1_ci_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WorkflowJobSummary.ProtoReflect.Descriptor instead.
+func (*WorkflowJobSummary) Descriptor() ([]byte, []int) {
+	return file_novaforge_ci_v1_ci_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *WorkflowJobSummary) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *WorkflowJobSummary) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *WorkflowJobSummary) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *WorkflowJobSummary) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *WorkflowJobSummary) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+type ArtifactSummary struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	JobId         string                 `protobuf:"bytes,2,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
+	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	SizeBytes     int64                  `protobuf:"varint,4,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ArtifactSummary) Reset() {
+	*x = ArtifactSummary{}
+	mi := &file_novaforge_ci_v1_ci_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ArtifactSummary) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ArtifactSummary) ProtoMessage() {}
+
+func (x *ArtifactSummary) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_ci_v1_ci_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ArtifactSummary.ProtoReflect.Descriptor instead.
+func (*ArtifactSummary) Descriptor() ([]byte, []int) {
+	return file_novaforge_ci_v1_ci_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ArtifactSummary) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *ArtifactSummary) GetJobId() string {
+	if x != nil {
+		return x.JobId
+	}
+	return ""
+}
+
+func (x *ArtifactSummary) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ArtifactSummary) GetSizeBytes() int64 {
+	if x != nil {
+		return x.SizeBytes
+	}
+	return 0
+}
+
+type ListRunsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RepoId        string                 `protobuf:"bytes,1,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListRunsRequest) Reset() {
+	*x = ListRunsRequest{}
+	mi := &file_novaforge_ci_v1_ci_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListRunsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListRunsRequest) ProtoMessage() {}
+
+func (x *ListRunsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_ci_v1_ci_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListRunsRequest.ProtoReflect.Descriptor instead.
+func (*ListRunsRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_ci_v1_ci_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ListRunsRequest) GetRepoId() string {
+	if x != nil {
+		return x.RepoId
+	}
+	return ""
+}
+
+type ListRunsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Runs          []*WorkflowRunSummary  `protobuf:"bytes,1,rep,name=runs,proto3" json:"runs,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListRunsResponse) Reset() {
+	*x = ListRunsResponse{}
+	mi := &file_novaforge_ci_v1_ci_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListRunsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListRunsResponse) ProtoMessage() {}
+
+func (x *ListRunsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_ci_v1_ci_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListRunsResponse.ProtoReflect.Descriptor instead.
+func (*ListRunsResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_ci_v1_ci_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *ListRunsResponse) GetRuns() []*WorkflowRunSummary {
+	if x != nil {
+		return x.Runs
+	}
+	return nil
+}
+
+type GetRunRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetRunRequest) Reset() {
+	*x = GetRunRequest{}
+	mi := &file_novaforge_ci_v1_ci_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetRunRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetRunRequest) ProtoMessage() {}
+
+func (x *GetRunRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_ci_v1_ci_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetRunRequest.ProtoReflect.Descriptor instead.
+func (*GetRunRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_ci_v1_ci_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *GetRunRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+type GetRunResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Run           *WorkflowRunSummary    `protobuf:"bytes,1,opt,name=run,proto3" json:"run,omitempty"`
+	Jobs          []*WorkflowJobSummary  `protobuf:"bytes,2,rep,name=jobs,proto3" json:"jobs,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetRunResponse) Reset() {
+	*x = GetRunResponse{}
+	mi := &file_novaforge_ci_v1_ci_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetRunResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetRunResponse) ProtoMessage() {}
+
+func (x *GetRunResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_ci_v1_ci_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetRunResponse.ProtoReflect.Descriptor instead.
+func (*GetRunResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_ci_v1_ci_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *GetRunResponse) GetRun() *WorkflowRunSummary {
+	if x != nil {
+		return x.Run
+	}
+	return nil
+}
+
+func (x *GetRunResponse) GetJobs() []*WorkflowJobSummary {
+	if x != nil {
+		return x.Jobs
+	}
+	return nil
+}
+
+type GetJobLogsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	JobId         string                 `protobuf:"bytes,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
+	RunId         string                 `protobuf:"bytes,2,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetJobLogsRequest) Reset() {
+	*x = GetJobLogsRequest{}
+	mi := &file_novaforge_ci_v1_ci_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetJobLogsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetJobLogsRequest) ProtoMessage() {}
+
+func (x *GetJobLogsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_ci_v1_ci_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetJobLogsRequest.ProtoReflect.Descriptor instead.
+func (*GetJobLogsRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_ci_v1_ci_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *GetJobLogsRequest) GetJobId() string {
+	if x != nil {
+		return x.JobId
+	}
+	return ""
+}
+
+func (x *GetJobLogsRequest) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+type GetJobLogsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Lines         []string               `protobuf:"bytes,1,rep,name=lines,proto3" json:"lines,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetJobLogsResponse) Reset() {
+	*x = GetJobLogsResponse{}
+	mi := &file_novaforge_ci_v1_ci_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetJobLogsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetJobLogsResponse) ProtoMessage() {}
+
+func (x *GetJobLogsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_ci_v1_ci_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetJobLogsResponse.ProtoReflect.Descriptor instead.
+func (*GetJobLogsResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_ci_v1_ci_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *GetJobLogsResponse) GetLines() []string {
+	if x != nil {
+		return x.Lines
+	}
+	return nil
+}
+
+type ListArtifactsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	JobId         string                 `protobuf:"bytes,2,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListArtifactsRequest) Reset() {
+	*x = ListArtifactsRequest{}
+	mi := &file_novaforge_ci_v1_ci_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListArtifactsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListArtifactsRequest) ProtoMessage() {}
+
+func (x *ListArtifactsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_ci_v1_ci_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListArtifactsRequest.ProtoReflect.Descriptor instead.
+func (*ListArtifactsRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_ci_v1_ci_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *ListArtifactsRequest) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *ListArtifactsRequest) GetJobId() string {
+	if x != nil {
+		return x.JobId
+	}
+	return ""
+}
+
+type ListArtifactsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Artifacts     []*ArtifactSummary     `protobuf:"bytes,1,rep,name=artifacts,proto3" json:"artifacts,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListArtifactsResponse) Reset() {
+	*x = ListArtifactsResponse{}
+	mi := &file_novaforge_ci_v1_ci_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListArtifactsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListArtifactsResponse) ProtoMessage() {}
+
+func (x *ListArtifactsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_ci_v1_ci_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListArtifactsResponse.ProtoReflect.Descriptor instead.
+func (*ListArtifactsResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_ci_v1_ci_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *ListArtifactsResponse) GetArtifacts() []*ArtifactSummary {
+	if x != nil {
+		return x.Artifacts
+	}
+	return nil
+}
+
 var File_novaforge_ci_v1_ci_proto protoreflect.FileDescriptor
 
 const file_novaforge_ci_v1_ci_proto_rawDesc = "" +
@@ -589,7 +1193,53 @@ const file_novaforge_ci_v1_ci_proto_rawDesc = "" +
 	"\texit_code\x18\x04 \x01(\x05R\bexitCode\x12\x16\n" +
 	"\x06detail\x18\x05 \x01(\tR\x06detail\"&\n" +
 	"\x14ReportStatusResponse\x12\x0e\n" +
-	"\x02ok\x18\x01 \x01(\bR\x02ok2\x8f\x02\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\"\xa5\x01\n" +
+	"\x12WorkflowRunSummary\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
+	"\arepo_id\x18\x02 \x01(\tR\x06repoId\x12\x1d\n" +
+	"\n" +
+	"commit_sha\x18\x03 \x01(\tR\tcommitSha\x12\x10\n" +
+	"\x03ref\x18\x04 \x01(\tR\x03ref\x12\x16\n" +
+	"\x06status\x18\x05 \x01(\tR\x06status\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x06 \x01(\tR\tcreatedAt\"\x7f\n" +
+	"\x12WorkflowJobSummary\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x15\n" +
+	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12\x16\n" +
+	"\x06status\x18\x04 \x01(\tR\x06status\x12\x16\n" +
+	"\x06detail\x18\x05 \x01(\tR\x06detail\"k\n" +
+	"\x0fArtifactSummary\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x15\n" +
+	"\x06job_id\x18\x02 \x01(\tR\x05jobId\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12\x1d\n" +
+	"\n" +
+	"size_bytes\x18\x04 \x01(\x03R\tsizeBytes\"*\n" +
+	"\x0fListRunsRequest\x12\x17\n" +
+	"\arepo_id\x18\x01 \x01(\tR\x06repoId\"K\n" +
+	"\x10ListRunsResponse\x127\n" +
+	"\x04runs\x18\x01 \x03(\v2#.novaforge.ci.v1.WorkflowRunSummaryR\x04runs\"\x1f\n" +
+	"\rGetRunRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\x80\x01\n" +
+	"\x0eGetRunResponse\x125\n" +
+	"\x03run\x18\x01 \x01(\v2#.novaforge.ci.v1.WorkflowRunSummaryR\x03run\x127\n" +
+	"\x04jobs\x18\x02 \x03(\v2#.novaforge.ci.v1.WorkflowJobSummaryR\x04jobs\"A\n" +
+	"\x11GetJobLogsRequest\x12\x15\n" +
+	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x15\n" +
+	"\x06run_id\x18\x02 \x01(\tR\x05runId\"*\n" +
+	"\x12GetJobLogsResponse\x12\x14\n" +
+	"\x05lines\x18\x01 \x03(\tR\x05lines\"D\n" +
+	"\x14ListArtifactsRequest\x12\x15\n" +
+	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x15\n" +
+	"\x06job_id\x18\x02 \x01(\tR\x05jobId\"W\n" +
+	"\x15ListArtifactsResponse\x12>\n" +
+	"\tartifacts\x18\x01 \x03(\v2 .novaforge.ci.v1.ArtifactSummaryR\tartifacts2\xde\x02\n" +
+	"\tCIService\x12O\n" +
+	"\bListRuns\x12 .novaforge.ci.v1.ListRunsRequest\x1a!.novaforge.ci.v1.ListRunsResponse\x12I\n" +
+	"\x06GetRun\x12\x1e.novaforge.ci.v1.GetRunRequest\x1a\x1f.novaforge.ci.v1.GetRunResponse\x12U\n" +
+	"\n" +
+	"GetJobLogs\x12\".novaforge.ci.v1.GetJobLogsRequest\x1a#.novaforge.ci.v1.GetJobLogsResponse\x12^\n" +
+	"\rListArtifacts\x12%.novaforge.ci.v1.ListArtifactsRequest\x1a&.novaforge.ci.v1.ListArtifactsResponse2\x8f\x02\n" +
 	"\rRunnerService\x12O\n" +
 	"\bRegister\x12 .novaforge.ci.v1.RegisterRequest\x1a!.novaforge.ci.v1.RegisterResponse\x12P\n" +
 	"\aConnect\x12\x1f.novaforge.ci.v1.ConnectRequest\x1a .novaforge.ci.v1.ConnectResponse(\x010\x01\x12[\n" +
@@ -608,33 +1258,56 @@ func file_novaforge_ci_v1_ci_proto_rawDescGZIP() []byte {
 	return file_novaforge_ci_v1_ci_proto_rawDescData
 }
 
-var file_novaforge_ci_v1_ci_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_novaforge_ci_v1_ci_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_novaforge_ci_v1_ci_proto_goTypes = []any{
-	(*RegisterRequest)(nil),      // 0: novaforge.ci.v1.RegisterRequest
-	(*RegisterResponse)(nil),     // 1: novaforge.ci.v1.RegisterResponse
-	(*Heartbeat)(nil),            // 2: novaforge.ci.v1.Heartbeat
-	(*LogChunk)(nil),             // 3: novaforge.ci.v1.LogChunk
-	(*ConnectRequest)(nil),       // 4: novaforge.ci.v1.ConnectRequest
-	(*ConnectResponse)(nil),      // 5: novaforge.ci.v1.ConnectResponse
-	(*ReportStatusRequest)(nil),  // 6: novaforge.ci.v1.ReportStatusRequest
-	(*ReportStatusResponse)(nil), // 7: novaforge.ci.v1.ReportStatusResponse
-	nil,                          // 8: novaforge.ci.v1.ConnectResponse.EnvEntry
+	(*RegisterRequest)(nil),       // 0: novaforge.ci.v1.RegisterRequest
+	(*RegisterResponse)(nil),      // 1: novaforge.ci.v1.RegisterResponse
+	(*Heartbeat)(nil),             // 2: novaforge.ci.v1.Heartbeat
+	(*LogChunk)(nil),              // 3: novaforge.ci.v1.LogChunk
+	(*ConnectRequest)(nil),        // 4: novaforge.ci.v1.ConnectRequest
+	(*ConnectResponse)(nil),       // 5: novaforge.ci.v1.ConnectResponse
+	(*ReportStatusRequest)(nil),   // 6: novaforge.ci.v1.ReportStatusRequest
+	(*ReportStatusResponse)(nil),  // 7: novaforge.ci.v1.ReportStatusResponse
+	(*WorkflowRunSummary)(nil),    // 8: novaforge.ci.v1.WorkflowRunSummary
+	(*WorkflowJobSummary)(nil),    // 9: novaforge.ci.v1.WorkflowJobSummary
+	(*ArtifactSummary)(nil),       // 10: novaforge.ci.v1.ArtifactSummary
+	(*ListRunsRequest)(nil),       // 11: novaforge.ci.v1.ListRunsRequest
+	(*ListRunsResponse)(nil),      // 12: novaforge.ci.v1.ListRunsResponse
+	(*GetRunRequest)(nil),         // 13: novaforge.ci.v1.GetRunRequest
+	(*GetRunResponse)(nil),        // 14: novaforge.ci.v1.GetRunResponse
+	(*GetJobLogsRequest)(nil),     // 15: novaforge.ci.v1.GetJobLogsRequest
+	(*GetJobLogsResponse)(nil),    // 16: novaforge.ci.v1.GetJobLogsResponse
+	(*ListArtifactsRequest)(nil),  // 17: novaforge.ci.v1.ListArtifactsRequest
+	(*ListArtifactsResponse)(nil), // 18: novaforge.ci.v1.ListArtifactsResponse
+	nil,                           // 19: novaforge.ci.v1.ConnectResponse.EnvEntry
 }
 var file_novaforge_ci_v1_ci_proto_depIdxs = []int32{
-	2, // 0: novaforge.ci.v1.ConnectRequest.heartbeat:type_name -> novaforge.ci.v1.Heartbeat
-	3, // 1: novaforge.ci.v1.ConnectRequest.log_chunk:type_name -> novaforge.ci.v1.LogChunk
-	8, // 2: novaforge.ci.v1.ConnectResponse.env:type_name -> novaforge.ci.v1.ConnectResponse.EnvEntry
-	0, // 3: novaforge.ci.v1.RunnerService.Register:input_type -> novaforge.ci.v1.RegisterRequest
-	4, // 4: novaforge.ci.v1.RunnerService.Connect:input_type -> novaforge.ci.v1.ConnectRequest
-	6, // 5: novaforge.ci.v1.RunnerService.ReportStatus:input_type -> novaforge.ci.v1.ReportStatusRequest
-	1, // 6: novaforge.ci.v1.RunnerService.Register:output_type -> novaforge.ci.v1.RegisterResponse
-	5, // 7: novaforge.ci.v1.RunnerService.Connect:output_type -> novaforge.ci.v1.ConnectResponse
-	7, // 8: novaforge.ci.v1.RunnerService.ReportStatus:output_type -> novaforge.ci.v1.ReportStatusResponse
-	6, // [6:9] is the sub-list for method output_type
-	3, // [3:6] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	2,  // 0: novaforge.ci.v1.ConnectRequest.heartbeat:type_name -> novaforge.ci.v1.Heartbeat
+	3,  // 1: novaforge.ci.v1.ConnectRequest.log_chunk:type_name -> novaforge.ci.v1.LogChunk
+	19, // 2: novaforge.ci.v1.ConnectResponse.env:type_name -> novaforge.ci.v1.ConnectResponse.EnvEntry
+	8,  // 3: novaforge.ci.v1.ListRunsResponse.runs:type_name -> novaforge.ci.v1.WorkflowRunSummary
+	8,  // 4: novaforge.ci.v1.GetRunResponse.run:type_name -> novaforge.ci.v1.WorkflowRunSummary
+	9,  // 5: novaforge.ci.v1.GetRunResponse.jobs:type_name -> novaforge.ci.v1.WorkflowJobSummary
+	10, // 6: novaforge.ci.v1.ListArtifactsResponse.artifacts:type_name -> novaforge.ci.v1.ArtifactSummary
+	11, // 7: novaforge.ci.v1.CIService.ListRuns:input_type -> novaforge.ci.v1.ListRunsRequest
+	13, // 8: novaforge.ci.v1.CIService.GetRun:input_type -> novaforge.ci.v1.GetRunRequest
+	15, // 9: novaforge.ci.v1.CIService.GetJobLogs:input_type -> novaforge.ci.v1.GetJobLogsRequest
+	17, // 10: novaforge.ci.v1.CIService.ListArtifacts:input_type -> novaforge.ci.v1.ListArtifactsRequest
+	0,  // 11: novaforge.ci.v1.RunnerService.Register:input_type -> novaforge.ci.v1.RegisterRequest
+	4,  // 12: novaforge.ci.v1.RunnerService.Connect:input_type -> novaforge.ci.v1.ConnectRequest
+	6,  // 13: novaforge.ci.v1.RunnerService.ReportStatus:input_type -> novaforge.ci.v1.ReportStatusRequest
+	12, // 14: novaforge.ci.v1.CIService.ListRuns:output_type -> novaforge.ci.v1.ListRunsResponse
+	14, // 15: novaforge.ci.v1.CIService.GetRun:output_type -> novaforge.ci.v1.GetRunResponse
+	16, // 16: novaforge.ci.v1.CIService.GetJobLogs:output_type -> novaforge.ci.v1.GetJobLogsResponse
+	18, // 17: novaforge.ci.v1.CIService.ListArtifacts:output_type -> novaforge.ci.v1.ListArtifactsResponse
+	1,  // 18: novaforge.ci.v1.RunnerService.Register:output_type -> novaforge.ci.v1.RegisterResponse
+	5,  // 19: novaforge.ci.v1.RunnerService.Connect:output_type -> novaforge.ci.v1.ConnectResponse
+	7,  // 20: novaforge.ci.v1.RunnerService.ReportStatus:output_type -> novaforge.ci.v1.ReportStatusResponse
+	14, // [14:21] is the sub-list for method output_type
+	7,  // [7:14] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_novaforge_ci_v1_ci_proto_init() }
@@ -652,9 +1325,9 @@ func file_novaforge_ci_v1_ci_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_novaforge_ci_v1_ci_proto_rawDesc), len(file_novaforge_ci_v1_ci_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   20,
 			NumExtensions: 0,
-			NumServices:   1,
+			NumServices:   2,
 		},
 		GoTypes:           file_novaforge_ci_v1_ci_proto_goTypes,
 		DependencyIndexes: file_novaforge_ci_v1_ci_proto_depIdxs,
