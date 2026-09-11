@@ -89,6 +89,9 @@ func seedFinishedJob(t *testing.T, pool *pgxpool.Pool, orgID uuid.UUID, age time
 	if err != nil || !created {
 		t.Fatalf("CreateRun: run=%+v created=%v err=%v", run, created, err)
 	}
+	t.Cleanup(func() {
+		store.DeleteRun(context.Background(), run.ID)
+	})
 	job, err := store.CreateJob(ctx, ci.WorkflowJob{RunID: run.ID, Name: "build", RunCmd: "true"})
 	if err != nil {
 		t.Fatalf("CreateJob: %v", err)

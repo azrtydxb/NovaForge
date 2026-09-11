@@ -61,7 +61,10 @@ func TestDispatchNoMatchingRunner(t *testing.T) {
 }
 
 func TestBrokenStreamOrphansJob(t *testing.T) {
-	pool := ciPool(t)
+	// ClaimJob claims globally across every pending job, so — like
+	// TestJobBlockedUntilNeedsSucceed — this test needs the ci schema to
+	// itself rather than sharing it with concurrent test runs.
+	pool := ciPoolExclusive(t)
 	store := ci.NewStore(pool)
 	d := ci.NewDispatcher(store)
 

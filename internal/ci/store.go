@@ -96,6 +96,15 @@ func (s *Store) CreateRun(ctx context.Context, run Run) (Run, bool, error) {
 	return run, true, nil
 }
 
+// DeleteRun permanently removes a run and, via ON DELETE CASCADE, every job
+// and artifact that belongs to it.
+func (s *Store) DeleteRun(ctx context.Context, id uuid.UUID) error {
+	if _, err := s.pool.Exec(ctx, `DELETE FROM ci.workflow_runs WHERE id = $1`, id); err != nil {
+		return fmt.Errorf("delete run %s: %w", id, err)
+	}
+	return nil
+}
+
 // GetRun looks up a run by id, scoped to the org carried in ctx.
 func (s *Store) GetRun(ctx context.Context, id uuid.UUID) (Run, error) {
 	scope, err := authz.FromContext(ctx)

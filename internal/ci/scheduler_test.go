@@ -123,6 +123,17 @@ func newTestScheduler(t *testing.T, git gitv1.GitServiceClient) (*ci.Scheduler, 
 	return sched, store, rdb
 }
 
+// cleanupOrgRuns deletes every ci.workflow_runs row for orgID (cascading to
+// its jobs and artifacts) once the test finishes, so repeated runs of this
+// suite against the shared external test database don't leave permanent
+// rows behind that a later, unrelated test's global ClaimJob could pick up.
+func cleanupOrgRuns(t *testing.T, pool *pgxpool.Pool, orgID uuid.UUID) {
+	t.Helper()
+	t.Cleanup(func() {
+		pool.Exec(context.Background(), "DELETE FROM ci.workflow_runs WHERE org_id = $1", orgID)
+	})
+}
+
 func publishPush(t *testing.T, rdb *redis.Client, stream string, evt events.PushEvent) {
 	t.Helper()
 	if err := events.Publish(context.Background(), rdb, stream, evt); err != nil {
@@ -144,6 +155,7 @@ func TestPushSchedulesRun(t *testing.T) {
 
 	orgID := uuid.New()
 	repoID := uuid.New()
+	cleanupOrgRuns(t, pool, orgID)
 	evt := events.PushEvent{
 		OrgID: orgID, RepoID: repoID, PusherID: uuid.New(),
 		Ref: "refs/heads/main", OldSHA: "old", NewSHA: uuid.NewString(),
@@ -179,6 +191,7 @@ func TestDuplicatePushIsIdempotent(t *testing.T) {
 
 	orgID := uuid.New()
 	repoID := uuid.New()
+	cleanupOrgRuns(t, pool, orgID)
 	evt := events.PushEvent{
 		OrgID: orgID, RepoID: repoID, PusherID: uuid.New(),
 		Ref: "refs/heads/main", OldSHA: "old", NewSHA: uuid.NewString(),

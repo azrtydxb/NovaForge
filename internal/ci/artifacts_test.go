@@ -40,6 +40,9 @@ func seedJob(t *testing.T, store *ci.Store, orgID, repoID uuid.UUID) ci.Workflow
 	if err != nil || !created {
 		t.Fatalf("CreateRun: run=%+v created=%v err=%v", run, created, err)
 	}
+	t.Cleanup(func() {
+		store.DeleteRun(context.Background(), run.ID)
+	})
 	job, err := store.CreateJob(ctx, ci.WorkflowJob{RunID: run.ID, Name: "build", RunCmd: "go build ./..."})
 	if err != nil {
 		t.Fatalf("CreateJob: %v", err)
