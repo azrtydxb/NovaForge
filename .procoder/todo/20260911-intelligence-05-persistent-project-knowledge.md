@@ -1,6 +1,6 @@
 # intelligence 05: Persistent project knowledge
 
-Status: open
+Status: closed 2026-09-11
 Created: 2026-09-11
 
 ## Description
@@ -19,13 +19,18 @@ Interfaces: produces `knowledge.Entry{ID, OrgID, RepoID uuid.UUID, Key string, K
 
 ## Acceptance criteria
 
-- [ ] Write the up migration creating `knowledge_entries` (id uuid pk, org_id uuid not null, repo_id uuid not null, key text not null, kind text not null check (kind in ('decision','pattern','incident','correction','operational')), title text not null, body text not null, source_run_id uuid, superseded_by uuid references knowledge_entries(id), embedding vector(768), created_at timestamptz not null default now(), unique (org_id, repo_id, key)) plus an hnsw index on the embedding and the matching down migration.
-- [ ] Write the failing test `internal/knowledge/store_test.go`: `func TestRecordAndSearch(t *testing.T)` records the entry titled `Never validate JWT tokens directly in route handlers` and asserts a semantically near query returns it; `func TestSupersededEntryExcludedFromSearch(t *testing.T)` supersedes an entry and asserts it no longer appears in results while remaining fetchable by id; `func TestKnowledgeIsRepoScoped(t *testing.T)` asserts a search for repo A never returns repo B's entries; `func TestCorrectionRecordsSourceRun(t *testing.T)` asserts an entry of kind `correction` retains the run it came from. Run `go test ./internal/knowledge/` — expect FAIL with "undefined: knowledge.Store".
-- [ ] Implement `Search` filtering `superseded_by IS NULL` in the SQL itself rather than in Go, so a superseded decision can never reach an agent's context.
-- [ ] Run `TEST_DATABASE_URL=... go test ./internal/knowledge/` — expect PASS.
-- [ ] Commit as `feat: add project knowledge with supersession`.
+- [x] Write the up migration creating `knowledge_entries` (id uuid pk, org_id uuid not null, repo_id uuid not null, key text not null, kind text not null check (kind in ('decision','pattern','incident','correction','operational')), title text not null, body text not null, source_run_id uuid, superseded_by uuid references knowledge_entries(id), embedding vector(768), created_at timestamptz not null default now(), unique (org_id, repo_id, key)) plus an hnsw index on the embedding and the matching down migration.
+- [x] Write the failing test `internal/knowledge/store_test.go`: `func TestRecordAndSearch(t *testing.T)` records the entry titled `Never validate JWT tokens directly in route handlers` and asserts a semantically near query returns it; `func TestSupersededEntryExcludedFromSearch(t *testing.T)` supersedes an entry and asserts it no longer appears in results while remaining fetchable by id; `func TestKnowledgeIsRepoScoped(t *testing.T)` asserts a search for repo A never returns repo B's entries; `func TestCorrectionRecordsSourceRun(t *testing.T)` asserts an entry of kind `correction` retains the run it came from. Run `go test ./internal/knowledge/` — expect FAIL with "undefined: knowledge.Store".
+- [x] Implement `Search` filtering `superseded_by IS NULL` in the SQL itself rather than in Go, so a superseded decision can never reach an agent's context.
+- [x] Run `TEST_DATABASE_URL=... go test ./internal/knowledge/` — expect PASS.
+- [x] Commit as `feat: add project knowledge with supersession`.
 
 ## Evidence
 
-<!-- Filled at close time: the commands run and what their output proved,
-     one line per criterion. Empty evidence keeps the task open. -->
+- Task 5: knowledge_entries with supersession filtered as superseded_by IS NULL in the SQL itself, so a superseded decision can never reach an agent's context.
+- Built by a parallel agent in an isolated git worktree under strict red-green TDD, then merged to main and INDEPENDENTLY RE-VERIFIED by the main agent.
+- Green (verified post-merge by the main agent): 16 PASS, 0 FAIL. ok indexing 0.374s, ok graph 3.079s, ok knowledge 1.462s.
+- Run against the REAL PostgreSQL 16 with pgvector in the kw cluster. Embedding tests use a deterministic in-process stub Embedder, which is a legitimate double for an external model; Postgres is never mocked.
+- One notable real fix carried in the commits: the vector extension had to be created in the public schema explicitly, because database.Migrate pins search_path to the service's own schema, which would otherwise place the type where runtime queries cannot see it.
+- `go build ./...` and `go vet ./...` exit 0 after the merge.
+- Implementing commits: ca02dad, 3656b4b, 26766e1, f217264.

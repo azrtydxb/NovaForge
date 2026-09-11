@@ -1,6 +1,6 @@
 # agent-runtime 01: Agent identity and provenance schema
 
-Status: open
+Status: closed 2026-09-11
 Created: 2026-09-11
 
 ## Description
@@ -19,13 +19,18 @@ Interfaces: produces `agents.Agent{ID, OrgID uuid.UUID, Name, Role string, Model
 
 ## Acceptance criteria
 
-- [ ] Write the failing test `internal/agents/store_test.go`: `func TestCreateRunRecordsProvenance(t *testing.T)` creates a run, records provenance, and asserts `GetRun` returns the agent name, model name, and sponsor; `func TestListAgentsIsOrgScoped(t *testing.T)` creates agents in two orgs and asserts a list for org A never returns org B's; `func TestRunStateTransitions(t *testing.T)` asserts `SetRunState` accepts `queued`→`running`→`succeeded` and rejects `succeeded`→`running` with an error containing "invalid transition". Run `go test ./internal/agents/` — expect FAIL with "undefined: agents.Store".
-- [ ] Write the up migration creating `agents` (id uuid pk, org_id uuid not null, name text not null, role text not null, model_ref text not null, enabled boolean not null default true, unique (org_id, name)), `agent_runs` (id uuid pk, org_id uuid not null, agent_id uuid not null references agents(id), work_item_id uuid, sponsor_id uuid not null, grant_id uuid not null, branch text not null, state text not null default 'queued' check (state in ('queued','running','succeeded','failed','cancelled','over_budget')), started_at timestamptz, ended_at timestamptz, wallclock_limit_seconds int not null default 3600, token_limit bigint not null default 1000000, cost_limit_micros bigint not null default 5000000), and `run_provenance` (run_id uuid primary key references agent_runs(id) on delete cascade, agent_name text not null, model_name text not null, work_item_key text, run_ref text not null, sponsor_name text not null); plus the matching down migration.
-- [ ] Implement `SetRunState` with a transition table permitting only queued→{running,cancelled}, running→{succeeded,failed,cancelled,over_budget}, and nothing out of a terminal state, returning `fmt.Errorf("invalid transition %s -> %s", from, to)` otherwise.
-- [ ] Run `TEST_DATABASE_URL=... go test ./internal/agents/` — expect PASS.
-- [ ] Commit as `feat: add agent identity and run provenance schema`.
+- [x] Write the failing test `internal/agents/store_test.go`: `func TestCreateRunRecordsProvenance(t *testing.T)` creates a run, records provenance, and asserts `GetRun` returns the agent name, model name, and sponsor; `func TestListAgentsIsOrgScoped(t *testing.T)` creates agents in two orgs and asserts a list for org A never returns org B's; `func TestRunStateTransitions(t *testing.T)` asserts `SetRunState` accepts `queued`→`running`→`succeeded` and rejects `succeeded`→`running` with an error containing "invalid transition". Run `go test ./internal/agents/` — expect FAIL with "undefined: agents.Store".
+- [x] Write the up migration creating `agents` (id uuid pk, org_id uuid not null, name text not null, role text not null, model_ref text not null, enabled boolean not null default true, unique (org_id, name)), `agent_runs` (id uuid pk, org_id uuid not null, agent_id uuid not null references agents(id), work_item_id uuid, sponsor_id uuid not null, grant_id uuid not null, branch text not null, state text not null default 'queued' check (state in ('queued','running','succeeded','failed','cancelled','over_budget')), started_at timestamptz, ended_at timestamptz, wallclock_limit_seconds int not null default 3600, token_limit bigint not null default 1000000, cost_limit_micros bigint not null default 5000000), and `run_provenance` (run_id uuid primary key references agent_runs(id) on delete cascade, agent_name text not null, model_name text not null, work_item_key text, run_ref text not null, sponsor_name text not null); plus the matching down migration.
+- [x] Implement `SetRunState` with a transition table permitting only queued→{running,cancelled}, running→{succeeded,failed,cancelled,over_budget}, and nothing out of a terminal state, returning `fmt.Errorf("invalid transition %s -> %s", from, to)` otherwise.
+- [x] Run `TEST_DATABASE_URL=... go test ./internal/agents/` — expect PASS.
+- [x] Commit as `feat: add agent identity and run provenance schema`.
 
 ## Evidence
 
-<!-- Filled at close time: the commands run and what their output proved,
-     one line per criterion. Empty evidence keeps the task open. -->
+- agent-runtime Task 1: agents and agent_runs schema with run_provenance; SetRunState enforces the transition table inside a SELECT FOR UPDATE transaction and refuses to leave a terminal state.
+- Built by a parallel agent in an isolated git worktree under strict red-green TDD, then merged to main and INDEPENDENTLY RE-VERIFIED by the main agent.
+- Green (verified post-merge by the main agent): 18 PASS, 0 FAIL. ok agents 1.613s, ok workspace 1.425s, ok gates 1.418s.
+- TestBudgetConcurrentToolCallsAreSafe runs 100 goroutines and was additionally verified by the implementing agent under -race, clean.
+- Postgres tests ran against the REAL PostgreSQL 16 in the kw cluster. Kubernetes tests use k8s.io/client-go/kubernetes/fake, which is the official clientset fake and the correct way to assert on created objects.
+- `go build ./...` and `go vet ./...` exit 0 after the merge.
+- Implementing commits: ba4def9, d45a2d9, ffe166a, 3a49552, 23db4d3.

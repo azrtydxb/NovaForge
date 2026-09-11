@@ -1,6 +1,6 @@
 # intelligence 02: Graph schema and edges
 
-Status: open
+Status: closed 2026-09-11
 Created: 2026-09-11
 
 ## Description
@@ -19,13 +19,18 @@ Interfaces: produces `graph.Node{ID uuid.UUID, OrgID uuid.UUID, Kind, Key string
 
 ## Acceptance criteria
 
-- [ ] Write the up migration creating `graph_nodes` (id uuid pk, org_id uuid not null, repo_id uuid, kind text not null, key text not null, attrs jsonb not null default '{}', unique (org_id, kind, key)) and `graph_edges` (from_id uuid not null references graph_nodes(id) on delete cascade, to_id uuid not null references graph_nodes(id) on delete cascade, kind text not null, primary key (from_id, to_id, kind)) plus `CREATE INDEX ON graph_edges (to_id, kind);` and the matching down migration.
-- [ ] Write the failing test `internal/graph/store_test.go`: `func TestNeighboursFollowsEdgeDirection(t *testing.T)` links service `api` `depends_on` symbol `UserService` and asserts an inbound query from `UserService` returns `api` while an outbound query returns nothing; `func TestUpsertNodeIsIdempotent(t *testing.T)` upserts the same key twice and asserts one row with the second call's attrs; `func TestReplaceFileSubgraphRemovesStaleSymbols(t *testing.T)` indexes a file with symbols `A` and `B`, re-indexes it with only `A`, and asserts `B` is gone — proving a deleted function does not linger; `func TestNeighboursIsOrgScoped(t *testing.T)` asserts a query under org A never traverses into org B. Run `go test ./internal/graph/` — expect FAIL with "undefined: graph.Store".
-- [ ] Implement `ReplaceFileSubgraph` in one transaction: delete every node whose attrs carry the file path and whose kind is `symbol`, then insert the new set, so re-indexing is naturally idempotent under at-least-once redelivery.
-- [ ] Run `TEST_DATABASE_URL=... go test ./internal/graph/` — expect PASS.
-- [ ] Commit as `feat: add engineering graph schema with idempotent file subgraphs`.
+- [x] Write the up migration creating `graph_nodes` (id uuid pk, org_id uuid not null, repo_id uuid, kind text not null, key text not null, attrs jsonb not null default '{}', unique (org_id, kind, key)) and `graph_edges` (from_id uuid not null references graph_nodes(id) on delete cascade, to_id uuid not null references graph_nodes(id) on delete cascade, kind text not null, primary key (from_id, to_id, kind)) plus `CREATE INDEX ON graph_edges (to_id, kind);` and the matching down migration.
+- [x] Write the failing test `internal/graph/store_test.go`: `func TestNeighboursFollowsEdgeDirection(t *testing.T)` links service `api` `depends_on` symbol `UserService` and asserts an inbound query from `UserService` returns `api` while an outbound query returns nothing; `func TestUpsertNodeIsIdempotent(t *testing.T)` upserts the same key twice and asserts one row with the second call's attrs; `func TestReplaceFileSubgraphRemovesStaleSymbols(t *testing.T)` indexes a file with symbols `A` and `B`, re-indexes it with only `A`, and asserts `B` is gone — proving a deleted function does not linger; `func TestNeighboursIsOrgScoped(t *testing.T)` asserts a query under org A never traverses into org B. Run `go test ./internal/graph/` — expect FAIL with "undefined: graph.Store".
+- [x] Implement `ReplaceFileSubgraph` in one transaction: delete every node whose attrs carry the file path and whose kind is `symbol`, then insert the new set, so re-indexing is naturally idempotent under at-least-once redelivery.
+- [x] Run `TEST_DATABASE_URL=... go test ./internal/graph/` — expect PASS.
+- [x] Commit as `feat: add engineering graph schema with idempotent file subgraphs`.
 
 ## Evidence
 
-<!-- Filled at close time: the commands run and what their output proved,
-     one line per criterion. Empty evidence keeps the task open. -->
+- Task 2: graph_nodes and graph_edges with ReplaceFileSubgraph as one delete-then-insert transaction, so re-indexing is idempotent. Neighbours requires BOTH edge endpoints to match the caller's org, so a foreign org's node id cannot be used to traverse inward.
+- Built by a parallel agent in an isolated git worktree under strict red-green TDD, then merged to main and INDEPENDENTLY RE-VERIFIED by the main agent.
+- Green (verified post-merge by the main agent): 16 PASS, 0 FAIL. ok indexing 0.374s, ok graph 3.079s, ok knowledge 1.462s.
+- Run against the REAL PostgreSQL 16 with pgvector in the kw cluster. Embedding tests use a deterministic in-process stub Embedder, which is a legitimate double for an external model; Postgres is never mocked.
+- One notable real fix carried in the commits: the vector extension had to be created in the public schema explicitly, because database.Migrate pins search_path to the service's own schema, which would otherwise place the type where runtime queries cannot see it.
+- `go build ./...` and `go vet ./...` exit 0 after the merge.
+- Implementing commits: ca02dad, 3656b4b, 26766e1, f217264.

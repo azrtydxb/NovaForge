@@ -1,6 +1,6 @@
 # intelligence 03: Embeddings and semantic storage
 
-Status: open
+Status: closed 2026-09-11
 Created: 2026-09-11
 
 ## Description
@@ -19,14 +19,19 @@ Interfaces: produces `graph.Embedder.Embed(ctx context.Context, chunks []string)
 
 ## Acceptance criteria
 
-- [ ] Write the up migration enabling pgvector with `CREATE EXTENSION IF NOT EXISTS vector;` and creating `code_chunks` (id uuid pk, org_id uuid not null, repo_id uuid not null, path text not null, start_line int not null, end_line int not null, text text not null, embedding vector(768) not null) plus `CREATE INDEX ON code_chunks USING hnsw (embedding vector_cosine_ops);` and the matching down migration.
-- [ ] Write the failing test `internal/graph/embed_test.go`: `func TestSearchRanksNearestFirst(t *testing.T)` upserts three chunks with stub embeddings whose cosine distances are known and asserts `Search` returns them nearest-first; `func TestSearchIsOrgScoped(t *testing.T)` asserts a search under org A never returns org B's chunks even when their embeddings are identical; `func TestUpsertReplacesChunksForPath(t *testing.T)` upserts two chunks for a path then one and asserts only the latter remains; `func TestEmbedderFailureIsNotFatal(t *testing.T)` asserts an embedder error leaves the relational index intact and returns an error naming the path. Run `go test ./internal/graph/` — expect FAIL with "undefined: graph.VectorStore".
-- [ ] Implement `Embedder` through go-ai-sdk's embedding interface, configured by `EMBED_ENDPOINT` and `EMBED_MODEL` so an air-gapped deployment points it at a local model and nothing in NovaForge names a provider.
-- [ ] Chunk by symbol span from Task 1 where a symbol exists, and otherwise by 60-line windows with a 10-line overlap.
-- [ ] Run `TEST_DATABASE_URL=... go test ./internal/graph/` — expect PASS.
-- [ ] Commit as `feat: add pgvector chunk storage with go-ai-sdk embeddings`.
+- [x] Write the up migration enabling pgvector with `CREATE EXTENSION IF NOT EXISTS vector;` and creating `code_chunks` (id uuid pk, org_id uuid not null, repo_id uuid not null, path text not null, start_line int not null, end_line int not null, text text not null, embedding vector(768) not null) plus `CREATE INDEX ON code_chunks USING hnsw (embedding vector_cosine_ops);` and the matching down migration.
+- [x] Write the failing test `internal/graph/embed_test.go`: `func TestSearchRanksNearestFirst(t *testing.T)` upserts three chunks with stub embeddings whose cosine distances are known and asserts `Search` returns them nearest-first; `func TestSearchIsOrgScoped(t *testing.T)` asserts a search under org A never returns org B's chunks even when their embeddings are identical; `func TestUpsertReplacesChunksForPath(t *testing.T)` upserts two chunks for a path then one and asserts only the latter remains; `func TestEmbedderFailureIsNotFatal(t *testing.T)` asserts an embedder error leaves the relational index intact and returns an error naming the path. Run `go test ./internal/graph/` — expect FAIL with "undefined: graph.VectorStore".
+- [x] Implement `Embedder` through go-ai-sdk's embedding interface, configured by `EMBED_ENDPOINT` and `EMBED_MODEL` so an air-gapped deployment points it at a local model and nothing in NovaForge names a provider.
+- [x] Chunk by symbol span from Task 1 where a symbol exists, and otherwise by 60-line windows with a 10-line overlap.
+- [x] Run `TEST_DATABASE_URL=... go test ./internal/graph/` — expect PASS.
+- [x] Commit as `feat: add pgvector chunk storage with go-ai-sdk embeddings`.
 
 ## Evidence
 
-<!-- Filled at close time: the commands run and what their output proved,
-     one line per criterion. Empty evidence keeps the task open. -->
+- Task 3: code_chunks with vector(768) and an HNSW cosine index. Embedder goes through go-ai-sdk's OpenAI-compatible provider configured only by EMBED_ENDPOINT/EMBED_MODEL, so no provider name appears in NovaForge code.
+- Built by a parallel agent in an isolated git worktree under strict red-green TDD, then merged to main and INDEPENDENTLY RE-VERIFIED by the main agent.
+- Green (verified post-merge by the main agent): 16 PASS, 0 FAIL. ok indexing 0.374s, ok graph 3.079s, ok knowledge 1.462s.
+- Run against the REAL PostgreSQL 16 with pgvector in the kw cluster. Embedding tests use a deterministic in-process stub Embedder, which is a legitimate double for an external model; Postgres is never mocked.
+- One notable real fix carried in the commits: the vector extension had to be created in the public schema explicitly, because database.Migrate pins search_path to the service's own schema, which would otherwise place the type where runtime queries cannot see it.
+- `go build ./...` and `go vet ./...` exit 0 after the merge.
+- Implementing commits: ca02dad, 3656b4b, 26766e1, f217264.

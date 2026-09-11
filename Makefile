@@ -17,3 +17,6 @@ generate:
 
 tidy:
 	$(GO) mod tidy
+
+openapi:
+	$(GO) run ./cmd/gen-openapi
