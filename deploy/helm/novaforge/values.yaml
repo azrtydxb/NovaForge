@@ -87,3 +87,10 @@ services:
     httpPort: 8080
     schema: edge
     extraServiceType: LoadBalancer
+
+# Runners are not in `services`: they expose no port and are never dialled, they
+# dial out. A Service in front of one would be an object nothing could use.
+runner:
+  replicas: 2
+  labels: ["linux"]
+  jobNamespace: novaforge
