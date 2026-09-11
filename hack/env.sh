@@ -21,13 +21,3 @@ export TEST_S3_ACCESS_KEY=minioadmin
 export TEST_S3_SECRET_KEY=minioadmin
 export TEST_S3_BUCKET=novaforge-test
 bk() { buildctl --tlscacert "$BK_CERTS/ca.crt" --tlscert "$BK_CERTS/tls.crt" --tlskey "$BK_CERTS/tls.key" "$@"; }
-
-# build <name> <dockerfile-dir> — build for arm64 on the cluster BuildKit and
-# push to nexus. The cluster then pulls the same image from $REGISTRY_PULL.
-nfbuild() {
-  local name="$1" dir="$2" tag="${3:-dev}"
-  bk build --frontend dockerfile.v0 \
-    --local context="$dir" --local dockerfile="$dir" \
-    --opt platform=linux/arm64 \
-    --output "type=image,name=$REGISTRY_PUSH/$REGISTRY_REPO/$name:$tag,push=true"
-}

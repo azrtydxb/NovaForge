@@ -6,7 +6,7 @@ source hack/env.sh
 
 NS="${NF_NAMESPACE:-novaforge}"
 REL="${REL:-novaforge}"
-TAG="${TAG:-dev}"
+TAG="${TAG:-$(git rev-parse --short HEAD)}"
 
 kubectl --context "$KUBE_CONTEXT" create namespace "$NS" --dry-run=client -o yaml | kubectl --context "$KUBE_CONTEXT" apply -f -
 

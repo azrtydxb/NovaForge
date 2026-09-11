@@ -4,8 +4,8 @@
 image:
   registry: 192.168.10.131
   repository: novaforge
-  tag: dev
-  pullPolicy: IfNotPresent
+  tag: dev # overridden per deploy with the commit sha; see hack/deploy.sh
+  pullPolicy: IfNotPresent # safe because tags are immutable commit shas
   pullSecret: nexus-pull
 
 # Bare repositories must be ReadWriteMany so any git-platform replica can serve

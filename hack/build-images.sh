@@ -10,7 +10,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 source hack/env.sh
 
-TAG="${TAG:-dev}"
+# Images are tagged with the commit they were built from. A mutable tag such as
+# "dev" combined with imagePullPolicy IfNotPresent makes nodes serve a cached
+# older image, which silently deploys stale code — that cost a full debug cycle.
+TAG="${TAG:-$(git rev-parse --short HEAD)}"
 SKIP="gen-openapi"
 
 # Services whose image needs the git binary at runtime, and those needing cgo.
