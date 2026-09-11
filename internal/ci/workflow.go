@@ -14,11 +14,12 @@ import (
 // Job is one job in a Workflow: either a shell command (Run) or an agent
 // role (Agent), never both.
 type Job struct {
-	Run   string            `yaml:"run"`
-	Agent string            `yaml:"agent"`
-	Needs []string          `yaml:"needs"`
-	Image string            `yaml:"image"`
-	Env   map[string]string `yaml:"env"`
+	Run     string            `yaml:"run"`
+	Agent   string            `yaml:"agent"`
+	Needs   []string          `yaml:"needs"`
+	Image   string            `yaml:"image"`
+	Env     map[string]string `yaml:"env"`
+	Secrets []string          `yaml:"secrets"`
 }
 
 // Workflow is a parsed .novaforge/workflow.yaml document.
