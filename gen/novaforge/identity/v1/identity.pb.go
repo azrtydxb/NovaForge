@@ -484,8 +484,11 @@ func (x *LoginResponse) GetUserId() string {
 }
 
 type ResolveSessionRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Token         string                 `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Token string                 `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
+	// Optional organization the caller is acting in, by name or id. See
+	// ResolveTokenRequest.org.
+	Org           string `protobuf:"bytes,2,opt,name=org,proto3" json:"org,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -523,6 +526,13 @@ func (*ResolveSessionRequest) Descriptor() ([]byte, []int) {
 func (x *ResolveSessionRequest) GetToken() string {
 	if x != nil {
 		return x.Token
+	}
+	return ""
+}
+
+func (x *ResolveSessionRequest) GetOrg() string {
+	if x != nil {
+		return x.Org
 	}
 	return ""
 }
@@ -572,8 +582,12 @@ func (x *ResolveSessionResponse) GetSubject() *Subject {
 }
 
 type ResolveTokenRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Token         string                 `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Token string                 `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
+	// Optional organization the caller is acting in, by name or id. When set,
+	// the response's org_id is populated only if the caller is a member, so a
+	// service can derive an org scope it can trust.
+	Org           string `protobuf:"bytes,2,opt,name=org,proto3" json:"org,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -611,6 +625,13 @@ func (*ResolveTokenRequest) Descriptor() ([]byte, []int) {
 func (x *ResolveTokenRequest) GetToken() string {
 	if x != nil {
 		return x.Token
+	}
+	return ""
+}
+
+func (x *ResolveTokenRequest) GetOrg() string {
+	if x != nil {
+		return x.Org
 	}
 	return ""
 }
@@ -660,8 +681,11 @@ func (x *ResolveTokenResponse) GetSubject() *Subject {
 }
 
 type ResolveFingerprintRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Fingerprint   string                 `protobuf:"bytes,1,opt,name=fingerprint,proto3" json:"fingerprint,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Fingerprint string                 `protobuf:"bytes,1,opt,name=fingerprint,proto3" json:"fingerprint,omitempty"`
+	// Optional organization the caller is acting in, by name or id. See
+	// ResolveTokenRequest.org.
+	Org           string `protobuf:"bytes,2,opt,name=org,proto3" json:"org,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -699,6 +723,13 @@ func (*ResolveFingerprintRequest) Descriptor() ([]byte, []int) {
 func (x *ResolveFingerprintRequest) GetFingerprint() string {
 	if x != nil {
 		return x.Fingerprint
+	}
+	return ""
+}
+
+func (x *ResolveFingerprintRequest) GetOrg() string {
+	if x != nil {
+		return x.Org
 	}
 	return ""
 }
@@ -1221,17 +1252,20 @@ const file_novaforge_identity_v1_identity_proto_rawDesc = "" +
 	"\rLoginResponse\x12#\n" +
 	"\rsession_token\x18\x01 \x01(\tR\fsessionToken\x12#\n" +
 	"\rrequires_totp\x18\x02 \x01(\bR\frequiresTotp\x12\x17\n" +
-	"\auser_id\x18\x03 \x01(\tR\x06userId\"-\n" +
+	"\auser_id\x18\x03 \x01(\tR\x06userId\"?\n" +
 	"\x15ResolveSessionRequest\x12\x14\n" +
-	"\x05token\x18\x01 \x01(\tR\x05token\"R\n" +
+	"\x05token\x18\x01 \x01(\tR\x05token\x12\x10\n" +
+	"\x03org\x18\x02 \x01(\tR\x03org\"R\n" +
 	"\x16ResolveSessionResponse\x128\n" +
-	"\asubject\x18\x01 \x01(\v2\x1e.novaforge.identity.v1.SubjectR\asubject\"+\n" +
-	"\x13ResolveTokenRequest\x12\x14\n" +
-	"\x05token\x18\x01 \x01(\tR\x05token\"P\n" +
-	"\x14ResolveTokenResponse\x128\n" +
 	"\asubject\x18\x01 \x01(\v2\x1e.novaforge.identity.v1.SubjectR\asubject\"=\n" +
+	"\x13ResolveTokenRequest\x12\x14\n" +
+	"\x05token\x18\x01 \x01(\tR\x05token\x12\x10\n" +
+	"\x03org\x18\x02 \x01(\tR\x03org\"P\n" +
+	"\x14ResolveTokenResponse\x128\n" +
+	"\asubject\x18\x01 \x01(\v2\x1e.novaforge.identity.v1.SubjectR\asubject\"O\n" +
 	"\x19ResolveFingerprintRequest\x12 \n" +
-	"\vfingerprint\x18\x01 \x01(\tR\vfingerprint\"V\n" +
+	"\vfingerprint\x18\x01 \x01(\tR\vfingerprint\x12\x10\n" +
+	"\x03org\x18\x02 \x01(\tR\x03org\"V\n" +
 	"\x1aResolveFingerprintResponse\x128\n" +
 	"\asubject\x18\x01 \x01(\v2\x1e.novaforge.identity.v1.SubjectR\asubject\"&\n" +
 	"\x10CreateOrgRequest\x12\x12\n" +

@@ -18,7 +18,11 @@ import (
 
 // AuthFunc authenticates HTTP Basic credentials and returns the caller's
 // authorization scope.
-type AuthFunc func(ctx context.Context, user, pass string) (authz.Scope, error)
+// orgRef is the organization as it appears in the clone URL: a human-typed
+// name or an id. Resolving it is identity's job, so AuthFunc returns a scope
+// whose OrgID is the resolved organization — the transport never trusts a
+// path segment as an identifier on its own.
+type AuthFunc func(ctx context.Context, user, pass, orgRef string) (authz.Scope, error)
 
 // CapFunc authorizes a set of ref updates (for git-receive-pack) against a
 // scope, before any git process is spawned. It is called with an empty refs
@@ -41,9 +45,9 @@ func NewHTTPHandler(root string, auth AuthFunc, caps CapFunc) http.Handler {
 
 // parsedPath is the {org}/{repo}.git/{op} decomposition of a request path.
 type parsedPath struct {
-	orgID uuid.UUID
-	repo  string
-	op    string // "info/refs", "git-upload-pack", or "git-receive-pack"
+	orgRef string
+	repo   string
+	op     string // "info/refs", "git-upload-pack", or "git-receive-pack"
 }
 
 func parsePath(p string) (parsedPath, error) {
@@ -52,16 +56,16 @@ func parsePath(p string) (parsedPath, error) {
 	if len(parts) != 3 {
 		return parsedPath{}, fmt.Errorf("malformed path %q", p)
 	}
-	orgID, err := uuid.Parse(parts[0])
-	if err != nil {
-		return parsedPath{}, fmt.Errorf("invalid org id %q: %w", parts[0], err)
+	orgRef := parts[0]
+	if orgRef == "" {
+		return parsedPath{}, fmt.Errorf("missing organization in path")
 	}
 	repoPart := parts[1]
 	if !strings.HasSuffix(repoPart, ".git") {
 		return parsedPath{}, fmt.Errorf("malformed repository path %q", repoPart)
 	}
 	repo := strings.TrimSuffix(repoPart, ".git")
-	return parsedPath{orgID: orgID, repo: repo, op: parts[2]}, nil
+	return parsedPath{orgRef: orgRef, repo: repo, op: parts[2]}, nil
 }
 
 func (h *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -77,18 +81,21 @@ func (h *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "authentication required", http.StatusUnauthorized)
 		return
 	}
-	scope, err := h.auth(r.Context(), user, pass)
+	// The organization from the clone URL is resolved and membership-checked
+	// during authentication, so the scope that comes back is already the
+	// caller's scope in that organization.
+	scope, err := h.auth(r.Context(), user, pass, pp.orgRef)
 	if err != nil {
 		w.Header().Set("WWW-Authenticate", `Basic realm="novaforge"`)
 		http.Error(w, "authentication required", http.StatusUnauthorized)
 		return
 	}
-	if err := authz.RequireOrg(authz.WithScope(r.Context(), scope), pp.orgID); err != nil {
-		http.Error(w, err.Error(), http.StatusForbidden)
+	if scope.OrgID == uuid.Nil {
+		http.Error(w, "no organization scope for "+pp.orgRef, http.StatusForbidden)
 		return
 	}
 
-	path, err := resolvePath(h.root, pp.orgID, pp.repo)
+	path, err := resolvePath(h.root, scope.OrgID, pp.repo)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
@@ -113,7 +120,7 @@ func (h *httpHandler) infoRefs(w http.ResponseWriter, r *http.Request, scope aut
 		return
 	}
 	if service == "git-receive-pack" {
-		if err := h.caps(r.Context(), scope, pp.orgID, pp.repo, nil); err != nil {
+		if err := h.caps(r.Context(), scope, scope.OrgID, pp.repo, nil); err != nil {
 			http.Error(w, err.Error(), http.StatusForbidden)
 			return
 		}
@@ -144,7 +151,7 @@ func (h *httpHandler) rpc(w http.ResponseWriter, r *http.Request, scope authz.Sc
 
 	if service == "git-receive-pack" {
 		refs := parseReceivePackRefs(body)
-		if err := h.caps(r.Context(), scope, pp.orgID, pp.repo, refs); err != nil {
+		if err := h.caps(r.Context(), scope, scope.OrgID, pp.repo, refs); err != nil {
 			h.rejectPush(w, refs, err)
 			return
 		}
@@ -167,7 +174,7 @@ func (h *httpHandler) rpc(w http.ResponseWriter, r *http.Request, scope authz.Sc
 	if service == "git-receive-pack" && receivePackSucceeded(stdout.Bytes()) {
 		if PushPublisher != nil {
 			updates := parseReceivePackRefUpdates(body)
-			PushPublisher(r.Context(), scope, pp.orgID, pp.repo, updates)
+			PushPublisher(r.Context(), scope, scope.OrgID, pp.repo, updates)
 		}
 	}
 }

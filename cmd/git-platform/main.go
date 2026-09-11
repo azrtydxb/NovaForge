@@ -203,22 +203,39 @@ func resolveScopeFromMetadata(ctx context.Context, identityClient identityv1.Ide
 	if token == "" {
 		return authz.Scope{}, false
 	}
-	subject, err := resolveSubject(ctx, identityClient, token)
+	// The organization travels in its own header. A credential says who the
+	// caller is, not which organization they are acting in, and identity
+	// verifies membership before granting an org scope — taking it from the
+	// request message would let a caller name any organization.
+	org := metadataValue(ctx, "x-novaforge-org")
+	subject, err := resolveSubject(ctx, identityClient, token, org)
 	if err != nil {
 		return authz.Scope{}, false
 	}
 	return subjectToScope(subject), true
 }
 
-func resolveSubject(ctx context.Context, identityClient identityv1.IdentityServiceClient, token string) (*identityv1.Subject, error) {
-	if resp, err := identityClient.ResolveToken(ctx, &identityv1.ResolveTokenRequest{Token: token}); err == nil {
+func resolveSubject(ctx context.Context, identityClient identityv1.IdentityServiceClient, token, org string) (*identityv1.Subject, error) {
+	if resp, err := identityClient.ResolveToken(ctx, &identityv1.ResolveTokenRequest{Token: token, Org: org}); err == nil {
 		return resp.GetSubject(), nil
 	}
-	resp, err := identityClient.ResolveSession(ctx, &identityv1.ResolveSessionRequest{Token: token})
+	resp, err := identityClient.ResolveSession(ctx, &identityv1.ResolveSessionRequest{Token: token, Org: org})
 	if err != nil {
 		return nil, err
 	}
 	return resp.GetSubject(), nil
+}
+
+// metadataValue returns the first value of an incoming metadata key.
+func metadataValue(ctx context.Context, key string) string {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return ""
+	}
+	if v := md.Get(key); len(v) > 0 {
+		return v[0]
+	}
+	return ""
 }
 
 // subjectToScope converts an identityv1.Subject into an authz.Scope.
@@ -245,8 +262,8 @@ func subjectToScope(subject *identityv1.Subject) authz.Scope {
 // personal access token or session token); the username is conventionally
 // ignored by git hosts using token auth and is not otherwise trusted.
 func newAuthFunc(identityClient identityv1.IdentityServiceClient) gitops.AuthFunc {
-	return func(ctx context.Context, user, pass string) (authz.Scope, error) {
-		subject, err := resolveSubject(ctx, identityClient, pass)
+	return func(ctx context.Context, user, pass, orgRef string) (authz.Scope, error) {
+		subject, err := resolveSubject(ctx, identityClient, pass, orgRef)
 		if err != nil {
 			return authz.Scope{}, fmt.Errorf("resolve credential: %w", err)
 		}
@@ -257,8 +274,9 @@ func newAuthFunc(identityClient identityv1.IdentityServiceClient) gitops.AuthFun
 // newFingerprintFunc adapts the identity service into a
 // gitops.FingerprintFunc for the SSH transport.
 func newFingerprintFunc(identityClient identityv1.IdentityServiceClient) gitops.FingerprintFunc {
-	return func(ctx context.Context, fingerprint string) (authz.Scope, error) {
-		resp, err := identityClient.ResolveFingerprint(ctx, &identityv1.ResolveFingerprintRequest{Fingerprint: fingerprint})
+	return func(ctx context.Context, fingerprint, orgRef string) (authz.Scope, error) {
+		resp, err := identityClient.ResolveFingerprint(ctx,
+			&identityv1.ResolveFingerprintRequest{Fingerprint: fingerprint, Org: orgRef})
 		if err != nil {
 			return authz.Scope{}, fmt.Errorf("resolve fingerprint: %w", err)
 		}

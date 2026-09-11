@@ -22,7 +22,7 @@ func TestCloneAndPushOverHTTP(t *testing.T) {
 		t.Fatalf("Init: %v", err)
 	}
 
-	auth := func(ctx context.Context, user, pass string) (authz.Scope, error) {
+	auth := func(ctx context.Context, user, pass, orgRef string) (authz.Scope, error) {
 		if user != "user" || pass != "token" {
 			return authz.Scope{}, fmt.Errorf("invalid credentials")
 		}
@@ -72,7 +72,7 @@ func TestPushDeniedByCapability(t *testing.T) {
 		t.Fatalf("Init: %v", err)
 	}
 
-	auth := func(ctx context.Context, user, pass string) (authz.Scope, error) {
+	auth := func(ctx context.Context, user, pass, orgRef string) (authz.Scope, error) {
 		return authz.Scope{OrgID: orgID, ActorID: uuid.New(), ActorKind: "user"}, nil
 	}
 	caps := func(ctx context.Context, s authz.Scope, orgID uuid.UUID, repo string, refs []string) error {

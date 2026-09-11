@@ -19,7 +19,11 @@ import (
 // FingerprintFunc resolves an SSH public key's SHA256 fingerprint to the
 // caller's authorization scope, or an error if the fingerprint is not
 // registered to anyone.
-type FingerprintFunc func(ctx context.Context, fingerprint string) (authz.Scope, error)
+// orgRef is the organization as it appears in the git command's path: a
+// human-typed name or an id. Resolving it and checking membership is
+// identity's job, so the returned scope's OrgID is already the resolved
+// organization.
+type FingerprintFunc func(ctx context.Context, fingerprint, orgRef string) (authz.Scope, error)
 
 // gitCommandRe matches the exec payload git sends for smart-SSH transport:
 // git-upload-pack '<org>/<repo>.git' or git-receive-pack '<org>/<repo>.git'.
@@ -49,17 +53,15 @@ func NewSSHServer(root string, hostKey ssh.Signer, lookup FingerprintFunc, caps 
 
 	config := &ssh.ServerConfig{
 		PublicKeyCallback: func(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
+			// The key is authenticated here; the organization is not known
+			// until the git command arrives, so only the fingerprint is
+			// carried forward and the scope is resolved per command.
 			fp := ssh.FingerprintSHA256(key)
-			scope, err := lookup(context.Background(), fp)
-			if err != nil {
+			if _, err := lookup(context.Background(), fp, ""); err != nil {
 				return nil, fmt.Errorf("permission denied")
 			}
 			return &ssh.Permissions{
-				Extensions: map[string]string{
-					"org_id":     scope.OrgID.String(),
-					"actor_id":   scope.ActorID.String(),
-					"actor_kind": scope.ActorKind,
-				},
+				Extensions: map[string]string{"fingerprint": fp},
 			}, nil
 		},
 	}
@@ -162,29 +164,25 @@ func (s *SSHServer) runGitCommand(sconn *ssh.ServerConn, channel ssh.Channel, co
 		writeExitStatus(channel, 128)
 		return
 	}
-	orgID, err := uuid.Parse(parts[0])
-	if err != nil {
-		fmt.Fprintf(channel.Stderr(), "invalid org id %q\n", parts[0])
-		writeExitStatus(channel, 128)
+	orgRef := parts[0]
+	repoName := strings.TrimSuffix(parts[1], ".git")
+
+	// The key was authenticated at handshake time, but the organization is only
+	// known now, from the command's path — so the scope is resolved here, with
+	// membership checked by identity.
+	ext := sconn.Permissions.Extensions
+	scope, err := s.lookup(context.Background(), ext["fingerprint"], orgRef)
+	if err != nil || scope.OrgID == uuid.Nil {
+		fmt.Fprintf(channel.Stderr(), "no access to organization %q\n", orgRef)
+		writeExitStatus(channel, 1)
 		return
 	}
-	repoName := strings.TrimSuffix(parts[1], ".git")
+	orgID := scope.OrgID
 
 	path, err := resolvePath(s.root, orgID, repoName)
 	if err != nil {
 		fmt.Fprintf(channel.Stderr(), "%v\n", err)
 		writeExitStatus(channel, 128)
-		return
-	}
-
-	ext := sconn.Permissions.Extensions
-	scope := authz.Scope{ActorKind: ext["actor_kind"]}
-	scope.OrgID, _ = uuid.Parse(ext["org_id"])
-	scope.ActorID, _ = uuid.Parse(ext["actor_id"])
-
-	if err := authz.RequireOrg(authz.WithScope(context.Background(), scope), orgID); err != nil {
-		fmt.Fprintf(channel.Stderr(), "%v\n", err)
-		writeExitStatus(channel, 1)
 		return
 	}
 

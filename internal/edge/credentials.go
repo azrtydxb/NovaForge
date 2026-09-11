@@ -26,6 +26,22 @@ func CredentialFrom(ctx context.Context) string {
 	return t
 }
 
+type orgKey struct{}
+
+// WithOrgRef returns a context carrying the organization the caller named.
+func WithOrgRef(ctx context.Context, org string) context.Context {
+	if org == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, orgKey{}, org)
+}
+
+// OrgRefFrom returns the organization reference carried by ctx, if any.
+func OrgRefFrom(ctx context.Context) string {
+	o, _ := ctx.Value(orgKey{}).(string)
+	return o
+}
+
 // ForwardCredential is a gRPC client interceptor that attaches the caller's
 // credential to every outbound call.
 //
@@ -39,6 +55,9 @@ func ForwardCredential(
 ) error {
 	if tok := CredentialFrom(ctx); tok != "" {
 		ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+tok)
+	}
+	if org := OrgRefFrom(ctx); org != "" {
+		ctx = metadata.AppendToOutgoingContext(ctx, "x-novaforge-org", org)
 	}
 	return invoker(ctx, method, req, reply, cc, opts...)
 }

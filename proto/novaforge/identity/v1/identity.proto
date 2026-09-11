@@ -66,6 +66,9 @@ message LoginResponse {
 
 message ResolveSessionRequest {
   string token = 1;
+  // Optional organization the caller is acting in, by name or id. See
+  // ResolveTokenRequest.org.
+  string org = 2;
 }
 message ResolveSessionResponse {
   Subject subject = 1;
@@ -73,6 +76,10 @@ message ResolveSessionResponse {
 
 message ResolveTokenRequest {
   string token = 1;
+  // Optional organization the caller is acting in, by name or id. When set,
+  // the response's org_id is populated only if the caller is a member, so a
+  // service can derive an org scope it can trust.
+  string org = 2;
 }
 message ResolveTokenResponse {
   Subject subject = 1;
@@ -80,6 +87,9 @@ message ResolveTokenResponse {
 
 message ResolveFingerprintRequest {
   string fingerprint = 1;
+  // Optional organization the caller is acting in, by name or id. See
+  // ResolveTokenRequest.org.
+  string org = 2;
 }
 message ResolveFingerprintResponse {
   Subject subject = 1;

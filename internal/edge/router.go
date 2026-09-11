@@ -78,13 +78,17 @@ func authenticate(cfg Config, next http.Handler) http.Handler {
 		var subj *identityv1.Subject
 		var lastErr error
 		var presented string
+		// The organization named in the path is the one the caller is acting in.
+		// A credential says who you are, not which org you are acting in, so the
+		// org travels with the request and identity verifies membership.
+		org := chi.URLParam(r, "org")
 		if tok := bearer(r); tok != "" {
 			presented = tok
-			if resp, err := cfg.Identity.ResolveToken(ctx, &identityv1.ResolveTokenRequest{Token: tok}); err == nil {
+			if resp, err := cfg.Identity.ResolveToken(ctx, &identityv1.ResolveTokenRequest{Token: tok, Org: org}); err == nil {
 				subj = resp.GetSubject()
 			} else {
 				lastErr = err
-				if resp, err := cfg.Identity.ResolveSession(ctx, &identityv1.ResolveSessionRequest{Token: tok}); err == nil {
+				if resp, err := cfg.Identity.ResolveSession(ctx, &identityv1.ResolveSessionRequest{Token: tok, Org: org}); err == nil {
 					subj = resp.GetSubject()
 					lastErr = nil
 				} else {
@@ -93,7 +97,7 @@ func authenticate(cfg Config, next http.Handler) http.Handler {
 			}
 		} else if ck, err := r.Cookie("nf_session"); err == nil && ck.Value != "" {
 			presented = ck.Value
-			resp, err := cfg.Identity.ResolveSession(ctx, &identityv1.ResolveSessionRequest{Token: ck.Value})
+			resp, err := cfg.Identity.ResolveSession(ctx, &identityv1.ResolveSessionRequest{Token: ck.Value, Org: org})
 			if err != nil {
 				lastErr = err
 			} else {
@@ -128,6 +132,7 @@ func authenticate(cfg Config, next http.Handler) http.Handler {
 		// as a trusted principal of its own.
 		rctx := authz.WithScope(r.Context(), scope)
 		rctx = WithCredential(rctx, presented)
+		rctx = WithOrgRef(rctx, org)
 		next.ServeHTTP(w, r.WithContext(rctx))
 	})
 }

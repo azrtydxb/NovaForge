@@ -80,7 +80,7 @@ func TestCloneOverSSH(t *testing.T) {
 
 	registeredFP := ssh.FingerprintSHA256(clientSigner.PublicKey())
 	actorID := uuid.New()
-	lookup := func(ctx context.Context, fingerprint string) (authz.Scope, error) {
+	lookup := func(ctx context.Context, fingerprint, orgRef string) (authz.Scope, error) {
 		if fingerprint != registeredFP {
 			return authz.Scope{}, fmt.Errorf("permission denied")
 		}
@@ -122,7 +122,7 @@ func TestUnknownKeyRejected(t *testing.T) {
 	}
 	seedCommit(t, root, orgID, "guarded")
 
-	lookup := func(ctx context.Context, fingerprint string) (authz.Scope, error) {
+	lookup := func(ctx context.Context, fingerprint, orgRef string) (authz.Scope, error) {
 		return authz.Scope{}, fmt.Errorf("permission denied")
 	}
 	caps := func(ctx context.Context, s authz.Scope, orgID uuid.UUID, repo string, refs []string) error {
@@ -152,7 +152,7 @@ func TestNonGitCommandRejected(t *testing.T) {
 	root := t.TempDir()
 	clientSigner, _, _ := newEd25519Signer(t)
 	registeredFP := ssh.FingerprintSHA256(clientSigner.PublicKey())
-	lookup := func(ctx context.Context, fingerprint string) (authz.Scope, error) {
+	lookup := func(ctx context.Context, fingerprint, orgRef string) (authz.Scope, error) {
 		if fingerprint != registeredFP {
 			return authz.Scope{}, fmt.Errorf("permission denied")
 		}
@@ -207,7 +207,7 @@ func TestPushOverSSH(t *testing.T) {
 	clientSigner, _, clientPriv := newEd25519Signer(t)
 	registeredFP := ssh.FingerprintSHA256(clientSigner.PublicKey())
 	actorID := uuid.New()
-	lookup := func(ctx context.Context, fingerprint string) (authz.Scope, error) {
+	lookup := func(ctx context.Context, fingerprint, orgRef string) (authz.Scope, error) {
 		if fingerprint != registeredFP {
 			return authz.Scope{}, fmt.Errorf("permission denied")
 		}
@@ -265,7 +265,7 @@ func TestPushOverSSHDeniedByCapability(t *testing.T) {
 
 	clientSigner, _, clientPriv := newEd25519Signer(t)
 	registeredFP := ssh.FingerprintSHA256(clientSigner.PublicKey())
-	lookup := func(ctx context.Context, fingerprint string) (authz.Scope, error) {
+	lookup := func(ctx context.Context, fingerprint, orgRef string) (authz.Scope, error) {
 		if fingerprint != registeredFP {
 			return authz.Scope{}, fmt.Errorf("permission denied")
 		}

@@ -105,9 +105,11 @@ func (s *Server) ResolveSession(ctx context.Context, req *identityv1.ResolveSess
 	if err != nil {
 		return nil, status.Error(codes.Unauthenticated, "invalid or expired session")
 	}
-	return &identityv1.ResolveSessionResponse{
-		Subject: &identityv1.Subject{UserId: userID.String(), ActorKind: "user"},
-	}, nil
+	subj := &identityv1.Subject{UserId: userID.String(), ActorKind: "user"}
+	if err := s.attachOrg(ctx, subj, userID, req.GetOrg()); err != nil {
+		return nil, err
+	}
+	return &identityv1.ResolveSessionResponse{Subject: subj}, nil
 }
 
 // ResolveToken resolves a personal access token to its subject, rejecting a
@@ -120,9 +122,27 @@ func (s *Server) ResolveToken(ctx context.Context, req *identityv1.ResolveTokenR
 	if err != nil {
 		return nil, status.Error(codes.Unauthenticated, "invalid, revoked, or expired token")
 	}
-	return &identityv1.ResolveTokenResponse{
-		Subject: &identityv1.Subject{UserId: t.UserID.String(), ActorKind: "user", Scopes: t.Scopes},
-	}, nil
+	subj := &identityv1.Subject{UserId: t.UserID.String(), ActorKind: "user", Scopes: t.Scopes}
+	if err := s.attachOrg(ctx, subj, t.UserID, req.GetOrg()); err != nil {
+		return nil, err
+	}
+	return &identityv1.ResolveTokenResponse{Subject: subj}, nil
+}
+
+// attachOrg fills in the subject's organization when the caller named one,
+// refusing a non-member. A credential alone says who you are, not which
+// organization you are acting in, so the org travels with the request and is
+// verified here rather than trusted from it.
+func (s *Server) attachOrg(ctx context.Context, subj *identityv1.Subject, userID uuid.UUID, ref string) error {
+	if ref == "" {
+		return nil
+	}
+	org, err := s.store.ResolveOrgScope(ctx, userID, ref)
+	if err != nil {
+		return status.Error(codes.PermissionDenied, err.Error())
+	}
+	subj.OrgId = org.ID.String()
+	return nil
 }
 
 // ResolveFingerprint resolves an SSH public key's SHA256 fingerprint to its
@@ -135,9 +155,11 @@ func (s *Server) ResolveFingerprint(ctx context.Context, req *identityv1.Resolve
 	if err != nil {
 		return nil, status.Error(codes.Unauthenticated, "unknown fingerprint")
 	}
-	return &identityv1.ResolveFingerprintResponse{
-		Subject: &identityv1.Subject{UserId: userID.String(), ActorKind: "user"},
-	}, nil
+	subj := &identityv1.Subject{UserId: userID.String(), ActorKind: "user"}
+	if err := s.attachOrg(ctx, subj, userID, req.GetOrg()); err != nil {
+		return nil, err
+	}
+	return &identityv1.ResolveFingerprintResponse{Subject: subj}, nil
 }
 
 // CreateOrg creates an organization owned by the authenticated caller. The

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http/httptest"
 	"os"
+	"os/exec"
+	"strings"
 	"testing"
 	"time"
 
@@ -46,7 +48,7 @@ func TestPushOverHTTPPublishesEvent(t *testing.T) {
 	}
 
 	actorID := uuid.New()
-	auth := func(ctx context.Context, user, pass string) (authz.Scope, error) {
+	auth := func(ctx context.Context, user, pass, orgRef string) (authz.Scope, error) {
 		return authz.Scope{OrgID: orgID, ActorID: actorID, ActorKind: "user"}, nil
 	}
 	caps := func(ctx context.Context, s authz.Scope, orgID uuid.UUID, repo string, refs []string) error {
@@ -64,23 +66,37 @@ func TestPushOverHTTPPublishesEvent(t *testing.T) {
 	runCmd(t, work, "git", "-c", "user.email=a@b.c", "-c", "user.name=Test", "commit", "-m", "push event test")
 	runCmd(t, work, "git", "push", "origin", "HEAD:refs/heads/main")
 
-	res, err := rdb.XReadGroup(ctx, &redis.XReadGroupArgs{
-		Group:    group,
-		Consumer: "test-consumer",
-		Streams:  []string{events.StreamGitPush, ">"},
-		Count:    1,
-		Block:    5 * time.Second,
-	}).Result()
-	if err != nil {
-		t.Fatalf("XReadGroup: %v", err)
-	}
-	if len(res) != 1 || len(res[0].Messages) != 1 {
-		t.Fatalf("want 1 push event, got %+v", res)
-	}
-	raw := res[0].Messages[0].Values["data"].(string)
+	// stream:git:push is shared and durable, so an event left by an earlier run
+	// would be read first. Scan for the event this test actually produced
+	// instead of assuming the stream is empty.
+	pushed := strings.TrimSpace(runCmdOut(t, work, "git", "rev-parse", "HEAD"))
 	var evt events.PushEvent
-	if err := json.Unmarshal([]byte(raw), &evt); err != nil {
-		t.Fatalf("unmarshal: %v", err)
+	deadline := time.Now().Add(15 * time.Second)
+	for evt.NewSHA != pushed {
+		if time.Now().After(deadline) {
+			t.Fatalf("no push event for %s arrived within 15s", pushed)
+		}
+		res, err := rdb.XReadGroup(ctx, &redis.XReadGroupArgs{
+			Group:    group,
+			Consumer: "test-consumer",
+			Streams:  []string{events.StreamGitPush, ">"},
+			Count:    10,
+			Block:    2 * time.Second,
+		}).Result()
+		if err != nil && err != redis.Nil {
+			t.Fatalf("XReadGroup: %v", err)
+		}
+		for _, st := range res {
+			for _, m := range st.Messages {
+				var candidate events.PushEvent
+				if err := json.Unmarshal([]byte(m.Values["data"].(string)), &candidate); err != nil {
+					continue
+				}
+				if candidate.NewSHA == pushed {
+					evt = candidate
+				}
+			}
+		}
 	}
 	if evt.Ref != "refs/heads/main" {
 		t.Fatalf("want ref refs/heads/main, got %q", evt.Ref)
@@ -91,4 +107,16 @@ func TestPushOverHTTPPublishesEvent(t *testing.T) {
 	if evt.OrgID != orgID {
 		t.Fatalf("want org id %s, got %s", orgID, evt.OrgID)
 	}
+}
+
+// runCmdOut runs a command and returns its stdout, failing the test on error.
+func runCmdOut(t *testing.T, dir, name string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("%s %v: %v", name, args, err)
+	}
+	return string(out)
 }
