@@ -28,8 +28,13 @@ func dbURL(t *testing.T) string {
 }
 
 // retentionPool returns a pool with both the retention and ci schemas
-// migrated and truncated: Sweep spans both, since it enforces each
-// organization's LogDays against the raw CI data ci owns.
+// migrated: Sweep spans both, since it enforces each organization's
+// LogDays against the raw CI data ci owns. Tests never truncate these
+// shared, exclusively-owned-by-this-package tables — the database is a real
+// external instance other test runs may be using concurrently — and instead
+// scope every assertion to the specific org, job, and object keys each test
+// creates for itself, so leftover or concurrently-written rows from
+// elsewhere never affect the outcome.
 func retentionPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	url := dbURL(t)
@@ -42,12 +47,6 @@ func retentionPool(t *testing.T) *pgxpool.Pool {
 	pool, err := database.Connect(context.Background(), url)
 	if err != nil {
 		t.Fatalf("Connect: %v", err)
-	}
-	if _, err := pool.Exec(context.Background(), "TRUNCATE retention.retention_policies"); err != nil {
-		t.Fatalf("truncate retention.retention_policies: %v", err)
-	}
-	if _, err := pool.Exec(context.Background(), "TRUNCATE ci.workflow_runs, ci.runners CASCADE"); err != nil {
-		t.Fatalf("truncate ci schema: %v", err)
 	}
 	t.Cleanup(pool.Close)
 	return pool
@@ -63,7 +62,7 @@ func retentionBlobstore(t *testing.T) *blobstore.Client {
 		Endpoint:  ep,
 		AccessKey: os.Getenv("TEST_S3_ACCESS_KEY"),
 		SecretKey: os.Getenv("TEST_S3_SECRET_KEY"),
-		Bucket:    "novaforge-test-retention",
+		Bucket:    "novaforge-test-retention-" + uuid.NewString()[:8],
 		UseSSL:    false,
 	})
 	if err != nil {

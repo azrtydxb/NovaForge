@@ -23,7 +23,7 @@ func artifactsBlobstore(t *testing.T) *blobstore.Client {
 		Endpoint:  ep,
 		AccessKey: os.Getenv("TEST_S3_ACCESS_KEY"),
 		SecretKey: os.Getenv("TEST_S3_SECRET_KEY"),
-		Bucket:    "novaforge-test-ci-artifacts",
+		Bucket:    "novaforge-test-ci-artifacts-" + uuid.NewString()[:8],
 		UseSSL:    false,
 	})
 	if err != nil {

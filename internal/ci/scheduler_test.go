@@ -38,11 +38,12 @@ func redisURL(t *testing.T) string {
 	return u
 }
 
-// ciPool returns a connected, migrated pool onto the ci schema, truncated
-// first. The ci schema belongs exclusively to this package, so — unlike the
-// org-scoped isolation other services rely on — each test starts from an
-// empty table set rather than filtering leftover rows by org, since
-// workflow_jobs claiming is intentionally global rather than org-scoped.
+// ciPool returns a connected, migrated pool onto the ci schema. Every test
+// that uses it scopes its own assertions by a freshly generated org and repo
+// id (ListRuns, List) or by comparing specific row ids it created itself, so
+// leftover rows from other tests or other concurrent test runs against this
+// shared external database never affect it — except ClaimJob, which claims
+// globally across every pending job regardless of org; see ciPoolExclusive.
 func ciPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	url := dbURL(t)
@@ -53,10 +54,20 @@ func ciPool(t *testing.T) *pgxpool.Pool {
 	if err != nil {
 		t.Fatalf("Connect: %v", err)
 	}
+	t.Cleanup(pool.Close)
+	return pool
+}
+
+// ciPoolExclusive is ciPool plus a truncate of every ci table, for the one
+// test (TestJobBlockedUntilNeedsSucceed) that depends on ClaimJob seeing no
+// job but the ones it created itself, since ClaimJob's eligibility query is
+// intentionally global rather than org-scoped.
+func ciPoolExclusive(t *testing.T) *pgxpool.Pool {
+	t.Helper()
+	pool := ciPool(t)
 	if _, err := pool.Exec(context.Background(), "TRUNCATE ci.workflow_runs, ci.runners CASCADE"); err != nil {
 		t.Fatalf("truncate ci schema: %v", err)
 	}
-	t.Cleanup(pool.Close)
 	return pool
 }
 
@@ -226,7 +237,7 @@ func TestMissingWorkflowSkipsSilently(t *testing.T) {
 }
 
 func TestJobBlockedUntilNeedsSucceed(t *testing.T) {
-	pool := ciPool(t)
+	pool := ciPoolExclusive(t)
 	store := ci.NewStore(pool)
 
 	orgID := uuid.New()
