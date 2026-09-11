@@ -18,6 +18,22 @@ import (
 // StreamGitPush is the stream name push events are published to.
 const StreamGitPush = "stream:git:push"
 
+// StreamAgentEvents is the stream name agent-runtime publishes one message
+// to per run state change and per recorded tool call.
+const StreamAgentEvents = "stream:agent:events"
+
+// AgentEvent is one message on StreamAgentEvents: either a run state change
+// or a recorded tool call, never both.
+type AgentEvent struct {
+	RunID     uuid.UUID `json:"run_id"`
+	At        time.Time `json:"at"`
+	Type      string    `json:"type"` // "state_change" or "tool_call"
+	FromState string    `json:"from_state,omitempty"`
+	ToState   string    `json:"to_state,omitempty"`
+	Tool      string    `json:"tool,omitempty"`
+	Outcome   string    `json:"outcome,omitempty"`
+}
+
 // PushEvent describes one ref update accepted by a git push.
 type PushEvent struct {
 	OrgID    uuid.UUID `json:"org_id"`

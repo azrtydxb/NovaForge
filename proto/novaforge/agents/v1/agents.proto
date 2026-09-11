@@ -1,0 +1,117 @@
+syntax = "proto3";
+
+package novaforge.agents.v1;
+
+// AgentService manages agent identities and their runs: isolated,
+// budget-bounded executions against a Work Item, with a live event stream
+// of state changes and tool calls. Every RPC derives its organization from
+// the caller's resolved scope, never from a field of the request message.
+service AgentService {
+  rpc CreateAgent(CreateAgentRequest) returns (CreateAgentResponse);
+  rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
+  rpc StartRun(StartRunRequest) returns (StartRunResponse);
+  rpc GetRun(GetRunRequest) returns (GetRunResponse);
+  rpc CancelRun(CancelRunRequest) returns (CancelRunResponse);
+  rpc StreamRunEvents(StreamRunEventsRequest) returns (stream StreamRunEventsResponse);
+}
+
+message Agent {
+  string id = 1;
+  string org_id = 2;
+  string name = 3;
+  string role = 4;
+  string model_ref = 5;
+  bool enabled = 6;
+}
+
+message CreateAgentRequest {
+  string name = 1;
+  string role = 2;
+  string model_ref = 3;
+  bool enabled = 4;
+}
+
+message CreateAgentResponse {
+  Agent agent = 1;
+}
+
+message ListAgentsRequest {}
+
+message ListAgentsResponse {
+  repeated Agent agents = 1;
+}
+
+message Run {
+  string id = 1;
+  string org_id = 2;
+  string agent_id = 3;
+  string work_item_id = 4;
+  string sponsor_id = 5;
+  string grant_id = 6;
+  string branch = 7;
+  string state = 8;
+  string started_at = 9;
+  string ended_at = 10;
+  int64 wallclock_limit_seconds = 11;
+  int64 token_limit = 12;
+  int64 cost_limit_micros = 13;
+}
+
+// StartRunRequest starts a new agent run against a Work Item, identified by
+// its human-readable key (e.g. "NF-1"). sponsor_id must name a human
+// member of the organization: an agent run started with no human sponsor
+// is refused.
+message StartRunRequest {
+  string agent_id = 1;
+  string repo_id = 2;
+  string work_item_key = 3;
+  string sponsor_id = 4;
+  int64 wallclock_limit_seconds = 5;
+  int64 token_limit = 6;
+  int64 cost_limit_micros = 7;
+}
+
+message StartRunResponse {
+  Run run = 1;
+}
+
+message GetRunRequest {
+  string id = 1;
+}
+
+message GetRunResponse {
+  Run run = 1;
+}
+
+message CancelRunRequest {
+  string id = 1;
+}
+
+message CancelRunResponse {
+  bool ok = 1;
+}
+
+message StreamRunEventsRequest {
+  string run_id = 1;
+}
+
+// RunEvent is one message on the run's event stream: either a state change
+// or a recorded tool call.
+message StreamRunEventsResponse {
+  string run_id = 1;
+  string at = 2;
+  oneof payload {
+    StateChange state_change = 3;
+    ToolCall tool_call = 4;
+  }
+}
+
+message StateChange {
+  string from_state = 1;
+  string to_state = 2;
+}
+
+message ToolCall {
+  string tool = 1;
+  string outcome = 2;
+}
