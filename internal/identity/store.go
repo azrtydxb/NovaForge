@@ -138,6 +138,19 @@ func (s *Store) AddOrgMember(ctx context.Context, orgID, userID uuid.UUID, role 
 	return nil
 }
 
+// IsOrgMember reports whether userID belongs to orgID.
+func (s *Store) IsOrgMember(ctx context.Context, orgID, userID uuid.UUID) (bool, error) {
+	var exists bool
+	err := s.pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM identity.org_members WHERE org_id = $1 AND user_id = $2)`,
+		orgID, userID,
+	).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("check org membership: %w", err)
+	}
+	return exists, nil
+}
+
 // SetTOTPSecret stores the TOTP secret for userID.
 func (s *Store) SetTOTPSecret(ctx context.Context, userID uuid.UUID, secret string) error {
 	tag, err := s.pool.Exec(ctx,
