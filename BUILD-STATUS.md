@@ -30,9 +30,40 @@ the merge** — an agent's report is a claim, not evidence.
 No mocks for PostgreSQL, Redis, MinIO, or git. Model endpoints and the Kubernetes
 API use in-process doubles, which is what they are for.
 
-## Integration proven so far
+## Proven on the cluster
 
-- An unmodified `git` client clones, commits and pushes over **both HTTPS and SSH**,
-  and both transports refuse an out-of-scope ref identically.
-- Push events reach a real Redis consumer group.
-- An arm64 image built from this source ran as a pod in the cluster.
+`bash tests/e2e/deploy_test.sh` passes against the live 8-node ARM64 k3s cluster:
+
+1. All deployments ready.
+2. The edge answers `/healthz`.
+3. Register, log in, create an organization and a repository through the REST API
+   via the `nf` CLI.
+4. An **unmodified git client** clones over HTTPS, commits, and pushes.
+5. An SSH key is registered through the REST API, and the same repository is
+   cloned and pushed over **SSH**.
+6. Both pushed commits read back through the REST API.
+
+31 Go packages pass `go test`, 0 failures, against the real PostgreSQL, Redis
+and MinIO — no datastore is mocked anywhere.
+
+## Defects found by running it, not by reading it
+
+Each was fixed with a test that pins it:
+
+- The edge resolved a bearer only as a personal access token, so every
+  authenticated CLI call failed — `nf` presents its session token that way.
+- The edge authenticated a request then called the services anonymously.
+- A credential says _who_ the caller is, not _which organization_ they act in.
+  Sessions therefore carried no org and every org-scoped service refused. The
+  org now travels with the request and identity verifies membership.
+- The org lookup queried an unqualified table, failing only at runtime, because
+  no test covered the path.
+- Capability grants were being demanded of human members. Grants constrain
+  _agents_; a member has ordinary write access to their own repositories.
+- The runner executed repository-supplied commands directly on the runner host.
+  Jobs now run in their own Kubernetes pod.
+- A mutable `dev` image tag with `IfNotPresent` served cached older images, so a
+  redeploy silently ran stale code. Tags are now commit shas.
+- Creating a token with no scopes violated a NOT NULL constraint.
+- A push-event test read the first message of a durable shared Redis stream, so
+  an event from an earlier run won.
