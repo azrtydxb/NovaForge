@@ -91,6 +91,11 @@ services:
 # Runners are not in `services`: they expose no port and are never dialled, they
 # dial out. A Service in front of one would be an object nothing could use.
 runner:
+  # Runners register into one organization, because organizations are a hard
+  # security boundary and a runner that served every org would be a way across
+  # it. There is no organization at install time, so no runner is deployed until
+  # orgId is set.
+  orgId: ""
   replicas: 2
   labels: ["linux"]
   jobNamespace: novaforge

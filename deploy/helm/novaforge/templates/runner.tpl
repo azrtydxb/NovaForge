@@ -3,6 +3,7 @@ The CI runner holds a persistent outbound gRPC stream and has no inbound
 surface, so it gets no Service. It needs permission to create the per-job pods
 that isolate repository-supplied commands from the runner host.
 */ -}}
+{{- if .Values.runner.orgId }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -70,8 +71,11 @@ spec:
               value: {{ join "," .Values.runner.labels | quote }}
             - name: RUNNER_JOB_NAMESPACE
               value: {{ .Values.runner.jobNamespace | quote }}
+            - name: RUNNER_ORG_ID
+              value: {{ .Values.runner.orgId | quote }}
             - name: RUNNER_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
           resources: {{- toYaml .Values.resources | nindent 12 }}
+{{- end }}

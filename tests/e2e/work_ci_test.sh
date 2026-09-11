@@ -42,7 +42,20 @@ echo "== 2. a Work Item is created through the API =="
 /tmp/nf work list "$REPO" | grep -q "add a pipeline" || fail "the Work Item is not listed"
 ok "Work Item created and listed"
 
-echo "== 3. pushing a workflow schedules a CI run =="
+echo "== 3. a runner is registered into this organization =="
+# Runners register into one organization, because organizations are a hard
+# security boundary. The test therefore provisions its own rather than relying
+# on a platform-wide runner, which would be a way across that boundary.
+ORG_ID="$(curl -fsS "http://$EDGE_IP:8080/api/v1/orgs/$ORG" \
+	-H "Authorization: Bearer $(python3 -c "import json,os;print(json.load(open(os.environ['XDG_CONFIG_HOME']+'/novaforge/config.json'))['token'])")" |
+	python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')"
+[ -n "$ORG_ID" ] || fail "could not resolve the organization id"
+helm --kube-context "$KUBE_CONTEXT" upgrade "$REL" deploy/helm/novaforge \
+	--namespace "$NS" --reuse-values \
+	--set runner.orgId="$ORG_ID" --wait --timeout 5m >/dev/null || fail "deploying a runner failed"
+ok "runner registered into $ORG_ID"
+
+echo "== 4. pushing a workflow schedules a CI run =="
 TOKEN="$(python3 -c "import json,os;print(json.load(open(os.environ['XDG_CONFIG_HOME']+'/novaforge/config.json'))['token'])")"
 WORK="$(mktemp -d)"
 git clone "http://$USER:$TOKEN@$GIT_IP:8081/$ORG/$REPO.git" "$WORK/repo" 2>/dev/null || fail "clone failed"
@@ -64,7 +77,7 @@ PUSHED="$(git rev-parse HEAD)"
 cd - >/dev/null
 ok "pushed $PUSHED with a workflow"
 
-echo "== 4. the run reaches a terminal state =="
+echo "== 5. the run reaches a terminal state =="
 STATE=""
 for _ in $(seq 1 60); do
 	STATE="$(/tmp/nf ci runs "$REPO" 2>/dev/null | head -1 | awk '{print $2}' || true)"
@@ -77,7 +90,7 @@ done
 ok "run reached state: $STATE"
 [ "$STATE" = "success" ] || fail "the run did not succeed"
 
-echo "== 5. the job log and artifact are retrievable =="
+echo "== 6. the job log and artifact are retrievable =="
 /tmp/nf ci logs "$REPO" | grep -q "hello from novaforge ci" || fail "the job log does not contain the command's output"
 /tmp/nf ci artifacts "$REPO" | grep -q "report.txt" || fail "the artifact is not listed"
 ok "log and artifact retrievable"
