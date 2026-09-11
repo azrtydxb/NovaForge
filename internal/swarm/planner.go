@@ -231,7 +231,7 @@ func (p *Planner) Materialise(ctx context.Context, epic work.Item, subs []Subtas
 	items := make([]work.Item, 0, len(subs))
 	idByKey := make(map[string]work.Item, len(subs))
 	for _, s := range subs {
-		item, err := p.Work.CreateChild(ctx, epic.ID, s.Key, work.Item{
+		item, err := p.Work.CreateChild(ctx, epic.ID, s.Key, s.AgentRole, work.Item{
 			RepoID: epic.RepoID,
 			Type:   s.Type,
 			Goal:   subtaskGoal(s),

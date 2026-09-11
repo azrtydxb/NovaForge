@@ -19,7 +19,7 @@ import (
 // (and therefore swarm.Planner.Materialise, which calls it once per
 // subtask) twice with the same epic and key set is idempotent: one child
 // per key, never two.
-func (s *Store) CreateChild(ctx context.Context, epicID uuid.UUID, key string, item Item) (Item, error) {
+func (s *Store) CreateChild(ctx context.Context, epicID uuid.UUID, key, role string, item Item) (Item, error) {
 	scope, err := authz.FromContext(ctx)
 	if err != nil {
 		return Item{}, err
@@ -95,8 +95,8 @@ func (s *Store) CreateChild(ctx context.Context, epicID uuid.UUID, key string, i
 	}
 
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO work.epic_subtasks (parent_id, key, work_item_id) VALUES ($1, $2, $3)`,
-		epicID, key, item.ID,
+		INSERT INTO work.epic_subtasks (parent_id, key, work_item_id, agent_role) VALUES ($1, $2, $3, $4)`,
+		epicID, key, item.ID, role,
 	); err != nil {
 		return Item{}, fmt.Errorf("create child: record subtask key: %w", err)
 	}
@@ -105,4 +105,56 @@ func (s *Store) CreateChild(ctx context.Context, epicID uuid.UUID, key string, i
 		return Item{}, fmt.Errorf("create child: commit: %w", err)
 	}
 	return item, nil
+}
+
+// SubtaskRole returns the agent role a materialised subtask was assigned to
+// by Planner.Materialise, scoped to the caller's org. It returns an error
+// if workItemID was not created through CreateChild (e.g. a top-level Work
+// Item, or a child created some other way).
+func (s *Store) SubtaskRole(ctx context.Context, workItemID uuid.UUID) (string, error) {
+	scope, err := authz.FromContext(ctx)
+	if err != nil {
+		return "", err
+	}
+	var role string
+	err = s.pool.QueryRow(ctx, `
+		SELECT es.agent_role
+		FROM work.epic_subtasks es
+		JOIN work.work_items w ON w.id = es.work_item_id
+		WHERE es.work_item_id = $1 AND w.org_id = $2`,
+		workItemID, scope.OrgID,
+	).Scan(&role)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", fmt.Errorf("subtask role: work item %s is not a materialised subtask", workItemID)
+		}
+		return "", fmt.Errorf("subtask role: %w", err)
+	}
+	return role, nil
+}
+
+// Children returns every work item whose parent_id is epicID, in every
+// state, scoped to the caller's org. Unlike Ready, it is not filtered to
+// dependency-free open items: the swarm scheduler uses it to see the whole
+// picture — how many subtasks are already in_progress (for the
+// concurrency cap) and whether any subtask has reached state "blocked"
+// (which the scheduler propagates to the epic itself).
+func (s *Store) Children(ctx context.Context, orgID, epicID uuid.UUID) ([]Item, error) {
+	if err := authz.RequireOrg(ctx, orgID); err != nil {
+		return nil, err
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT w.id, w.org_id, w.repo_id, w.key, w.type, w.goal, w.acceptance,
+		       w.constraints, w.required_gates, w.assignee_id, w.assignee_kind,
+		       w.state, w.created_at
+		FROM work.work_items w
+		WHERE w.org_id = $1 AND w.parent_id = $2
+		ORDER BY w.seq`,
+		orgID, epicID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("children: %w", err)
+	}
+	defer rows.Close()
+	return scanItems(rows)
 }
