@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS run_provenance;
+DROP TABLE IF EXISTS agent_runs;
+DROP TABLE IF EXISTS agents;
