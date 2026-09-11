@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package novaforge.work.v1;
+
+// WorkService manages Work Items: typed engineering intent that can be
+// assigned to a human or an agent. Every RPC derives its organization from
+// the caller's resolved scope, never from a field of the request message.
+service WorkService {
+  rpc CreateItem(CreateItemRequest) returns (CreateItemResponse);
+  rpc GetItem(GetItemRequest) returns (GetItemResponse);
+  rpc ListItems(ListItemsRequest) returns (ListItemsResponse);
+  rpc AssignItem(AssignItemRequest) returns (AssignItemResponse);
+}
+
+// WorkItem mirrors a row in the work.work_items table.
+message WorkItem {
+  string id = 1;
+  string org_id = 2;
+  string repo_id = 3;
+  string key = 4;
+  string type = 5;
+  string goal = 6;
+  repeated string acceptance = 7;
+  repeated string constraints = 8;
+  repeated string required_gates = 9;
+  string assignee_id = 10;
+  string assignee_kind = 11;
+  string state = 12;
+  string created_at = 13;
+}
+
+message CreateItemRequest {
+  string repo_id = 1;
+  string type = 2;
+  string goal = 3;
+  repeated string acceptance = 4;
+  repeated string constraints = 5;
+  repeated string required_gates = 6;
+}
+
+message CreateItemResponse {
+  WorkItem item = 1;
+}
+
+// GetItemRequest identifies a Work Item by id or by its human-readable key
+// (e.g. "NF-1"). Exactly one of the two must be set.
+message GetItemRequest {
+  string id = 1;
+  string key = 2;
+}
+
+message GetItemResponse {
+  WorkItem item = 1;
+}
+
+message ListItemsRequest {
+  string repo_id = 1;
+  string state = 2;
+}
+
+message ListItemsResponse {
+  repeated WorkItem items = 1;
+}
+
+message AssignItemRequest {
+  string id = 1;
+  string assignee_id = 2;
+  string assignee_kind = 3;
+}
+
+message AssignItemResponse {
+  WorkItem item = 1;
+}

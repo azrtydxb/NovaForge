@@ -1,0 +1,112 @@
+syntax = "proto3";
+
+package novaforge.reviews.v1;
+
+// ReviewsService manages Engineering Runs: pull requests that carry plan and
+// proof through to merge. Every RPC derives its organization from the
+// caller's resolved scope, never from a field of the request message.
+service ReviewsService {
+  rpc CreateRun(CreateRunRequest) returns (CreateRunResponse);
+  rpc GetRun(GetRunRequest) returns (GetRunResponse);
+  rpc ListRuns(ListRunsRequest) returns (ListRunsResponse);
+  rpc AddPlanStep(AddPlanStepRequest) returns (AddPlanStepResponse);
+  rpc RecordProof(RecordProofRequest) returns (RecordProofResponse);
+  rpc SubmitReview(SubmitReviewRequest) returns (SubmitReviewResponse);
+  rpc AddComment(AddCommentRequest) returns (AddCommentResponse);
+}
+
+// Run mirrors a row in the reviews.runs table.
+message Run {
+  string id = 1;
+  string org_id = 2;
+  string repo_id = 3;
+  string work_item_id = 4;
+  int32 number = 5;
+  string title = 6;
+  string source_ref = 7;
+  string target_ref = 8;
+  string state = 9;
+  string author_id = 10;
+  string author_kind = 11;
+  string agent_name = 12;
+  string model_name = 13;
+  string created_at = 14;
+}
+
+message CreateRunRequest {
+  string repo_id = 1;
+  string work_item_id = 2;
+  string title = 3;
+  string source_ref = 4;
+  string target_ref = 5;
+  string author_id = 6;
+  string author_kind = 7;
+  string agent_name = 8;
+  string model_name = 9;
+}
+
+message CreateRunResponse {
+  Run run = 1;
+}
+
+message GetRunRequest {
+  string id = 1;
+}
+
+message GetRunResponse {
+  Run run = 1;
+}
+
+message ListRunsRequest {
+  string repo_id = 1;
+  string state = 2;
+}
+
+message ListRunsResponse {
+  repeated Run runs = 1;
+}
+
+message AddPlanStepRequest {
+  string run_id = 1;
+  int32 ordinal = 2;
+  string text = 3;
+  string state = 4;
+}
+
+message AddPlanStepResponse {
+  bool ok = 1;
+}
+
+message RecordProofRequest {
+  string run_id = 1;
+  string gate = 2;
+  string status = 3;
+  string detail = 4;
+}
+
+message RecordProofResponse {
+  bool ok = 1;
+}
+
+message SubmitReviewRequest {
+  string run_id = 1;
+  string reviewer_id = 2;
+  string reviewer_kind = 3;
+  string verdict = 4;
+}
+
+message SubmitReviewResponse {
+  bool ok = 1;
+}
+
+message AddCommentRequest {
+  string run_id = 1;
+  string author_id = 2;
+  string author_kind = 3;
+  string body = 4;
+}
+
+message AddCommentResponse {
+  string id = 1;
+  string created_at = 2;
+}

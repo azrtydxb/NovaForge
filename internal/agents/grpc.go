@@ -1,0 +1,370 @@
+package agents
+
+import (
+	"context"
+	"encoding/json"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
+	agentsv1 "github.com/novaforge/novaforge/gen/novaforge/agents/v1"
+	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
+	"github.com/novaforge/novaforge/internal/authz"
+	"github.com/novaforge/novaforge/internal/capability"
+	"github.com/novaforge/novaforge/internal/events"
+)
+
+const rfc3339 = "2006-01-02T15:04:05.999999999Z07:00"
+
+// defaultGrantTTL is how long a Start-issued capability grant remains
+// active. A run that outlives it is expected to have already finished
+// (WallclockLimit bounds every run well below this).
+const defaultGrantTTL = 24 * time.Hour
+
+// ExecuteFunc takes over a run once it has been created and issued its
+// grant: provisioning its isolated workspace, running the agent loop, and
+// driving it to a terminal state. It is invoked in a fresh background
+// context (a running agent must outlive the StartRun request that
+// launched it) after the run's state has already moved to "running". When
+// nil, StartRun still transitions the run from queued to running — the
+// state change a caller subscribed via StreamRunEvents can rely on
+// seeing — but nothing then executes it further, which is the same
+// nil-safe degrade every other service in this codebase uses for an
+// optional dependency the caller has not wired up (compare graph.Assemble).
+type ExecuteFunc func(ctx context.Context, run Run)
+
+// GRPCServer implements agentsv1.AgentServiceServer. Every method derives
+// the caller's organization from authz.FromContext and passes it as an
+// explicit predicate to every query — never from a field of the request
+// message, so a client cannot simply name a different org and be believed.
+type GRPCServer struct {
+	agentsv1.UnimplementedAgentServiceServer
+
+	Store   *Store
+	Grants  *capability.Store
+	RDB     *redis.Client
+	Work    workv1.WorkServiceClient
+	Execute ExecuteFunc
+}
+
+// NewGRPCServer wraps the given dependencies as an agentsv1.AgentServiceServer.
+func NewGRPCServer(store *Store, grants *capability.Store, rdb *redis.Client, work workv1.WorkServiceClient, execute ExecuteFunc) *GRPCServer {
+	return &GRPCServer{Store: store, Grants: grants, RDB: rdb, Work: work, Execute: execute}
+}
+
+func callerOrg(ctx context.Context) (uuid.UUID, error) {
+	scope, err := authz.FromContext(ctx)
+	if err != nil {
+		return uuid.Nil, status.Error(codes.PermissionDenied, "no authorization scope for this call")
+	}
+	return scope.OrgID, nil
+}
+
+func parseUUID(field, raw string) (uuid.UUID, error) {
+	id, err := uuid.Parse(raw)
+	if err != nil {
+		return uuid.Nil, status.Errorf(codes.InvalidArgument, "invalid %s %q: %v", field, raw, err)
+	}
+	return id, nil
+}
+
+func toProtoAgent(a Agent) *agentsv1.Agent {
+	return &agentsv1.Agent{
+		Id:       a.ID.String(),
+		OrgId:    a.OrgID.String(),
+		Name:     a.Name,
+		Role:     a.Role,
+		ModelRef: a.ModelRef,
+		Enabled:  a.Enabled,
+	}
+}
+
+func toProtoRun(r Run) *agentsv1.Run {
+	out := &agentsv1.Run{
+		Id:                    r.ID.String(),
+		OrgId:                 r.OrgID.String(),
+		AgentId:               r.AgentID.String(),
+		Branch:                r.Branch,
+		State:                 r.State,
+		WallclockLimitSeconds: int64(r.WallclockLimit / time.Second),
+		TokenLimit:            r.TokenLimit,
+		CostLimitMicros:       r.CostLimitMicros,
+	}
+	if r.WorkItemID != uuid.Nil {
+		out.WorkItemId = r.WorkItemID.String()
+	}
+	if r.SponsorID != uuid.Nil {
+		out.SponsorId = r.SponsorID.String()
+	}
+	if r.GrantID != uuid.Nil {
+		out.GrantId = r.GrantID.String()
+	}
+	if !r.StartedAt.IsZero() {
+		out.StartedAt = r.StartedAt.Format(rfc3339)
+	}
+	if r.EndedAt != nil {
+		out.EndedAt = r.EndedAt.Format(rfc3339)
+	}
+	return out
+}
+
+// CreateAgent registers a new agent identity within the caller's organization.
+func (g *GRPCServer) CreateAgent(ctx context.Context, req *agentsv1.CreateAgentRequest) (*agentsv1.CreateAgentResponse, error) {
+	orgID, err := callerOrg(ctx)
+	if err != nil {
+		return nil, err
+	}
+	created, err := g.Store.CreateAgent(ctx, Agent{
+		OrgID:    orgID,
+		Name:     req.GetName(),
+		Role:     req.GetRole(),
+		ModelRef: req.GetModelRef(),
+		Enabled:  req.GetEnabled(),
+	})
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "create agent: %v", err)
+	}
+	return &agentsv1.CreateAgentResponse{Agent: toProtoAgent(created)}, nil
+}
+
+// ListAgents lists every agent within the caller's organization.
+func (g *GRPCServer) ListAgents(ctx context.Context, req *agentsv1.ListAgentsRequest) (*agentsv1.ListAgentsResponse, error) {
+	if _, err := callerOrg(ctx); err != nil {
+		return nil, err
+	}
+	list, err := g.Store.ListAgents(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "list agents: %v", err)
+	}
+	out := make([]*agentsv1.Agent, len(list))
+	for i, a := range list {
+		out[i] = toProtoAgent(a)
+	}
+	return &agentsv1.ListAgentsResponse{Agents: out}, nil
+}
+
+// StartRun starts a new agent run against a Work Item. sponsor_id must name
+// a human member of the organization: a run started with no sponsor is
+// refused with PermissionDenied. It issues a capability grant scoped to
+// exactly the Work Item's agent branch, with no secret or deploy access,
+// creates the run "queued", publishes that state change, then transitions
+// it to "running" and hands it to Execute (when configured) in the
+// background — StartRun itself returns as soon as the run exists.
+func (g *GRPCServer) StartRun(ctx context.Context, req *agentsv1.StartRunRequest) (*agentsv1.StartRunResponse, error) {
+	orgID, err := callerOrg(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if req.GetSponsorId() == "" {
+		return nil, status.Error(codes.PermissionDenied, "an agent run requires a human sponsor")
+	}
+	sponsorID, err := parseUUID("sponsor_id", req.GetSponsorId())
+	if err != nil {
+		return nil, err
+	}
+	agentID, err := parseUUID("agent_id", req.GetAgentId())
+	if err != nil {
+		return nil, err
+	}
+	if _, err := parseUUID("repo_id", req.GetRepoId()); err != nil {
+		return nil, err
+	}
+	if req.GetWorkItemKey() == "" {
+		return nil, status.Error(codes.InvalidArgument, "work_item_key is required")
+	}
+	if g.Work == nil {
+		return nil, status.Error(codes.Internal, "work service is not configured")
+	}
+	itemResp, err := g.Work.GetItem(ctx, &workv1.GetItemRequest{Key: req.GetWorkItemKey()})
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "resolve work item %q: %v", req.GetWorkItemKey(), err)
+	}
+	workItemID, err := parseUUID("work_item.id", itemResp.GetItem().GetId())
+	if err != nil {
+		return nil, err
+	}
+	if itemResp.GetItem().GetRepoId() != req.GetRepoId() {
+		return nil, status.Errorf(codes.InvalidArgument, "work item %q belongs to a different repository than repo_id %q", req.GetWorkItemKey(), req.GetRepoId())
+	}
+
+	grant := capability.Grant{
+		OrgID:         orgID,
+		SubjectID:     agentID,
+		SubjectKind:   "agent",
+		RepoRead:      true,
+		WriteBranch:   "agents/" + req.GetWorkItemKey() + "/",
+		SecretsProd:   false,
+		DeployStaging: false,
+		DeployProd:    false,
+		ExpiresAt:     time.Now().Add(defaultGrantTTL),
+	}
+	issued, err := g.Grants.Issue(ctx, grant)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "issue capability grant: %v", err)
+	}
+
+	run, err := g.Store.CreateRun(ctx, Run{
+		OrgID:           orgID,
+		AgentID:         agentID,
+		WorkItemID:      workItemID,
+		SponsorID:       sponsorID,
+		GrantID:         issued.ID,
+		Branch:          issued.WriteBranch,
+		WallclockLimit:  time.Duration(req.GetWallclockLimitSeconds()) * time.Second,
+		TokenLimit:      req.GetTokenLimit(),
+		CostLimitMicros: req.GetCostLimitMicros(),
+	})
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "create run: %v", err)
+	}
+
+	g.publishStateChange(run.ID, "", "queued")
+
+	go g.driveToRunning(run)
+
+	return &agentsv1.StartRunResponse{Run: toProtoRun(run)}, nil
+}
+
+// driveToRunning transitions a freshly created run from queued to running
+// and publishes that change, then hands off to Execute if one is
+// configured. It runs in the background, detached from the StartRun
+// request's context, since an agent run outlives the RPC that started it.
+func (g *GRPCServer) driveToRunning(run Run) {
+	ctx := authz.WithScope(context.Background(), authz.Scope{OrgID: run.OrgID, ActorID: run.AgentID, ActorKind: "agent"})
+	if err := g.Store.SetRunState(ctx, run.ID, "running"); err != nil {
+		return
+	}
+	g.publishStateChange(run.ID, "queued", "running")
+	run.State = "running"
+
+	if g.Execute != nil {
+		g.Execute(ctx, run)
+	}
+}
+
+func (g *GRPCServer) publishStateChange(runID uuid.UUID, from, to string) {
+	if g.RDB == nil {
+		return
+	}
+	_ = events.Publish(context.Background(), g.RDB, events.StreamAgentEvents, events.AgentEvent{
+		RunID: runID, At: time.Now(), Type: "state_change", FromState: from, ToState: to,
+	})
+}
+
+// GetRun looks up a run by id within the caller's organization.
+func (g *GRPCServer) GetRun(ctx context.Context, req *agentsv1.GetRunRequest) (*agentsv1.GetRunResponse, error) {
+	if _, err := callerOrg(ctx); err != nil {
+		return nil, err
+	}
+	id, err := parseUUID("id", req.GetId())
+	if err != nil {
+		return nil, err
+	}
+	run, err := g.Store.GetRun(ctx, id)
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "get run: %v", err)
+	}
+	return &agentsv1.GetRunResponse{Run: toProtoRun(run)}, nil
+}
+
+// CancelRun transitions a run to cancelled, within the caller's organization.
+func (g *GRPCServer) CancelRun(ctx context.Context, req *agentsv1.CancelRunRequest) (*agentsv1.CancelRunResponse, error) {
+	if _, err := callerOrg(ctx); err != nil {
+		return nil, err
+	}
+	id, err := parseUUID("id", req.GetId())
+	if err != nil {
+		return nil, err
+	}
+	run, err := g.Store.GetRun(ctx, id)
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "get run: %v", err)
+	}
+	if err := g.Store.SetRunState(ctx, id, "cancelled"); err != nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "cancel run: %v", err)
+	}
+	g.publishStateChange(id, run.State, "cancelled")
+	return &agentsv1.CancelRunResponse{Ok: true}, nil
+}
+
+// StreamRunEvents tails events.StreamAgentEvents from its beginning,
+// forwarding every message for the requested run until the client
+// disconnects or ctx is cancelled. Reading from the beginning (rather than
+// only new messages) means a client that subscribes immediately after
+// StartRun returns still sees the queued and running state changes that
+// were published just before it connected.
+func (g *GRPCServer) StreamRunEvents(req *agentsv1.StreamRunEventsRequest, stream agentsv1.AgentService_StreamRunEventsServer) error {
+	ctx := stream.Context()
+	if _, err := callerOrg(ctx); err != nil {
+		return err
+	}
+	runID, err := parseUUID("run_id", req.GetRunId())
+	if err != nil {
+		return err
+	}
+	if g.RDB == nil {
+		return status.Error(codes.Unavailable, "event stream is not configured")
+	}
+
+	lastID := "0"
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+		}
+
+		res, err := g.RDB.XRead(ctx, &redis.XReadArgs{
+			Streams: []string{events.StreamAgentEvents, lastID},
+			Block:   2 * time.Second,
+			Count:   100,
+		}).Result()
+		if err != nil {
+			if err == redis.Nil || ctx.Err() != nil {
+				continue
+			}
+			return status.Errorf(codes.Internal, "read event stream: %v", err)
+		}
+		for _, s := range res {
+			for _, msg := range s.Messages {
+				lastID = msg.ID
+				evt, ok := decodeAgentEvent(msg.Values)
+				if !ok || evt.RunID != runID {
+					continue
+				}
+				resp := &agentsv1.StreamRunEventsResponse{
+					RunId: evt.RunID.String(),
+					At:    evt.At.Format(rfc3339),
+				}
+				switch evt.Type {
+				case "tool_call":
+					resp.Payload = &agentsv1.StreamRunEventsResponse_ToolCall{
+						ToolCall: &agentsv1.ToolCall{Tool: evt.Tool, Outcome: evt.Outcome},
+					}
+				default:
+					resp.Payload = &agentsv1.StreamRunEventsResponse_StateChange{
+						StateChange: &agentsv1.StateChange{FromState: evt.FromState, ToState: evt.ToState},
+					}
+				}
+				if err := stream.Send(resp); err != nil {
+					return err
+				}
+			}
+		}
+	}
+}
+
+func decodeAgentEvent(values map[string]interface{}) (events.AgentEvent, bool) {
+	raw, ok := values["data"].(string)
+	if !ok {
+		return events.AgentEvent{}, false
+	}
+	var evt events.AgentEvent
+	if err := json.Unmarshal([]byte(raw), &evt); err != nil {
+		return events.AgentEvent{}, false
+	}
+	return evt, true
+}
