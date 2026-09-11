@@ -77,7 +77,9 @@ func authenticate(cfg Config, next http.Handler) http.Handler {
 		// CLI call, so both are tried before the request is refused.
 		var subj *identityv1.Subject
 		var lastErr error
+		var presented string
 		if tok := bearer(r); tok != "" {
+			presented = tok
 			if resp, err := cfg.Identity.ResolveToken(ctx, &identityv1.ResolveTokenRequest{Token: tok}); err == nil {
 				subj = resp.GetSubject()
 			} else {
@@ -90,6 +92,7 @@ func authenticate(cfg Config, next http.Handler) http.Handler {
 				}
 			}
 		} else if ck, err := r.Cookie("nf_session"); err == nil && ck.Value != "" {
+			presented = ck.Value
 			resp, err := cfg.Identity.ResolveSession(ctx, &identityv1.ResolveSessionRequest{Token: ck.Value})
 			if err != nil {
 				lastErr = err
@@ -120,7 +123,12 @@ func authenticate(cfg Config, next http.Handler) http.Handler {
 		// which StatusFromGRPC maps to 403 or 404. Duplicating the check here
 		// would mean two places to get it wrong, and the edge is the one
 		// without the data to decide.
-		next.ServeHTTP(w, r.WithContext(authz.WithScope(r.Context(), scope)))
+		// The credential travels with the request so downstream gRPC calls can
+		// present it; the edge carries the caller's identity rather than acting
+		// as a trusted principal of its own.
+		rctx := authz.WithScope(r.Context(), scope)
+		rctx = WithCredential(rctx, presented)
+		next.ServeHTTP(w, r.WithContext(rctx))
 	})
 }
 

@@ -12,6 +12,7 @@ import (
 	"github.com/novaforge/novaforge/internal/edge"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
@@ -169,5 +170,54 @@ func TestUnwiredOperationIsLoud(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "no handler wired") {
 		t.Fatalf("want an explanatory body, got %s", rec.Body.String())
+	}
+}
+
+// TestCredentialIsForwardedDownstream pins the second defect the cluster
+// end-to-end test caught: the edge authenticated a request and then called the
+// services anonymously, so every service-side authorization check saw no
+// caller and refused with "authentication required". The edge is a gateway, not
+// a trusted principal — it must carry the caller's credential onward.
+func TestCredentialIsForwardedDownstream(t *testing.T) {
+	org, user := uuid.New(), uuid.New()
+	var seen string
+	cfg := edge.Config{
+		Identity: stubIdentity{subject: &identityv1.Subject{
+			UserId: user.String(), OrgId: org.String(), ActorKind: "user",
+		}},
+		Handlers: map[string]http.HandlerFunc{
+			"listOrgs": func(w http.ResponseWriter, r *http.Request) {
+				seen = edge.CredentialFrom(r.Context())
+				edge.WriteJSON(w, http.StatusOK, []string{})
+			},
+		},
+	}
+	r := edge.NewRouter(cfg)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/orgs", nil)
+	req.Header.Set("Authorization", "Bearer nf_the_caller_token")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d %s", rec.Code, rec.Body.String())
+	}
+	if seen != "nf_the_caller_token" {
+		t.Fatalf("credential not carried into the request context, got %q", seen)
+	}
+}
+
+func TestForwardCredentialAttachesMetadata(t *testing.T) {
+	ctx := edge.WithCredential(context.Background(), "nf_tok")
+	var gotAuth []string
+	invoker := func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, opts ...grpc.CallOption) error {
+		md, _ := metadata.FromOutgoingContext(ctx)
+		gotAuth = md.Get("authorization")
+		return nil
+	}
+	if err := edge.ForwardCredential(ctx, "/x.Y/Z", nil, nil, nil, invoker); err != nil {
+		t.Fatalf("ForwardCredential: %v", err)
+	}
+	if len(gotAuth) != 1 || gotAuth[0] != "Bearer nf_tok" {
+		t.Fatalf("want the bearer attached to outbound metadata, got %v", gotAuth)
 	}
 }

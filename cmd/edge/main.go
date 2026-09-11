@@ -88,5 +88,10 @@ func dial(addr string) (*grpc.ClientConn, error) {
 	if _, _, err := net.SplitHostPort(addr); err != nil {
 		return nil, fmt.Errorf("invalid address %q: %w", addr, err)
 	}
-	return grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	return grpc.NewClient(addr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		// Carry the caller's credential onto every downstream call; the edge is
+		// a gateway, not a trusted principal of its own.
+		grpc.WithChainUnaryInterceptor(edge.ForwardCredential),
+	)
 }
