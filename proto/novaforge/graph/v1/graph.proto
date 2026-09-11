@@ -1,0 +1,147 @@
+syntax = "proto3";
+
+package novaforge.graph.v1;
+
+// GraphService answers queries over the engineering graph and its
+// associated code search, context assembly, and project knowledge. Every
+// RPC derives the caller's organization from the authenticated scope on the
+// connection, never from a field in the request message, so no query here
+// can ever be satisfied outside the caller's own organization.
+service GraphService {
+  rpc GetSymbol(GetSymbolRequest) returns (GetSymbolResponse);
+  rpc Dependents(DependentsRequest) returns (DependentsResponse);
+  rpc Dependencies(DependenciesRequest) returns (DependenciesResponse);
+  rpc TestsCovering(TestsCoveringRequest) returns (TestsCoveringResponse);
+  rpc LastChangedBy(LastChangedByRequest) returns (LastChangedByResponse);
+  rpc SearchCode(SearchCodeRequest) returns (SearchCodeResponse);
+  rpc AssembleContext(AssembleContextRequest) returns (AssembleContextResponse);
+  rpc RecordKnowledge(RecordKnowledgeRequest) returns (RecordKnowledgeResponse);
+  rpc SearchKnowledge(SearchKnowledgeRequest) returns (SearchKnowledgeResponse);
+}
+
+message Symbol {
+  string id = 1;
+  string name = 2;
+  string kind = 3;
+  string path = 4;
+  int32 start_line = 5;
+  int32 end_line = 6;
+  string signature = 7;
+}
+
+message Node {
+  string id = 1;
+  string kind = 2;
+  string key = 3;
+  map<string, string> attrs = 4;
+}
+
+message CodeChunk {
+  string path = 1;
+  int32 start_line = 2;
+  int32 end_line = 3;
+  string text = 4;
+  float score = 5;
+}
+
+message KnowledgeEntry {
+  string id = 1;
+  string key = 2;
+  string kind = 3;
+  string title = 4;
+  string body = 5;
+  string created_at = 6;
+}
+
+message ContextSnippet {
+  string path = 1;
+  int32 start_line = 2;
+  int32 end_line = 3;
+  string text = 4;
+  string signal = 5;
+}
+
+message ContextBundle {
+  repeated ContextSnippet files = 1;
+  repeated KnowledgeEntry knowledge = 2;
+  repeated string tests = 3;
+  int32 tokens_estimated = 4;
+}
+
+message GetSymbolRequest {
+  string repo_id = 1;
+  string name = 2;
+}
+message GetSymbolResponse {
+  Symbol symbol = 1;
+}
+
+message DependentsRequest {
+  string repo_id = 1;
+  string symbol = 2;
+}
+message DependentsResponse {
+  repeated Node nodes = 1;
+}
+
+message DependenciesRequest {
+  string repo_id = 1;
+  string symbol = 2;
+}
+message DependenciesResponse {
+  repeated Node nodes = 1;
+}
+
+message TestsCoveringRequest {
+  string repo_id = 1;
+  string symbol = 2;
+}
+message TestsCoveringResponse {
+  repeated string tests = 1;
+}
+
+message LastChangedByRequest {
+  string repo_id = 1;
+  string symbol = 2;
+}
+message LastChangedByResponse {
+  string work_item_key = 1;
+}
+
+message SearchCodeRequest {
+  string repo_id = 1;
+  string query = 2;
+  int32 k = 3;
+}
+message SearchCodeResponse {
+  repeated CodeChunk chunks = 1;
+}
+
+message AssembleContextRequest {
+  string repo_id = 1;
+  string work_item_key = 2;
+  int32 token_budget = 3;
+}
+message AssembleContextResponse {
+  ContextBundle bundle = 1;
+}
+
+message RecordKnowledgeRequest {
+  string repo_id = 1;
+  string key = 2;
+  string kind = 3;
+  string title = 4;
+  string body = 5;
+}
+message RecordKnowledgeResponse {
+  string id = 1;
+}
+
+message SearchKnowledgeRequest {
+  string repo_id = 1;
+  string query = 2;
+  int32 k = 3;
+}
+message SearchKnowledgeResponse {
+  repeated KnowledgeEntry entries = 1;
+}
