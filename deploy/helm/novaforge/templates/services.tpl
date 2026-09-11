@@ -59,16 +59,29 @@ spec:
             {{- end }}
             - name: GIT_DATA_DIR
               value: /data/repos
-            - name: IDENTITY_ADDR
-              value: "{{ $.Release.Name }}-identity:{{ (index $.Values.services "identity").grpcPort }}"
-            - name: GIT_ADDR
-              value: "{{ $.Release.Name }}-git-platform:{{ (index $.Values.services "git-platform").grpcPort }}"
-{{- range $peer, $pcfg := $.Values.services }}
-{{- if and $pcfg.grpcPort (ne $peer "identity") (ne $peer "git-platform") }}
-            - name: {{ $peer | upper | replace "-" "_" }}_ADDR
-              value: "{{ $.Release.Name }}-{{ $peer }}:{{ $pcfg.grpcPort }}"
-{{- end }}
-{{- end }}
+            {{- /*
+            Peer addresses use the canonical names the services read, not names
+            derived from the Helm keys: the deployment name is work-reviews but
+            the variable is WORK_ADDR, and deriving it produced WORK_REVIEWS_ADDR,
+            which every dependent service rejected at startup.
+            */ -}}
+            {{- $peers := dict
+              "IDENTITY_ADDR" "identity"
+              "GIT_ADDR" "git-platform"
+              "WORK_ADDR" "work-reviews"
+              "REVIEWS_ADDR" "work-reviews"
+              "CI_ADDR" "ci-runner"
+              "GATES_ADDR" "gates"
+              "AGENTS_ADDR" "agent-runtime"
+              "GRAPH_ADDR" "engineering-graph"
+              "MCP_ADDR" "mcp-server" }}
+            {{- range $var, $target := $peers }}
+            {{- $tcfg := index $.Values.services $target }}
+            {{- if and $tcfg $tcfg.grpcPort }}
+            - name: {{ $var }}
+              value: "{{ $.Release.Name }}-{{ $target }}:{{ $tcfg.grpcPort }}"
+            {{- end }}
+            {{- end }}
             - name: AI_ENDPOINT
               value: {{ $.Values.ai.endpoint | quote }}
             - name: AI_MODEL
