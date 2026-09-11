@@ -102,3 +102,36 @@ func (s *Store) Resolve(ctx context.Context, id uuid.UUID) (Grant, error) {
 	}
 	return g, nil
 }
+
+// ListActive returns every non-expired grant issued to subjectID within
+// orgID. This is what a transport's CapFunc uses to find the grants that
+// might authorize a given ref update, since a push arrives with a subject
+// and an organization, not a grant id.
+func (s *Store) ListActive(ctx context.Context, orgID, subjectID uuid.UUID) ([]Grant, error) {
+	const q = `
+		SELECT id, org_id, subject_id, subject_kind, repo_read, write_branch,
+		       secrets_prod, deploy_staging, deploy_prod, expires_at
+		FROM gitplatform.capability_grants
+		WHERE org_id = $1 AND subject_id = $2 AND expires_at > now()`
+	rows, err := s.pool.Query(ctx, q, orgID, subjectID)
+	if err != nil {
+		return nil, fmt.Errorf("list active capability grants: %w", err)
+	}
+	defer rows.Close()
+
+	var grants []Grant
+	for rows.Next() {
+		var g Grant
+		if err := rows.Scan(
+			&g.ID, &g.OrgID, &g.SubjectID, &g.SubjectKind, &g.RepoRead, &g.WriteBranch,
+			&g.SecretsProd, &g.DeployStaging, &g.DeployProd, &g.ExpiresAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan capability grant: %w", err)
+		}
+		grants = append(grants, g)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list active capability grants: %w", err)
+	}
+	return grants, nil
+}
