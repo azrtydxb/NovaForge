@@ -22,11 +22,16 @@ import (
 // double for a service under separate test, not for a datastore.
 type stubIdentity struct {
 	identityv1.IdentityServiceClient
-	subject *identityv1.Subject
-	err     error
+	subject     *identityv1.Subject
+	err         error
+	tokenErr    error // when set, ResolveToken fails but ResolveSession may not
+	sessionOnly *identityv1.Subject
 }
 
 func (s stubIdentity) ResolveToken(_ context.Context, _ *identityv1.ResolveTokenRequest, _ ...grpc.CallOption) (*identityv1.ResolveTokenResponse, error) {
+	if s.tokenErr != nil {
+		return nil, s.tokenErr
+	}
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -34,10 +39,48 @@ func (s stubIdentity) ResolveToken(_ context.Context, _ *identityv1.ResolveToken
 }
 
 func (s stubIdentity) ResolveSession(_ context.Context, _ *identityv1.ResolveSessionRequest, _ ...grpc.CallOption) (*identityv1.ResolveSessionResponse, error) {
+	if s.sessionOnly != nil {
+		return &identityv1.ResolveSessionResponse{Subject: s.sessionOnly}, nil
+	}
 	if s.err != nil {
 		return nil, s.err
 	}
 	return &identityv1.ResolveSessionResponse{Subject: s.subject}, nil
+}
+
+// TestBearerAcceptsSessionToken pins a defect the cluster end-to-end test
+// caught: nf stores the session token from login and sends it as a Bearer
+// header, but the edge only tried personal-access-token resolution for Bearer,
+// so every authenticated CLI call failed with "invalid, revoked, or expired
+// token". A bearer header carries a credential; the edge must resolve it
+// against both kinds before refusing it.
+func TestBearerAcceptsSessionToken(t *testing.T) {
+	org, user := uuid.New(), uuid.New()
+	called := false
+	cfg := edge.Config{
+		Identity: stubIdentity{
+			tokenErr:    status.Error(codes.Unauthenticated, "invalid, revoked, or expired token"),
+			sessionOnly: &identityv1.Subject{UserId: user.String(), OrgId: org.String(), ActorKind: "user"},
+		},
+		Handlers: map[string]http.HandlerFunc{
+			"listOrgs": func(w http.ResponseWriter, r *http.Request) {
+				called = true
+				edge.WriteJSON(w, http.StatusOK, []string{})
+			},
+		},
+	}
+	r := edge.NewRouter(cfg)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/orgs", nil)
+	req.Header.Set("Authorization", "Bearer a-session-token")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("a session token presented as a bearer must authenticate; got %d %s", rec.Code, rec.Body.String())
+	}
+	if !called {
+		t.Fatal("handler never ran")
+	}
 }
 
 func TestUnauthenticatedRejected(t *testing.T) {

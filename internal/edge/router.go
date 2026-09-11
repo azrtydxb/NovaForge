@@ -71,21 +71,35 @@ func authenticate(cfg Config, next http.Handler) http.Handler {
 		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 		defer cancel()
 
+		// A bearer header carries "a credential", not specifically a personal
+		// access token: nf stores the session token from login and presents it
+		// this way. Resolving against only one kind rejected every authenticated
+		// CLI call, so both are tried before the request is refused.
 		var subj *identityv1.Subject
+		var lastErr error
 		if tok := bearer(r); tok != "" {
-			resp, err := cfg.Identity.ResolveToken(ctx, &identityv1.ResolveTokenRequest{Token: tok})
-			if err != nil {
-				WriteError(w, http.StatusUnauthorized, err)
-				return
+			if resp, err := cfg.Identity.ResolveToken(ctx, &identityv1.ResolveTokenRequest{Token: tok}); err == nil {
+				subj = resp.GetSubject()
+			} else {
+				lastErr = err
+				if resp, err := cfg.Identity.ResolveSession(ctx, &identityv1.ResolveSessionRequest{Token: tok}); err == nil {
+					subj = resp.GetSubject()
+					lastErr = nil
+				} else {
+					lastErr = err
+				}
 			}
-			subj = resp.GetSubject()
 		} else if ck, err := r.Cookie("nf_session"); err == nil && ck.Value != "" {
 			resp, err := cfg.Identity.ResolveSession(ctx, &identityv1.ResolveSessionRequest{Token: ck.Value})
 			if err != nil {
-				WriteError(w, http.StatusUnauthorized, err)
-				return
+				lastErr = err
+			} else {
+				subj = resp.GetSubject()
 			}
-			subj = resp.GetSubject()
+		}
+		if subj == nil && lastErr != nil {
+			WriteError(w, http.StatusUnauthorized, lastErr)
+			return
 		}
 		if subj == nil {
 			WriteError(w, http.StatusUnauthorized, errors.New("no credentials"))

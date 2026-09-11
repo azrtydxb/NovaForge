@@ -63,16 +63,12 @@ spec:
               value: "{{ $.Release.Name }}-identity:{{ (index $.Values.services "identity").grpcPort }}"
             - name: GIT_ADDR
               value: "{{ $.Release.Name }}-git-platform:{{ (index $.Values.services "git-platform").grpcPort }}"
-            - name: WORK_ADDR
-              value: "{{ $.Release.Name }}-work-reviews:{{ (index $.Values.services "work-reviews").grpcPort }}"
-            - name: CI_ADDR
-              value: "{{ $.Release.Name }}-ci-runner:{{ (index $.Values.services "ci-runner").grpcPort }}"
-            - name: GATES_ADDR
-              value: "{{ $.Release.Name }}-gates:{{ (index $.Values.services "gates").grpcPort }}"
-            - name: AGENTS_ADDR
-              value: "{{ $.Release.Name }}-agent-runtime:{{ (index $.Values.services "agent-runtime").grpcPort }}"
-            - name: GRAPH_ADDR
-              value: "{{ $.Release.Name }}-engineering-graph:{{ (index $.Values.services "engineering-graph").grpcPort }}"
+{{- range $peer, $pcfg := $.Values.services }}
+{{- if and $pcfg.grpcPort (ne $peer "identity") (ne $peer "git-platform") }}
+            - name: {{ $peer | upper | replace "-" "_" }}_ADDR
+              value: "{{ $.Release.Name }}-{{ $peer }}:{{ $pcfg.grpcPort }}"
+{{- end }}
+{{- end }}
             - name: AI_ENDPOINT
               value: {{ $.Values.ai.endpoint | quote }}
             - name: AI_MODEL
