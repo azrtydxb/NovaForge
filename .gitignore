@@ -1,0 +1,6 @@
+# procoder machine state — regenerated, not source
+.procoder/state/
+
+# Go build output
+/bin/
+*.test
