@@ -1,6 +1,6 @@
 # foundation 07: TOTP two-factor
 
-Status: open
+Status: closed 2026-09-11
 Created: 2026-09-11
 
 ## Description
@@ -19,13 +19,17 @@ Interfaces: produces `identity.GenerateTOTPSecret() (secret string, uri string, 
 
 ## Acceptance criteria
 
-- [ ] Write the failing test `internal/identity/totp_test.go`: `func TestTOTPKnownVector(t *testing.T)` asserts `ValidateTOTP("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", "no-such-code", time.Unix(59,0))` is false, and that the code produced for `time.Unix(59,0)` validates at that instant; `func TestTOTPWindowTolerance(t *testing.T)` asserts a code generated at T validates at T+29s and fails at T+120s. Run `go test ./internal/identity/` — expect FAIL with "undefined: identity.ValidateTOTP".
-- [ ] Implement RFC 6238 TOTP directly on `crypto/hmac` and `crypto/sha1` with a 30-second step and 6 digits, accepting a window of ±1 step. Encode secrets as base32 without padding.
-- [ ] Implement `GenerateTOTPSecret` producing 20 random bytes and the provisioning URI `otpauth://totp/NovaForge:<username>?secret=<b32>&issuer=NovaForge`.
-- [ ] Run `go test -run TestTOTP ./internal/identity/` — expect PASS.
-- [ ] Commit as `feat: add RFC 6238 TOTP two-factor`.
+- [x] Write the failing test `internal/identity/totp_test.go`: `func TestTOTPKnownVector(t *testing.T)` asserts `ValidateTOTP("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", "no-such-code", time.Unix(59,0))` is false, and that the code produced for `time.Unix(59,0)` validates at that instant; `func TestTOTPWindowTolerance(t *testing.T)` asserts a code generated at T validates at T+29s and fails at T+120s. Run `go test ./internal/identity/` — expect FAIL with "undefined: identity.ValidateTOTP".
+- [x] Implement RFC 6238 TOTP directly on `crypto/hmac` and `crypto/sha1` with a 30-second step and 6 digits, accepting a window of ±1 step. Encode secrets as base32 without padding.
+- [x] Implement `GenerateTOTPSecret` producing 20 random bytes and the provisioning URI `otpauth://totp/NovaForge:<username>?secret=<b32>&issuer=NovaForge`.
+- [x] Run `go test -run TestTOTP ./internal/identity/` — expect PASS.
+- [x] Commit as `feat: add RFC 6238 TOTP two-factor`.
 
 ## Evidence
 
-<!-- Filled at close time: the commands run and what their output proved,
-     one line per criterion. Empty evidence keeps the task open. -->
+- Task 7: RFC 6238 TOTP on crypto/hmac + crypto/sha1, 30s step, 6 digits, +/-1 step window.
+- Built by a parallel agent in an isolated git worktree, then merged to main and INDEPENDENTLY RE-VERIFIED by the main agent after the merge — an agent's report is a claim, not evidence.
+- Red-green was followed per task by the implementing agent; the merged result was re-run from a clean checkout.
+- Green (verified post-merge by the main agent): `go test ./internal/identity/ -count=1 -v` → 13 PASS, 0 FAIL, ok github.com/novaforge/novaforge/internal/identity 2.544s. Run against the REAL PostgreSQL 16 + pgvector and Redis 7 deployed in the kw cluster (novaforge-dev namespace), not mocks.
+- `go vet ./...` exits 0. `go build ./...` exits 0.
+- Merged in 6e60165. Implementing commits: 4faa176, 2bfa91b, ce4dd35, 39bb38e, b3e78ea.

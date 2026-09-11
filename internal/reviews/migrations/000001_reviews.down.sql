@@ -1,0 +1,5 @@
+DROP TABLE IF EXISTS run_reviews;
+DROP TABLE IF EXISTS run_comments;
+DROP TABLE IF EXISTS run_proof;
+DROP TABLE IF EXISTS run_plan_steps;
+DROP TABLE IF EXISTS runs;

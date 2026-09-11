@@ -1,6 +1,6 @@
 # foundation 08: SSH public keys
 
-Status: open
+Status: closed 2026-09-11
 Created: 2026-09-11
 
 ## Description
@@ -19,13 +19,17 @@ Interfaces: produces `identity.SSHKeyStore.Add(ctx, userID uuid.UUID, title, aut
 
 ## Acceptance criteria
 
-- [ ] Write the failing test `internal/identity/sshkey_test.go`: `func TestAddKeyComputesFingerprint(t *testing.T)` adds a known ed25519 authorized-key line and asserts the stored fingerprint starts with `SHA256:`; `func TestRejectMalformedKey(t *testing.T)` asserts `Add(ctx, user, "t", "not-a-key")` returns an error containing "parse". Run `go test ./internal/identity/` — expect FAIL with "undefined: identity.SSHKeyStore".
-- [ ] Write the up migration creating `ssh_keys` (id uuid pk, user_id uuid not null references users(id) on delete cascade, title text not null, fingerprint text not null unique, public_key text not null, created_at timestamptz not null default now()) and the matching down migration.
-- [ ] Implement `Add` parsing with `ssh.ParseAuthorizedKey` and computing the fingerprint with `ssh.FingerprintSHA256`, returning `fmt.Errorf("parse public key: %w", err)` on failure.
-- [ ] Run `TEST_DATABASE_URL=... go test ./internal/identity/` — expect PASS.
-- [ ] Commit as `feat: add ssh public key storage with sha256 fingerprints`.
+- [x] Write the failing test `internal/identity/sshkey_test.go`: `func TestAddKeyComputesFingerprint(t *testing.T)` adds a known ed25519 authorized-key line and asserts the stored fingerprint starts with `SHA256:`; `func TestRejectMalformedKey(t *testing.T)` asserts `Add(ctx, user, "t", "not-a-key")` returns an error containing "parse". Run `go test ./internal/identity/` — expect FAIL with "undefined: identity.SSHKeyStore".
+- [x] Write the up migration creating `ssh_keys` (id uuid pk, user_id uuid not null references users(id) on delete cascade, title text not null, fingerprint text not null unique, public_key text not null, created_at timestamptz not null default now()) and the matching down migration.
+- [x] Implement `Add` parsing with `ssh.ParseAuthorizedKey` and computing the fingerprint with `ssh.FingerprintSHA256`, returning `fmt.Errorf("parse public key: %w", err)` on failure.
+- [x] Run `TEST_DATABASE_URL=... go test ./internal/identity/` — expect PASS.
+- [x] Commit as `feat: add ssh public key storage with sha256 fingerprints`.
 
 ## Evidence
 
-<!-- Filled at close time: the commands run and what their output proved,
-     one line per criterion. Empty evidence keeps the task open. -->
+- Task 8: ssh.ParseAuthorizedKey + ssh.FingerprintSHA256, malformed keys rejected with a parse error.
+- Built by a parallel agent in an isolated git worktree, then merged to main and INDEPENDENTLY RE-VERIFIED by the main agent after the merge — an agent's report is a claim, not evidence.
+- Red-green was followed per task by the implementing agent; the merged result was re-run from a clean checkout.
+- Green (verified post-merge by the main agent): `go test ./internal/identity/ -count=1 -v` → 13 PASS, 0 FAIL, ok github.com/novaforge/novaforge/internal/identity 2.544s. Run against the REAL PostgreSQL 16 + pgvector and Redis 7 deployed in the kw cluster (novaforge-dev namespace), not mocks.
+- `go vet ./...` exits 0. `go build ./...` exits 0.
+- Merged in 6e60165. Implementing commits: 4faa176, 2bfa91b, ce4dd35, 39bb38e, b3e78ea.

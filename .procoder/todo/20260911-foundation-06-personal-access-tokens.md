@@ -1,6 +1,6 @@
 # foundation 06: Personal access tokens
 
-Status: open
+Status: closed 2026-09-11
 Created: 2026-09-11
 
 ## Description
@@ -19,14 +19,18 @@ Interfaces: produces `identity.TokenStore.Create(ctx, userID uuid.UUID, name str
 
 ## Acceptance criteria
 
-- [ ] Write the failing test `internal/identity/token_test.go`: `func TestTokenResolve(t *testing.T)` creates a token and asserts `Resolve(plaintext)` returns the matching user id; `func TestRevokedTokenRejected(t *testing.T)` revokes then asserts `Resolve` returns an error containing "revoked"; `func TestExpiredTokenRejected(t *testing.T)` creates with an `expiresAt` one hour in the past and asserts the error contains "expired". Run `go test ./internal/identity/` — expect FAIL with "undefined: identity.TokenStore".
-- [ ] Write the up migration creating `access_tokens` (id uuid pk, user_id uuid not null references users(id) on delete cascade, name text not null, token_hash bytea not null unique, scopes text[] not null default '{}', expires_at timestamptz, revoked_at timestamptz, created_at timestamptz not null default now()) plus `CREATE INDEX ON access_tokens (token_hash);` and the matching down migration.
-- [ ] Implement `Create` generating 32 random bytes rendered as `nf_<base64url>`, storing only `sha256(plaintext)` in `token_hash`, and returning the plaintext exactly once.
-- [ ] Implement `Resolve` looking up by `sha256(plaintext)`, returning `errors.New("token revoked")` when `revoked_at` is set and `errors.New("token expired")` when `expires_at` is in the past.
-- [ ] Run `TEST_DATABASE_URL=... go test ./internal/identity/` — expect PASS.
-- [ ] Commit as `feat: add personal access tokens with hashed storage`.
+- [x] Write the failing test `internal/identity/token_test.go`: `func TestTokenResolve(t *testing.T)` creates a token and asserts `Resolve(plaintext)` returns the matching user id; `func TestRevokedTokenRejected(t *testing.T)` revokes then asserts `Resolve` returns an error containing "revoked"; `func TestExpiredTokenRejected(t *testing.T)` creates with an `expiresAt` one hour in the past and asserts the error contains "expired". Run `go test ./internal/identity/` — expect FAIL with "undefined: identity.TokenStore".
+- [x] Write the up migration creating `access_tokens` (id uuid pk, user_id uuid not null references users(id) on delete cascade, name text not null, token_hash bytea not null unique, scopes text[] not null default '{}', expires_at timestamptz, revoked_at timestamptz, created_at timestamptz not null default now()) plus `CREATE INDEX ON access_tokens (token_hash);` and the matching down migration.
+- [x] Implement `Create` generating 32 random bytes rendered as `nf_<base64url>`, storing only `sha256(plaintext)` in `token_hash`, and returning the plaintext exactly once.
+- [x] Implement `Resolve` looking up by `sha256(plaintext)`, returning `errors.New("token revoked")` when `revoked_at` is set and `errors.New("token expired")` when `expires_at` is in the past.
+- [x] Run `TEST_DATABASE_URL=... go test ./internal/identity/` — expect PASS.
+- [x] Commit as `feat: add personal access tokens with hashed storage`.
 
 ## Evidence
 
-<!-- Filled at close time: the commands run and what their output proved,
-     one line per criterion. Empty evidence keeps the task open. -->
+- Task 6: PATs issued as nf_<base64url> with only sha256 stored; revoked and expired tokens rejected with distinct errors.
+- Built by a parallel agent in an isolated git worktree, then merged to main and INDEPENDENTLY RE-VERIFIED by the main agent after the merge — an agent's report is a claim, not evidence.
+- Red-green was followed per task by the implementing agent; the merged result was re-run from a clean checkout.
+- Green (verified post-merge by the main agent): `go test ./internal/identity/ -count=1 -v` → 13 PASS, 0 FAIL, ok github.com/novaforge/novaforge/internal/identity 2.544s. Run against the REAL PostgreSQL 16 + pgvector and Redis 7 deployed in the kw cluster (novaforge-dev namespace), not mocks.
+- `go vet ./...` exits 0. `go build ./...` exits 0.
+- Merged in 6e60165. Implementing commits: 4faa176, 2bfa91b, ce4dd35, 39bb38e, b3e78ea.
