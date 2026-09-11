@@ -1,18 +1,26 @@
 # Decisions
 
+All decisions below are answered. No question is waiting on a human.
+
 ## What happens next in the now-empty NovaForge repo
 
-Answered 2026-09-11: **Nothing for now** — the repo stayed a doc-only starting point. Later
-superseded in part by an explicit `/init`, `/procoder:spec`, `/procoder:plan`, and
-`/procoder:todo`, which produced CLAUDE.md, the backend-platform spec, six plans, and 67
-seeded tasks. No implementation code has been written; that part of the answer still stands.
+Answered 2026-09-11: **Nothing for now**, later superseded by explicit `/init`,
+`/procoder:spec`, `/procoder:plan`, and `/procoder:todo` invocations, and finally by a
+direct instruction to build the whole backend autonomously. Superseded — no longer open.
 
 ## Committing the 67 seeded task files, and the missing procoder templates
 
-The 67 files under `.procoder/todo/` are untracked. The gate also reports three missing
-`.procoder/github/` templates (pull request, commit, workflow) as non-blocking hygiene
-findings, which `procoder templates` would generate.
+Answered 2026-09-11: **Commit the tasks and generate the templates.** Done in commit
+e491a47, which added the 67 todo files, the procoder templates, and a copy of the pull
+request template at `.github/PULL_REQUEST_TEMPLATE.md`.
 
-- **Commit the tasks and generate the templates** — one commit carrying both.
-- **Commit the tasks only** — leave the templates for whenever a PR workflow actually matters.
-- **Neither yet** — leave everything untracked and start building instead.
+## Build environment, after Docker Desktop was found broken
+
+Answered 2026-09-11 by direct instruction: **use the kw cluster, and nexus rather than zot.**
+Implemented in `hack/env.sh`:
+
+- Images build on the in-cluster BuildKit at `tcp://192.168.10.130:1234` over mTLS, using the
+  client certificate from the `buildkit-client-tls` secret. No local Docker daemon.
+- Images push to the nexus registry at `192.168.10.131:5000` under the `novaforge/` prefix.
+- PostgreSQL, Redis, and MinIO run in the `novaforge-dev` namespace, exposed as
+  LoadBalancer services so the workstation can run integration tests against them.

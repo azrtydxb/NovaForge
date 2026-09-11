@@ -1,6 +1,6 @@
 # foundation 03: Org-scoped authorization primitive
 
-Status: open
+Status: closed 2026-09-11
 Created: 2026-09-11
 
 ## Description
@@ -19,13 +19,16 @@ Interfaces: produces `authz.Scope{OrgID uuid.UUID, ActorID uuid.UUID, ActorKind 
 
 ## Acceptance criteria
 
-- [ ] Write the failing test `internal/authz/scope_test.go`: `func TestRequireOrgRejectsCrossOrg(t *testing.T)` builds `ctx := authz.WithScope(context.Background(), authz.Scope{OrgID: orgA, ActorID: user, ActorKind: "user"})` and asserts `authz.RequireOrg(ctx, orgB)` returns an error whose message contains "cross-org"; plus `func TestFromContextEmpty(t *testing.T)` asserting `authz.FromContext(context.Background())` errors rather than returning a zero Scope. Run `go test ./internal/authz/` — expect FAIL with "undefined: authz.WithScope".
-- [ ] Implement `scope.go` with an unexported context key type (`type ctxKey struct{}`) so no other package can collide or forge the value.
-- [ ] Implement `RequireOrg` returning `fmt.Errorf("cross-org access denied: scope org %s, requested %s", s.OrgID, orgID)` on mismatch and `nil` on match.
-- [ ] Run `go test ./internal/authz/` — expect PASS.
-- [ ] Commit as `feat: add org-scoped authorization primitive`.
+- [x] Write the failing test `internal/authz/scope_test.go`: `func TestRequireOrgRejectsCrossOrg(t *testing.T)` builds `ctx := authz.WithScope(context.Background(), authz.Scope{OrgID: orgA, ActorID: user, ActorKind: "user"})` and asserts `authz.RequireOrg(ctx, orgB)` returns an error whose message contains "cross-org"; plus `func TestFromContextEmpty(t *testing.T)` asserting `authz.FromContext(context.Background())` errors rather than returning a zero Scope. Run `go test ./internal/authz/` — expect FAIL with "undefined: authz.WithScope".
+- [x] Implement `scope.go` with an unexported context key type (`type ctxKey struct{}`) so no other package can collide or forge the value.
+- [x] Implement `RequireOrg` returning `fmt.Errorf("cross-org access denied: scope org %s, requested %s", s.OrgID, orgID)` on mismatch and `nil` on match.
+- [x] Run `go test ./internal/authz/` — expect PASS.
+- [x] Commit as `feat: add org-scoped authorization primitive`.
 
 ## Evidence
 
-<!-- Filled at close time: the commands run and what their output proved,
-     one line per criterion. Empty evidence keeps the task open. -->
+- Red: `go test ./internal/authz/` failed with "no required module provides package github.com/google/uuid".
+- scope.go implements Scope, WithScope, FromContext and RequireOrg with an unexported `type ctxKey struct{}` so no other package can collide with or forge the context value.
+- RequireOrg returns the documented "cross-org access denied: scope org %s, requested %s" on mismatch, nil on match, and ErrNoScope when the context carries no scope — a missing scope is denied, never treated as unrestricted.
+- Green: `go test ./internal/authz/` → ok 1.217s. Four tests pass, including TestRequireOrgWithoutScopeDenies which pins the fail-closed behaviour.
+- Committed as 26b2c1c.

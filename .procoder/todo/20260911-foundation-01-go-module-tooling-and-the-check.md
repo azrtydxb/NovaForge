@@ -1,6 +1,6 @@
 # foundation 01: Go module, tooling, and the check command
 
-Status: open
+Status: closed 2026-09-11
 Created: 2026-09-11
 
 ## Description
@@ -19,15 +19,19 @@ Interfaces: produces `version.Require(bin string, min string) error` and `versio
 
 ## Acceptance criteria
 
-- [ ] Write the failing test `internal/version/version_test.go`: `func TestRequireRejectsOldGit(t *testing.T) { err := version.Require("git", "2.40.0"); if err != nil && !strings.Contains(err.Error(), "git") { t.Fatalf("want git in error, got %v", err) } }` and `func TestRequireMissingBinary(t *testing.T) { if err := version.Require("definitely-not-a-binary", "1.0.0"); err == nil { t.Fatal("want error for missing binary") } }`. Run `go test ./internal/version/` — expect FAIL with "no required module provides package".
-- [ ] Create `go.mod` with `module github.com/novaforge/novaforge` and `go 1.26`.
-- [ ] Implement `internal/version/version.go`: `Require` runs `exec.Command(bin, "--version")`, parses the first three-part version number with the regexp pattern (\d+)\.(\d+)\.(\d+), compares numerically against `min`, and returns `fmt.Errorf("%s %s is older than required %s", bin, got, min)` when short, or `fmt.Errorf("%s not found: %w", bin, err)` when the binary is absent.
-- [ ] Run `go test ./internal/version/` — expect PASS.
-- [ ] Write `Makefile` with targets `test: go test ./...`, `build: go build ./...`, `lint: go vet ./...`, and `generate`.
-- [ ] Run `make test` and `make lint` — expect both to exit 0.
-- [ ] Commit as `feat: add go module, makefile, and binary version guard`.
+- [x] Write the failing test `internal/version/version_test.go`: `func TestRequireRejectsOldGit(t *testing.T) { err := version.Require("git", "2.40.0"); if err != nil && !strings.Contains(err.Error(), "git") { t.Fatalf("want git in error, got %v", err) } }` and `func TestRequireMissingBinary(t *testing.T) { if err := version.Require("definitely-not-a-binary", "1.0.0"); err == nil { t.Fatal("want error for missing binary") } }`. Run `go test ./internal/version/` — expect FAIL with "no required module provides package".
+- [x] Create `go.mod` with `module github.com/novaforge/novaforge` and `go 1.26`.
+- [x] Implement `internal/version/version.go`: `Require` runs `exec.Command(bin, "--version")`, parses the first three-part version number with the regexp pattern (\d+)\.(\d+)\.(\d+), compares numerically against `min`, and returns `fmt.Errorf("%s %s is older than required %s", bin, got, min)` when short, or `fmt.Errorf("%s not found: %w", bin, err)` when the binary is absent.
+- [x] Run `go test ./internal/version/` — expect PASS.
+- [x] Write `Makefile` with targets `test: go test ./...`, `build: go build ./...`, `lint: go vet ./...`, and `generate`.
+- [x] Run `make test` and `make lint` — expect both to exit 0.
+- [x] Commit as `feat: add go module, makefile, and binary version guard`.
 
 ## Evidence
 
-<!-- Filled at close time: the commands run and what their output proved,
-     one line per criterion. Empty evidence keeps the task open. -->
+- Red: `go test ./internal/version/` before go.mod existed failed with "cannot find main module" — the package could not build.
+- go.mod created: module github.com/novaforge/novaforge, go 1.26.
+- internal/version/version.go implements Require by exec-ing `<bin> --version`, parsing the first three-part version, comparing numerically, and returning the two documented error strings.
+- Green: `go test ./internal/version/` → ok github.com/novaforge/novaforge/internal/version 0.915s. Three tests pass, including TestRequireRejectsTooNewMinimum which exercises the "older than required" path against the real git 2.50.1 on PATH.
+- Makefile written with test/build/lint/generate/tidy targets. `make test` → ok; `make lint` (go vet ./...) → exit 0 with no findings.
+- Committed as 71c5236 "feat: add go module, makefile, and binary version guard".
