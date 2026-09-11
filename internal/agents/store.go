@@ -73,6 +73,12 @@ func NewStore(pool *pgxpool.Pool) *Store {
 	return &Store{pool: pool}
 }
 
+// Pool returns the underlying connection pool, for constructing other
+// components (such as AuditLog) that share the same schema's connection.
+func (s *Store) Pool() *pgxpool.Pool {
+	return s.pool
+}
+
 // terminalStates are agent_runs.state values that no further transition may
 // leave.
 var terminalStates = map[string]bool{
