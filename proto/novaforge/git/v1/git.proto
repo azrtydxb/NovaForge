@@ -1,0 +1,136 @@
+syntax = "proto3";
+
+package novaforge.git.v1;
+
+// GitService owns bare repository storage and read access to their contents.
+// Authentication is delegated to the identity service; every request is
+// answered only within the caller's organization.
+service GitService {
+  rpc CreateRepo(CreateRepoRequest) returns (CreateRepoResponse);
+  rpc GetRepo(GetRepoRequest) returns (GetRepoResponse);
+  rpc ListRepos(ListReposRequest) returns (ListReposResponse);
+  rpc DeleteRepo(DeleteRepoRequest) returns (DeleteRepoResponse);
+  rpc ListBranches(ListBranchesRequest) returns (ListBranchesResponse);
+  rpc ListTags(ListTagsRequest) returns (ListTagsResponse);
+  rpc ListCommits(ListCommitsRequest) returns (ListCommitsResponse);
+  rpc GetTree(GetTreeRequest) returns (GetTreeResponse);
+  rpc GetBlob(GetBlobRequest) returns (GetBlobResponse);
+  rpc GetDiff(GetDiffRequest) returns (GetDiffResponse);
+  rpc Merge(MergeRequest) returns (MergeResponse);
+}
+
+message Repo {
+  string id = 1;
+  string org_id = 2;
+  string name = 3;
+  string default_branch = 4;
+}
+
+message Ref {
+  string name = 1;
+  string sha = 2;
+  string kind = 3;
+}
+
+message Commit {
+  string sha = 1;
+  string message = 2;
+  string author_name = 3;
+  string author_email = 4;
+  string at = 5;
+}
+
+message TreeEntry {
+  string mode = 1;
+  string kind = 2;
+  string sha = 3;
+  string name = 4;
+  int64 size = 5;
+}
+
+message CreateRepoRequest {
+  string name = 1;
+}
+message CreateRepoResponse {
+  Repo repo = 1;
+}
+
+message GetRepoRequest {
+  string name = 1;
+}
+message GetRepoResponse {
+  Repo repo = 1;
+}
+
+message ListReposRequest {}
+message ListReposResponse {
+  repeated Repo repos = 1;
+}
+
+message DeleteRepoRequest {
+  string name = 1;
+}
+message DeleteRepoResponse {
+  bool ok = 1;
+}
+
+message ListBranchesRequest {
+  string repo = 1;
+}
+message ListBranchesResponse {
+  repeated Ref refs = 1;
+}
+
+message ListTagsRequest {
+  string repo = 1;
+}
+message ListTagsResponse {
+  repeated Ref refs = 1;
+}
+
+message ListCommitsRequest {
+  string repo = 1;
+  string ref = 2;
+  int32 limit = 3;
+}
+message ListCommitsResponse {
+  repeated Commit commits = 1;
+}
+
+message GetTreeRequest {
+  string repo = 1;
+  string ref = 2;
+  string path = 3;
+}
+message GetTreeResponse {
+  repeated TreeEntry entries = 1;
+}
+
+message GetBlobRequest {
+  string repo = 1;
+  string ref = 2;
+  string path = 3;
+}
+message GetBlobResponse {
+  bytes content = 1;
+}
+
+message GetDiffRequest {
+  string repo = 1;
+  string from = 2;
+  string to = 3;
+}
+message GetDiffResponse {
+  string unified = 1;
+}
+
+message MergeRequest {
+  string repo = 1;
+  string source_ref = 2;
+  string target_ref = 3;
+  string method = 4;
+  string message = 5;
+}
+message MergeResponse {
+  string merge_sha = 1;
+}

@@ -1,0 +1,124 @@
+syntax = "proto3";
+
+package novaforge.identity.v1;
+
+// IdentityService owns users, organizations, teams, credentials and capability
+// grants. No other service reads the identity schema; everything else asks
+// here.
+service IdentityService {
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+  rpc Login(LoginRequest) returns (LoginResponse);
+  rpc ResolveSession(ResolveSessionRequest) returns (ResolveSessionResponse);
+  rpc ResolveToken(ResolveTokenRequest) returns (ResolveTokenResponse);
+  rpc ResolveFingerprint(ResolveFingerprintRequest) returns (ResolveFingerprintResponse);
+  rpc CreateOrg(CreateOrgRequest) returns (CreateOrgResponse);
+  rpc AddOrgMember(AddOrgMemberRequest) returns (AddOrgMemberResponse);
+  rpc IssueGrant(IssueGrantRequest) returns (IssueGrantResponse);
+  rpc GetGrant(GetGrantRequest) returns (GetGrantResponse);
+}
+
+// Subject is the authenticated caller. org_id is empty when no organization
+// has been selected; an empty org_id never means "every organization".
+message Subject {
+  string user_id = 1;
+  string org_id = 2;
+  string actor_kind = 3;
+  repeated string scopes = 4;
+}
+
+message Grant {
+  string id = 1;
+  string org_id = 2;
+  string subject_id = 3;
+  string subject_kind = 4;
+  bool repo_read = 5;
+  string write_branch = 6;
+  bool secrets_prod = 7;
+  bool deploy_staging = 8;
+  bool deploy_prod = 9;
+  string expires_at = 10;
+}
+
+message Org {
+  string id = 1;
+  string name = 2;
+}
+
+message RegisterRequest {
+  string email = 1;
+  string username = 2;
+  string password = 3;
+}
+message RegisterResponse {
+  string user_id = 1;
+}
+
+message LoginRequest {
+  string username = 1;
+  string password = 2;
+  string totp_code = 3;
+}
+message LoginResponse {
+  string session_token = 1;
+  bool requires_totp = 2;
+  string user_id = 3;
+}
+
+message ResolveSessionRequest {
+  string token = 1;
+}
+message ResolveSessionResponse {
+  Subject subject = 1;
+}
+
+message ResolveTokenRequest {
+  string token = 1;
+}
+message ResolveTokenResponse {
+  Subject subject = 1;
+}
+
+message ResolveFingerprintRequest {
+  string fingerprint = 1;
+}
+message ResolveFingerprintResponse {
+  Subject subject = 1;
+}
+
+message CreateOrgRequest {
+  string name = 1;
+}
+message CreateOrgResponse {
+  Org org = 1;
+}
+
+message AddOrgMemberRequest {
+  string org_id = 1;
+  string user_id = 2;
+  string role = 3;
+}
+message AddOrgMemberResponse {
+  bool ok = 1;
+}
+
+message IssueGrantRequest {
+  string org_id = 1;
+  string subject_id = 2;
+  string subject_kind = 3;
+  bool repo_read = 4;
+  string write_branch = 5;
+  bool secrets_prod = 6;
+  bool deploy_staging = 7;
+  bool deploy_prod = 8;
+  int64 ttl_seconds = 9;
+}
+message IssueGrantResponse {
+  Grant grant = 1;
+}
+
+message GetGrantRequest {
+  string id = 1;
+}
+message GetGrantResponse {
+  Grant grant = 1;
+}
