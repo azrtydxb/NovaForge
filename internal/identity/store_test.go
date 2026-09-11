@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/novaforge/novaforge/internal/database"
 	"github.com/novaforge/novaforge/internal/identity"
 )
@@ -20,7 +21,7 @@ func dbURL(t *testing.T) string {
 	return u
 }
 
-func newStore(t *testing.T) *identity.Store {
+func storePool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	url := dbURL(t)
 	if err := database.Migrate(url, "identity", os.DirFS("migrations")); err != nil {
@@ -31,7 +32,12 @@ func newStore(t *testing.T) *identity.Store {
 		t.Fatalf("Connect: %v", err)
 	}
 	t.Cleanup(pool.Close)
-	return identity.NewStore(pool)
+	return pool
+}
+
+func newStore(t *testing.T) *identity.Store {
+	t.Helper()
+	return identity.NewStore(storePool(t))
 }
 
 func uniqueName(prefix string) string {
