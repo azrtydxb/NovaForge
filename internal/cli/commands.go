@@ -18,12 +18,14 @@ type command struct {
 
 func commands() map[string]command {
 	return map[string]command{
-		"login":  {"login", "Authenticate and store a session token", cmdLogin},
-		"org":    {"org", "Manage organizations", cmdOrg},
-		"repo":   {"repo", "Manage repositories", cmdRepo},
-		"work":   {"work", "Manage Work Items", cmdWork},
-		"run":    {"run", "Inspect and merge Engineering Runs", cmdRun},
-		"whoami": {"whoami", "Show the authenticated user", cmdWhoami},
+		"login":     {"login", "Authenticate and store a session token", cmdLogin},
+		"org":       {"org", "Manage organizations", cmdOrg},
+		"repo":      {"repo", "Manage repositories", cmdRepo},
+		"work":      {"work", "Manage Work Items", cmdWork},
+		"run":       {"run", "Inspect and merge Engineering Runs", cmdRun},
+		"whoami":    {"whoami", "Show the authenticated user", cmdWhoami},
+		"ci":        {"ci", "Inspect CI runs, logs and artifacts", cmdCI},
+		"dashboard": {"dashboard", "Show what needs human attention", cmdDashboard},
 	}
 }
 
@@ -59,7 +61,7 @@ func usage(w io.Writer) {
 	}
 	sort.Strings(names)
 	for _, n := range names {
-		fmt.Fprintf(w, "  %-8s %s\n", n, cmds[n].summary)
+		fmt.Fprintf(w, "  %-10s %s\n", n, cmds[n].summary)
 	}
 }
 
@@ -319,6 +321,39 @@ func cmdWork(args []string, stdout, stderr io.Writer) error {
 		}
 		fmt.Fprintf(stdout, "%v\n", out)
 		return nil
+	case "decompose":
+		if len(args) < 3 {
+			return fmt.Errorf("usage: nf work decompose <repo> <key>")
+		}
+		var out map[string]any
+		if err := c.Do("POST", base+"/"+args[2]+"/decompose", nil, &out); err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "decomposed %s\n", args[2])
+		return nil
+	case "subtasks":
+		if len(args) < 3 {
+			return fmt.Errorf("usage: nf work subtasks <repo> <key>")
+		}
+		var out struct {
+			Subtasks []struct {
+				Key   string `json:"key"`
+				Goal  string `json:"goal"`
+				State string `json:"state"`
+				Ready bool   `json:"ready"`
+			} `json:"subtasks"`
+		}
+		if err := c.Do("GET", base+"/"+args[2]+"/subtasks", nil, &out); err != nil {
+			return err
+		}
+		for _, st := range out.Subtasks {
+			status := "blocked"
+			if st.Ready {
+				status = "ready"
+			}
+			fmt.Fprintf(stdout, "%s\t%s\t%s\t%s\n", st.Key, st.State, status, st.Goal)
+		}
+		return nil
 	}
 	return fmt.Errorf("unknown work subcommand %q", args[0])
 }
@@ -374,4 +409,108 @@ func cmdRun(args []string, stdout, stderr io.Writer) error {
 		return nil
 	}
 	return fmt.Errorf("unknown run subcommand %q", args[0])
+}
+
+func cmdCI(args []string, stdout, stderr io.Writer) error {
+	if len(args) < 2 {
+		return fmt.Errorf("usage: nf ci <runs|logs|artifacts> <repo> [job-id]")
+	}
+	c, cfg, err := session()
+	if err != nil {
+		return err
+	}
+	org, err := requireOrg(cfg)
+	if err != nil {
+		return err
+	}
+	base := fmt.Sprintf("/api/v1/orgs/%s/repos/%s/ci", org, args[1])
+
+	switch args[0] {
+	case "runs":
+		var out struct {
+			Runs []struct {
+				ID        string `json:"id"`
+				Status    string `json:"status"`
+				CommitSHA string `json:"commit_sha"`
+				Ref       string `json:"ref"`
+			} `json:"runs"`
+		}
+		if err := c.Do("GET", base+"/runs", nil, &out); err != nil {
+			return err
+		}
+		for _, r := range out.Runs {
+			sha := r.CommitSHA
+			if len(sha) > 8 {
+				sha = sha[:8]
+			}
+			fmt.Fprintf(stdout, "%s\t%s\t%s\t%s\n", r.ID, r.Status, sha, r.Ref)
+		}
+		return nil
+	case "logs":
+		// With no job id this shows the newest run's first job, which is what
+		// somebody checking "did my push build" actually wants.
+		path := base + "/logs"
+		if len(args) > 2 {
+			path = base + "/jobs/" + args[2] + "/logs"
+		}
+		var out struct {
+			Lines []string `json:"lines"`
+		}
+		if err := c.Do("GET", path, nil, &out); err != nil {
+			return err
+		}
+		for _, l := range out.Lines {
+			fmt.Fprintln(stdout, l)
+		}
+		return nil
+	case "artifacts":
+		path := base + "/artifacts"
+		if len(args) > 2 {
+			path = base + "/jobs/" + args[2] + "/artifacts"
+		}
+		var out struct {
+			Artifacts []struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+				Size int64  `json:"size_bytes"`
+			} `json:"artifacts"`
+		}
+		if err := c.Do("GET", path, nil, &out); err != nil {
+			return err
+		}
+		for _, a := range out.Artifacts {
+			fmt.Fprintf(stdout, "%s\t%s\t%d\n", a.ID, a.Name, a.Size)
+		}
+		return nil
+	}
+	return fmt.Errorf("unknown ci subcommand %q", args[0])
+}
+
+func cmdDashboard(args []string, stdout, stderr io.Writer) error {
+	c, cfg, err := session()
+	if err != nil {
+		return err
+	}
+	org, err := requireOrg(cfg)
+	if err != nil {
+		return err
+	}
+	var out struct {
+		AgentsRunning         int `json:"agents_running"`
+		ReadyToAutoMerge      int `json:"ready_to_auto_merge"`
+		NeedHumanReview       int `json:"need_human_review"`
+		ArchitectureDecisions int `json:"architecture_decisions"`
+		GateFailures          int `json:"gate_failures"`
+		AgentsBlocked         int `json:"agents_blocked"`
+	}
+	if err := c.Do("GET", "/api/v1/orgs/"+org+"/dashboard", nil, &out); err != nil {
+		return err
+	}
+	fmt.Fprintf(stdout, "%d agents running\n", out.AgentsRunning)
+	fmt.Fprintf(stdout, "%d ready to auto-merge\n", out.ReadyToAutoMerge)
+	fmt.Fprintf(stdout, "%d need human review\n", out.NeedHumanReview)
+	fmt.Fprintf(stdout, "%d architecture decisions\n", out.ArchitectureDecisions)
+	fmt.Fprintf(stdout, "%d gate failures\n", out.GateFailures)
+	fmt.Fprintf(stdout, "%d agents blocked\n", out.AgentsBlocked)
+	return nil
 }
