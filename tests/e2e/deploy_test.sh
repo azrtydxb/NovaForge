@@ -76,8 +76,34 @@ PUSHED="$(git rev-parse HEAD)"
 cd - >/dev/null
 ok "pushed $PUSHED with a standard git client"
 
-echo "== 5. the pushed commit is readable through the REST API =="
-/tmp/nf repo log "$REPO" main | grep -q "${PUSHED:0:8}" || fail "pushed commit not visible through the API"
+echo "== 5. the same repository works over SSH =="
+SSH_IP="$GIT_IP"
+KEYDIR="$(mktemp -d)"
+ssh-keygen -t ed25519 -N "" -f "$KEYDIR/id" -q
+PUBKEY="$(cat "$KEYDIR/id.pub")"
+curl -fsS -X POST "http://$EDGE_IP:8080/api/v1/user/ssh-keys" \
+	-H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+	-d "{\"title\":\"e2e\",\"key\":\"$PUBKEY\"}" >/dev/null || fail "adding the ssh key failed"
+
+GIT_SSH_CMD="ssh -i $KEYDIR/id -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 2222"
+SSHWORK="$(mktemp -d)"
+GIT_SSH_COMMAND="$GIT_SSH_CMD" git clone "ssh://git@$SSH_IP/$ORG/$REPO.git" "$SSHWORK/repo" ||
+	fail "git clone over SSH failed"
+grep -q "end-to-end test" "$SSHWORK/repo/README.md" || fail "SSH clone did not carry the pushed content"
+cd "$SSHWORK/repo"
+git config user.email e2e@example.com
+git config user.name "E2E"
+echo "second commit over ssh" >>README.md
+git add README.md
+git commit -q -m "e2e: pushed over ssh"
+GIT_SSH_COMMAND="$GIT_SSH_CMD" git push origin HEAD:main || fail "git push over SSH failed"
+SSH_PUSHED="$(git rev-parse HEAD)"
+cd - >/dev/null
+ok "cloned and pushed $SSH_PUSHED over SSH"
+
+echo "== 6. the pushed commit is readable through the REST API =="
+/tmp/nf repo log "$REPO" main | grep -q "${PUSHED:0:8}" || fail "HTTPS-pushed commit not visible through the API"
+/tmp/nf repo log "$REPO" main | grep -q "${SSH_PUSHED:0:8}" || fail "SSH-pushed commit not visible through the API"
 /tmp/nf repo branches "$REPO" | grep -q main || fail "main branch not listed"
 ok "commit and branch visible through the API"
 

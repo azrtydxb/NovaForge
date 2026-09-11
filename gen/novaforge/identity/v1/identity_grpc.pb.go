@@ -28,6 +28,18 @@ const (
 	IdentityService_AddOrgMember_FullMethodName       = "/novaforge.identity.v1.IdentityService/AddOrgMember"
 	IdentityService_IssueGrant_FullMethodName         = "/novaforge.identity.v1.IdentityService/IssueGrant"
 	IdentityService_GetGrant_FullMethodName           = "/novaforge.identity.v1.IdentityService/GetGrant"
+	IdentityService_GetCurrentUser_FullMethodName     = "/novaforge.identity.v1.IdentityService/GetCurrentUser"
+	IdentityService_ListOrgs_FullMethodName           = "/novaforge.identity.v1.IdentityService/ListOrgs"
+	IdentityService_GetOrg_FullMethodName             = "/novaforge.identity.v1.IdentityService/GetOrg"
+	IdentityService_ListOrgMembers_FullMethodName     = "/novaforge.identity.v1.IdentityService/ListOrgMembers"
+	IdentityService_AddSSHKey_FullMethodName          = "/novaforge.identity.v1.IdentityService/AddSSHKey"
+	IdentityService_ListSSHKeys_FullMethodName        = "/novaforge.identity.v1.IdentityService/ListSSHKeys"
+	IdentityService_DeleteSSHKey_FullMethodName       = "/novaforge.identity.v1.IdentityService/DeleteSSHKey"
+	IdentityService_CreateToken_FullMethodName        = "/novaforge.identity.v1.IdentityService/CreateToken"
+	IdentityService_ListTokens_FullMethodName         = "/novaforge.identity.v1.IdentityService/ListTokens"
+	IdentityService_DeleteToken_FullMethodName        = "/novaforge.identity.v1.IdentityService/DeleteToken"
+	IdentityService_Setup2FA_FullMethodName           = "/novaforge.identity.v1.IdentityService/Setup2FA"
+	IdentityService_Verify2FA_FullMethodName          = "/novaforge.identity.v1.IdentityService/Verify2FA"
 )
 
 // IdentityServiceClient is the client API for IdentityService service.
@@ -47,6 +59,18 @@ type IdentityServiceClient interface {
 	AddOrgMember(ctx context.Context, in *AddOrgMemberRequest, opts ...grpc.CallOption) (*AddOrgMemberResponse, error)
 	IssueGrant(ctx context.Context, in *IssueGrantRequest, opts ...grpc.CallOption) (*IssueGrantResponse, error)
 	GetGrant(ctx context.Context, in *GetGrantRequest, opts ...grpc.CallOption) (*GetGrantResponse, error)
+	GetCurrentUser(ctx context.Context, in *GetCurrentUserRequest, opts ...grpc.CallOption) (*GetCurrentUserResponse, error)
+	ListOrgs(ctx context.Context, in *ListOrgsRequest, opts ...grpc.CallOption) (*ListOrgsResponse, error)
+	GetOrg(ctx context.Context, in *GetOrgRequest, opts ...grpc.CallOption) (*GetOrgResponse, error)
+	ListOrgMembers(ctx context.Context, in *ListOrgMembersRequest, opts ...grpc.CallOption) (*ListOrgMembersResponse, error)
+	AddSSHKey(ctx context.Context, in *AddSSHKeyRequest, opts ...grpc.CallOption) (*AddSSHKeyResponse, error)
+	ListSSHKeys(ctx context.Context, in *ListSSHKeysRequest, opts ...grpc.CallOption) (*ListSSHKeysResponse, error)
+	DeleteSSHKey(ctx context.Context, in *DeleteSSHKeyRequest, opts ...grpc.CallOption) (*DeleteSSHKeyResponse, error)
+	CreateToken(ctx context.Context, in *CreateTokenRequest, opts ...grpc.CallOption) (*CreateTokenResponse, error)
+	ListTokens(ctx context.Context, in *ListTokensRequest, opts ...grpc.CallOption) (*ListTokensResponse, error)
+	DeleteToken(ctx context.Context, in *DeleteTokenRequest, opts ...grpc.CallOption) (*DeleteTokenResponse, error)
+	Setup2FA(ctx context.Context, in *Setup2FARequest, opts ...grpc.CallOption) (*Setup2FAResponse, error)
+	Verify2FA(ctx context.Context, in *Verify2FARequest, opts ...grpc.CallOption) (*Verify2FAResponse, error)
 }
 
 type identityServiceClient struct {
@@ -147,6 +171,126 @@ func (c *identityServiceClient) GetGrant(ctx context.Context, in *GetGrantReques
 	return out, nil
 }
 
+func (c *identityServiceClient) GetCurrentUser(ctx context.Context, in *GetCurrentUserRequest, opts ...grpc.CallOption) (*GetCurrentUserResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetCurrentUserResponse)
+	err := c.cc.Invoke(ctx, IdentityService_GetCurrentUser_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) ListOrgs(ctx context.Context, in *ListOrgsRequest, opts ...grpc.CallOption) (*ListOrgsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListOrgsResponse)
+	err := c.cc.Invoke(ctx, IdentityService_ListOrgs_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) GetOrg(ctx context.Context, in *GetOrgRequest, opts ...grpc.CallOption) (*GetOrgResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetOrgResponse)
+	err := c.cc.Invoke(ctx, IdentityService_GetOrg_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) ListOrgMembers(ctx context.Context, in *ListOrgMembersRequest, opts ...grpc.CallOption) (*ListOrgMembersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListOrgMembersResponse)
+	err := c.cc.Invoke(ctx, IdentityService_ListOrgMembers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) AddSSHKey(ctx context.Context, in *AddSSHKeyRequest, opts ...grpc.CallOption) (*AddSSHKeyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddSSHKeyResponse)
+	err := c.cc.Invoke(ctx, IdentityService_AddSSHKey_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) ListSSHKeys(ctx context.Context, in *ListSSHKeysRequest, opts ...grpc.CallOption) (*ListSSHKeysResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSSHKeysResponse)
+	err := c.cc.Invoke(ctx, IdentityService_ListSSHKeys_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) DeleteSSHKey(ctx context.Context, in *DeleteSSHKeyRequest, opts ...grpc.CallOption) (*DeleteSSHKeyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteSSHKeyResponse)
+	err := c.cc.Invoke(ctx, IdentityService_DeleteSSHKey_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) CreateToken(ctx context.Context, in *CreateTokenRequest, opts ...grpc.CallOption) (*CreateTokenResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateTokenResponse)
+	err := c.cc.Invoke(ctx, IdentityService_CreateToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) ListTokens(ctx context.Context, in *ListTokensRequest, opts ...grpc.CallOption) (*ListTokensResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListTokensResponse)
+	err := c.cc.Invoke(ctx, IdentityService_ListTokens_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) DeleteToken(ctx context.Context, in *DeleteTokenRequest, opts ...grpc.CallOption) (*DeleteTokenResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteTokenResponse)
+	err := c.cc.Invoke(ctx, IdentityService_DeleteToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) Setup2FA(ctx context.Context, in *Setup2FARequest, opts ...grpc.CallOption) (*Setup2FAResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Setup2FAResponse)
+	err := c.cc.Invoke(ctx, IdentityService_Setup2FA_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) Verify2FA(ctx context.Context, in *Verify2FARequest, opts ...grpc.CallOption) (*Verify2FAResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Verify2FAResponse)
+	err := c.cc.Invoke(ctx, IdentityService_Verify2FA_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // IdentityServiceServer is the server API for IdentityService service.
 // All implementations should embed UnimplementedIdentityServiceServer
 // for forward compatibility.
@@ -164,6 +308,18 @@ type IdentityServiceServer interface {
 	AddOrgMember(context.Context, *AddOrgMemberRequest) (*AddOrgMemberResponse, error)
 	IssueGrant(context.Context, *IssueGrantRequest) (*IssueGrantResponse, error)
 	GetGrant(context.Context, *GetGrantRequest) (*GetGrantResponse, error)
+	GetCurrentUser(context.Context, *GetCurrentUserRequest) (*GetCurrentUserResponse, error)
+	ListOrgs(context.Context, *ListOrgsRequest) (*ListOrgsResponse, error)
+	GetOrg(context.Context, *GetOrgRequest) (*GetOrgResponse, error)
+	ListOrgMembers(context.Context, *ListOrgMembersRequest) (*ListOrgMembersResponse, error)
+	AddSSHKey(context.Context, *AddSSHKeyRequest) (*AddSSHKeyResponse, error)
+	ListSSHKeys(context.Context, *ListSSHKeysRequest) (*ListSSHKeysResponse, error)
+	DeleteSSHKey(context.Context, *DeleteSSHKeyRequest) (*DeleteSSHKeyResponse, error)
+	CreateToken(context.Context, *CreateTokenRequest) (*CreateTokenResponse, error)
+	ListTokens(context.Context, *ListTokensRequest) (*ListTokensResponse, error)
+	DeleteToken(context.Context, *DeleteTokenRequest) (*DeleteTokenResponse, error)
+	Setup2FA(context.Context, *Setup2FARequest) (*Setup2FAResponse, error)
+	Verify2FA(context.Context, *Verify2FARequest) (*Verify2FAResponse, error)
 }
 
 // UnimplementedIdentityServiceServer should be embedded to have
@@ -199,6 +355,42 @@ func (UnimplementedIdentityServiceServer) IssueGrant(context.Context, *IssueGran
 }
 func (UnimplementedIdentityServiceServer) GetGrant(context.Context, *GetGrantRequest) (*GetGrantResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetGrant not implemented")
+}
+func (UnimplementedIdentityServiceServer) GetCurrentUser(context.Context, *GetCurrentUserRequest) (*GetCurrentUserResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetCurrentUser not implemented")
+}
+func (UnimplementedIdentityServiceServer) ListOrgs(context.Context, *ListOrgsRequest) (*ListOrgsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListOrgs not implemented")
+}
+func (UnimplementedIdentityServiceServer) GetOrg(context.Context, *GetOrgRequest) (*GetOrgResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetOrg not implemented")
+}
+func (UnimplementedIdentityServiceServer) ListOrgMembers(context.Context, *ListOrgMembersRequest) (*ListOrgMembersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListOrgMembers not implemented")
+}
+func (UnimplementedIdentityServiceServer) AddSSHKey(context.Context, *AddSSHKeyRequest) (*AddSSHKeyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddSSHKey not implemented")
+}
+func (UnimplementedIdentityServiceServer) ListSSHKeys(context.Context, *ListSSHKeysRequest) (*ListSSHKeysResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListSSHKeys not implemented")
+}
+func (UnimplementedIdentityServiceServer) DeleteSSHKey(context.Context, *DeleteSSHKeyRequest) (*DeleteSSHKeyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteSSHKey not implemented")
+}
+func (UnimplementedIdentityServiceServer) CreateToken(context.Context, *CreateTokenRequest) (*CreateTokenResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateToken not implemented")
+}
+func (UnimplementedIdentityServiceServer) ListTokens(context.Context, *ListTokensRequest) (*ListTokensResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListTokens not implemented")
+}
+func (UnimplementedIdentityServiceServer) DeleteToken(context.Context, *DeleteTokenRequest) (*DeleteTokenResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteToken not implemented")
+}
+func (UnimplementedIdentityServiceServer) Setup2FA(context.Context, *Setup2FARequest) (*Setup2FAResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Setup2FA not implemented")
+}
+func (UnimplementedIdentityServiceServer) Verify2FA(context.Context, *Verify2FARequest) (*Verify2FAResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Verify2FA not implemented")
 }
 func (UnimplementedIdentityServiceServer) testEmbeddedByValue() {}
 
@@ -382,6 +574,222 @@ func _IdentityService_GetGrant_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IdentityService_GetCurrentUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCurrentUserRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).GetCurrentUser(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_GetCurrentUser_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).GetCurrentUser(ctx, req.(*GetCurrentUserRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_ListOrgs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListOrgsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).ListOrgs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_ListOrgs_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).ListOrgs(ctx, req.(*ListOrgsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_GetOrg_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetOrgRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).GetOrg(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_GetOrg_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).GetOrg(ctx, req.(*GetOrgRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_ListOrgMembers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListOrgMembersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).ListOrgMembers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_ListOrgMembers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).ListOrgMembers(ctx, req.(*ListOrgMembersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_AddSSHKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddSSHKeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).AddSSHKey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_AddSSHKey_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).AddSSHKey(ctx, req.(*AddSSHKeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_ListSSHKeys_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSSHKeysRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).ListSSHKeys(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_ListSSHKeys_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).ListSSHKeys(ctx, req.(*ListSSHKeysRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_DeleteSSHKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteSSHKeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).DeleteSSHKey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_DeleteSSHKey_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).DeleteSSHKey(ctx, req.(*DeleteSSHKeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_CreateToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateTokenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).CreateToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_CreateToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).CreateToken(ctx, req.(*CreateTokenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_ListTokens_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListTokensRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).ListTokens(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_ListTokens_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).ListTokens(ctx, req.(*ListTokensRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_DeleteToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteTokenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).DeleteToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_DeleteToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).DeleteToken(ctx, req.(*DeleteTokenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_Setup2FA_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Setup2FARequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).Setup2FA(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_Setup2FA_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).Setup2FA(ctx, req.(*Setup2FARequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_Verify2FA_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Verify2FARequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).Verify2FA(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_Verify2FA_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).Verify2FA(ctx, req.(*Verify2FARequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // IdentityService_ServiceDesc is the grpc.ServiceDesc for IdentityService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -424,6 +832,54 @@ var IdentityService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetGrant",
 			Handler:    _IdentityService_GetGrant_Handler,
+		},
+		{
+			MethodName: "GetCurrentUser",
+			Handler:    _IdentityService_GetCurrentUser_Handler,
+		},
+		{
+			MethodName: "ListOrgs",
+			Handler:    _IdentityService_ListOrgs_Handler,
+		},
+		{
+			MethodName: "GetOrg",
+			Handler:    _IdentityService_GetOrg_Handler,
+		},
+		{
+			MethodName: "ListOrgMembers",
+			Handler:    _IdentityService_ListOrgMembers_Handler,
+		},
+		{
+			MethodName: "AddSSHKey",
+			Handler:    _IdentityService_AddSSHKey_Handler,
+		},
+		{
+			MethodName: "ListSSHKeys",
+			Handler:    _IdentityService_ListSSHKeys_Handler,
+		},
+		{
+			MethodName: "DeleteSSHKey",
+			Handler:    _IdentityService_DeleteSSHKey_Handler,
+		},
+		{
+			MethodName: "CreateToken",
+			Handler:    _IdentityService_CreateToken_Handler,
+		},
+		{
+			MethodName: "ListTokens",
+			Handler:    _IdentityService_ListTokens_Handler,
+		},
+		{
+			MethodName: "DeleteToken",
+			Handler:    _IdentityService_DeleteToken_Handler,
+		},
+		{
+			MethodName: "Setup2FA",
+			Handler:    _IdentityService_Setup2FA_Handler,
+		},
+		{
+			MethodName: "Verify2FA",
+			Handler:    _IdentityService_Verify2FA_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

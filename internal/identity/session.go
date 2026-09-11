@@ -65,3 +65,29 @@ func (s *SessionStore) Resolve(ctx context.Context, token string) (uuid.UUID, er
 	}
 	return userID, nil
 }
+
+// pendingTOTPTTL bounds how long a TOTP enrolment may stay half-finished.
+const pendingTOTPTTL = 10 * time.Minute
+
+// StashPendingTOTP holds a not-yet-confirmed TOTP secret for a user.
+//
+// The secret cannot go straight onto the user row: login treats a present
+// secret as "two-factor enabled", so writing it before the user has proved they
+// can generate a code would lock them out of their own account.
+func (s *SessionStore) StashPendingTOTP(ctx context.Context, userID uuid.UUID, secret string) error {
+	return s.client.Set(ctx, "totp:pending:"+userID.String(), secret, pendingTOTPTTL).Err()
+}
+
+// PendingTOTP returns the stashed secret, if the enrolment is still live.
+func (s *SessionStore) PendingTOTP(ctx context.Context, userID uuid.UUID) (string, error) {
+	v, err := s.client.Get(ctx, "totp:pending:"+userID.String()).Result()
+	if errors.Is(err, redis.Nil) {
+		return "", fmt.Errorf("no pending two-factor enrolment; start again with setup")
+	}
+	return v, err
+}
+
+// ClearPendingTOTP drops a completed or abandoned enrolment.
+func (s *SessionStore) ClearPendingTOTP(ctx context.Context, userID uuid.UUID) error {
+	return s.client.Del(ctx, "totp:pending:"+userID.String()).Err()
+}

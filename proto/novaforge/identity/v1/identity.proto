@@ -15,6 +15,123 @@ service IdentityService {
   rpc AddOrgMember(AddOrgMemberRequest) returns (AddOrgMemberResponse);
   rpc IssueGrant(IssueGrantRequest) returns (IssueGrantResponse);
   rpc GetGrant(GetGrantRequest) returns (GetGrantResponse);
+  rpc GetCurrentUser(GetCurrentUserRequest) returns (GetCurrentUserResponse);
+  rpc ListOrgs(ListOrgsRequest) returns (ListOrgsResponse);
+  rpc GetOrg(GetOrgRequest) returns (GetOrgResponse);
+  rpc ListOrgMembers(ListOrgMembersRequest) returns (ListOrgMembersResponse);
+  rpc AddSSHKey(AddSSHKeyRequest) returns (AddSSHKeyResponse);
+  rpc ListSSHKeys(ListSSHKeysRequest) returns (ListSSHKeysResponse);
+  rpc DeleteSSHKey(DeleteSSHKeyRequest) returns (DeleteSSHKeyResponse);
+  rpc CreateToken(CreateTokenRequest) returns (CreateTokenResponse);
+  rpc ListTokens(ListTokensRequest) returns (ListTokensResponse);
+  rpc DeleteToken(DeleteTokenRequest) returns (DeleteTokenResponse);
+  rpc Setup2FA(Setup2FARequest) returns (Setup2FAResponse);
+  rpc Verify2FA(Verify2FARequest) returns (Verify2FAResponse);
+}
+
+message User {
+  string id = 1;
+  string email = 2;
+  string username = 3;
+  bool totp_enabled = 4;
+}
+
+message SSHKey {
+  string id = 1;
+  string title = 2;
+  string fingerprint = 3;
+}
+
+message AccessToken {
+  string id = 1;
+  string name = 2;
+  repeated string scopes = 3;
+  string expires_at = 4;
+}
+
+message OrgMember {
+  string user_id = 1;
+  string username = 2;
+  string role = 3;
+}
+
+message GetCurrentUserRequest {}
+message GetCurrentUserResponse {
+  User user = 1;
+}
+
+message ListOrgsRequest {}
+message ListOrgsResponse {
+  repeated Org orgs = 1;
+}
+
+message GetOrgRequest {
+  string org = 1;
+}
+message GetOrgResponse {
+  Org org = 1;
+}
+
+message ListOrgMembersRequest {
+  string org = 1;
+}
+message ListOrgMembersResponse {
+  repeated OrgMember members = 1;
+}
+
+message AddSSHKeyRequest {
+  string title = 1;
+  string key = 2;
+}
+message AddSSHKeyResponse {
+  SSHKey key = 1;
+}
+
+message ListSSHKeysRequest {}
+message ListSSHKeysResponse {
+  repeated SSHKey keys = 1;
+}
+
+message DeleteSSHKeyRequest {
+  string id = 1;
+}
+message DeleteSSHKeyResponse {
+  bool ok = 1;
+}
+
+message CreateTokenRequest {
+  string name = 1;
+  repeated string scopes = 2;
+  int64 ttl_seconds = 3;
+}
+message CreateTokenResponse {
+  AccessToken token = 1;
+  string plaintext = 2;
+}
+
+message ListTokensRequest {}
+message ListTokensResponse {
+  repeated AccessToken tokens = 1;
+}
+
+message DeleteTokenRequest {
+  string id = 1;
+}
+message DeleteTokenResponse {
+  bool ok = 1;
+}
+
+message Setup2FARequest {}
+message Setup2FAResponse {
+  string secret = 1;
+  string uri = 2;
+}
+
+message Verify2FARequest {
+  string code = 1;
+}
+message Verify2FAResponse {
+  bool enabled = 1;
 }
 
 // Subject is the authenticated caller. org_id is empty when no organization

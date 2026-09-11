@@ -48,6 +48,12 @@ func hashToken(plaintext string) []byte {
 // Create mints a new personal access token for userID and returns its
 // plaintext (rendered as "nf_<base64url>") alongside the stored record.
 func (s *TokenStore) Create(ctx context.Context, userID uuid.UUID, name string, scopes []string, expiresAt *time.Time) (string, Token, error) {
+	// A token with no scopes is legitimate — it simply carries none — but the
+	// column is NOT NULL, so nil must become an empty list rather than a
+	// constraint violation at the far end of an API call.
+	if scopes == nil {
+		scopes = []string{}
+	}
 	raw := make([]byte, tokenBytes)
 	if _, err := rand.Read(raw); err != nil {
 		return "", Token{}, fmt.Errorf("generate token: %w", err)

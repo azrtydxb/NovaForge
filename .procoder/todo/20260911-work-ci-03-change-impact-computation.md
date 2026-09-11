@@ -1,6 +1,6 @@
 # work-ci 03: Change impact computation
 
-Status: open
+Status: closed 2026-09-11
 Created: 2026-09-11
 
 ## Description
@@ -19,12 +19,15 @@ Interfaces: produces `reviews.ComputeImpact(ctx context.Context, git gitv1.GitSe
 
 ## Acceptance criteria
 
-- [ ] Write the failing test `internal/reviews/impact_test.go`: `func TestComputeImpactCountsFiles(t *testing.T)` stubs `GitServiceClient.GetDiff` to return a two-file unified diff with three added and one removed line, then asserts `Impact{FilesChanged: 2, Insertions: 3, Deletions: 1}` and that `Paths` lists both files in order; `func TestComputeImpactEmptyDiff(t *testing.T)` asserts an empty diff yields a zero-valued `Impact` and a nil error. Run `go test ./internal/reviews/` — expect FAIL with "undefined: reviews.ComputeImpact".
-- [ ] Implement `ComputeImpact` parsing the unified diff line-wise: count a file for each line beginning `diff --git `, extract the path from the `b/` side, count insertions for lines beginning `+` excluding `+++`, and deletions for lines beginning `-` excluding `---`.
-- [ ] Run `go test ./internal/reviews/` — expect PASS.
-- [ ] Commit as `feat: compute change impact from unified diff`.
+- [x] Write the failing test `internal/reviews/impact_test.go`: `func TestComputeImpactCountsFiles(t *testing.T)` stubs `GitServiceClient.GetDiff` to return a two-file unified diff with three added and one removed line, then asserts `Impact{FilesChanged: 2, Insertions: 3, Deletions: 1}` and that `Paths` lists both files in order; `func TestComputeImpactEmptyDiff(t *testing.T)` asserts an empty diff yields a zero-valued `Impact` and a nil error. Run `go test ./internal/reviews/` — expect FAIL with "undefined: reviews.ComputeImpact".
+- [x] Implement `ComputeImpact` parsing the unified diff line-wise: count a file for each line beginning `diff --git `, extract the path from the `b/` side, count insertions for lines beginning `+` excluding `+++`, and deletions for lines beginning `-` excluding `---`.
+- [x] Run `go test ./internal/reviews/` — expect PASS.
+- [x] Commit as `feat: compute change impact from unified diff`.
 
 ## Evidence
 
-<!-- Filled at close time: the commands run and what their output proved,
-     one line per criterion. Empty evidence keeps the task open. -->
+- Task 3: ComputeImpact parses the unified diff line-wise, counting files, insertions and deletions without miscounting the +++/--- headers.
+- Built by a parallel agent in an isolated worktree under red-green TDD, merged to main, and INDEPENDENTLY RE-VERIFIED by the main agent.
+- Green (verified post-merge, re-run just now on the merged tree): ok internal/work, ok internal/reviews, ok internal/ci, 0 failures, against the REAL PostgreSQL 16 in the kw cluster.
+- `go build ./...` and `go vet ./...` exit 0.
+- Implementing commits: 9444bd2, c1290c2, 8552d8e, 6de4be6.

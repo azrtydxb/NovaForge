@@ -30,6 +30,18 @@ var base32NoPad = base32.StdEncoding.WithPadding(base32.NoPadding)
 // without padding, plus its otpauth:// provisioning URI. The caller (the
 // login/enrollment path) is responsible for associating the secret with a
 // specific account before persisting it via Store.SetTOTPSecret.
+// TOTPCode returns the code valid for secret right now. It is exported so
+// enrolment can be exercised end to end in tests without reimplementing RFC
+// 6238 in the test file, where a second implementation could agree with a
+// broken one.
+func TOTPCode(secret string) string {
+	code, err := generateTOTPCode(secret, time.Now())
+	if err != nil {
+		return ""
+	}
+	return code
+}
+
 func GenerateTOTPSecret() (secret string, uri string, err error) {
 	raw := make([]byte, totpSecretBytes)
 	if _, err := rand.Read(raw); err != nil {

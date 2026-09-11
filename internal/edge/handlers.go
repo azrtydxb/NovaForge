@@ -103,6 +103,171 @@ func addIdentityHandlers(h map[string]http.HandlerFunc, c identityv1.IdentitySer
 		})
 	}
 
+	h["getCurrentUser"] = func(w http.ResponseWriter, r *http.Request) {
+		resp, err := c.GetCurrentUser(r.Context(), &identityv1.GetCurrentUserRequest{})
+		if err != nil {
+			WriteError(w, StatusFromGRPC(err), err)
+			return
+		}
+		u := resp.GetUser()
+		WriteJSON(w, http.StatusOK, map[string]any{
+			"id": u.GetId(), "email": u.GetEmail(),
+			"username": u.GetUsername(), "totp_enabled": u.GetTotpEnabled(),
+		})
+	}
+
+	h["listOrgs"] = func(w http.ResponseWriter, r *http.Request) {
+		resp, err := c.ListOrgs(r.Context(), &identityv1.ListOrgsRequest{})
+		if err != nil {
+			WriteError(w, StatusFromGRPC(err), err)
+			return
+		}
+		out := make([]map[string]any, 0, len(resp.GetOrgs()))
+		for _, o := range resp.GetOrgs() {
+			out = append(out, map[string]any{"id": o.GetId(), "name": o.GetName()})
+		}
+		WriteJSON(w, http.StatusOK, map[string]any{"orgs": out})
+	}
+
+	h["getOrg"] = func(w http.ResponseWriter, r *http.Request) {
+		resp, err := c.GetOrg(r.Context(), &identityv1.GetOrgRequest{Org: chi.URLParam(r, "org")})
+		if err != nil {
+			WriteError(w, StatusFromGRPC(err), err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, map[string]any{
+			"id": resp.GetOrg().GetId(), "name": resp.GetOrg().GetName(),
+		})
+	}
+
+	h["listOrgMembers"] = func(w http.ResponseWriter, r *http.Request) {
+		resp, err := c.ListOrgMembers(r.Context(), &identityv1.ListOrgMembersRequest{Org: chi.URLParam(r, "org")})
+		if err != nil {
+			WriteError(w, StatusFromGRPC(err), err)
+			return
+		}
+		out := make([]map[string]any, 0, len(resp.GetMembers()))
+		for _, m := range resp.GetMembers() {
+			out = append(out, map[string]any{
+				"user_id": m.GetUserId(), "username": m.GetUsername(), "role": m.GetRole(),
+			})
+		}
+		WriteJSON(w, http.StatusOK, map[string]any{"members": out})
+	}
+
+	h["addSSHKey"] = func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Title, Key string }
+		if err := decode(r, &req); err != nil {
+			WriteError(w, http.StatusBadRequest, err)
+			return
+		}
+		resp, err := c.AddSSHKey(r.Context(), &identityv1.AddSSHKeyRequest{Title: req.Title, Key: req.Key})
+		if err != nil {
+			WriteError(w, StatusFromGRPC(err), err)
+			return
+		}
+		WriteJSON(w, http.StatusCreated, map[string]any{
+			"id": resp.GetKey().GetId(), "title": resp.GetKey().GetTitle(),
+			"fingerprint": resp.GetKey().GetFingerprint(),
+		})
+	}
+
+	h["listSSHKeys"] = func(w http.ResponseWriter, r *http.Request) {
+		resp, err := c.ListSSHKeys(r.Context(), &identityv1.ListSSHKeysRequest{})
+		if err != nil {
+			WriteError(w, StatusFromGRPC(err), err)
+			return
+		}
+		out := make([]map[string]any, 0, len(resp.GetKeys()))
+		for _, k := range resp.GetKeys() {
+			out = append(out, map[string]any{
+				"id": k.GetId(), "title": k.GetTitle(), "fingerprint": k.GetFingerprint(),
+			})
+		}
+		WriteJSON(w, http.StatusOK, map[string]any{"keys": out})
+	}
+
+	h["deleteSSHKey"] = func(w http.ResponseWriter, r *http.Request) {
+		if _, err := c.DeleteSSHKey(r.Context(), &identityv1.DeleteSSHKeyRequest{Id: chi.URLParam(r, "id")}); err != nil {
+			WriteError(w, StatusFromGRPC(err), err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+	}
+
+	h["createToken"] = func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Name       string   `json:"name"`
+			Scopes     []string `json:"scopes"`
+			TTLSeconds int64    `json:"ttl_seconds"`
+		}
+		if err := decode(r, &req); err != nil {
+			WriteError(w, http.StatusBadRequest, err)
+			return
+		}
+		resp, err := c.CreateToken(r.Context(), &identityv1.CreateTokenRequest{
+			Name: req.Name, Scopes: req.Scopes, TtlSeconds: req.TTLSeconds,
+		})
+		if err != nil {
+			WriteError(w, StatusFromGRPC(err), err)
+			return
+		}
+		// The plaintext is returned exactly once, here: only its hash is stored.
+		WriteJSON(w, http.StatusCreated, map[string]any{
+			"id": resp.GetToken().GetId(), "name": resp.GetToken().GetName(),
+			"token": resp.GetPlaintext(),
+		})
+	}
+
+	h["listTokens"] = func(w http.ResponseWriter, r *http.Request) {
+		resp, err := c.ListTokens(r.Context(), &identityv1.ListTokensRequest{})
+		if err != nil {
+			WriteError(w, StatusFromGRPC(err), err)
+			return
+		}
+		out := make([]map[string]any, 0, len(resp.GetTokens()))
+		for _, t := range resp.GetTokens() {
+			out = append(out, map[string]any{
+				"id": t.GetId(), "name": t.GetName(),
+				"scopes": t.GetScopes(), "expires_at": t.GetExpiresAt(),
+			})
+		}
+		WriteJSON(w, http.StatusOK, map[string]any{"tokens": out})
+	}
+
+	h["deleteToken"] = func(w http.ResponseWriter, r *http.Request) {
+		if _, err := c.DeleteToken(r.Context(), &identityv1.DeleteTokenRequest{Id: chi.URLParam(r, "id")}); err != nil {
+			WriteError(w, StatusFromGRPC(err), err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, map[string]string{"status": "revoked"})
+	}
+
+	h["setup2FA"] = func(w http.ResponseWriter, r *http.Request) {
+		resp, err := c.Setup2FA(r.Context(), &identityv1.Setup2FARequest{})
+		if err != nil {
+			WriteError(w, StatusFromGRPC(err), err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, map[string]any{"secret": resp.GetSecret(), "uri": resp.GetUri()})
+	}
+
+	h["verify2FA"] = func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Code string `json:"code"`
+		}
+		if err := decode(r, &req); err != nil {
+			WriteError(w, http.StatusBadRequest, err)
+			return
+		}
+		resp, err := c.Verify2FA(r.Context(), &identityv1.Verify2FARequest{Code: req.Code})
+		if err != nil {
+			WriteError(w, StatusFromGRPC(err), err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, map[string]any{"enabled": resp.GetEnabled()})
+	}
+
 	h["addOrgMember"] = func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			UserID string `json:"user_id"`
