@@ -36,7 +36,9 @@ type Service struct {
 
 // NewService wires a Service from its infrastructure dependencies. git is
 // the client the scheduler uses to fetch each push's workflow file.
-func NewService(pool *pgxpool.Pool, rdb *redis.Client, blobs *blobstore.Client, git gitv1.GitServiceClient) *Service {
+// hmacSecret signs the service tokens the scheduler presents to git-platform
+// when it reads a workflow on its own behalf.
+func NewService(pool *pgxpool.Pool, rdb *redis.Client, blobs *blobstore.Client, git gitv1.GitServiceClient, hmacSecret string) *Service {
 	store := NewStore(pool)
 	dispatcher := NewDispatcher(store)
 	logs := NewLogSink(rdb, blobs)
@@ -45,7 +47,7 @@ func NewService(pool *pgxpool.Pool, rdb *redis.Client, blobs *blobstore.Client, 
 	server := NewServer(store, dispatcher)
 	server.SetLogSink(logs)
 
-	scheduler := NewScheduler(rdb, store, git, SchedulerConfig{})
+	scheduler := NewScheduler(rdb, store, git, SchedulerConfig{HMACSecret: hmacSecret})
 	sweeper := retention.NewSweeper(pool, blobs)
 
 	return &Service{

@@ -86,7 +86,7 @@ func main() {
 	defer gitConn.Close()
 	gitClient := gitv1.NewGitServiceClient(gitConn)
 
-	svc := ci.NewService(pool, rdb, blobs, gitClient)
+	svc := ci.NewService(pool, rdb, blobs, gitClient, cfg.HMACSecret)
 
 	// RunnerService has no authz.Scope to resolve: a runner authenticates
 	// with the bearer token Register returned, verified inside Server's own

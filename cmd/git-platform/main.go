@@ -7,6 +7,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"fmt"
+	"github.com/novaforge/novaforge/internal/svcauth"
 	"log"
 	"net"
 	"net/http"
@@ -44,6 +45,7 @@ func main() {
 	}
 
 	cfg := service.LoadConfig()
+	hmacSecret = cfg.HMACSecret
 	if cfg.DatabaseURL == "" {
 		log.Fatal("git-platform: DATABASE_URL is required")
 	}
@@ -198,6 +200,10 @@ func gitopsAuthInterceptor(identityClient identityv1.IdentityServiceClient) grpc
 	}
 }
 
+// hmacSecret is the shared secret platform service tokens are signed with. It
+// is set once at startup from the environment.
+var hmacSecret string
+
 func resolveScopeFromMetadata(ctx context.Context, identityClient identityv1.IdentityServiceClient) (authz.Scope, bool) {
 	token := bearerTokenFromContext(ctx)
 	if token == "" {
@@ -208,6 +214,20 @@ func resolveScopeFromMetadata(ctx context.Context, identityClient identityv1.Ide
 	// verifies membership before granting an org scope — taking it from the
 	// request message would let a caller name any organization.
 	org := metadataValue(ctx, "x-novaforge-org")
+
+	// A platform worker has no human behind it and presents a signed service
+	// token naming the single organization it is acting for. It is verified
+	// here rather than being let through unauthenticated, which would open the
+	// same door to anyone.
+	if strings.HasPrefix(token, svcauth.Prefix) {
+		name, orgID, err := svcauth.Verify(hmacSecret, token)
+		if err != nil {
+			return authz.Scope{}, false
+		}
+		log.Printf("git-platform: accepted service token from %s for org %s", name, orgID)
+		return authz.Scope{OrgID: orgID, ActorKind: "service", ActorID: uuid.Nil}, true
+	}
+
 	subject, err := resolveSubject(ctx, identityClient, token, org)
 	if err != nil {
 		return authz.Scope{}, false

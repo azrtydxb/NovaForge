@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/novaforge/novaforge/internal/svcauth"
+	"google.golang.org/grpc/metadata"
 	"log/slog"
 	"time"
 
@@ -39,6 +41,10 @@ type SchedulerConfig struct {
 	Stream   string
 	Group    string
 	Consumer string
+	// HMACSecret signs the service tokens the scheduler presents when it reads
+	// a repository on its own behalf. Without it the scheduler cannot fetch a
+	// workflow, so it is required rather than optional.
+	HMACSecret string
 }
 
 // Scheduler consumes events.StreamGitPush, resolves each push's
@@ -194,6 +200,15 @@ func (s *Scheduler) handleMessage(ctx context.Context, msg redis.XMessage) error
 // handlePush schedules a Run for evt, tolerating at-least-once redelivery
 // and a repository with no workflow file.
 func (s *Scheduler) handlePush(ctx context.Context, evt events.PushEvent) error {
+	// The scheduler reacts to an event, not to a request, so it holds no
+	// caller's credential. It presents a service token naming the single
+	// organization the event belongs to, which is how it reads that
+	// repository's workflow without being able to reach any other.
+	ctx, err := s.withServiceIdentity(ctx, evt.OrgID)
+	if err != nil {
+		return err
+	}
+
 	blob, err := s.git.GetBlob(ctx, &gitv1.GetBlobRequest{
 		Repo: evt.RepoID.String(),
 		Ref:  evt.NewSHA,
@@ -246,4 +261,17 @@ func (s *Scheduler) handlePush(ctx context.Context, evt events.PushEvent) error 
 		}
 	}
 	return nil
+}
+
+// withServiceIdentity attaches this service's token for orgID to outgoing
+// calls.
+func (s *Scheduler) withServiceIdentity(ctx context.Context, orgID uuid.UUID) (context.Context, error) {
+	tok, err := svcauth.Mint(s.cfg.HMACSecret, "ci-scheduler", orgID, svcauth.DefaultTTL)
+	if err != nil {
+		return nil, fmt.Errorf("mint service token: %w", err)
+	}
+	return metadata.AppendToOutgoingContext(ctx,
+		"authorization", "Bearer "+tok,
+		"x-novaforge-org", orgID.String(),
+	), nil
 }

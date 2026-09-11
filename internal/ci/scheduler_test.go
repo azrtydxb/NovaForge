@@ -117,8 +117,9 @@ func newTestScheduler(t *testing.T, git gitv1.GitServiceClient) (*ci.Scheduler, 
 	stream := "stream:test:git:push:" + uuid.NewString()
 	t.Cleanup(func() { rdb.Del(context.Background(), stream) })
 	sched := ci.NewScheduler(rdb, store, git, ci.SchedulerConfig{
-		Stream: stream,
-		Group:  "ci-engine-test",
+		HMACSecret: "test-secret",
+		Stream:     stream,
+		Group:      "ci-engine-test",
 	})
 	return sched, store, rdb
 }
@@ -151,7 +152,8 @@ func TestPushSchedulesRun(t *testing.T) {
 	rdb := ciRedis(t)
 	stream := "stream:test:git:push:" + uuid.NewString()
 	t.Cleanup(func() { rdb.Del(context.Background(), stream) })
-	sched := ci.NewScheduler(rdb, store, git, ci.SchedulerConfig{Stream: stream, Group: "ci-engine-test-" + uuid.NewString()})
+	sched := ci.NewScheduler(rdb, store, git, ci.SchedulerConfig{
+		Stream: stream, Group: "ci-engine-test-" + uuid.NewString(), HMACSecret: "test-secret"})
 
 	orgID := uuid.New()
 	repoID := uuid.New()
@@ -187,7 +189,8 @@ func TestDuplicatePushIsIdempotent(t *testing.T) {
 	rdb := ciRedis(t)
 	stream := "stream:test:git:push:" + uuid.NewString()
 	t.Cleanup(func() { rdb.Del(context.Background(), stream) })
-	sched := ci.NewScheduler(rdb, store, git, ci.SchedulerConfig{Stream: stream, Group: "ci-engine-test-" + uuid.NewString()})
+	sched := ci.NewScheduler(rdb, store, git, ci.SchedulerConfig{
+		Stream: stream, Group: "ci-engine-test-" + uuid.NewString(), HMACSecret: "test-secret"})
 
 	orgID := uuid.New()
 	repoID := uuid.New()
@@ -224,7 +227,8 @@ func TestMissingWorkflowSkipsSilently(t *testing.T) {
 	rdb := ciRedis(t)
 	stream := "stream:test:git:push:" + uuid.NewString()
 	t.Cleanup(func() { rdb.Del(context.Background(), stream) })
-	sched := ci.NewScheduler(rdb, store, git, ci.SchedulerConfig{Stream: stream, Group: "ci-engine-test-" + uuid.NewString()})
+	sched := ci.NewScheduler(rdb, store, git, ci.SchedulerConfig{
+		Stream: stream, Group: "ci-engine-test-" + uuid.NewString(), HMACSecret: "test-secret"})
 
 	orgID := uuid.New()
 	repoID := uuid.New()
