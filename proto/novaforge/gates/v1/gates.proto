@@ -1,0 +1,108 @@
+syntax = "proto3";
+
+package novaforge.gates.v1;
+
+// GatesService is the sole authority on merge eligibility: gate evaluation,
+// human approvals, and short-lived secret leases. Every RPC derives its
+// organization from the caller's resolved scope, never from a field of the
+// request message.
+service GatesService {
+  rpc Evaluate(EvaluateRequest) returns (EvaluateResponse);
+  rpc MayMerge(MayMergeRequest) returns (MayMergeResponse);
+  rpc ListEvaluations(ListEvaluationsRequest) returns (ListEvaluationsResponse);
+  rpc RequestApproval(RequestApprovalRequest) returns (RequestApprovalResponse);
+  rpc ResolveApproval(ResolveApprovalRequest) returns (ResolveApprovalResponse);
+  rpc IssueLease(IssueLeaseRequest) returns (IssueLeaseResponse);
+  rpc RedeemLease(RedeemLeaseRequest) returns (RedeemLeaseResponse);
+}
+
+message Evaluation {
+  string id = 1;
+  string org_id = 2;
+  string run_id = 3;
+  string gate = 4;
+  string status = 5;
+  string detail = 6;
+  string target_sha = 7;
+  string evaluated_at = 8;
+}
+
+message EvaluateRequest {
+  string run_id = 1;
+}
+
+message EvaluateResponse {
+  repeated Evaluation evaluations = 1;
+}
+
+message MayMergeRequest {
+  string run_id = 1;
+}
+
+message MayMergeResponse {
+  bool allowed = 1;
+  repeated string reasons = 2;
+}
+
+message ListEvaluationsRequest {
+  string run_id = 1;
+}
+
+message ListEvaluationsResponse {
+  repeated Evaluation evaluations = 1;
+}
+
+message ApprovalRequestMsg {
+  string id = 1;
+  string org_id = 2;
+  string run_id = 3;
+  string action = 4;
+  string detail_json = 5;
+  string decision = 6;
+  string decided_by = 7;
+  string decided_at = 8;
+  string created_at = 9;
+}
+
+message RequestApprovalRequest {
+  string run_id = 1;
+  string action = 2;
+  string detail_json = 3;
+}
+
+message RequestApprovalResponse {
+  ApprovalRequestMsg request = 1;
+}
+
+message ResolveApprovalRequest {
+  string id = 1;
+  string decided_by = 2;
+  string decision = 3;
+}
+
+message ResolveApprovalResponse {
+  bool ok = 1;
+}
+
+message IssueLeaseRequest {
+  string run_id = 1;
+  string grant_id = 2;
+  string name = 3;
+  int64 ttl_seconds = 4;
+}
+
+message IssueLeaseResponse {
+  string lease_id = 1;
+  string token = 2;
+  string name = 3;
+  string expires_at = 4;
+}
+
+message RedeemLeaseRequest {
+  string run_id = 1;
+  string token = 2;
+}
+
+message RedeemLeaseResponse {
+  string value = 1;
+}
