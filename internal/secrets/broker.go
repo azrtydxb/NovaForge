@@ -58,8 +58,25 @@ func WithRunID(ctx context.Context, runID uuid.UUID) context.Context {
 }
 
 func runIDFromContext(ctx context.Context) (uuid.UUID, bool) {
+	return RunIDFromContext(ctx)
+}
+
+// RunIDFromContext returns the run ID ctx was scoped to via WithRunID, if
+// any. Consumers such as internal/ci use it to thread the same run scope
+// through to Broker.Issue when resolving job credentials.
+func RunIDFromContext(ctx context.Context) (uuid.UUID, bool) {
 	v, ok := ctx.Value(runCtxKey{}).(uuid.UUID)
 	return v, ok
+}
+
+// BrokerClient is the interface consumers such as internal/ci use to
+// request and redeem credentials without depending on Broker's storage
+// internals. In production this is backed by a gRPC client to the secrets
+// service (or, in-process, directly by *Broker, which satisfies it);
+// tests stub it directly.
+type BrokerClient interface {
+	Issue(ctx context.Context, runID uuid.UUID, g capability.Grant, name string, ttl time.Duration) (Lease, error)
+	Redeem(ctx context.Context, token string) (string, error)
 }
 
 func (b *Broker) encrypt(plaintext string) ([]byte, error) {
