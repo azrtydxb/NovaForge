@@ -182,7 +182,18 @@ func (h *httpHandler) rpc(w http.ResponseWriter, r *http.Request, scope authz.Sc
 func (h *httpHandler) rejectPush(w http.ResponseWriter, refs []string, err error) {
 	w.Header().Set("Content-Type", "application/x-git-receive-pack-result")
 	w.WriteHeader(http.StatusOK)
+	w.Write(rejectedReceivePackReport(refs, err))
+}
 
+// rejectedReceivePackReport builds a synthesized git-receive-pack
+// report-status response marking every ref in refs "ng" (not ok) with err's
+// message as the reason, wrapped in side-band-64k framing. Both the HTTP and
+// SSH transports negotiate side-band-64k during their ref advertisement, so
+// both must wrap this identically: an unwrapped report-status is misread by
+// the client as a corrupt sideband packet, and a bare error status code
+// never reaches the user at all, since git's client discards the response
+// body for non-2xx statuses.
+func rejectedReceivePackReport(refs []string, err error) []byte {
 	// The report-status body is itself a pkt-line stream: a status line,
 	// one ok/ng line per ref, and a flush-pkt.
 	var status bytes.Buffer
@@ -192,12 +203,13 @@ func (h *httpHandler) rejectPush(w http.ResponseWriter, refs []string, err error
 	}
 	status.Write([]byte("0000"))
 
-	// The client negotiated side-band-64k during the advertise-refs
-	// exchange, so the whole report-status stream above must be carried as
-	// the payload of a single outer pkt-line prefixed with the band byte
-	// (1 = primary data), followed by the outer flush-pkt.
-	writePktLine(w, "\x01"+status.String())
-	w.Write([]byte("0000"))
+	// The whole report-status stream above is carried as the payload of a
+	// single outer pkt-line prefixed with the band byte (1 = primary data),
+	// followed by the outer flush-pkt.
+	var out bytes.Buffer
+	writePktLine(&out, "\x01"+status.String())
+	out.Write([]byte("0000"))
+	return out.Bytes()
 }
 
 // RefUpdate is one ref update requested by a push.
