@@ -51,7 +51,19 @@ READY="$(/tmp/nf work subtasks "$REPO" "$EPIC" | grep -c ready || true)"
 ok "$READY of $SUBS subtasks are ready; the rest are blocked"
 
 echo "== 4. the dashboard reports the exception counts =="
-/tmp/nf dashboard | grep -qiE "agents|review|gate" || fail "the dashboard returned nothing recognisable"
+# Polled rather than asked once: this runs seconds after a rollout, and every
+# other step here polls for the same reason. A single attempt made this step
+# fail on a service that was still settling, which says nothing about the
+# dashboard.
+DASH=""
+for _ in $(seq 1 12); do
+	if DASH="$(/tmp/nf dashboard 2>&1)" && printf '%s' "$DASH" | grep -qiE "agents|review|gate"; then
+		break
+	fi
+	DASH=""
+	sleep 5
+done
+[ -n "$DASH" ] || fail "the dashboard returned nothing recognisable within 60s"
 ok "dashboard answers"
 
 echo
