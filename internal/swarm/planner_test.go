@@ -303,3 +303,97 @@ func TestDefaultAgentRolesCoverADecomposition(t *testing.T) {
 		t.Fatalf("want 3 subtasks, got %d", len(subs))
 	}
 }
+
+// retryModel answers the first call with bad and every later call with
+// good, so a test can pin that a rejected decomposition is retried once
+// with the violation quoted back.
+type retryModel struct {
+	stubPlannerModel
+	bad, good string
+	calls     int
+	systems   []string
+}
+
+func (m *retryModel) Generate(ctx context.Context, call provider.Call) (*provider.Response, error) {
+	for _, msg := range call.Messages {
+		if msg.Role == provider.RoleSystem {
+			for _, part := range msg.Content {
+				if tp, ok := part.(provider.TextPart); ok {
+					m.systems = append(m.systems, tp.Text)
+				}
+			}
+		}
+	}
+	m.calls++
+	body := m.good
+	if m.calls == 1 {
+		body = m.bad
+	}
+	return &provider.Response{
+		Content:      []provider.ContentPart{provider.TextPart{Text: body}},
+		FinishReason: provider.FinishStop,
+	}, nil
+}
+
+// TestDecomposeRejectsAnIllegalType pins a failure seen against a real
+// model: it put an agent role ("test") in the "type" field, and the whole
+// decomposition was lost at insert time, after some children had been
+// written. The type is now checked before anything is written.
+func TestDecomposeRejectsAnIllegalType(t *testing.T) {
+	const bad = `{"elements":[
+		{"key":"a","title":"A","goal":"g","type":"test","agentRole":"backend","dependsOn":[]}
+	]}`
+	p := swarm.NewPlanner(&stubPlannerModel{body: bad}, nil, ssoRoles)
+
+	_, err := p.Decompose(context.Background(), work.Item{Key: "NF-1", Goal: "x"}, swarm.Bundle{})
+	if err == nil {
+		t.Fatal("want an error for a subtask whose type is an agent role")
+	}
+	if !strings.Contains(err.Error(), "test") {
+		t.Fatalf("the error does not name the offending type: %v", err)
+	}
+}
+
+// TestDecomposeRetriesOnceWithTheViolation pins that a single bad field
+// does not discard an otherwise sound decomposition: the model is told what
+// it got wrong and asked once more.
+func TestDecomposeRetriesOnceWithTheViolation(t *testing.T) {
+	const bad = `{"elements":[
+		{"key":"a","title":"A","goal":"g","type":"test","agentRole":"backend","dependsOn":[]}
+	]}`
+	const good = `{"elements":[
+		{"key":"a","title":"A","goal":"g","type":"feature","agentRole":"backend","dependsOn":[]}
+	]}`
+	m := &retryModel{bad: bad, good: good}
+	p := swarm.NewPlanner(m, nil, ssoRoles)
+
+	subs, err := p.Decompose(context.Background(), work.Item{Key: "NF-1", Goal: "x"}, swarm.Bundle{})
+	if err != nil {
+		t.Fatalf("Decompose after a corrected retry: %v", err)
+	}
+	if len(subs) != 1 || subs[0].Type != "feature" {
+		t.Fatalf("want the corrected decomposition, got %+v", subs)
+	}
+	if m.calls != 2 {
+		t.Fatalf("want exactly one retry (2 calls), got %d", m.calls)
+	}
+	if len(m.systems) < 2 || !strings.Contains(m.systems[1], "rejected") {
+		t.Fatalf("the retry did not quote the violation back: %q", m.systems)
+	}
+}
+
+// TestSystemPromptNamesTheLegalTypes pins that the model is told which
+// types it may choose, read from the package that owns them.
+func TestSystemPromptNamesTheLegalTypes(t *testing.T) {
+	m := &recordingModel{stubPlannerModel: stubPlannerModel{body: ssoDecomposition}}
+	p := swarm.NewPlanner(m, nil, ssoRoles)
+
+	if _, err := p.Decompose(context.Background(), work.Item{Key: "NF-1", Goal: "x"}, swarm.Bundle{}); err != nil {
+		t.Fatalf("Decompose: %v", err)
+	}
+	for _, typ := range work.SortedTypes() {
+		if !strings.Contains(m.system, typ) {
+			t.Fatalf("the system prompt never names the legal type %q", typ)
+		}
+	}
+}

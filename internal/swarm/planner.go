@@ -99,6 +99,7 @@ const decomposeSystemPrompt = `You are the NovaForge swarm planner. Decompose th
 	`a "title", a "goal" describing what must be true when it is done, a work item "type" ` +
 	`(one of feature, bug, refactor, security, tech_debt, research, architecture, upgrade, incident, documentation), ` +
 	`an "agentRole" naming who should do it, and "dependsOn", the keys of subtasks that must complete first. ` +
+	`"type" and "agentRole" are different fields drawn from different lists: never put a role name in "type". ` +
 	`Order subtasks so that database and schema work precedes the backend work built on it, ` +
 	`backend work precedes admin configuration and frontend work that calls it, ` +
 	`and documentation and integration tests come last, depending on everything they exercise.`
@@ -134,14 +135,74 @@ func (p *Planner) Decompose(ctx context.Context, epic work.Item, bundle Bundle) 
 		return nil, fmt.Errorf("swarm: decomposition of epic %s produced no subtasks", epic.Key)
 	}
 
-	if err := p.validateRoles(subs); err != nil {
-		return nil, err
+	if err := p.validate(subs); err != nil {
+		// One wrong field must not discard a decomposition that is otherwise
+		// sound: the model is told exactly what it got wrong and asked once
+		// more. A second failure is reported rather than retried forever.
+		subs, err = p.retryDecompose(ctx, prompt, err)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if err := checkAcyclic(subs); err != nil {
 		return nil, fmt.Errorf("swarm: decomposition of epic %s refused: %w", epic.Key, err)
 	}
 
 	return subs, nil
+}
+
+// systemPrompt is the instruction the model sees, with the two closed sets
+// it must choose from spelled out. The model cannot pick a legal value
+// unless it is told which values are legal, and both lists are read from
+// the packages that own them rather than copied.
+func (p *Planner) systemPrompt() string {
+	return decomposeSystemPrompt +
+		"\nThe \"type\" of every subtask must be exactly one of: " + strings.Join(work.SortedTypes(), ", ") + "." +
+		"\nThe \"agentRole\" of every subtask must be exactly one of: " + p.allowedRoles() + "."
+}
+
+// retryDecompose asks once more, quoting the exact violation. A model that
+// confuses two adjacent enumerations usually corrects itself when told
+// which field was wrong; one retry bounds the cost of finding out.
+func (p *Planner) retryDecompose(ctx context.Context, prompt string, cause error) ([]Subtask, error) {
+	result, err := ai.GenerateText(ctx, ai.GenerateTextOpts{
+		Model: p.Model,
+		System: p.systemPrompt() +
+			"\nYour previous answer was rejected: " + cause.Error() +
+			"\nReturn the same decomposition with that corrected.",
+		Prompt:          prompt,
+		Output:          ai.OutputArray[Subtask](),
+		MaxTokens:       &decomposeMaxTokensValue,
+		ProviderOptions: p.ProviderOptions,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("swarm: retry after %v: %w", cause, err)
+	}
+	subs, err := ai.OutputAs[[]Subtask](result)
+	if err != nil {
+		return nil, fmt.Errorf("swarm: decode retried decomposition: %w", err)
+	}
+	if err := p.validate(subs); err != nil {
+		return nil, err
+	}
+	return subs, nil
+}
+
+// validate rejects a decomposition naming an agent role or a Work Item type
+// outside the legal sets. Types are checked here rather than left to
+// Materialise's insert, because failing at insert time rejects the
+// decomposition after some of its children have already been written.
+func (p *Planner) validate(subs []Subtask) error {
+	if err := p.validateRoles(subs); err != nil {
+		return err
+	}
+	for _, s := range subs {
+		if !work.IsValidType(s.Type) {
+			return fmt.Errorf("swarm: subtask %q has type %q, which is not one of: %s",
+				s.Key, s.Type, strings.Join(work.SortedTypes(), ", "))
+		}
+	}
+	return nil
 }
 
 // buildDecomposePrompt renders epic and the assembled context bundle into

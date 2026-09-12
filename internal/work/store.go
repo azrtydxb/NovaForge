@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -316,3 +317,20 @@ func (s *Store) ListComments(ctx context.Context, workItemID uuid.UUID) ([]Comme
 	}
 	return out, rows.Err()
 }
+
+// SortedTypes returns every legal Work Item type in sorted order. It is
+// exported so a caller that must name the legal set — a prompt telling a
+// model what it may choose, a validation error explaining what it may not —
+// reads it from the one place that decides, rather than keeping a second
+// copy that drifts.
+func SortedTypes() []string {
+	out := make([]string, 0, len(validTypes))
+	for t := range validTypes {
+		out = append(out, t)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// IsValidType reports whether t is a legal Work Item type.
+func IsValidType(t string) bool { return validTypes[t] }
