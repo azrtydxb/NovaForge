@@ -437,11 +437,16 @@ func (s *Store) ClaimForDispatch(ctx context.Context, runnerID uuid.UUID, labels
 		repoID uuid.UUID
 		sha    string
 	)
+	// The job must belong to the runner's own organization. Without this
+	// predicate a runner registered to one organization could be handed
+	// another's job, which would make the hard boundary organizations are
+	// meant to be into a soft one.
 	err = tx.QueryRow(ctx, `
 		SELECT j.id, j.run_id, j.run_cmd, j.agent_role, j.image,
 		       r.org_id, r.repo_id, r.commit_sha
 		FROM ci.workflow_jobs j
 		JOIN ci.workflow_runs r ON r.id = j.run_id
+		JOIN ci.runners rn ON rn.id = $1 AND rn.org_id = r.org_id
 		WHERE j.status = 'pending'
 		  AND NOT EXISTS (
 		    SELECT 1 FROM unnest(j.needs) AS need(name)
@@ -452,7 +457,7 @@ func (s *Store) ClaimForDispatch(ctx context.Context, runnerID uuid.UUID, labels
 		  )
 		ORDER BY j.id
 		FOR UPDATE OF j SKIP LOCKED
-		LIMIT 1`,
+		LIMIT 1`, runnerID,
 	).Scan(&dj.JobID, &dj.RunID, &runCmd, &agent, &image, &orgID, &repoID, &sha)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

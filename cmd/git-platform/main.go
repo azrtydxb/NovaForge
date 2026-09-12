@@ -291,6 +291,17 @@ func subjectToScope(subject *identityv1.Subject) authz.Scope {
 // ignored by git hosts using token auth and is not otherwise trusted.
 func newAuthFunc(identityClient identityv1.IdentityServiceClient) gitops.AuthFunc {
 	return func(ctx context.Context, user, pass, orgRef string) (authz.Scope, error) {
+		// A CI job clones with a service token, not a person's credential. The
+		// same token type is accepted on both surfaces so a job does not need a
+		// second, weaker way in.
+		if strings.HasPrefix(pass, svcauth.Prefix) {
+			name, orgID, err := svcauth.Verify(hmacSecret, pass)
+			if err != nil {
+				return authz.Scope{}, fmt.Errorf("service token: %w", err)
+			}
+			log.Printf("git-platform: accepted service token from %s for org %s over http", name, orgID)
+			return authz.Scope{OrgID: orgID, ActorKind: "service"}, nil
+		}
 		subject, err := resolveSubject(ctx, identityClient, pass, orgRef)
 		if err != nil {
 			return authz.Scope{}, fmt.Errorf("resolve credential: %w", err)

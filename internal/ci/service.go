@@ -52,7 +52,7 @@ func NewService(pool *pgxpool.Pool, rdb *redis.Client, blobs *blobstore.Client, 
 	server.SetLogSink(logs)
 
 	scheduler := NewScheduler(rdb, store, git, SchedulerConfig{HMACSecret: hmacSecret})
-	pump := NewPump(store, dispatcher, cloneBase)
+	pump := NewPump(store, dispatcher, cloneBase, hmacSecret)
 	sweeper := retention.NewSweeper(pool, blobs)
 
 	return &Service{

@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/novaforge/novaforge/internal/svcauth"
 	"log/slog"
+	"net/url"
 	"time"
 
 	"github.com/google/uuid"
@@ -27,17 +29,19 @@ type Pump struct {
 	store      *Store
 	dispatcher *Dispatcher
 	cloneBase  string
+	hmacSecret string
 	log        *slog.Logger
 	interval   time.Duration
 }
 
 // NewPump builds a Pump. cloneBase is the base URL a runner clones from, e.g.
 // "http://novaforge-git-platform:8081".
-func NewPump(store *Store, dispatcher *Dispatcher, cloneBase string) *Pump {
+func NewPump(store *Store, dispatcher *Dispatcher, cloneBase, hmacSecret string) *Pump {
 	return &Pump{
 		store:      store,
 		dispatcher: dispatcher,
 		cloneBase:  cloneBase,
+		hmacSecret: hmacSecret,
 		log:        slog.Default(),
 		interval:   pumpInterval,
 	}
@@ -76,7 +80,12 @@ func (p *Pump) tick(ctx context.Context) error {
 			}
 			continue
 		}
-		job.RepoCloneURL = p.cloneURL(orgID, job.RepoCloneURL)
+		job.RepoCloneURL, err = p.cloneURL(orgID, job.RepoCloneURL)
+		if err != nil {
+			p.log.Error("ci pump: build clone url", "job", job.JobID, "error", err)
+			_ = p.store.SetJobStatus(ctx, job.JobID, "failure", err.Error())
+			continue
+		}
 
 		if err := p.dispatcher.DispatchTo(ctx, r.ID, job); err != nil {
 			// The runner vanished between the claim and the send; put the job
@@ -88,11 +97,30 @@ func (p *Pump) tick(ctx context.Context) error {
 	return nil
 }
 
-// cloneURL addresses the repository by id, which git-platform resolves the same
-// way it resolves a name.
-func (p *Pump) cloneURL(orgID uuid.UUID, repoID string) string {
+// cloneURL addresses the repository by id — git-platform resolves that the same
+// way it resolves a name — and carries a short-lived service token scoped to the
+// job's organization.
+//
+// A CI job has no person behind it, so it cannot borrow anyone's credential;
+// without one the clone simply fails with git's generic exit 128 and no
+// indication that authentication was the problem.
+func (p *Pump) cloneURL(orgID uuid.UUID, repoID string) (string, error) {
 	if p.cloneBase == "" {
-		return ""
+		return "", nil
 	}
-	return fmt.Sprintf("%s/%s/%s.git", p.cloneBase, orgID, repoID)
+	tok, err := svcauth.Mint(p.hmacSecret, "ci-pump", orgID, jobCloneTokenTTL)
+	if err != nil {
+		return "", fmt.Errorf("mint clone token: %w", err)
+	}
+	u, err := url.Parse(p.cloneBase)
+	if err != nil {
+		return "", fmt.Errorf("parse clone base %q: %w", p.cloneBase, err)
+	}
+	u.User = url.UserPassword("ci", tok)
+	u.Path = fmt.Sprintf("/%s/%s.git", orgID, repoID)
+	return u.String(), nil
 }
+
+// jobCloneTokenTTL bounds the credential a job clones with. It outlives a
+// normal checkout and little else.
+const jobCloneTokenTTL = 30 * time.Minute
