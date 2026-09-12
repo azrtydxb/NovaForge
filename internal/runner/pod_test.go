@@ -1,7 +1,11 @@
 package runner_test
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
+	"encoding/base64"
+	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -109,5 +113,54 @@ func TestDefaultJobImageIsConfigurable(t *testing.T) {
 	}
 	if got := pod.Spec.Containers[0].Image; got != "registry.example/novaforge/runner:abc123" {
 		t.Fatalf("want the configured default image, got %q", got)
+	}
+}
+
+// TestArtifactsTravelThroughTheJobsOwnOutput pins why this is not done with
+// kubectl-style exec: by the time a job has finished its container has
+// terminated and there is nothing left to exec into, so the job captures its
+// own declared outputs while it is still alive.
+func TestArtifactsRoundTripThroughOutput(t *testing.T) {
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	body := []byte("artifact body\n")
+	if err := tw.WriteHeader(&tar.Header{
+		Name: "out/report.txt", Mode: 0o644, Size: int64(len(body)), Typeflag: tar.TypeReg,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	tw.Write(body)
+	tw.Close()
+
+	lines := []string{
+		"hello from novaforge ci",
+		"::novaforge-artifacts-begin::",
+		base64.StdEncoding.EncodeToString(buf.Bytes()),
+		"::novaforge-artifacts-end::",
+	}
+	arts, clean, err := runner.ExtractArtifactsForTest(lines)
+	if err != nil {
+		t.Fatalf("extract: %v", err)
+	}
+	if len(arts) != 1 || arts[0].Name != "report.txt" || string(arts[0].Content) != "artifact body\n" {
+		t.Fatalf("artifact not recovered: %+v", arts)
+	}
+	// The encoded blob must not reach whoever reads the log.
+	for _, l := range clean {
+		if strings.Contains(l, "novaforge-artifacts") || len(l) > 200 {
+			t.Fatalf("payload leaked into the log: %q", l)
+		}
+	}
+	if len(clean) != 1 || clean[0] != "hello from novaforge ci" {
+		t.Fatalf("job output not preserved: %v", clean)
+	}
+}
+
+func TestNoArtifactsDeclaredEmitsNoCaptureScript(t *testing.T) {
+	if s := runner.ArtifactCaptureScriptForTest(nil); s != "" {
+		t.Fatalf("a job declaring no artifacts must emit no capture script, got %q", s)
+	}
+	if s := runner.ArtifactCaptureScriptForTest([]string{"out/x"}); !strings.Contains(s, "tar cf -") {
+		t.Fatalf("capture script does not archive: %q", s)
 	}
 }

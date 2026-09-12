@@ -84,14 +84,14 @@ func (p *PodExecutor) Run(ctx context.Context, job *civ1.ConnectResponse, logs c
 		name = name[:63]
 	}
 
-	script := job.GetRunCmd()
+	script := job.GetRunCmd() + artifactCaptureScript(job.GetArtifactPaths())
 	if url := job.GetRepoCloneUrl(); url != "" {
 		// The clone happens inside the pod too: cloning on the host would put
 		// repository content on the runner, which is what isolation avoids.
 		script = fmt.Sprintf(
 			"set -e\ngit clone %q /workspace/repo\ncd /workspace/repo\n"+
 				"if [ -n %q ]; then git checkout %q; fi\n%s",
-			url, job.GetCommitSha(), job.GetCommitSha(), job.GetRunCmd())
+			url, job.GetCommitSha(), job.GetCommitSha(), script)
 	}
 
 	env := make([]corev1.EnvVar, 0, len(job.GetEnv()))
@@ -138,25 +138,50 @@ func (p *PodExecutor) Run(ctx context.Context, job *civ1.ConnectResponse, logs c
 		_ = p.Client.CoreV1().Pods(p.Namespace).Delete(delCtx, created.Name, metav1.DeleteOptions{})
 	}()
 
-	if err := p.streamLogs(ctx, created.Name, logs); err != nil {
+	// The job's own output carries its artifacts, so the stream is filtered
+	// here rather than forwarded raw: a reader of the log should never see the
+	// encoded blob.
+	raw := make(chan string, 256)
+	var collected []string
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for line := range raw {
+			collected = append(collected, line)
+		}
+	}()
+	if err := p.streamLogs(ctx, created.Name, raw); err != nil {
+		close(raw)
+		<-done
 		return 0, err
 	}
+	close(raw)
+	<-done
+
+	arts, clean, aerr := extractArtifacts(collected)
+	for _, l := range clean {
+		select {
+		case logs <- l:
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		}
+	}
+
 	code, err := p.waitForExit(ctx, created.Name)
 	if err != nil {
 		return code, err
 	}
 
-	// Artifacts are collected before the deferred delete removes the pod, and
-	// only from a job that succeeded: a failed job's outputs are usually
-	// half-written and keeping them invites trusting them.
-	if code == 0 && len(job.GetArtifactPaths()) > 0 && p.OnArtifacts != nil {
-		arts, cerr := p.CollectArtifacts(ctx, created.Name, job.GetArtifactPaths())
-		if cerr != nil {
-			// Losing artifacts does not change whether the job passed, so this
-			// is reported rather than turned into a failure.
-			logs <- "novaforge: collecting artifacts failed: " + cerr.Error()
-		} else if uerr := p.OnArtifacts(ctx, job.GetJobId(), arts); uerr != nil {
-			logs <- "novaforge: uploading artifacts failed: " + uerr.Error()
+	// Artifacts are kept only from a job that succeeded: a failed job's outputs
+	// are usually half-written, and keeping them invites trusting them.
+	if code == 0 && p.OnArtifacts != nil {
+		if aerr != nil {
+			logs <- "novaforge: reading artifacts failed: " + aerr.Error()
+		} else if len(arts) > 0 {
+			if uerr := p.OnArtifacts(ctx, job.GetJobId(), arts); uerr != nil {
+				// Losing artifacts does not change whether the job passed.
+				logs <- "novaforge: uploading artifacts failed: " + uerr.Error()
+			}
 		}
 	}
 	return code, nil

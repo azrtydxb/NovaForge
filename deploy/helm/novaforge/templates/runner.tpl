@@ -23,11 +23,6 @@ rules:
   - apiGroups: [""]
     resources: [pods, pods/log]
     verbs: [create, get, list, watch, delete]
-  # exec is how declared artifacts are streamed out of a finished job's pod,
-  # the same mechanism kubectl cp uses.
-  - apiGroups: [""]
-    resources: [pods/exec]
-    verbs: [create]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
