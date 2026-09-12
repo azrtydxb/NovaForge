@@ -3,7 +3,12 @@ The CI runner holds a persistent outbound gRPC stream and has no inbound
 surface, so it gets no Service. It needs permission to create the per-job pods
 that isolate repository-supplied commands from the runner host.
 */ -}}
-{{- if .Values.runner.orgId }}
+{{- /*
+The runner's identity and permissions exist whether or not a runner is deployed,
+so a runner can be added for an organization without upgrading the release —
+gating them too meant the ServiceAccount was missing exactly when something
+tried to use it.
+*/ -}}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -32,6 +37,7 @@ subjects:
   - kind: ServiceAccount
     name: {{ .Release.Name }}-runner
     namespace: {{ .Release.Namespace }}
+{{- if .Values.runner.orgId }}
 ---
 apiVersion: apps/v1
 kind: Deployment
