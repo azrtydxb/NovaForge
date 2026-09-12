@@ -77,6 +77,8 @@ spec:
               value: {{ join "," .Values.runner.labels | quote }}
             - name: RUNNER_JOB_NAMESPACE
               value: {{ .Values.runner.jobNamespace | quote }}
+            - name: CI_DEFAULT_JOB_IMAGE
+              value: "{{ .Values.image.registry }}/{{ .Values.image.repository }}/runner:{{ .Values.image.tag }}"
             - name: RUNNER_ORG_ID
               value: {{ .Values.runner.orgId | quote }}
             - name: RUNNER_NAME

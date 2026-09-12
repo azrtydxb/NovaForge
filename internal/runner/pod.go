@@ -72,7 +72,7 @@ func (p *PodExecutor) Run(ctx context.Context, job *civ1.ConnectResponse, logs c
 
 	image := job.GetImage()
 	if image == "" {
-		image = defaultJobImage
+		image = defaultJobImage()
 	}
 	name := "nf-job-" + strings.ToLower(job.GetJobId())
 	if len(name) > 63 {
@@ -139,7 +139,16 @@ func (p *PodExecutor) Run(ctx context.Context, job *civ1.ConnectResponse, logs c
 	return p.waitForExit(ctx, created.Name)
 }
 
-const defaultJobImage = "debian:13-slim"
+// defaultJobImage is used when a workflow job names no image. It must contain
+// git, because a job that checks out the repository runs the clone inside the
+// pod — a bare base image exits 127 on the first line for a reason that reads
+// like a user error rather than a missing dependency.
+func defaultJobImage() string {
+	if v := os.Getenv("CI_DEFAULT_JOB_IMAGE"); v != "" {
+		return v
+	}
+	return "debian:13-slim"
+}
 
 func (p *PodExecutor) streamLogs(ctx context.Context, podName string, logs chan<- string) error {
 	// Wait for the container to start producing output before attaching.

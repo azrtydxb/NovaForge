@@ -76,3 +76,38 @@ func contains(s, sub string) bool {
 		return false
 	})()
 }
+
+// TestDefaultJobImageIsConfigurable pins why this exists: a workflow job that
+// names no image still has to be able to clone, and a base image without git
+// exits 127 on the first line — which reads like a broken workflow rather than
+// a missing dependency.
+func TestDefaultJobImageIsConfigurable(t *testing.T) {
+	t.Setenv("CI_DEFAULT_JOB_IMAGE", "registry.example/novaforge/runner:abc123")
+
+	cs := fake.NewSimpleClientset()
+	px := &runner.PodExecutor{Client: cs, Namespace: "novaforge"}
+	job := &civ1.ConnectResponse{JobId: "nodefault", RunId: "r1", RunCmd: "true"}
+
+	go func() {
+		logs := make(chan string, 4)
+		go func() {
+			for range logs {
+			}
+		}()
+		_, _ = px.Run(context.Background(), job, logs)
+	}()
+
+	var pod *corev1.Pod
+	for i := 0; i < 200 && pod == nil; i++ {
+		list, _ := cs.CoreV1().Pods("novaforge").List(context.Background(), metav1.ListOptions{})
+		if len(list.Items) > 0 {
+			pod = &list.Items[0]
+		}
+	}
+	if pod == nil {
+		t.Fatal("no job pod was created")
+	}
+	if got := pod.Spec.Containers[0].Image; got != "registry.example/novaforge/runner:abc123" {
+		t.Fatalf("want the configured default image, got %q", got)
+	}
+}
