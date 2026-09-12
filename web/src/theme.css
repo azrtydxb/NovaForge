@@ -1,0 +1,87 @@
+/* Design tokens taken from the NovaForge GUI design (claude.ai/design project
+   "NovaForge GUI design", file "NovaForge GUI.dc.html"). The prototype styled
+   every element inline; the values are hoisted here so a change lands in one
+   place and so screens read as structure rather than as colour literals. */
+:root {
+  --bg: #0a0b0e;
+  --panel: #111318;
+  --panel-2: #14171d;
+  --fg: #e8eaf0;
+  --fg-dim: #aab0be;
+  --fg-muted: #8b91a0;
+  --fg-faint: #4a5060;
+
+  --line: rgba(255, 255, 255, 0.07);
+  --line-2: rgba(255, 255, 255, 0.1);
+  --line-3: rgba(255, 255, 255, 0.12);
+
+  --accent: #4d7fff;
+  --accent-soft: rgba(77, 127, 255, 0.16);
+  --accent-softer: rgba(77, 127, 255, 0.12);
+  --link: #7ea2ff;
+  --link-hover: #a8c0ff;
+
+  --ok: #2bb673;
+  --warn: #e6a23c;
+  --bad: #e5534b;
+  --info: #7ea2ff;
+  --violet: #d8a6ff;
+
+  --ok-bg: #2bb67322;
+  --warn-bg: #e6a23c22;
+  --bad-bg: #e5534b22;
+  --info-bg: #4d7fff22;
+
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sans: Archivo, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --rail-collapsed: 62px;
+  --rail-expanded: 208px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--link);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--link-hover);
+}
+
+button {
+  font-family: inherit;
+  color: inherit;
+}
+
+@keyframes nfpulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
