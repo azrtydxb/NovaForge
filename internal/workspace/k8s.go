@@ -8,6 +8,7 @@ package workspace
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -26,6 +27,12 @@ const runIDLabel = "novaforge.io/run-id"
 // createdAtLabel records a namespace's creation time as a label (rather than
 // relying solely on the Kubernetes object's CreationTimestamp) so Reap can
 // filter on it directly, including against the fake clientset used in tests.
+//
+// The value is Unix seconds, not RFC 3339. A label value may contain only
+// alphanumerics, '-', '_' and '.', and RFC 3339 has colons in it: the API
+// server rejected every namespace this package tried to create, so no agent
+// workspace could ever be provisioned. The fake clientset does not validate
+// label syntax, which is exactly why the unit tests were happy.
 const createdAtLabel = "novaforge.io/created-at"
 
 // Spec describes the workspace to provision for one agent run.
@@ -71,7 +78,7 @@ func (p *Provisioner) Create(ctx context.Context, runID uuid.UUID, spec Spec) (W
 			Name: ns,
 			Labels: map[string]string{
 				runIDLabel:     runID.String(),
-				createdAtLabel: time.Now().UTC().Format(time.RFC3339),
+				createdAtLabel: strconv.FormatInt(time.Now().UTC().Unix(), 10),
 			},
 		},
 	}, metav1.CreateOptions{})
@@ -232,10 +239,11 @@ func (p *Provisioner) Reap(ctx context.Context, olderThan time.Duration) (int, e
 		if !ok {
 			continue
 		}
-		created, err := time.Parse(time.RFC3339, createdRaw)
+		secs, err := strconv.ParseInt(createdRaw, 10, 64)
 		if err != nil {
 			continue
 		}
+		created := time.Unix(secs, 0).UTC()
 		if created.After(cutoff) {
 			continue
 		}

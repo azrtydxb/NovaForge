@@ -2,6 +2,7 @@ package workspace_test
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/novaforge/novaforge/internal/workspace"
@@ -122,7 +124,7 @@ func TestReapRemovesOrphanedNamespaces(t *testing.T) {
 			Name: "nf-run-" + oldRunID.String(),
 			Labels: map[string]string{
 				"novaforge.io/run-id":     oldRunID.String(),
-				"novaforge.io/created-at": oldCreated.UTC().Format(time.RFC3339),
+				"novaforge.io/created-at": strconv.FormatInt(oldCreated.UTC().Unix(), 10),
 			},
 		},
 	}, metav1.CreateOptions{})
@@ -151,5 +153,39 @@ func TestReapRemovesOrphanedNamespaces(t *testing.T) {
 	_, err = clientset.CoreV1().Namespaces().Get(context.Background(), "nf-run-"+freshRunID.String(), metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("want fresh namespace to survive Reap, got err: %v", err)
+	}
+}
+
+// TestProvisionedLabelsAreLegal pins a defect the fake clientset can never
+// catch: it does not validate label syntax, so every unit test passed while
+// the real API server rejected every namespace this package created. The
+// created-at label held an RFC 3339 timestamp, and a label value may not
+// contain a colon — no agent workspace could be provisioned at all.
+//
+// This asserts the labels against Kubernetes' own validation rather than
+// against a guess at them.
+func TestProvisionedLabelsAreLegal(t *testing.T) {
+	clientset := fake.NewSimpleClientset()
+	p := workspace.NewProvisioner(clientset)
+	runID := uuid.New()
+
+	if _, err := p.Create(context.Background(), runID, workspace.Spec{Image: "busybox"}); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	ns, err := clientset.CoreV1().Namespaces().Get(context.Background(), "nf-run-"+runID.String(), metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get namespace: %v", err)
+	}
+	if len(ns.Labels) == 0 {
+		t.Fatal("the namespace carries no labels at all")
+	}
+	for k, v := range ns.Labels {
+		if errs := validation.IsQualifiedName(k); len(errs) > 0 {
+			t.Errorf("label key %q is not a legal Kubernetes label name: %v", k, errs)
+		}
+		if errs := validation.IsValidLabelValue(v); len(errs) > 0 {
+			t.Errorf("label %s=%q is not a legal Kubernetes label value: %v — the API server will reject this object", k, v, errs)
+		}
 	}
 }
