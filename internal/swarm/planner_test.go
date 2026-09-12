@@ -244,3 +244,62 @@ func TestMaterialiseIsIdempotent(t *testing.T) {
 		}
 	}
 }
+
+// recordingModel captures the system prompt it was called with, so a test
+// can assert what the planner actually told the model.
+type recordingModel struct {
+	stubPlannerModel
+	system string
+}
+
+func (m *recordingModel) Generate(ctx context.Context, call provider.Call) (*provider.Response, error) {
+	for _, msg := range call.Messages {
+		if msg.Role == provider.RoleSystem {
+			for _, part := range msg.Content {
+				if tp, ok := part.(provider.TextPart); ok {
+					m.system += tp.Text
+				}
+			}
+		}
+	}
+	return m.stubPlannerModel.Generate(ctx, call)
+}
+
+// TestDecomposePromptNamesTheLegalRoles pins a defect that made decomposition
+// impossible in practice: the planner refuses any subtask naming a role it
+// does not know, but never told the model which roles those were, so the
+// model guessed and every decomposition was rejected. The role list must
+// reach the model.
+func TestDecomposePromptNamesTheLegalRoles(t *testing.T) {
+	model := &recordingModel{stubPlannerModel: stubPlannerModel{body: ssoDecomposition}}
+	p := swarm.NewPlanner(model, nil, ssoRoles)
+
+	if _, err := p.Decompose(context.Background(), work.Item{Key: "NF-1", Goal: "Enterprise SSO"}, swarm.Bundle{}); err != nil {
+		t.Fatalf("Decompose: %v", err)
+	}
+	for _, role := range ssoRoles {
+		if !strings.Contains(model.system, role) {
+			t.Fatalf("the system prompt never names the legal role %q:\n%s", role, model.system)
+		}
+	}
+}
+
+// TestDefaultAgentRolesCoverADecomposition pins that a repository which has
+// declared no agents of its own can still be decomposed: the default roles
+// must accept a decomposition that uses them.
+func TestDefaultAgentRolesCoverADecomposition(t *testing.T) {
+	const body = `{"elements":[
+		{"key":"design","title":"Design","goal":"Design it","type":"architecture","agentRole":"architect","dependsOn":[]},
+		{"key":"build","title":"Build","goal":"Build it","type":"feature","agentRole":"implementer","dependsOn":["design"]},
+		{"key":"docs","title":"Docs","goal":"Document it","type":"documentation","agentRole":"documentation","dependsOn":["build"]}
+	]}`
+	p := swarm.NewPlanner(&stubPlannerModel{body: body}, nil, swarm.DefaultAgentRoles)
+
+	subs, err := p.Decompose(context.Background(), work.Item{Key: "NF-2", Goal: "Anything"}, swarm.Bundle{})
+	if err != nil {
+		t.Fatalf("Decompose with the default roles: %v", err)
+	}
+	if len(subs) != 3 {
+		t.Fatalf("want 3 subtasks, got %d", len(subs))
+	}
+}

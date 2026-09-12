@@ -79,7 +79,7 @@ func main() {
 			log.Printf("work-reviews: no decomposition (%v)", err)
 		} else {
 			workServer.SetDecomposer(swarm.PlannerDecomposer{
-				Planner: swarm.NewPlanner(model, workStore, nil),
+				Planner: swarm.NewPlanner(model, workStore, swarm.DefaultAgentRoles),
 			})
 			log.Printf("work-reviews: decomposition enabled via %s", cfg.AIEndpoint)
 		}

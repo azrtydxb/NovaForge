@@ -8,6 +8,7 @@ package swarm
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/azrtydxb/go-ai-sdk/ai"
@@ -98,7 +99,7 @@ func (p *Planner) Decompose(ctx context.Context, epic work.Item, bundle Bundle) 
 	prompt := buildDecomposePrompt(epic, bundle)
 	result, err := ai.GenerateText(ctx, ai.GenerateTextOpts{
 		Model:  p.Model,
-		System: decomposeSystemPrompt,
+		System: decomposeSystemPrompt + "\nThe \"agentRole\" of every subtask must be exactly one of: " + p.allowedRoles() + ".",
 		Prompt: prompt,
 		Output: ai.OutputArray[Subtask](),
 	})
@@ -264,4 +265,34 @@ func subtaskGoal(s Subtask) string {
 		return s.Title
 	}
 	return fmt.Sprintf("%s: %s", s.Title, s.Goal)
+}
+
+// DefaultAgentRoles is the role set a decomposition may draw on when the
+// repository declares no agents of its own under .novaforge/agents. A
+// Planner refuses any subtask naming a role it does not know, so without a
+// fallback every epic in a repository that has not yet been configured
+// would be undecomposable — which is exactly the repository most in need of
+// being broken down. These six cover the phases the planner is asked to
+// order: design, implementation, the three independent review dimensions,
+// and the documentation that trails them.
+var DefaultAgentRoles = []string{
+	"architect",
+	"implementer",
+	"reviewer",
+	"security",
+	"test",
+	"documentation",
+}
+
+// allowedRoles renders p.KnownRoles as a sorted, comma-separated list for
+// the prompt. The model cannot pick a legal role unless it is told which
+// roles are legal: leaving it to guess is what made validateRoles reject
+// otherwise sound decompositions.
+func (p *Planner) allowedRoles() string {
+	roles := make([]string, 0, len(p.KnownRoles))
+	for r := range p.KnownRoles {
+		roles = append(roles, r)
+	}
+	sort.Strings(roles)
+	return strings.Join(roles, ", ")
 }
