@@ -79,7 +79,7 @@ export function Account() {
                   {d.keys.map((k) => (
                     <div key={k.id} style={rowStyle}>
                       <span style={{ flex: 1, font: "13px var(--sans)" }}>
-                        {k.name}
+                        {k.title}
                       </span>
                       <span
                         style={{

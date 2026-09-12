@@ -54,7 +54,7 @@ func addWorkHandlers(h map[string]http.HandlerFunc, g gitv1.GitServiceClient, w 
 				WriteError(wr, StatusFromGRPC(err), err)
 				return
 			}
-			WriteJSON(wr, http.StatusCreated, workItemJSON(resp.GetItem()))
+			WriteJSON(wr, http.StatusCreated, WorkItemJSON(resp.GetItem()))
 		}
 
 		h["listWorkItems"] = func(wr http.ResponseWriter, r *http.Request) {
@@ -72,7 +72,7 @@ func addWorkHandlers(h map[string]http.HandlerFunc, g gitv1.GitServiceClient, w 
 			}
 			out := make([]map[string]any, 0, len(resp.GetItems()))
 			for _, it := range resp.GetItems() {
-				out = append(out, workItemJSON(it))
+				out = append(out, WorkItemJSON(it))
 			}
 			WriteJSON(wr, http.StatusOK, map[string]any{"items": out})
 		}
@@ -83,7 +83,7 @@ func addWorkHandlers(h map[string]http.HandlerFunc, g gitv1.GitServiceClient, w 
 				WriteError(wr, StatusFromGRPC(err), err)
 				return
 			}
-			WriteJSON(wr, http.StatusOK, workItemJSON(resp.GetItem()))
+			WriteJSON(wr, http.StatusOK, WorkItemJSON(resp.GetItem()))
 		}
 	}
 
@@ -98,7 +98,7 @@ func addWorkHandlers(h map[string]http.HandlerFunc, g gitv1.GitServiceClient, w 
 			}
 			out := make([]map[string]any, 0, len(resp.GetSubtasks()))
 			for _, it := range resp.GetSubtasks() {
-				out = append(out, workItemJSON(it))
+				out = append(out, WorkItemJSON(it))
 			}
 			WriteJSON(wr, http.StatusCreated, map[string]any{"subtasks": out})
 		}
@@ -139,7 +139,7 @@ func addWorkHandlers(h map[string]http.HandlerFunc, g gitv1.GitServiceClient, w 
 			}
 			out := make([]map[string]any, 0, len(resp.GetSubtasks()))
 			for _, st := range resp.GetSubtasks() {
-				body := workItemJSON(st.GetItem())
+				body := WorkItemJSON(st.GetItem())
 				body["ready"] = st.GetReady()
 				out = append(out, body)
 			}
@@ -197,7 +197,7 @@ func addWorkHandlers(h map[string]http.HandlerFunc, g gitv1.GitServiceClient, w 
 				WriteError(wr, StatusFromGRPC(err), err)
 				return
 			}
-			WriteJSON(wr, http.StatusCreated, runJSON(resp.GetRun()))
+			WriteJSON(wr, http.StatusCreated, RunJSON(resp.GetRun()))
 		}
 
 		h["listRuns"] = func(wr http.ResponseWriter, r *http.Request) {
@@ -213,7 +213,7 @@ func addWorkHandlers(h map[string]http.HandlerFunc, g gitv1.GitServiceClient, w 
 			}
 			out := make([]map[string]any, 0, len(resp.GetRuns()))
 			for _, rn := range resp.GetRuns() {
-				out = append(out, runJSON(rn))
+				out = append(out, RunJSON(rn))
 			}
 			WriteJSON(wr, http.StatusOK, map[string]any{"runs": out})
 		}
@@ -238,7 +238,7 @@ func addWorkHandlers(h map[string]http.HandlerFunc, g gitv1.GitServiceClient, w 
 			}
 			for _, rn := range list.GetRuns() {
 				if int(rn.GetNumber()) == n {
-					WriteJSON(wr, http.StatusOK, runJSON(rn))
+					WriteJSON(wr, http.StatusOK, RunJSON(rn))
 					return
 				}
 			}
@@ -367,19 +367,34 @@ func addWorkHandlers(h map[string]http.HandlerFunc, g gitv1.GitServiceClient, w 
 	}
 }
 
-func workItemJSON(it *workv1.WorkItem) map[string]any {
+// WorkItemJSON renders a Work Item for the API. The identity and assignment
+// fields are carried as well as the descriptive ones: a client listing items
+// needs something stable to key them by, something to order them by, and a way
+// to say who holds one — without those it has to invent all three.
+func WorkItemJSON(it *workv1.WorkItem) map[string]any {
 	return map[string]any{
-		"key": it.GetKey(), "type": it.GetType(), "goal": it.GetGoal(),
-		"state": it.GetState(), "acceptance": it.GetAcceptance(),
-		"constraints": it.GetConstraints(), "required_gates": it.GetRequiredGates(),
+		"id": it.GetId(), "key": it.GetKey(), "type": it.GetType(),
+		"goal": it.GetGoal(), "state": it.GetState(),
+		"acceptance": it.GetAcceptance(), "constraints": it.GetConstraints(),
+		"required_gates": it.GetRequiredGates(),
+		"repo_id":        it.GetRepoId(),
+		"assignee_id":    it.GetAssigneeId(), "assignee_kind": it.GetAssigneeKind(),
+		"created_at": it.GetCreatedAt(),
 	}
 }
 
-func runJSON(r *reviewsv1.Run) map[string]any {
+// RunJSON renders an Engineering Run for the API. Like a Work Item it carries
+// its identity as well as its description: a run is addressed by number in the
+// API, but a client still needs a stable key, the kind of author it had, and
+// when it was opened.
+func RunJSON(r *reviewsv1.Run) map[string]any {
 	return map[string]any{
-		"number": r.GetNumber(), "title": r.GetTitle(), "state": r.GetState(),
-		"source_ref": r.GetSourceRef(), "target_ref": r.GetTargetRef(),
-		"agent_name": r.GetAgentName(), "model_name": r.GetModelName(),
+		"id": r.GetId(), "number": r.GetNumber(), "title": r.GetTitle(),
+		"state": r.GetState(), "source_ref": r.GetSourceRef(),
+		"target_ref": r.GetTargetRef(), "agent_name": r.GetAgentName(),
+		"model_name": r.GetModelName(),
+		"author_id":  r.GetAuthorId(), "author_kind": r.GetAuthorKind(),
+		"work_item_id": r.GetWorkItemId(), "created_at": r.GetCreatedAt(),
 	}
 }
 

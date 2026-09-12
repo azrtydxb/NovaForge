@@ -148,7 +148,7 @@ export function Orgs() {
                 <>
                   {d.members.map((m) => (
                     <div
-                      key={m.id}
+                      key={m.user_id}
                       style={{
                         display: "flex",
                         alignItems: "center",
@@ -162,18 +162,19 @@ export function Orgs() {
                           width: 26,
                           height: 26,
                           borderRadius: 99,
-                          background:
-                            m.kind === "agent" ? "#33415e" : "#2f3542",
+                          background: "#2f3542",
                           display: "grid",
                           placeItems: "center",
                           font: "600 10px var(--sans)",
                           flex: "none",
                         }}
                       >
-                        {m.name.slice(0, 1).toUpperCase()}
+                        {m.username.slice(0, 1).toUpperCase()}
                       </span>
                       <span style={{ flex: 1 }}>
-                        <div style={{ font: "13px var(--sans)" }}>{m.name}</div>
+                        <div style={{ font: "13px var(--sans)" }}>
+                          {m.username}
+                        </div>
                         <div
                           style={{
                             font: "11px var(--mono)",
@@ -181,9 +182,7 @@ export function Orgs() {
                             marginTop: 2,
                           }}
                         >
-                          {m.kind === "agent"
-                            ? "agent — capability-scoped"
-                            : "human"}
+                          {m.user_id}
                         </div>
                       </span>
                       <span

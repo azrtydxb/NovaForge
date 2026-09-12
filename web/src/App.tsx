@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api, enc, storedToken } from "./lib/api";
 import { WorkspaceProvider, useWorkspace } from "./lib/workspace";
 import { Rail } from "./components/Rail";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Login } from "./Login";
 import { TopBar } from "./components/TopBar";
 import type { Dashboard, User } from "./lib/types";
@@ -55,6 +56,7 @@ function Shell({
   onSignedOut: () => void;
 }) {
   const { org } = useWorkspace();
+  const location = useLocation();
 
   // The exception count on the rail is the dashboard's own tally of what needs
   // a person, so the badge and the Exceptions screen cannot disagree.
@@ -84,39 +86,40 @@ function Shell({
         }}
       >
         <TopBar user={user} onSignedOut={onSignedOut} />
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/work" element={<Work />} />
-          <Route path="/swarm" element={<Swarm />} />
-          <Route path="/repos" element={<Repos />} />
-          <Route path="/repos/*" element={<Repos />} />
-          <Route path="/ci" element={<CI />} />
-          <Route path="/runs" element={<Runs />} />
-          <Route path="/runs/:repo/:number" element={<RunDetail />} />
-          <Route path="/agents" element={<Agents />} />
-          <Route path="/exceptions" element={<Exceptions />} />
-          <Route path="/maintenance" element={<Maintenance />} />
-          <Route path="/knowledge" element={<Knowledge />} />
-          <Route path="/graph" element={<Graph />} />
-          <Route path="/orgs" element={<Orgs />} />
-          <Route path="/secrets" element={<Secrets />} />
-          <Route path="/mcp" element={<Mcp />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/account" element={<Account />} />
-        </Routes>
+        {/* Keyed on the path so moving to another screen clears a previous
+            screen's failure rather than carrying it along. */}
+        <ErrorBoundary where={location.pathname} key={location.pathname}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/work" element={<Work />} />
+            <Route path="/swarm" element={<Swarm />} />
+            <Route path="/repos" element={<Repos />} />
+            <Route path="/repos/*" element={<Repos />} />
+            <Route path="/ci" element={<CI />} />
+            <Route path="/runs" element={<Runs />} />
+            <Route path="/runs/:repo/:number" element={<RunDetail />} />
+            <Route path="/agents" element={<Agents />} />
+            <Route path="/exceptions" element={<Exceptions />} />
+            <Route path="/maintenance" element={<Maintenance />} />
+            <Route path="/knowledge" element={<Knowledge />} />
+            <Route path="/graph" element={<Graph />} />
+            <Route path="/orgs" element={<Orgs />} />
+            <Route path="/secrets" element={<Secrets />} />
+            <Route path="/mcp" element={<Mcp />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/account" element={<Account />} />
+          </Routes>
+        </ErrorBoundary>
       </div>
     </div>
   );
 }
 
-/** exceptionTotal is the number the rail badges: everything the dashboard
- * counts as needing a person. */
+/** exceptionTotal is the number the rail badges. It is the length of the
+ * platform's own exception list rather than a sum of the counts beside it:
+ * summing would double-count an item that is both blocked and failing a gate,
+ * and the badge would then disagree with the list it points at. */
 export function exceptionTotal(d: Dashboard | undefined): number | null {
   if (!d) return null;
-  return (
-    d.need_human_review +
-    d.architecture_decisions +
-    d.gate_failures +
-    d.agents_blocked
-  );
+  return d.exceptions?.length ?? 0;
 }

@@ -200,16 +200,6 @@ function RunDetail({
                     <span style={{ flex: 1, font: "13px var(--sans)" }}>
                       {j.name}
                     </span>
-                    {j.agent_role ? (
-                      <span
-                        style={{
-                          font: "11px var(--mono)",
-                          color: "var(--violet)",
-                        }}
-                      >
-                        agent: {j.agent_role}
-                      </span>
-                    ) : null}
                     <span
                       style={{
                         font: "11px var(--mono)",

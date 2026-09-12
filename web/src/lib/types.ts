@@ -6,6 +6,7 @@ export interface User {
   id: string;
   username: string;
   email: string;
+  totp_enabled: boolean;
 }
 
 export interface Org {
@@ -14,9 +15,8 @@ export interface Org {
 }
 
 export interface OrgMember {
-  id: string;
-  name: string;
-  kind: string;
+  user_id: string;
+  username: string;
   role: string;
 }
 
@@ -38,7 +38,7 @@ export interface Commit {
   message: string;
   author_name: string;
   author_email: string;
-  committed_at: string;
+  at: string;
 }
 
 export interface TreeEntry {
@@ -68,7 +68,18 @@ export interface Subtask extends WorkItem {
   ready: boolean;
 }
 
+/** DashboardException is one thing the platform says needs a person. It is
+ * the platform's own list — deriving a second one in the client would be a
+ * second opinion about what is wrong. */
+export interface DashboardException {
+  key: string;
+  title: string;
+  state: string;
+  reason: string;
+}
+
 export interface Dashboard {
+  exceptions: DashboardException[];
   agents_running: number;
   ready_to_auto_merge: number;
   need_human_review: number;
@@ -133,7 +144,6 @@ export interface CIJob {
   name: string;
   status: string;
   detail: string;
-  agent_role: string;
 }
 
 export interface Artifact {
@@ -151,7 +161,6 @@ export interface PersonalToken {
 
 export interface SSHKey {
   id: string;
-  name: string;
+  title: string;
   fingerprint: string;
-  type: string;
 }
