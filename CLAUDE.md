@@ -4,8 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-The backend is built, deployed to the kw cluster, and covered by three acceptance tests
-that run against it. The GUI is deliberately not built yet — the spec scoped it out.
+The backend is built, deployed to the kw cluster, and covered by five acceptance tests that
+run against it. The GUI is built too, from the claude.ai/design project "NovaForge GUI
+design": `web/` is a React + TypeScript + Vite application that the edge embeds and serves,
+so a deployment cannot serve an API with no UI, or a UI built from a different commit than
+the API it talks to.
 
 `NovaForge_AI_Native_Git_Platform.md` is the design document and remains the source of
 truth for intent. `.procoder/specs/backend-platform.md` is the spec actually built against,
@@ -24,7 +27,15 @@ make openapi       # regenerate api/openapi.yaml from the edge route table
 
 go test ./internal/work/ -run TestAddAndListComments -v   # one test
 gofmt -l internal cmd                                      # must print nothing
+
+cd web && npm ci && npm run build   # the app the edge embeds
+cd web && npx tsc -b --noEmit       # type-check without building
 ```
+
+The web application is embedded into the edge binary at image build time
+(`deploy/docker/Dockerfile.edge`, the only image with a Node stage). A plain `go build`
+outside that image has an empty `internal/edge/dist/`, and the edge then says so on every
+page rather than serving a blank one.
 
 Tests run against **real** PostgreSQL, Redis and MinIO — no datastore is mocked anywhere.
 `source hack/env.sh` exports `TEST_DATABASE_URL`, `TEST_REDIS_URL` and the S3 variables
@@ -44,6 +55,7 @@ bash tests/e2e/deploy_test.sh     # git round trip over HTTPS and SSH
 bash tests/e2e/work_ci_test.sh    # Work Item, push, CI run in a pod, log and artifact
 bash tests/e2e/factory_test.sh    # epic decomposition by the real model, dependency ordering
 bash tests/e2e/agent_test.sh      # an Agent Run executes and commits its work
+bash tests/e2e/gui_test.sh        # the app is served and every screen's endpoint answers
 ```
 
 `hack/env.local.sh` is untracked and holds `REGISTRY_PASSWORD` and `AI_API_KEY`. A fresh
@@ -59,6 +71,15 @@ the next `helm upgrade` conflicts.
 
 Go microservices, module `github.com/novaforge/novaforge`. gRPC between services (buf,
 STANDARD lint), REST/OpenAPI only at the edge, Redis Streams for events.
+
+**Frontend** — `web/`, React 19 + TypeScript + Vite. One API client (`src/lib/api.ts`), one
+workspace scope every screen reads (`src/lib/workspace.tsx`: an organization and optionally
+one repository — "all projects" never crosses an organization), design tokens in
+`src/theme.css`, one file per screen under `src/screens/`. Where a deployment has no
+endpoint for something a screen shows, the screen says so: `Failed` distinguishes "not
+available in this deployment" from a request that actually failed. **Never render invented
+data** — a GUI showing a plausible number for something the platform does not know is worse
+than one that admits the gap.
 
 **Services** (`cmd/`, each with a matching slice of `internal/`): `identity`,
 `git-platform`, `work-reviews`, `ci-runner`, `gates`, `agent-runtime`,

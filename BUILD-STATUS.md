@@ -50,6 +50,11 @@ and MinIO — no datastore is mocked anywhere.
 push schedules a CI run from the repository's workflow file, a runner in its
 own pod executes it, and the job's log and declared artifact come back.
 
+`bash tests/e2e/gui_test.sh` passes: the edge serves the web application —
+index, client-side deep links, and built assets — without shadowing the API,
+and every one of the sixteen endpoints its screens read answers for a freshly
+created account.
+
 `bash tests/e2e/agent_test.sh` passes: an agent is defined through the API, a
 Work Item is created for it, an Agent Run is started, the run executes against
 the real model in its own Kubernetes namespace, and **the agent commits its
@@ -135,9 +140,30 @@ Each was fixed with a test that pins it:
 - A capability grant allows a branch PREFIX, and the run recorded that prefix
   as its branch — a ref may not end in a slash, so the agent could not use what
   it was given, and every sensible alternative was outside the grant.
+- The sign-in screen posted `totp` and read `token`; the edge takes
+  `totp_code` and returns `session_token`, so signing in never worked against
+  the real service. The GUI acceptance test found it on its first run.
+- `secrets.Broker.Revoke` matched on lease id alone, with no organization
+  predicate — one organization could revoke another's live credential and
+  stall its runs. The same defect class as the CI job claim.
 - Three services kept their own auth interceptor that understood a person's
   credential but not a platform service token, while git-platform understood
   both — so an agent's token was accepted by one service and refused by three.
+
+## The GUI
+
+`web/` implements "NovaForge GUI.dc.html" from the claude.ai/design project
+"NovaForge GUI design": all seventeen screens, behind the design's
+hover-expanding rail and project context switcher. React 19 + TypeScript +
+Vite, embedded into the edge binary at image build time so the UI and the API
+it talks to are always the same commit.
+
+Building it needed nine new REST operations and the services behind them:
+per-agent run history, a run's plan, the tool calls of the agent run behind an
+Engineering Run, project knowledge, symbol relations, maintenance proposals,
+the approval policy, the MCP tool list, and the secrets and leases surface.
+Two of those were already answerable by a service and had no way for a person
+to reach them; the rest needed a store query or an RPC.
 
 ## Known limitations
 
