@@ -11,6 +11,10 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** requiresTOTP marks the 401 the edge sends when an account has
+     * two-factor enabled. It is a challenge, not bad credentials, and the
+     * sign-in screen offers the field rather than refusing the attempt. */
+    readonly requiresTOTP = false,
   ) {
     super(message);
     this.name = "ApiError";
@@ -73,6 +77,7 @@ async function request<T>(
     throw new ApiError(
       res.status,
       errorMessage(parsed) || text || res.statusText,
+      flagged(parsed, "requires_totp"),
     );
   }
   return parsed as T;
@@ -85,6 +90,12 @@ function errorMessage(parsed: unknown): string {
   if (parsed === null || typeof parsed !== "object") return "";
   const err = (parsed as Record<string, unknown>)["error"];
   return typeof err === "string" ? err : "";
+}
+
+/** flagged reads a boolean field out of a failure body. */
+function flagged(parsed: unknown, field: string): boolean {
+  if (parsed === null || typeof parsed !== "object") return false;
+  return (parsed as Record<string, unknown>)[field] === true;
 }
 
 export const api = {

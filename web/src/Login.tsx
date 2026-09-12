@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { api, setStoredToken } from "./lib/api";
+import { ApiError, api, setStoredToken } from "./lib/api";
+
+interface LoginResponse {
+  session_token: string;
+  user_id: string;
+  requires_totp: boolean;
+}
 
 /** Login presents the platform's own credential flow. TOTP is asked for only
  * when the server says it is required, so a user without it never sees a
@@ -17,15 +23,32 @@ export function Login({ onSignedIn }: { onSignedIn: () => void }) {
     setBusy(true);
     setError(null);
     try {
+      // The field names are the edge's own: totp_code on the way in,
+      // session_token on the way back. Reading "token" instead is how this
+      // screen first failed against the real service.
       const body: Record<string, string> = { username, password };
-      if (totp) body.totp = totp;
-      const res = await api.post<{ token: string }>("/api/v1/auth/login", body);
-      setStoredToken(res.token);
+      if (totp) body.totp_code = totp;
+      const res = await api.post<LoginResponse>("/api/v1/auth/login", body);
+      if (res.requires_totp && !res.session_token) {
+        setNeedTotp(true);
+        setError("This account requires an authentication code.");
+        return;
+      }
+      if (!res.session_token) {
+        setError("The server returned no session token.");
+        return;
+      }
+      setStoredToken(res.session_token);
       onSignedIn();
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (/totp|two.factor|2fa/i.test(message)) setNeedTotp(true);
-      setError(message);
+      // A TOTP challenge arrives as a 401 carrying requires_totp, not as bad
+      // credentials, so the field is offered rather than the attempt refused.
+      if (err instanceof ApiError && err.requiresTOTP) {
+        setNeedTotp(true);
+        setError("Enter your authentication code.");
+        return;
+      }
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
