@@ -306,3 +306,47 @@ func (s *Store) OrganizationsWithWork(ctx context.Context) ([]uuid.UUID, error) 
 	}
 	return out, rows.Err()
 }
+
+// Proposal is one maintenance finding that became a Work Item, together with
+// the item it created. resolved marks a finding that has stopped reproducing.
+type Proposal struct {
+	Fingerprint  string
+	WorkItemKey  string
+	WorkItemGoal string
+	WorkItemType string
+	State        string
+	Resolved     bool
+}
+
+// ListProposals returns what the maintenance scanners have proposed for one
+// repository, newest first. The join is to work_items because a proposal is
+// not a separate kind of thing: it is a plain, unassigned Work Item plus the
+// fingerprint that stops the same finding being raised twice.
+func (s *Store) ListProposals(ctx context.Context, repoID uuid.UUID) ([]Proposal, error) {
+	scope, err := authz.FromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT p.fingerprint, w.key, w.goal, w.type, w.state, p.resolved_at IS NOT NULL
+		FROM work.maintenance_proposals p
+		JOIN work.work_items w ON w.id = p.work_item_id
+		WHERE p.org_id = $1 AND p.repo_id = $2
+		ORDER BY w.created_at DESC`,
+		scope.OrgID, repoID)
+	if err != nil {
+		return nil, fmt.Errorf("list maintenance proposals: %w", err)
+	}
+	defer rows.Close()
+
+	var out []Proposal
+	for rows.Next() {
+		var p Proposal
+		if err := rows.Scan(&p.Fingerprint, &p.WorkItemKey, &p.WorkItemGoal,
+			&p.WorkItemType, &p.State, &p.Resolved); err != nil {
+			return nil, fmt.Errorf("scan proposal: %w", err)
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}

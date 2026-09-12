@@ -55,3 +55,29 @@ func toProtoComment(c Comment) *workv1.Comment {
 		CreatedAt:  c.CreatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
 	}
 }
+
+// ListMaintenanceProposals returns what the scanners proposed for one
+// repository. Nothing here executed a fix: a proposal is a plain, unassigned
+// Work Item that a person decides about.
+func (g *GRPCServer) ListMaintenanceProposals(ctx context.Context, req *workv1.ListMaintenanceProposalsRequest) (*workv1.ListMaintenanceProposalsResponse, error) {
+	repoID, err := parseUUID("repo_id", req.GetRepoId())
+	if err != nil {
+		return nil, err
+	}
+	found, err := g.Store.ListProposals(ctx, repoID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "list maintenance proposals: %v", err)
+	}
+	out := make([]*workv1.MaintenanceProposal, 0, len(found))
+	for _, p := range found {
+		out = append(out, &workv1.MaintenanceProposal{
+			Fingerprint:  p.Fingerprint,
+			WorkItemKey:  p.WorkItemKey,
+			WorkItemGoal: p.WorkItemGoal,
+			WorkItemType: p.WorkItemType,
+			State:        p.State,
+			Resolved:     p.Resolved,
+		})
+	}
+	return &workv1.ListMaintenanceProposalsResponse{Proposals: out}, nil
+}

@@ -16,7 +16,9 @@ import (
 
 	agentsv1 "github.com/novaforge/novaforge/gen/novaforge/agents/v1"
 	civ1 "github.com/novaforge/novaforge/gen/novaforge/ci/v1"
+	gatesv1 "github.com/novaforge/novaforge/gen/novaforge/gates/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
+	graphv1 "github.com/novaforge/novaforge/gen/novaforge/graph/v1"
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
 	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
 	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
@@ -69,6 +71,31 @@ func main() {
 		log.Println("edge: AGENTS_ADDR is unset; the agent routes are not mounted")
 	}
 
+	// The graph backs the knowledge and symbol screens. A deployment without
+	// it keeps every other route; those two report themselves unavailable,
+	// which is what the "no client, no handler" rule gives us.
+	var graphClient graphv1.GraphServiceClient
+	if cfg.GraphAddr != "" {
+		graphConn, err := dial(cfg.GraphAddr)
+		if err != nil {
+			log.Fatalf("edge: dial engineering-graph: %v", err)
+		}
+		defer graphConn.Close()
+		graphClient = graphv1.NewGraphServiceClient(graphConn)
+	} else {
+		log.Println("edge: GRAPH_ADDR is unset; the knowledge and graph routes are not mounted")
+	}
+
+	var gatesClient gatesv1.GatesServiceClient
+	if cfg.GatesAddr != "" {
+		gatesConn, err := dial(cfg.GatesAddr)
+		if err != nil {
+			log.Fatalf("edge: dial gates: %v", err)
+		}
+		defer gatesConn.Close()
+		gatesClient = gatesv1.NewGatesServiceClient(gatesConn)
+	}
+
 	ecfg := edge.Config{
 		Identity: identityv1.NewIdentityServiceClient(identityConn),
 		Git:      gitv1.NewGitServiceClient(gitConn),
@@ -76,6 +103,8 @@ func main() {
 		Reviews:  reviewsv1.NewReviewsServiceClient(workConn),
 		CI:       civ1.NewCIServiceClient(ciConn),
 		Agents:   agentsClient,
+		Graph:    graphClient,
+		Gates:    gatesClient,
 	}
 	ecfg.Handlers = edge.Handlers(ecfg)
 

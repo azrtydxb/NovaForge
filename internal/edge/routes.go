@@ -76,6 +76,13 @@ func Routes() []Route {
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/ci/artifacts", "listLatestArtifacts", "The newest run's artifacts"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/ci/jobs/{id}/artifacts", "listJobArtifacts", "One job's artifacts"},
 
+		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/knowledge", "searchKnowledge", "Project knowledge for a repository"},
+		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/graph/symbol", "getSymbolRelations", "A symbol and what it relates to"},
+		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/maintenance", "listMaintenanceProposals", "What the maintenance scanners proposed"},
+
+		{http.MethodGet, "/api/v1/approvals/policy", "approvalPolicy", "What the platform requires before each action"},
+		{http.MethodGet, "/api/v1/mcp/tools", "mcpTools", "The MCP tools this deployment exposes"},
+
 		{http.MethodGet, "/healthz", "healthz", "Readiness"},
 	}
 }

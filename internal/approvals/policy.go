@@ -99,3 +99,31 @@ func Decide(ctx context.Context, p Policy, a Action, g capability.Grant) (Decisi
 		return DecisionForbidden, nil
 	}
 }
+
+// Rule is one row of the approval policy: an action, and what the platform
+// requires before it proceeds. Actions whose decision depends on the caller's
+// grant say so, because "human" and "forbidden" are the same action seen
+// through two different grants.
+type Rule struct {
+	Action   Action
+	Decision Decision
+	// GrantDependent reports that the decision above is what an agent with
+	// the corresponding capability gets, and that an agent without it is
+	// refused outright.
+	GrantDependent bool
+}
+
+// Rules returns the whole policy, in the order Decide's switch reads. It
+// exists so a person can be shown what governs agents here without anyone
+// writing a second copy of the table that then drifts from the switch.
+func Rules() []Rule {
+	return []Rule{
+		{ActionReadSource, DecisionAutomatic, false},
+		{ActionModifyWorkspace, DecisionAutomatic, false},
+		{ActionAddDependency, DecisionPolicy, false},
+		{ActionChangeDBSchema, DecisionHuman, false},
+		{ActionAccessSecret, DecisionPolicy, false},
+		{ActionDeployStaging, DecisionHuman, true},
+		{ActionDeployProduction, DecisionHuman, true},
+	}
+}

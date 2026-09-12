@@ -18,7 +18,9 @@ import (
 
 	agentsv1 "github.com/novaforge/novaforge/gen/novaforge/agents/v1"
 	civ1 "github.com/novaforge/novaforge/gen/novaforge/ci/v1"
+	gatesv1 "github.com/novaforge/novaforge/gen/novaforge/gates/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
+	graphv1 "github.com/novaforge/novaforge/gen/novaforge/graph/v1"
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
 	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
 	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
@@ -33,6 +35,8 @@ type Config struct {
 	Work     workv1.WorkServiceClient
 	Reviews  reviewsv1.ReviewsServiceClient
 	Agents   agentsv1.AgentServiceClient
+	Graph    graphv1.GraphServiceClient
+	Gates    gatesv1.GatesServiceClient
 	Handlers map[string]http.HandlerFunc
 }
 

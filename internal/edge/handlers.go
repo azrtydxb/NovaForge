@@ -24,6 +24,7 @@ func Handlers(cfg Config) map[string]http.HandlerFunc {
 		addWorkHandlers(h, cfg.Git, cfg.Work, cfg.Reviews)
 		addCIHandlers(h, cfg.Git, cfg.CI)
 		addAgentHandlers(h, cfg.Git, cfg.Agents, cfg.Identity)
+		addPlatformHandlers(h, cfg.Git, cfg.Graph, cfg.Gates)
 	}
 	h["healthz"] = func(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})

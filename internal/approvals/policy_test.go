@@ -93,3 +93,59 @@ func TestPolicyIsNotDerivedFromModelOutput(t *testing.T) {
 		}
 	}
 }
+
+// TestRulesMatchDecide pins the two against each other. Rules() exists so a
+// person can be shown the policy; if it could drift from Decide's switch it
+// would be showing them something the platform does not actually enforce,
+// which is worse than showing nothing.
+func TestRulesMatchDecide(t *testing.T) {
+	// A grant with every deploy capability, so the grant-dependent actions
+	// report the decision they reach rather than the refusal they get
+	// without it.
+	full := capability.Grant{DeployStaging: true, DeployProd: true}
+
+	for _, r := range approvals.Rules() {
+		got, err := approvals.Decide(context.Background(), approvals.Policy{}, r.Action, full)
+		if err != nil {
+			t.Fatalf("Decide(%s): %v", r.Action, err)
+		}
+		if got != r.Decision {
+			t.Errorf("Rules() says %s is %q, Decide says %q", r.Action, r.Decision, got)
+		}
+
+		// A grant-dependent rule must actually depend on the grant.
+		without, err := approvals.Decide(context.Background(), approvals.Policy{}, r.Action, capability.Grant{})
+		if err != nil {
+			t.Fatalf("Decide(%s) without grant: %v", r.Action, err)
+		}
+		if r.GrantDependent && without != approvals.DecisionForbidden {
+			t.Errorf("%s is marked grant-dependent but is %q without the grant", r.Action, without)
+		}
+		if !r.GrantDependent && without != r.Decision {
+			t.Errorf("%s is not marked grant-dependent but changes to %q without the grant", r.Action, without)
+		}
+	}
+}
+
+// TestRulesCoverEveryAction pins that no action is missing from the shown
+// policy: an action Decide knows about but Rules() omits is a rule the user
+// is never told about.
+func TestRulesCoverEveryAction(t *testing.T) {
+	shown := map[approvals.Action]bool{}
+	for _, r := range approvals.Rules() {
+		shown[r.Action] = true
+	}
+	for _, a := range []approvals.Action{
+		approvals.ActionReadSource,
+		approvals.ActionModifyWorkspace,
+		approvals.ActionAddDependency,
+		approvals.ActionChangeDBSchema,
+		approvals.ActionAccessSecret,
+		approvals.ActionDeployStaging,
+		approvals.ActionDeployProduction,
+	} {
+		if !shown[a] {
+			t.Errorf("action %q is enforced but never shown by Rules()", a)
+		}
+	}
+}

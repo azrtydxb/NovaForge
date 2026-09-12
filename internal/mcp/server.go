@@ -249,3 +249,8 @@ func schema(props map[string]any, required ...string) map[string]any {
 		"required":   required,
 	}
 }
+
+// ToolDefs is the tool surface this server advertises. It is exported so the
+// REST edge can show a person exactly what an external agent will discover —
+// one list, so the two cannot disagree.
+func ToolDefs() []ToolDef { return toolDefs() }

@@ -23,6 +23,19 @@ components:
     NotFound:
       description: No such resource in the caller's organization
 paths:
+  /api/v1/approvals/policy:
+    get:
+      operationId: approvalPolicy
+      summary: What the platform requires before each action
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/auth/login:
     post:
       operationId: login
@@ -53,6 +66,19 @@ paths:
     post:
       operationId: register
       summary: Register a user
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/mcp/tools:
+    get:
+      operationId: mcpTools
+      summary: The MCP tools this deployment exposes
       responses:
         "200":
           description: Success
@@ -604,6 +630,78 @@ paths:
     get:
       operationId: getDiff
       summary: Unified diff between two refs
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/orgs/{org}/repos/{repo}/graph/symbol:
+    get:
+      operationId: getSymbolRelations
+      summary: A symbol and what it relates to
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/orgs/{org}/repos/{repo}/knowledge:
+    get:
+      operationId: searchKnowledge
+      summary: Project knowledge for a repository
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/orgs/{org}/repos/{repo}/maintenance:
+    get:
+      operationId: listMaintenanceProposals
+      summary: What the maintenance scanners proposed
       parameters:
         - name: org
           in: path

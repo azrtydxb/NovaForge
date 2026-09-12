@@ -103,6 +103,32 @@ func addWorkHandlers(h map[string]http.HandlerFunc, g gitv1.GitServiceClient, w 
 			WriteJSON(wr, http.StatusCreated, map[string]any{"subtasks": out})
 		}
 
+		h["listMaintenanceProposals"] = func(wr http.ResponseWriter, r *http.Request) {
+			rid, err := repoID(r)
+			if err != nil {
+				WriteError(wr, StatusFromGRPC(err), err)
+				return
+			}
+			resp, err := w.ListMaintenanceProposals(r.Context(),
+				&workv1.ListMaintenanceProposalsRequest{RepoId: rid})
+			if err != nil {
+				WriteError(wr, StatusFromGRPC(err), err)
+				return
+			}
+			out := make([]map[string]any, 0, len(resp.GetProposals()))
+			for _, p := range resp.GetProposals() {
+				out = append(out, map[string]any{
+					"fingerprint":    p.GetFingerprint(),
+					"work_item_key":  p.GetWorkItemKey(),
+					"work_item_goal": p.GetWorkItemGoal(),
+					"work_item_type": p.GetWorkItemType(),
+					"state":          p.GetState(),
+					"resolved":       p.GetResolved(),
+				})
+			}
+			WriteJSON(wr, http.StatusOK, map[string]any{"proposals": out})
+		}
+
 		h["listSubtasks"] = func(wr http.ResponseWriter, r *http.Request) {
 			resp, err := w.ListSubtasks(r.Context(), &workv1.ListSubtasksRequest{
 				EpicKey: chi.URLParam(r, "key"),

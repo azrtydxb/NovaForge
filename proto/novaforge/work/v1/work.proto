@@ -14,6 +14,7 @@ service WorkService {
   rpc DecomposeEpic(DecomposeEpicRequest) returns (DecomposeEpicResponse);
   rpc AddComment(AddCommentRequest) returns (AddCommentResponse);
   rpc ListComments(ListCommentsRequest) returns (ListCommentsResponse);
+  rpc ListMaintenanceProposals(ListMaintenanceProposalsRequest) returns (ListMaintenanceProposalsResponse);
 }
 
 // WorkItem mirrors a row in the work.work_items table.
@@ -122,4 +123,22 @@ message ListCommentsRequest {
 }
 message ListCommentsResponse {
   repeated Comment comments = 1;
+}
+
+// MaintenanceProposal is a scanner finding that became a Work Item. resolved
+// marks a finding that has stopped reproducing.
+message MaintenanceProposal {
+  string fingerprint = 1;
+  string work_item_key = 2;
+  string work_item_goal = 3;
+  string work_item_type = 4;
+  string state = 5;
+  bool resolved = 6;
+}
+
+message ListMaintenanceProposalsRequest {
+  string repo_id = 1;
+}
+message ListMaintenanceProposalsResponse {
+  repeated MaintenanceProposal proposals = 1;
 }
