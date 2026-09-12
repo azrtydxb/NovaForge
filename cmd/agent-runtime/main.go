@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -241,12 +242,30 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 			return
 		}
 
-		ws, err := provisioner.Create(ctx, run.ID, workspace.Spec{Image: defaultWorkspaceImage})
-		if err != nil {
+		// The per-run namespace carries the run's isolation — its own
+		// network policy and resource quota — and is torn down with the run.
+		if _, err := provisioner.Create(ctx, run.ID, workspace.Spec{Image: defaultWorkspaceImage}); err != nil {
 			log.Printf("agent-runtime: provision workspace for run %s: %v", run.ID, err)
 			finishRun(ctx, store, run, "failed")
 			return
 		}
+
+		// The staging directory the workspace.* tools write into. It is a
+		// directory this process can actually create: the tools used to be
+		// pointed at /workspace/<pod>, which this container cannot write —
+		// every write_file failed with "mkdir /workspace: permission
+		// denied", and the agent then had nothing to commit.
+		//
+		// Files staged here are not executed; they are the content of the
+		// commit the run makes through git-platform. Running a repository's
+		// own code is CI's job, and CI does it in a per-job pod.
+		stage, err := os.MkdirTemp("", "nf-run-"+run.ID.String()+"-*")
+		if err != nil {
+			log.Printf("agent-runtime: create staging directory for run %s: %v", run.ID, err)
+			finishRun(ctx, store, run, "failed")
+			return
+		}
+		defer os.RemoveAll(stage)
 		defer func() {
 			if err := provisioner.Destroy(context.Background(), run.ID); err != nil {
 				log.Printf("agent-runtime: destroy workspace for run %s: %v", run.ID, err)
@@ -280,7 +299,7 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 			RunID:         run.ID,
 			Grant:         grant,
 			Budget:        budget,
-			WorkspaceRoot: "/workspace/" + ws.PodName,
+			WorkspaceRoot: stage,
 			Git:           newGitAdapter(gitClient, graphClient),
 			Work:          newWorkAdapter(workClient),
 		}, audit)

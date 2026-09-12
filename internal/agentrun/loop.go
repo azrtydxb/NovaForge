@@ -14,12 +14,6 @@ import (
 	"github.com/novaforge/novaforge/internal/tools"
 )
 
-// genericToolSchema is used for every tool offered to the model: the
-// registry's Handler takes raw JSON and validates its own shape, so no
-// per-tool schema is required for the model-facing tool definition beyond
-// "an object".
-var genericToolSchema = json.RawMessage(`{"type":"object","additionalProperties":true}`)
-
 // hardStepCap bounds the loop even when no budget dimension catches a
 // misbehaving model or a bug in the stop condition — a safety net, not a
 // budget dimension in its own right.
@@ -128,10 +122,11 @@ func buildToolDefs(reg *tools.Registry) []provider.ToolDef {
 	names := reg.Names()
 	defs := make([]provider.ToolDef, 0, len(names))
 	for _, name := range names {
+		spec := tools.SpecFor(name)
 		defs = append(defs, provider.ToolDef{
 			Name:        name,
-			Description: name,
-			Schema:      genericToolSchema,
+			Description: spec.Description,
+			Schema:      spec.Schema,
 		})
 	}
 	return defs
