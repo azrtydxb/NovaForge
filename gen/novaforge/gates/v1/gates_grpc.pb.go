@@ -26,6 +26,9 @@ const (
 	GatesService_ResolveApproval_FullMethodName = "/novaforge.gates.v1.GatesService/ResolveApproval"
 	GatesService_IssueLease_FullMethodName      = "/novaforge.gates.v1.GatesService/IssueLease"
 	GatesService_RedeemLease_FullMethodName     = "/novaforge.gates.v1.GatesService/RedeemLease"
+	GatesService_ListSecrets_FullMethodName     = "/novaforge.gates.v1.GatesService/ListSecrets"
+	GatesService_ListLeases_FullMethodName      = "/novaforge.gates.v1.GatesService/ListLeases"
+	GatesService_RevokeLease_FullMethodName     = "/novaforge.gates.v1.GatesService/RevokeLease"
 )
 
 // GatesServiceClient is the client API for GatesService service.
@@ -44,6 +47,9 @@ type GatesServiceClient interface {
 	ResolveApproval(ctx context.Context, in *ResolveApprovalRequest, opts ...grpc.CallOption) (*ResolveApprovalResponse, error)
 	IssueLease(ctx context.Context, in *IssueLeaseRequest, opts ...grpc.CallOption) (*IssueLeaseResponse, error)
 	RedeemLease(ctx context.Context, in *RedeemLeaseRequest, opts ...grpc.CallOption) (*RedeemLeaseResponse, error)
+	ListSecrets(ctx context.Context, in *ListSecretsRequest, opts ...grpc.CallOption) (*ListSecretsResponse, error)
+	ListLeases(ctx context.Context, in *ListLeasesRequest, opts ...grpc.CallOption) (*ListLeasesResponse, error)
+	RevokeLease(ctx context.Context, in *RevokeLeaseRequest, opts ...grpc.CallOption) (*RevokeLeaseResponse, error)
 }
 
 type gatesServiceClient struct {
@@ -124,6 +130,36 @@ func (c *gatesServiceClient) RedeemLease(ctx context.Context, in *RedeemLeaseReq
 	return out, nil
 }
 
+func (c *gatesServiceClient) ListSecrets(ctx context.Context, in *ListSecretsRequest, opts ...grpc.CallOption) (*ListSecretsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSecretsResponse)
+	err := c.cc.Invoke(ctx, GatesService_ListSecrets_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gatesServiceClient) ListLeases(ctx context.Context, in *ListLeasesRequest, opts ...grpc.CallOption) (*ListLeasesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListLeasesResponse)
+	err := c.cc.Invoke(ctx, GatesService_ListLeases_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gatesServiceClient) RevokeLease(ctx context.Context, in *RevokeLeaseRequest, opts ...grpc.CallOption) (*RevokeLeaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RevokeLeaseResponse)
+	err := c.cc.Invoke(ctx, GatesService_RevokeLease_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // GatesServiceServer is the server API for GatesService service.
 // All implementations should embed UnimplementedGatesServiceServer
 // for forward compatibility.
@@ -140,6 +176,9 @@ type GatesServiceServer interface {
 	ResolveApproval(context.Context, *ResolveApprovalRequest) (*ResolveApprovalResponse, error)
 	IssueLease(context.Context, *IssueLeaseRequest) (*IssueLeaseResponse, error)
 	RedeemLease(context.Context, *RedeemLeaseRequest) (*RedeemLeaseResponse, error)
+	ListSecrets(context.Context, *ListSecretsRequest) (*ListSecretsResponse, error)
+	ListLeases(context.Context, *ListLeasesRequest) (*ListLeasesResponse, error)
+	RevokeLease(context.Context, *RevokeLeaseRequest) (*RevokeLeaseResponse, error)
 }
 
 // UnimplementedGatesServiceServer should be embedded to have
@@ -169,6 +208,15 @@ func (UnimplementedGatesServiceServer) IssueLease(context.Context, *IssueLeaseRe
 }
 func (UnimplementedGatesServiceServer) RedeemLease(context.Context, *RedeemLeaseRequest) (*RedeemLeaseResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RedeemLease not implemented")
+}
+func (UnimplementedGatesServiceServer) ListSecrets(context.Context, *ListSecretsRequest) (*ListSecretsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListSecrets not implemented")
+}
+func (UnimplementedGatesServiceServer) ListLeases(context.Context, *ListLeasesRequest) (*ListLeasesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListLeases not implemented")
+}
+func (UnimplementedGatesServiceServer) RevokeLease(context.Context, *RevokeLeaseRequest) (*RevokeLeaseResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RevokeLease not implemented")
 }
 func (UnimplementedGatesServiceServer) testEmbeddedByValue() {}
 
@@ -316,6 +364,60 @@ func _GatesService_RedeemLease_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GatesService_ListSecrets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSecretsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GatesServiceServer).ListSecrets(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GatesService_ListSecrets_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GatesServiceServer).ListSecrets(ctx, req.(*ListSecretsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GatesService_ListLeases_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListLeasesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GatesServiceServer).ListLeases(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GatesService_ListLeases_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GatesServiceServer).ListLeases(ctx, req.(*ListLeasesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GatesService_RevokeLease_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RevokeLeaseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GatesServiceServer).RevokeLease(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GatesService_RevokeLease_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GatesServiceServer).RevokeLease(ctx, req.(*RevokeLeaseRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // GatesService_ServiceDesc is the grpc.ServiceDesc for GatesService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -350,6 +452,18 @@ var GatesService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RedeemLease",
 			Handler:    _GatesService_RedeemLease_Handler,
+		},
+		{
+			MethodName: "ListSecrets",
+			Handler:    _GatesService_ListSecrets_Handler,
+		},
+		{
+			MethodName: "ListLeases",
+			Handler:    _GatesService_ListLeases_Handler,
+		},
+		{
+			MethodName: "RevokeLease",
+			Handler:    _GatesService_RevokeLease_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

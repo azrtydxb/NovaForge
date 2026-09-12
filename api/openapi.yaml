@@ -254,6 +254,49 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/orgs/{org}/leases:
+    get:
+      operationId: listLeases
+      summary: Credentials currently brokered to runs
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/orgs/{org}/leases/{id}:
+    delete:
+      operationId: revokeLease
+      summary: End a live lease immediately
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/orgs/{org}/members:
     get:
       operationId: listOrgMembers
@@ -1141,6 +1184,25 @@ paths:
           schema:
             type: string
         - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/orgs/{org}/secrets:
+    get:
+      operationId: listSecrets
+      summary: Secrets registered for an organization, names only
+      parameters:
+        - name: org
           in: path
           required: true
           schema:

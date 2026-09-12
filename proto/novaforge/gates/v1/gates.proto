@@ -14,6 +14,9 @@ service GatesService {
   rpc ResolveApproval(ResolveApprovalRequest) returns (ResolveApprovalResponse);
   rpc IssueLease(IssueLeaseRequest) returns (IssueLeaseResponse);
   rpc RedeemLease(RedeemLeaseRequest) returns (RedeemLeaseResponse);
+  rpc ListSecrets(ListSecretsRequest) returns (ListSecretsResponse);
+  rpc ListLeases(ListLeasesRequest) returns (ListLeasesResponse);
+  rpc RevokeLease(RevokeLeaseRequest) returns (RevokeLeaseResponse);
 }
 
 message Evaluation {
@@ -105,4 +108,37 @@ message RedeemLeaseRequest {
 
 message RedeemLeaseResponse {
   string value = 1;
+}
+
+// SecretReference names a stored secret without any of its material.
+message SecretReference {
+  string name = 1;
+  string environment = 2;
+}
+
+message ListSecretsRequest {}
+message ListSecretsResponse {
+  repeated SecretReference secrets = 1;
+}
+
+// Lease is one brokered credential as an operator sees it. The token is not
+// carried: only its hash is stored, and even that is never returned.
+message Lease {
+  string id = 1;
+  string secret_name = 2;
+  string run_id = 3;
+  string state = 4;
+  string expires_at = 5;
+}
+
+message ListLeasesRequest {}
+message ListLeasesResponse {
+  repeated Lease leases = 1;
+}
+
+message RevokeLeaseRequest {
+  string id = 1;
+}
+message RevokeLeaseResponse {
+  bool revoked = 1;
 }

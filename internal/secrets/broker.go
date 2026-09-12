@@ -21,6 +21,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/novaforge/novaforge/internal/authz"
 	"github.com/novaforge/novaforge/internal/capability"
 )
 
@@ -278,10 +279,17 @@ func (b *Broker) Redeem(ctx context.Context, token string) (string, error) {
 
 // Revoke invalidates leaseID immediately, before it would otherwise expire.
 func (b *Broker) Revoke(ctx context.Context, leaseID uuid.UUID) error {
+	// Organizations are a hard boundary, and a lease id is guessable in the
+	// way any uuid is: without this predicate one organization could revoke
+	// another's live credential and stall its runs.
+	scope, err := authz.FromContext(ctx)
+	if err != nil {
+		return err
+	}
 	tag, err := b.pool.Exec(ctx, `
 		UPDATE secrets.secret_leases SET revoked_at = now()
-		WHERE id = $1 AND revoked_at IS NULL`,
-		leaseID,
+		WHERE id = $1 AND org_id = $2 AND revoked_at IS NULL`,
+		leaseID, scope.OrgID,
 	)
 	if err != nil {
 		return fmt.Errorf("revoke lease %s: %w", leaseID, err)
@@ -290,4 +298,91 @@ func (b *Broker) Revoke(ctx context.Context, leaseID uuid.UUID) error {
 		return fmt.Errorf("lease %s not found or already revoked", leaseID)
 	}
 	return nil
+}
+
+// Reference names a stored secret without any of its material. Listing
+// secrets is a legitimate thing for a person to do; reading their values is
+// not, so nothing here decrypts anything.
+type Reference struct {
+	Name        string
+	Environment string
+}
+
+// List returns the secrets registered for orgID, names and environments only.
+// The ciphertext column is never selected: a query that cannot read the
+// material cannot leak it, whatever a caller does with the result.
+func (b *Broker) List(ctx context.Context, orgID uuid.UUID) ([]Reference, error) {
+	if err := authz.RequireOrg(ctx, orgID); err != nil {
+		return nil, err
+	}
+	rows, err := b.pool.Query(ctx, `
+		SELECT name, environment FROM secrets.secret_values
+		WHERE org_id = $1 ORDER BY environment, name`, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("list secrets: %w", err)
+	}
+	defer rows.Close()
+
+	var out []Reference
+	for rows.Next() {
+		var r Reference
+		if err := rows.Scan(&r.Name, &r.Environment); err != nil {
+			return nil, fmt.Errorf("scan secret: %w", err)
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// LeaseRecord is one brokered credential as an operator sees it: which secret,
+// which run, and whether it is still live. The token itself is not here — only
+// its hash is stored, and even that is not returned.
+type LeaseRecord struct {
+	ID         uuid.UUID
+	SecretName string
+	RunID      uuid.UUID
+	State      string
+	ExpiresAt  time.Time
+}
+
+// ListLeases returns orgID's leases, newest first. State is derived rather
+// than stored: a lease is revoked, spent, expired, or issued, and deriving it
+// here means the four cannot disagree with the columns they come from.
+func (b *Broker) ListLeases(ctx context.Context, orgID uuid.UUID) ([]LeaseRecord, error) {
+	if err := authz.RequireOrg(ctx, orgID); err != nil {
+		return nil, err
+	}
+	rows, err := b.pool.Query(ctx, `
+		SELECT id, name, run_id, expires_at, revoked_at, redeemed_count
+		FROM secrets.secret_leases
+		WHERE org_id = $1 ORDER BY expires_at DESC`, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("list leases: %w", err)
+	}
+	defer rows.Close()
+
+	now := time.Now()
+	var out []LeaseRecord
+	for rows.Next() {
+		var (
+			l         LeaseRecord
+			revokedAt *time.Time
+			redeemed  int
+		)
+		if err := rows.Scan(&l.ID, &l.SecretName, &l.RunID, &l.ExpiresAt, &revokedAt, &redeemed); err != nil {
+			return nil, fmt.Errorf("scan lease: %w", err)
+		}
+		switch {
+		case revokedAt != nil:
+			l.State = "revoked"
+		case redeemed > 0:
+			l.State = "spent"
+		case l.ExpiresAt.Before(now):
+			l.State = "expired"
+		default:
+			l.State = "issued"
+		}
+		out = append(out, l)
+	}
+	return out, rows.Err()
 }

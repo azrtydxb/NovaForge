@@ -31,7 +31,52 @@ func addPlatformHandlers(
 	graph graphv1.GraphServiceClient,
 	gates gatesv1.GatesServiceClient,
 ) {
-	_ = gates
+	if gates != nil {
+		h["listSecrets"] = func(wr http.ResponseWriter, r *http.Request) {
+			resp, err := gates.ListSecrets(r.Context(), &gatesv1.ListSecretsRequest{})
+			if err != nil {
+				WriteError(wr, StatusFromGRPC(err), err)
+				return
+			}
+			out := make([]map[string]any, 0, len(resp.GetSecrets()))
+			for _, s := range resp.GetSecrets() {
+				out = append(out, map[string]any{
+					"name":        s.GetName(),
+					"environment": s.GetEnvironment(),
+				})
+			}
+			WriteJSON(wr, http.StatusOK, map[string]any{"secrets": out})
+		}
+
+		h["listLeases"] = func(wr http.ResponseWriter, r *http.Request) {
+			resp, err := gates.ListLeases(r.Context(), &gatesv1.ListLeasesRequest{})
+			if err != nil {
+				WriteError(wr, StatusFromGRPC(err), err)
+				return
+			}
+			out := make([]map[string]any, 0, len(resp.GetLeases()))
+			for _, l := range resp.GetLeases() {
+				out = append(out, map[string]any{
+					"id":          l.GetId(),
+					"secret_name": l.GetSecretName(),
+					"run_id":      l.GetRunId(),
+					"state":       l.GetState(),
+					"expires_at":  l.GetExpiresAt(),
+				})
+			}
+			WriteJSON(wr, http.StatusOK, map[string]any{"leases": out})
+		}
+
+		h["revokeLease"] = func(wr http.ResponseWriter, r *http.Request) {
+			if _, err := gates.RevokeLease(r.Context(), &gatesv1.RevokeLeaseRequest{
+				Id: chi.URLParam(r, "id"),
+			}); err != nil {
+				WriteError(wr, StatusFromGRPC(err), err)
+				return
+			}
+			WriteJSON(wr, http.StatusOK, map[string]any{"revoked": chi.URLParam(r, "id")})
+		}
+	}
 
 	h["approvalPolicy"] = func(wr http.ResponseWriter, r *http.Request) {
 		rules := approvals.Rules()

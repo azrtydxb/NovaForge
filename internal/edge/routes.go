@@ -83,6 +83,10 @@ func Routes() []Route {
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/graph/symbol", "getSymbolRelations", "A symbol and what it relates to"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/maintenance", "listMaintenanceProposals", "What the maintenance scanners proposed"},
 
+		{http.MethodGet, "/api/v1/orgs/{org}/secrets", "listSecrets", "Secrets registered for an organization, names only"},
+		{http.MethodGet, "/api/v1/orgs/{org}/leases", "listLeases", "Credentials currently brokered to runs"},
+		{http.MethodDelete, "/api/v1/orgs/{org}/leases/{id}", "revokeLease", "End a live lease immediately"},
+
 		{http.MethodGet, "/api/v1/approvals/policy", "approvalPolicy", "What the platform requires before each action"},
 		{http.MethodGet, "/api/v1/mcp/tools", "mcpTools", "The MCP tools this deployment exposes"},
 
