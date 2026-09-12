@@ -16,6 +16,7 @@ service ReviewsService {
   rpc GetExceptions(GetExceptionsRequest) returns (GetExceptionsResponse);
   rpc ListProof(ListProofRequest) returns (ListProofResponse);
   rpc MergeRun(MergeRunRequest) returns (MergeRunResponse);
+  rpc ListPlan(ListPlanRequest) returns (ListPlanResponse);
 }
 
 // Run mirrors a row in the reviews.runs table.
@@ -172,4 +173,21 @@ message MergeRunRequest {
 }
 message MergeRunResponse {
   string merge_sha = 1;
+}
+
+// PlanStep is one step of a run's plan — what it intended, shown next to what
+// it demonstrated.
+message PlanStep {
+  int32 ordinal = 1;
+  string text = 2;
+  string state = 3;
+}
+
+message ListPlanRequest {
+  string run_id = 1;
+  string repo_id = 2;
+  int32 number = 3;
+}
+message ListPlanResponse {
+  repeated PlanStep steps = 1;
 }

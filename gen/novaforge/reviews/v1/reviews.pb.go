@@ -1512,6 +1512,172 @@ func (x *MergeRunResponse) GetMergeSha() string {
 	return ""
 }
 
+// PlanStep is one step of a run's plan — what it intended, shown next to what
+// it demonstrated.
+type PlanStep struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ordinal       int32                  `protobuf:"varint,1,opt,name=ordinal,proto3" json:"ordinal,omitempty"`
+	Text          string                 `protobuf:"bytes,2,opt,name=text,proto3" json:"text,omitempty"`
+	State         string                 `protobuf:"bytes,3,opt,name=state,proto3" json:"state,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PlanStep) Reset() {
+	*x = PlanStep{}
+	mi := &file_novaforge_reviews_v1_reviews_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlanStep) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlanStep) ProtoMessage() {}
+
+func (x *PlanStep) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_reviews_v1_reviews_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlanStep.ProtoReflect.Descriptor instead.
+func (*PlanStep) Descriptor() ([]byte, []int) {
+	return file_novaforge_reviews_v1_reviews_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *PlanStep) GetOrdinal() int32 {
+	if x != nil {
+		return x.Ordinal
+	}
+	return 0
+}
+
+func (x *PlanStep) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *PlanStep) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+type ListPlanRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	RepoId        string                 `protobuf:"bytes,2,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	Number        int32                  `protobuf:"varint,3,opt,name=number,proto3" json:"number,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPlanRequest) Reset() {
+	*x = ListPlanRequest{}
+	mi := &file_novaforge_reviews_v1_reviews_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPlanRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPlanRequest) ProtoMessage() {}
+
+func (x *ListPlanRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_reviews_v1_reviews_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPlanRequest.ProtoReflect.Descriptor instead.
+func (*ListPlanRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_reviews_v1_reviews_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *ListPlanRequest) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *ListPlanRequest) GetRepoId() string {
+	if x != nil {
+		return x.RepoId
+	}
+	return ""
+}
+
+func (x *ListPlanRequest) GetNumber() int32 {
+	if x != nil {
+		return x.Number
+	}
+	return 0
+}
+
+type ListPlanResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Steps         []*PlanStep            `protobuf:"bytes,1,rep,name=steps,proto3" json:"steps,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPlanResponse) Reset() {
+	*x = ListPlanResponse{}
+	mi := &file_novaforge_reviews_v1_reviews_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPlanResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPlanResponse) ProtoMessage() {}
+
+func (x *ListPlanResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_reviews_v1_reviews_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPlanResponse.ProtoReflect.Descriptor instead.
+func (*ListPlanResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_reviews_v1_reviews_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *ListPlanResponse) GetSteps() []*PlanStep {
+	if x != nil {
+		return x.Steps
+	}
+	return nil
+}
+
 var File_novaforge_reviews_v1_reviews_proto protoreflect.FileDescriptor
 
 const file_novaforge_reviews_v1_reviews_proto_rawDesc = "" +
@@ -1635,7 +1801,17 @@ const file_novaforge_reviews_v1_reviews_proto_rawDesc = "" +
 	"\x06number\x18\x03 \x01(\x05R\x06number\x12\x16\n" +
 	"\x06method\x18\x04 \x01(\tR\x06method\"/\n" +
 	"\x10MergeRunResponse\x12\x1b\n" +
-	"\tmerge_sha\x18\x01 \x01(\tR\bmergeSha2\xd1\a\n" +
+	"\tmerge_sha\x18\x01 \x01(\tR\bmergeSha\"N\n" +
+	"\bPlanStep\x12\x18\n" +
+	"\aordinal\x18\x01 \x01(\x05R\aordinal\x12\x12\n" +
+	"\x04text\x18\x02 \x01(\tR\x04text\x12\x14\n" +
+	"\x05state\x18\x03 \x01(\tR\x05state\"Y\n" +
+	"\x0fListPlanRequest\x12\x15\n" +
+	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x17\n" +
+	"\arepo_id\x18\x02 \x01(\tR\x06repoId\x12\x16\n" +
+	"\x06number\x18\x03 \x01(\x05R\x06number\"H\n" +
+	"\x10ListPlanResponse\x124\n" +
+	"\x05steps\x18\x01 \x03(\v2\x1e.novaforge.reviews.v1.PlanStepR\x05steps2\xac\b\n" +
 	"\x0eReviewsService\x12\\\n" +
 	"\tCreateRun\x12&.novaforge.reviews.v1.CreateRunRequest\x1a'.novaforge.reviews.v1.CreateRunResponse\x12S\n" +
 	"\x06GetRun\x12#.novaforge.reviews.v1.GetRunRequest\x1a$.novaforge.reviews.v1.GetRunResponse\x12Y\n" +
@@ -1647,7 +1823,8 @@ const file_novaforge_reviews_v1_reviews_proto_rawDesc = "" +
 	"AddComment\x12'.novaforge.reviews.v1.AddCommentRequest\x1a(.novaforge.reviews.v1.AddCommentResponse\x12h\n" +
 	"\rGetExceptions\x12*.novaforge.reviews.v1.GetExceptionsRequest\x1a+.novaforge.reviews.v1.GetExceptionsResponse\x12\\\n" +
 	"\tListProof\x12&.novaforge.reviews.v1.ListProofRequest\x1a'.novaforge.reviews.v1.ListProofResponse\x12Y\n" +
-	"\bMergeRun\x12%.novaforge.reviews.v1.MergeRunRequest\x1a&.novaforge.reviews.v1.MergeRunResponseB\xdd\x01\n" +
+	"\bMergeRun\x12%.novaforge.reviews.v1.MergeRunRequest\x1a&.novaforge.reviews.v1.MergeRunResponse\x12Y\n" +
+	"\bListPlan\x12%.novaforge.reviews.v1.ListPlanRequest\x1a&.novaforge.reviews.v1.ListPlanResponseB\xdd\x01\n" +
 	"\x18com.novaforge.reviews.v1B\fReviewsProtoP\x01ZAgithub.com/novaforge/novaforge/gen/novaforge/reviews/v1;reviewsv1\xa2\x02\x03NRX\xaa\x02\x14Novaforge.Reviews.V1\xca\x02\x14Novaforge\\Reviews\\V1\xe2\x02 Novaforge\\Reviews\\V1\\GPBMetadata\xea\x02\x16Novaforge::Reviews::V1b\x06proto3"
 
 var (
@@ -1662,7 +1839,7 @@ func file_novaforge_reviews_v1_reviews_proto_rawDescGZIP() []byte {
 	return file_novaforge_reviews_v1_reviews_proto_rawDescData
 }
 
-var file_novaforge_reviews_v1_reviews_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
+var file_novaforge_reviews_v1_reviews_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
 var file_novaforge_reviews_v1_reviews_proto_goTypes = []any{
 	(*Run)(nil),                   // 0: novaforge.reviews.v1.Run
 	(*CreateRunRequest)(nil),      // 1: novaforge.reviews.v1.CreateRunRequest
@@ -1688,6 +1865,9 @@ var file_novaforge_reviews_v1_reviews_proto_goTypes = []any{
 	(*ListProofResponse)(nil),     // 21: novaforge.reviews.v1.ListProofResponse
 	(*MergeRunRequest)(nil),       // 22: novaforge.reviews.v1.MergeRunRequest
 	(*MergeRunResponse)(nil),      // 23: novaforge.reviews.v1.MergeRunResponse
+	(*PlanStep)(nil),              // 24: novaforge.reviews.v1.PlanStep
+	(*ListPlanRequest)(nil),       // 25: novaforge.reviews.v1.ListPlanRequest
+	(*ListPlanResponse)(nil),      // 26: novaforge.reviews.v1.ListPlanResponse
 }
 var file_novaforge_reviews_v1_reviews_proto_depIdxs = []int32{
 	0,  // 0: novaforge.reviews.v1.CreateRunResponse.run:type_name -> novaforge.reviews.v1.Run
@@ -1696,31 +1876,34 @@ var file_novaforge_reviews_v1_reviews_proto_depIdxs = []int32{
 	15, // 3: novaforge.reviews.v1.GetExceptionsResponse.summary:type_name -> novaforge.reviews.v1.ExceptionSummary
 	16, // 4: novaforge.reviews.v1.GetExceptionsResponse.items:type_name -> novaforge.reviews.v1.ExceptionItem
 	19, // 5: novaforge.reviews.v1.ListProofResponse.proof:type_name -> novaforge.reviews.v1.ProofRecord
-	1,  // 6: novaforge.reviews.v1.ReviewsService.CreateRun:input_type -> novaforge.reviews.v1.CreateRunRequest
-	3,  // 7: novaforge.reviews.v1.ReviewsService.GetRun:input_type -> novaforge.reviews.v1.GetRunRequest
-	5,  // 8: novaforge.reviews.v1.ReviewsService.ListRuns:input_type -> novaforge.reviews.v1.ListRunsRequest
-	7,  // 9: novaforge.reviews.v1.ReviewsService.AddPlanStep:input_type -> novaforge.reviews.v1.AddPlanStepRequest
-	9,  // 10: novaforge.reviews.v1.ReviewsService.RecordProof:input_type -> novaforge.reviews.v1.RecordProofRequest
-	11, // 11: novaforge.reviews.v1.ReviewsService.SubmitReview:input_type -> novaforge.reviews.v1.SubmitReviewRequest
-	13, // 12: novaforge.reviews.v1.ReviewsService.AddComment:input_type -> novaforge.reviews.v1.AddCommentRequest
-	17, // 13: novaforge.reviews.v1.ReviewsService.GetExceptions:input_type -> novaforge.reviews.v1.GetExceptionsRequest
-	20, // 14: novaforge.reviews.v1.ReviewsService.ListProof:input_type -> novaforge.reviews.v1.ListProofRequest
-	22, // 15: novaforge.reviews.v1.ReviewsService.MergeRun:input_type -> novaforge.reviews.v1.MergeRunRequest
-	2,  // 16: novaforge.reviews.v1.ReviewsService.CreateRun:output_type -> novaforge.reviews.v1.CreateRunResponse
-	4,  // 17: novaforge.reviews.v1.ReviewsService.GetRun:output_type -> novaforge.reviews.v1.GetRunResponse
-	6,  // 18: novaforge.reviews.v1.ReviewsService.ListRuns:output_type -> novaforge.reviews.v1.ListRunsResponse
-	8,  // 19: novaforge.reviews.v1.ReviewsService.AddPlanStep:output_type -> novaforge.reviews.v1.AddPlanStepResponse
-	10, // 20: novaforge.reviews.v1.ReviewsService.RecordProof:output_type -> novaforge.reviews.v1.RecordProofResponse
-	12, // 21: novaforge.reviews.v1.ReviewsService.SubmitReview:output_type -> novaforge.reviews.v1.SubmitReviewResponse
-	14, // 22: novaforge.reviews.v1.ReviewsService.AddComment:output_type -> novaforge.reviews.v1.AddCommentResponse
-	18, // 23: novaforge.reviews.v1.ReviewsService.GetExceptions:output_type -> novaforge.reviews.v1.GetExceptionsResponse
-	21, // 24: novaforge.reviews.v1.ReviewsService.ListProof:output_type -> novaforge.reviews.v1.ListProofResponse
-	23, // 25: novaforge.reviews.v1.ReviewsService.MergeRun:output_type -> novaforge.reviews.v1.MergeRunResponse
-	16, // [16:26] is the sub-list for method output_type
-	6,  // [6:16] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	24, // 6: novaforge.reviews.v1.ListPlanResponse.steps:type_name -> novaforge.reviews.v1.PlanStep
+	1,  // 7: novaforge.reviews.v1.ReviewsService.CreateRun:input_type -> novaforge.reviews.v1.CreateRunRequest
+	3,  // 8: novaforge.reviews.v1.ReviewsService.GetRun:input_type -> novaforge.reviews.v1.GetRunRequest
+	5,  // 9: novaforge.reviews.v1.ReviewsService.ListRuns:input_type -> novaforge.reviews.v1.ListRunsRequest
+	7,  // 10: novaforge.reviews.v1.ReviewsService.AddPlanStep:input_type -> novaforge.reviews.v1.AddPlanStepRequest
+	9,  // 11: novaforge.reviews.v1.ReviewsService.RecordProof:input_type -> novaforge.reviews.v1.RecordProofRequest
+	11, // 12: novaforge.reviews.v1.ReviewsService.SubmitReview:input_type -> novaforge.reviews.v1.SubmitReviewRequest
+	13, // 13: novaforge.reviews.v1.ReviewsService.AddComment:input_type -> novaforge.reviews.v1.AddCommentRequest
+	17, // 14: novaforge.reviews.v1.ReviewsService.GetExceptions:input_type -> novaforge.reviews.v1.GetExceptionsRequest
+	20, // 15: novaforge.reviews.v1.ReviewsService.ListProof:input_type -> novaforge.reviews.v1.ListProofRequest
+	22, // 16: novaforge.reviews.v1.ReviewsService.MergeRun:input_type -> novaforge.reviews.v1.MergeRunRequest
+	25, // 17: novaforge.reviews.v1.ReviewsService.ListPlan:input_type -> novaforge.reviews.v1.ListPlanRequest
+	2,  // 18: novaforge.reviews.v1.ReviewsService.CreateRun:output_type -> novaforge.reviews.v1.CreateRunResponse
+	4,  // 19: novaforge.reviews.v1.ReviewsService.GetRun:output_type -> novaforge.reviews.v1.GetRunResponse
+	6,  // 20: novaforge.reviews.v1.ReviewsService.ListRuns:output_type -> novaforge.reviews.v1.ListRunsResponse
+	8,  // 21: novaforge.reviews.v1.ReviewsService.AddPlanStep:output_type -> novaforge.reviews.v1.AddPlanStepResponse
+	10, // 22: novaforge.reviews.v1.ReviewsService.RecordProof:output_type -> novaforge.reviews.v1.RecordProofResponse
+	12, // 23: novaforge.reviews.v1.ReviewsService.SubmitReview:output_type -> novaforge.reviews.v1.SubmitReviewResponse
+	14, // 24: novaforge.reviews.v1.ReviewsService.AddComment:output_type -> novaforge.reviews.v1.AddCommentResponse
+	18, // 25: novaforge.reviews.v1.ReviewsService.GetExceptions:output_type -> novaforge.reviews.v1.GetExceptionsResponse
+	21, // 26: novaforge.reviews.v1.ReviewsService.ListProof:output_type -> novaforge.reviews.v1.ListProofResponse
+	23, // 27: novaforge.reviews.v1.ReviewsService.MergeRun:output_type -> novaforge.reviews.v1.MergeRunResponse
+	26, // 28: novaforge.reviews.v1.ReviewsService.ListPlan:output_type -> novaforge.reviews.v1.ListPlanResponse
+	18, // [18:29] is the sub-list for method output_type
+	7,  // [7:18] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_novaforge_reviews_v1_reviews_proto_init() }
@@ -1734,7 +1917,7 @@ func file_novaforge_reviews_v1_reviews_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_novaforge_reviews_v1_reviews_proto_rawDesc), len(file_novaforge_reviews_v1_reviews_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   24,
+			NumMessages:   27,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

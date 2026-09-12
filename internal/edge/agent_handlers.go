@@ -3,12 +3,14 @@ package edge
 import (
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 
 	agentsv1 "github.com/novaforge/novaforge/gen/novaforge/agents/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
+	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
 )
 
 // addAgentHandlers mounts the agent surface. Without these an agent could
@@ -105,6 +107,28 @@ func addAgentHandlers(h map[string]http.HandlerFunc, g gitv1.GitServiceClient, a
 		WriteJSON(wr, http.StatusCreated, agentRunJSON(resp.GetRun()))
 	}
 
+	h["agentStats"] = func(wr http.ResponseWriter, r *http.Request) {
+		resp, err := a.ListStats(r.Context(), &agentsv1.ListStatsRequest{})
+		if err != nil {
+			WriteError(wr, StatusFromGRPC(err), err)
+			return
+		}
+		out := make([]map[string]any, 0, len(resp.GetStats()))
+		for _, s := range resp.GetStats() {
+			out = append(out, map[string]any{
+				"agent_id":    s.GetAgentId(),
+				"runs":        s.GetRuns(),
+				"succeeded":   s.GetSucceeded(),
+				"failed":      s.GetFailed(),
+				"over_budget": s.GetOverBudget(),
+				"running":     s.GetRunning(),
+				"tokens_used": s.GetTokensUsed(),
+				"token_limit": s.GetTokenLimit(),
+			})
+		}
+		WriteJSON(wr, http.StatusOK, map[string]any{"stats": out})
+	}
+
 	h["getAgentRun"] = func(wr http.ResponseWriter, r *http.Request) {
 		resp, err := a.GetRun(r.Context(), &agentsv1.GetRunRequest{Id: chi.URLParam(r, "id")})
 		if err != nil {
@@ -180,4 +204,78 @@ func resolveCaller(r *http.Request, id identityv1.IdentityServiceClient) string 
 		return s.GetUserId()
 	}
 	return ""
+}
+
+// addRunToolHandlers mounts the tool-call history of the agent run behind an
+// Engineering Run. It needs both services: a run names a Work Item, and the
+// agent runs — with their audited tool calls — are keyed on that Work Item.
+// Neither service can answer this alone, which is why the edge joins them.
+func addRunToolHandlers(
+	h map[string]http.HandlerFunc,
+	g gitv1.GitServiceClient,
+	rv reviewsv1.ReviewsServiceClient,
+	a agentsv1.AgentServiceClient,
+) {
+	if rv == nil || a == nil {
+		return
+	}
+
+	h["getRunToolCalls"] = func(wr http.ResponseWriter, r *http.Request) {
+		n, err := strconv.Atoi(chi.URLParam(r, "number"))
+		if err != nil {
+			WriteError(wr, http.StatusBadRequest, err)
+			return
+		}
+		repo, err := g.GetRepo(r.Context(), &gitv1.GetRepoRequest{Name: chi.URLParam(r, "repo")})
+		if err != nil {
+			WriteError(wr, StatusFromGRPC(err), err)
+			return
+		}
+		run, err := rv.GetRun(r.Context(), &reviewsv1.GetRunRequest{
+			RepoId: repo.GetRepo().GetId(), Number: int32(n),
+		})
+		if err != nil {
+			WriteError(wr, StatusFromGRPC(err), err)
+			return
+		}
+		workItemID := run.GetRun().GetWorkItemId()
+		if workItemID == "" {
+			// A run opened by a person carries no Work Item and therefore no
+			// agent run; saying so beats an empty list that reads as "the
+			// agent did nothing".
+			WriteJSON(wr, http.StatusOK, map[string]any{
+				"calls": []map[string]any{},
+				"note":  "this run carries no Work Item, so no agent run is associated with it",
+			})
+			return
+		}
+
+		runs, err := a.ListRunsForWorkItem(r.Context(),
+			&agentsv1.ListRunsForWorkItemRequest{WorkItemId: workItemID})
+		if err != nil {
+			WriteError(wr, StatusFromGRPC(err), err)
+			return
+		}
+
+		// Every agent run against the Work Item contributed to this change,
+		// so all of their calls are shown, newest run first.
+		out := make([]map[string]any, 0)
+		for _, id := range runs.GetRunIds() {
+			calls, err := a.ListToolCalls(r.Context(), &agentsv1.ListToolCallsRequest{RunId: id})
+			if err != nil {
+				WriteError(wr, StatusFromGRPC(err), err)
+				return
+			}
+			for _, c := range calls.GetCalls() {
+				out = append(out, map[string]any{
+					"tool":       c.GetTool(),
+					"args":       c.GetArgs(),
+					"outcome":    c.GetOutcome(),
+					"error":      c.GetError(),
+					"started_at": c.GetStartedAt(),
+				})
+			}
+		}
+		WriteJSON(wr, http.StatusOK, map[string]any{"calls": out})
+	}
 }

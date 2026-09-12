@@ -303,6 +303,35 @@ func addWorkHandlers(h map[string]http.HandlerFunc, g gitv1.GitServiceClient, w 
 			WriteJSON(wr, http.StatusOK, map[string]any{"merge_sha": resp.GetMergeSha()})
 		}
 
+		h["getRunPlan"] = func(wr http.ResponseWriter, r *http.Request) {
+			n, err := strconv.Atoi(chi.URLParam(r, "number"))
+			if err != nil {
+				WriteError(wr, http.StatusBadRequest, err)
+				return
+			}
+			rid, err := repoID(r)
+			if err != nil {
+				WriteError(wr, StatusFromGRPC(err), err)
+				return
+			}
+			resp, err := rv.ListPlan(r.Context(), &reviewsv1.ListPlanRequest{
+				RepoId: rid, Number: int32(n),
+			})
+			if err != nil {
+				WriteError(wr, StatusFromGRPC(err), err)
+				return
+			}
+			out := make([]map[string]any, 0, len(resp.GetSteps()))
+			for _, s := range resp.GetSteps() {
+				out = append(out, map[string]any{
+					"ordinal": s.GetOrdinal(),
+					"text":    s.GetText(),
+					"state":   s.GetState(),
+				})
+			}
+			WriteJSON(wr, http.StatusOK, map[string]any{"steps": out})
+		}
+
 		h["submitReview"] = func(wr http.ResponseWriter, r *http.Request) {
 			n, err := strconv.Atoi(chi.URLParam(r, "number"))
 			if err != nil {

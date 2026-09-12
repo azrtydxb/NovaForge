@@ -29,6 +29,7 @@ const (
 	ReviewsService_GetExceptions_FullMethodName = "/novaforge.reviews.v1.ReviewsService/GetExceptions"
 	ReviewsService_ListProof_FullMethodName     = "/novaforge.reviews.v1.ReviewsService/ListProof"
 	ReviewsService_MergeRun_FullMethodName      = "/novaforge.reviews.v1.ReviewsService/MergeRun"
+	ReviewsService_ListPlan_FullMethodName      = "/novaforge.reviews.v1.ReviewsService/ListPlan"
 )
 
 // ReviewsServiceClient is the client API for ReviewsService service.
@@ -49,6 +50,7 @@ type ReviewsServiceClient interface {
 	GetExceptions(ctx context.Context, in *GetExceptionsRequest, opts ...grpc.CallOption) (*GetExceptionsResponse, error)
 	ListProof(ctx context.Context, in *ListProofRequest, opts ...grpc.CallOption) (*ListProofResponse, error)
 	MergeRun(ctx context.Context, in *MergeRunRequest, opts ...grpc.CallOption) (*MergeRunResponse, error)
+	ListPlan(ctx context.Context, in *ListPlanRequest, opts ...grpc.CallOption) (*ListPlanResponse, error)
 }
 
 type reviewsServiceClient struct {
@@ -159,6 +161,16 @@ func (c *reviewsServiceClient) MergeRun(ctx context.Context, in *MergeRunRequest
 	return out, nil
 }
 
+func (c *reviewsServiceClient) ListPlan(ctx context.Context, in *ListPlanRequest, opts ...grpc.CallOption) (*ListPlanResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPlanResponse)
+	err := c.cc.Invoke(ctx, ReviewsService_ListPlan_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ReviewsServiceServer is the server API for ReviewsService service.
 // All implementations should embed UnimplementedReviewsServiceServer
 // for forward compatibility.
@@ -177,6 +189,7 @@ type ReviewsServiceServer interface {
 	GetExceptions(context.Context, *GetExceptionsRequest) (*GetExceptionsResponse, error)
 	ListProof(context.Context, *ListProofRequest) (*ListProofResponse, error)
 	MergeRun(context.Context, *MergeRunRequest) (*MergeRunResponse, error)
+	ListPlan(context.Context, *ListPlanRequest) (*ListPlanResponse, error)
 }
 
 // UnimplementedReviewsServiceServer should be embedded to have
@@ -215,6 +228,9 @@ func (UnimplementedReviewsServiceServer) ListProof(context.Context, *ListProofRe
 }
 func (UnimplementedReviewsServiceServer) MergeRun(context.Context, *MergeRunRequest) (*MergeRunResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method MergeRun not implemented")
+}
+func (UnimplementedReviewsServiceServer) ListPlan(context.Context, *ListPlanRequest) (*ListPlanResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListPlan not implemented")
 }
 func (UnimplementedReviewsServiceServer) testEmbeddedByValue() {}
 
@@ -416,6 +432,24 @@ func _ReviewsService_MergeRun_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ReviewsService_ListPlan_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPlanRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReviewsServiceServer).ListPlan(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ReviewsService_ListPlan_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReviewsServiceServer).ListPlan(ctx, req.(*ListPlanRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ReviewsService_ServiceDesc is the grpc.ServiceDesc for ReviewsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -462,6 +496,10 @@ var ReviewsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "MergeRun",
 			Handler:    _ReviewsService_MergeRun_Handler,
+		},
+		{
+			MethodName: "ListPlan",
+			Handler:    _ReviewsService_ListPlan_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

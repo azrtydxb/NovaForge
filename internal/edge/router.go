@@ -56,6 +56,12 @@ func NewRouter(cfg Config) http.Handler {
 		}
 		r.Method(rt.Method, rt.Pattern, authenticate(cfg, h))
 	}
+	// Everything that is not a declared API route is the web application:
+	// the app routes client-side, so a deep link reaches the server as a path
+	// it has no route for. Registering it as the not-found handler means no
+	// application path can shadow an API route.
+	r.NotFound(WebHandler().ServeHTTP)
+
 	return r
 }
 

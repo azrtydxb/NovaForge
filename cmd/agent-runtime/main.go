@@ -180,6 +180,7 @@ func main() {
 
 	execute := newExecuteFunc(store, grants, audit, provisioner, gitClient, graphClient, workClient, reviewsClient, ciClient, cfg)
 	grpcServer := agents.NewGRPCServer(store, grants, rdb, workClient, execute)
+	grpcServer.Audit = audit
 
 	// Callers are resolved the same way every other service resolves them:
 	// a person's credential through identity, or a platform service token
@@ -322,6 +323,7 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 		}, audit)
 
 		loop := agentrun.NewLoop(model, budget, audit)
+		loop.Runs = store
 		providerOptions, poErr := agentrun.ParseProviderOptions(cfg.AIProviderOptions)
 		if poErr != nil {
 			log.Printf("agent-runtime: %v", poErr)

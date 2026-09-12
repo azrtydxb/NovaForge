@@ -349,3 +349,26 @@ func (s *Store) SubmitReview(ctx context.Context, runID, reviewerID uuid.UUID, r
 	}
 	return nil
 }
+
+// ListPlanSteps returns runID's plan in order. A run presents its plan
+// alongside its proof: what it intended, next to what it demonstrated.
+func (s *Store) ListPlanSteps(ctx context.Context, runID uuid.UUID) ([]PlanStep, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT run_id, ordinal, text, state
+		FROM reviews.run_plan_steps WHERE run_id = $1 ORDER BY ordinal`,
+		runID)
+	if err != nil {
+		return nil, fmt.Errorf("list plan steps: %w", err)
+	}
+	defer rows.Close()
+
+	var out []PlanStep
+	for rows.Next() {
+		var p PlanStep
+		if err := rows.Scan(&p.RunID, &p.Ordinal, &p.Text, &p.State); err != nil {
+			return nil, fmt.Errorf("scan plan step: %w", err)
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}

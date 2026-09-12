@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/google/uuid"
@@ -42,6 +43,9 @@ type Loop struct {
 	// model server (see ParseProviderOptions), merged into every call this
 	// loop makes.
 	ProviderOptions map[string]any
+
+	// Runs, when non-nil, receives the run's token spend when it finishes.
+	Runs *agents.Store
 }
 
 // NewLoop builds a Loop bound to model and budget, persisting its final
@@ -167,6 +171,14 @@ func toolResultMessage(call provider.ToolCallPart, result []byte, callErr error)
 // to model reasoning, only the state string and summary text the caller
 // (or the model's own final text, on natural completion) supplied.
 func (l *Loop) finish(ctx context.Context, run agents.Run, state string, steps int, tokensUsed int64, summary string) (Result, error) {
+	// What the run spent is recorded before anything else: the budget was
+	// enforced in memory, and without this the number is gone the moment the
+	// process moves on.
+	if l.Runs != nil {
+		if err := l.Runs.RecordSpend(ctx, run.ID, tokensUsed); err != nil {
+			log.Printf("agentrun: record spend for run %s: %v", run.ID, err)
+		}
+	}
 	if l.Audit != nil {
 		argsJSON, err := json.Marshal(map[string]string{"state": state, "summary": summary})
 		if err == nil {

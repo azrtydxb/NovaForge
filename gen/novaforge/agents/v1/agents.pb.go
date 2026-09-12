@@ -949,10 +949,17 @@ func (x *StateChange) GetToState() string {
 	return ""
 }
 
+// ToolCall is one tool call an agent run made — carried live on the run
+// event stream, and read back afterwards from the audit log. The later
+// fields are empty on a live event, which reports a call as it happens
+// rather than a completed record of one.
 type ToolCall struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Tool          string                 `protobuf:"bytes,1,opt,name=tool,proto3" json:"tool,omitempty"`
 	Outcome       string                 `protobuf:"bytes,2,opt,name=outcome,proto3" json:"outcome,omitempty"`
+	Args          string                 `protobuf:"bytes,3,opt,name=args,proto3" json:"args,omitempty"`
+	Error         string                 `protobuf:"bytes,4,opt,name=error,proto3" json:"error,omitempty"`
+	StartedAt     string                 `protobuf:"bytes,5,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -999,6 +1006,385 @@ func (x *ToolCall) GetOutcome() string {
 		return x.Outcome
 	}
 	return ""
+}
+
+func (x *ToolCall) GetArgs() string {
+	if x != nil {
+		return x.Args
+	}
+	return ""
+}
+
+func (x *ToolCall) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+func (x *ToolCall) GetStartedAt() string {
+	if x != nil {
+		return x.StartedAt
+	}
+	return ""
+}
+
+// AgentStats is one agent's run history: how many runs it started, how they
+// ended, and what they spent.
+type AgentStats struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	Runs          int32                  `protobuf:"varint,2,opt,name=runs,proto3" json:"runs,omitempty"`
+	Succeeded     int32                  `protobuf:"varint,3,opt,name=succeeded,proto3" json:"succeeded,omitempty"`
+	Failed        int32                  `protobuf:"varint,4,opt,name=failed,proto3" json:"failed,omitempty"`
+	OverBudget    int32                  `protobuf:"varint,5,opt,name=over_budget,json=overBudget,proto3" json:"over_budget,omitempty"`
+	Running       int32                  `protobuf:"varint,6,opt,name=running,proto3" json:"running,omitempty"`
+	TokensUsed    int64                  `protobuf:"varint,7,opt,name=tokens_used,json=tokensUsed,proto3" json:"tokens_used,omitempty"`
+	TokenLimit    int64                  `protobuf:"varint,8,opt,name=token_limit,json=tokenLimit,proto3" json:"token_limit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AgentStats) Reset() {
+	*x = AgentStats{}
+	mi := &file_novaforge_agents_v1_agents_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AgentStats) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AgentStats) ProtoMessage() {}
+
+func (x *AgentStats) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_agents_v1_agents_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AgentStats.ProtoReflect.Descriptor instead.
+func (*AgentStats) Descriptor() ([]byte, []int) {
+	return file_novaforge_agents_v1_agents_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *AgentStats) GetAgentId() string {
+	if x != nil {
+		return x.AgentId
+	}
+	return ""
+}
+
+func (x *AgentStats) GetRuns() int32 {
+	if x != nil {
+		return x.Runs
+	}
+	return 0
+}
+
+func (x *AgentStats) GetSucceeded() int32 {
+	if x != nil {
+		return x.Succeeded
+	}
+	return 0
+}
+
+func (x *AgentStats) GetFailed() int32 {
+	if x != nil {
+		return x.Failed
+	}
+	return 0
+}
+
+func (x *AgentStats) GetOverBudget() int32 {
+	if x != nil {
+		return x.OverBudget
+	}
+	return 0
+}
+
+func (x *AgentStats) GetRunning() int32 {
+	if x != nil {
+		return x.Running
+	}
+	return 0
+}
+
+func (x *AgentStats) GetTokensUsed() int64 {
+	if x != nil {
+		return x.TokensUsed
+	}
+	return 0
+}
+
+func (x *AgentStats) GetTokenLimit() int64 {
+	if x != nil {
+		return x.TokenLimit
+	}
+	return 0
+}
+
+type ListStatsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListStatsRequest) Reset() {
+	*x = ListStatsRequest{}
+	mi := &file_novaforge_agents_v1_agents_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListStatsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListStatsRequest) ProtoMessage() {}
+
+func (x *ListStatsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_agents_v1_agents_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListStatsRequest.ProtoReflect.Descriptor instead.
+func (*ListStatsRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_agents_v1_agents_proto_rawDescGZIP(), []int{17}
+}
+
+type ListStatsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Stats         []*AgentStats          `protobuf:"bytes,1,rep,name=stats,proto3" json:"stats,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListStatsResponse) Reset() {
+	*x = ListStatsResponse{}
+	mi := &file_novaforge_agents_v1_agents_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListStatsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListStatsResponse) ProtoMessage() {}
+
+func (x *ListStatsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_agents_v1_agents_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListStatsResponse.ProtoReflect.Descriptor instead.
+func (*ListStatsResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_agents_v1_agents_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *ListStatsResponse) GetStats() []*AgentStats {
+	if x != nil {
+		return x.Stats
+	}
+	return nil
+}
+
+type ListToolCallsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListToolCallsRequest) Reset() {
+	*x = ListToolCallsRequest{}
+	mi := &file_novaforge_agents_v1_agents_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListToolCallsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListToolCallsRequest) ProtoMessage() {}
+
+func (x *ListToolCallsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_agents_v1_agents_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListToolCallsRequest.ProtoReflect.Descriptor instead.
+func (*ListToolCallsRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_agents_v1_agents_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *ListToolCallsRequest) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+type ListToolCallsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Calls         []*ToolCall            `protobuf:"bytes,1,rep,name=calls,proto3" json:"calls,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListToolCallsResponse) Reset() {
+	*x = ListToolCallsResponse{}
+	mi := &file_novaforge_agents_v1_agents_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListToolCallsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListToolCallsResponse) ProtoMessage() {}
+
+func (x *ListToolCallsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_agents_v1_agents_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListToolCallsResponse.ProtoReflect.Descriptor instead.
+func (*ListToolCallsResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_agents_v1_agents_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *ListToolCallsResponse) GetCalls() []*ToolCall {
+	if x != nil {
+		return x.Calls
+	}
+	return nil
+}
+
+type ListRunsForWorkItemRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	WorkItemId    string                 `protobuf:"bytes,1,opt,name=work_item_id,json=workItemId,proto3" json:"work_item_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListRunsForWorkItemRequest) Reset() {
+	*x = ListRunsForWorkItemRequest{}
+	mi := &file_novaforge_agents_v1_agents_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListRunsForWorkItemRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListRunsForWorkItemRequest) ProtoMessage() {}
+
+func (x *ListRunsForWorkItemRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_agents_v1_agents_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListRunsForWorkItemRequest.ProtoReflect.Descriptor instead.
+func (*ListRunsForWorkItemRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_agents_v1_agents_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *ListRunsForWorkItemRequest) GetWorkItemId() string {
+	if x != nil {
+		return x.WorkItemId
+	}
+	return ""
+}
+
+type ListRunsForWorkItemResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RunIds        []string               `protobuf:"bytes,1,rep,name=run_ids,json=runIds,proto3" json:"run_ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListRunsForWorkItemResponse) Reset() {
+	*x = ListRunsForWorkItemResponse{}
+	mi := &file_novaforge_agents_v1_agents_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListRunsForWorkItemResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListRunsForWorkItemResponse) ProtoMessage() {}
+
+func (x *ListRunsForWorkItemResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_agents_v1_agents_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListRunsForWorkItemResponse.ProtoReflect.Descriptor instead.
+func (*ListRunsForWorkItemResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_agents_v1_agents_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *ListRunsForWorkItemResponse) GetRunIds() []string {
+	if x != nil {
+		return x.RunIds
+	}
+	return nil
 }
 
 var File_novaforge_agents_v1_agents_proto protoreflect.FileDescriptor
@@ -1073,10 +1459,39 @@ const file_novaforge_agents_v1_agents_proto_rawDesc = "" +
 	"\vStateChange\x12\x1d\n" +
 	"\n" +
 	"from_state\x18\x01 \x01(\tR\tfromState\x12\x19\n" +
-	"\bto_state\x18\x02 \x01(\tR\atoState\"8\n" +
+	"\bto_state\x18\x02 \x01(\tR\atoState\"\x81\x01\n" +
 	"\bToolCall\x12\x12\n" +
 	"\x04tool\x18\x01 \x01(\tR\x04tool\x12\x18\n" +
-	"\aoutcome\x18\x02 \x01(\tR\aoutcome2\xc7\x04\n" +
+	"\aoutcome\x18\x02 \x01(\tR\aoutcome\x12\x12\n" +
+	"\x04args\x18\x03 \x01(\tR\x04args\x12\x14\n" +
+	"\x05error\x18\x04 \x01(\tR\x05error\x12\x1d\n" +
+	"\n" +
+	"started_at\x18\x05 \x01(\tR\tstartedAt\"\xee\x01\n" +
+	"\n" +
+	"AgentStats\x12\x19\n" +
+	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x12\n" +
+	"\x04runs\x18\x02 \x01(\x05R\x04runs\x12\x1c\n" +
+	"\tsucceeded\x18\x03 \x01(\x05R\tsucceeded\x12\x16\n" +
+	"\x06failed\x18\x04 \x01(\x05R\x06failed\x12\x1f\n" +
+	"\vover_budget\x18\x05 \x01(\x05R\n" +
+	"overBudget\x12\x18\n" +
+	"\arunning\x18\x06 \x01(\x05R\arunning\x12\x1f\n" +
+	"\vtokens_used\x18\a \x01(\x03R\n" +
+	"tokensUsed\x12\x1f\n" +
+	"\vtoken_limit\x18\b \x01(\x03R\n" +
+	"tokenLimit\"\x12\n" +
+	"\x10ListStatsRequest\"J\n" +
+	"\x11ListStatsResponse\x125\n" +
+	"\x05stats\x18\x01 \x03(\v2\x1f.novaforge.agents.v1.AgentStatsR\x05stats\"-\n" +
+	"\x14ListToolCallsRequest\x12\x15\n" +
+	"\x06run_id\x18\x01 \x01(\tR\x05runId\"L\n" +
+	"\x15ListToolCallsResponse\x123\n" +
+	"\x05calls\x18\x01 \x03(\v2\x1d.novaforge.agents.v1.ToolCallR\x05calls\">\n" +
+	"\x1aListRunsForWorkItemRequest\x12 \n" +
+	"\fwork_item_id\x18\x01 \x01(\tR\n" +
+	"workItemId\"6\n" +
+	"\x1bListRunsForWorkItemResponse\x12\x17\n" +
+	"\arun_ids\x18\x01 \x03(\tR\x06runIds2\x85\a\n" +
 	"\fAgentService\x12`\n" +
 	"\vCreateAgent\x12'.novaforge.agents.v1.CreateAgentRequest\x1a(.novaforge.agents.v1.CreateAgentResponse\x12]\n" +
 	"\n" +
@@ -1084,7 +1499,10 @@ const file_novaforge_agents_v1_agents_proto_rawDesc = "" +
 	"\bStartRun\x12$.novaforge.agents.v1.StartRunRequest\x1a%.novaforge.agents.v1.StartRunResponse\x12Q\n" +
 	"\x06GetRun\x12\".novaforge.agents.v1.GetRunRequest\x1a#.novaforge.agents.v1.GetRunResponse\x12Z\n" +
 	"\tCancelRun\x12%.novaforge.agents.v1.CancelRunRequest\x1a&.novaforge.agents.v1.CancelRunResponse\x12n\n" +
-	"\x0fStreamRunEvents\x12+.novaforge.agents.v1.StreamRunEventsRequest\x1a,.novaforge.agents.v1.StreamRunEventsResponse0\x01B\xd5\x01\n" +
+	"\x0fStreamRunEvents\x12+.novaforge.agents.v1.StreamRunEventsRequest\x1a,.novaforge.agents.v1.StreamRunEventsResponse0\x01\x12Z\n" +
+	"\tListStats\x12%.novaforge.agents.v1.ListStatsRequest\x1a&.novaforge.agents.v1.ListStatsResponse\x12f\n" +
+	"\rListToolCalls\x12).novaforge.agents.v1.ListToolCallsRequest\x1a*.novaforge.agents.v1.ListToolCallsResponse\x12x\n" +
+	"\x13ListRunsForWorkItem\x12/.novaforge.agents.v1.ListRunsForWorkItemRequest\x1a0.novaforge.agents.v1.ListRunsForWorkItemResponseB\xd5\x01\n" +
 	"\x17com.novaforge.agents.v1B\vAgentsProtoP\x01Z?github.com/novaforge/novaforge/gen/novaforge/agents/v1;agentsv1\xa2\x02\x03NAX\xaa\x02\x13Novaforge.Agents.V1\xca\x02\x13Novaforge\\Agents\\V1\xe2\x02\x1fNovaforge\\Agents\\V1\\GPBMetadata\xea\x02\x15Novaforge::Agents::V1b\x06proto3"
 
 var (
@@ -1099,24 +1517,31 @@ func file_novaforge_agents_v1_agents_proto_rawDescGZIP() []byte {
 	return file_novaforge_agents_v1_agents_proto_rawDescData
 }
 
-var file_novaforge_agents_v1_agents_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_novaforge_agents_v1_agents_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
 var file_novaforge_agents_v1_agents_proto_goTypes = []any{
-	(*Agent)(nil),                   // 0: novaforge.agents.v1.Agent
-	(*CreateAgentRequest)(nil),      // 1: novaforge.agents.v1.CreateAgentRequest
-	(*CreateAgentResponse)(nil),     // 2: novaforge.agents.v1.CreateAgentResponse
-	(*ListAgentsRequest)(nil),       // 3: novaforge.agents.v1.ListAgentsRequest
-	(*ListAgentsResponse)(nil),      // 4: novaforge.agents.v1.ListAgentsResponse
-	(*Run)(nil),                     // 5: novaforge.agents.v1.Run
-	(*StartRunRequest)(nil),         // 6: novaforge.agents.v1.StartRunRequest
-	(*StartRunResponse)(nil),        // 7: novaforge.agents.v1.StartRunResponse
-	(*GetRunRequest)(nil),           // 8: novaforge.agents.v1.GetRunRequest
-	(*GetRunResponse)(nil),          // 9: novaforge.agents.v1.GetRunResponse
-	(*CancelRunRequest)(nil),        // 10: novaforge.agents.v1.CancelRunRequest
-	(*CancelRunResponse)(nil),       // 11: novaforge.agents.v1.CancelRunResponse
-	(*StreamRunEventsRequest)(nil),  // 12: novaforge.agents.v1.StreamRunEventsRequest
-	(*StreamRunEventsResponse)(nil), // 13: novaforge.agents.v1.StreamRunEventsResponse
-	(*StateChange)(nil),             // 14: novaforge.agents.v1.StateChange
-	(*ToolCall)(nil),                // 15: novaforge.agents.v1.ToolCall
+	(*Agent)(nil),                       // 0: novaforge.agents.v1.Agent
+	(*CreateAgentRequest)(nil),          // 1: novaforge.agents.v1.CreateAgentRequest
+	(*CreateAgentResponse)(nil),         // 2: novaforge.agents.v1.CreateAgentResponse
+	(*ListAgentsRequest)(nil),           // 3: novaforge.agents.v1.ListAgentsRequest
+	(*ListAgentsResponse)(nil),          // 4: novaforge.agents.v1.ListAgentsResponse
+	(*Run)(nil),                         // 5: novaforge.agents.v1.Run
+	(*StartRunRequest)(nil),             // 6: novaforge.agents.v1.StartRunRequest
+	(*StartRunResponse)(nil),            // 7: novaforge.agents.v1.StartRunResponse
+	(*GetRunRequest)(nil),               // 8: novaforge.agents.v1.GetRunRequest
+	(*GetRunResponse)(nil),              // 9: novaforge.agents.v1.GetRunResponse
+	(*CancelRunRequest)(nil),            // 10: novaforge.agents.v1.CancelRunRequest
+	(*CancelRunResponse)(nil),           // 11: novaforge.agents.v1.CancelRunResponse
+	(*StreamRunEventsRequest)(nil),      // 12: novaforge.agents.v1.StreamRunEventsRequest
+	(*StreamRunEventsResponse)(nil),     // 13: novaforge.agents.v1.StreamRunEventsResponse
+	(*StateChange)(nil),                 // 14: novaforge.agents.v1.StateChange
+	(*ToolCall)(nil),                    // 15: novaforge.agents.v1.ToolCall
+	(*AgentStats)(nil),                  // 16: novaforge.agents.v1.AgentStats
+	(*ListStatsRequest)(nil),            // 17: novaforge.agents.v1.ListStatsRequest
+	(*ListStatsResponse)(nil),           // 18: novaforge.agents.v1.ListStatsResponse
+	(*ListToolCallsRequest)(nil),        // 19: novaforge.agents.v1.ListToolCallsRequest
+	(*ListToolCallsResponse)(nil),       // 20: novaforge.agents.v1.ListToolCallsResponse
+	(*ListRunsForWorkItemRequest)(nil),  // 21: novaforge.agents.v1.ListRunsForWorkItemRequest
+	(*ListRunsForWorkItemResponse)(nil), // 22: novaforge.agents.v1.ListRunsForWorkItemResponse
 }
 var file_novaforge_agents_v1_agents_proto_depIdxs = []int32{
 	0,  // 0: novaforge.agents.v1.CreateAgentResponse.agent:type_name -> novaforge.agents.v1.Agent
@@ -1125,23 +1550,31 @@ var file_novaforge_agents_v1_agents_proto_depIdxs = []int32{
 	5,  // 3: novaforge.agents.v1.GetRunResponse.run:type_name -> novaforge.agents.v1.Run
 	14, // 4: novaforge.agents.v1.StreamRunEventsResponse.state_change:type_name -> novaforge.agents.v1.StateChange
 	15, // 5: novaforge.agents.v1.StreamRunEventsResponse.tool_call:type_name -> novaforge.agents.v1.ToolCall
-	1,  // 6: novaforge.agents.v1.AgentService.CreateAgent:input_type -> novaforge.agents.v1.CreateAgentRequest
-	3,  // 7: novaforge.agents.v1.AgentService.ListAgents:input_type -> novaforge.agents.v1.ListAgentsRequest
-	6,  // 8: novaforge.agents.v1.AgentService.StartRun:input_type -> novaforge.agents.v1.StartRunRequest
-	8,  // 9: novaforge.agents.v1.AgentService.GetRun:input_type -> novaforge.agents.v1.GetRunRequest
-	10, // 10: novaforge.agents.v1.AgentService.CancelRun:input_type -> novaforge.agents.v1.CancelRunRequest
-	12, // 11: novaforge.agents.v1.AgentService.StreamRunEvents:input_type -> novaforge.agents.v1.StreamRunEventsRequest
-	2,  // 12: novaforge.agents.v1.AgentService.CreateAgent:output_type -> novaforge.agents.v1.CreateAgentResponse
-	4,  // 13: novaforge.agents.v1.AgentService.ListAgents:output_type -> novaforge.agents.v1.ListAgentsResponse
-	7,  // 14: novaforge.agents.v1.AgentService.StartRun:output_type -> novaforge.agents.v1.StartRunResponse
-	9,  // 15: novaforge.agents.v1.AgentService.GetRun:output_type -> novaforge.agents.v1.GetRunResponse
-	11, // 16: novaforge.agents.v1.AgentService.CancelRun:output_type -> novaforge.agents.v1.CancelRunResponse
-	13, // 17: novaforge.agents.v1.AgentService.StreamRunEvents:output_type -> novaforge.agents.v1.StreamRunEventsResponse
-	12, // [12:18] is the sub-list for method output_type
-	6,  // [6:12] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	16, // 6: novaforge.agents.v1.ListStatsResponse.stats:type_name -> novaforge.agents.v1.AgentStats
+	15, // 7: novaforge.agents.v1.ListToolCallsResponse.calls:type_name -> novaforge.agents.v1.ToolCall
+	1,  // 8: novaforge.agents.v1.AgentService.CreateAgent:input_type -> novaforge.agents.v1.CreateAgentRequest
+	3,  // 9: novaforge.agents.v1.AgentService.ListAgents:input_type -> novaforge.agents.v1.ListAgentsRequest
+	6,  // 10: novaforge.agents.v1.AgentService.StartRun:input_type -> novaforge.agents.v1.StartRunRequest
+	8,  // 11: novaforge.agents.v1.AgentService.GetRun:input_type -> novaforge.agents.v1.GetRunRequest
+	10, // 12: novaforge.agents.v1.AgentService.CancelRun:input_type -> novaforge.agents.v1.CancelRunRequest
+	12, // 13: novaforge.agents.v1.AgentService.StreamRunEvents:input_type -> novaforge.agents.v1.StreamRunEventsRequest
+	17, // 14: novaforge.agents.v1.AgentService.ListStats:input_type -> novaforge.agents.v1.ListStatsRequest
+	19, // 15: novaforge.agents.v1.AgentService.ListToolCalls:input_type -> novaforge.agents.v1.ListToolCallsRequest
+	21, // 16: novaforge.agents.v1.AgentService.ListRunsForWorkItem:input_type -> novaforge.agents.v1.ListRunsForWorkItemRequest
+	2,  // 17: novaforge.agents.v1.AgentService.CreateAgent:output_type -> novaforge.agents.v1.CreateAgentResponse
+	4,  // 18: novaforge.agents.v1.AgentService.ListAgents:output_type -> novaforge.agents.v1.ListAgentsResponse
+	7,  // 19: novaforge.agents.v1.AgentService.StartRun:output_type -> novaforge.agents.v1.StartRunResponse
+	9,  // 20: novaforge.agents.v1.AgentService.GetRun:output_type -> novaforge.agents.v1.GetRunResponse
+	11, // 21: novaforge.agents.v1.AgentService.CancelRun:output_type -> novaforge.agents.v1.CancelRunResponse
+	13, // 22: novaforge.agents.v1.AgentService.StreamRunEvents:output_type -> novaforge.agents.v1.StreamRunEventsResponse
+	18, // 23: novaforge.agents.v1.AgentService.ListStats:output_type -> novaforge.agents.v1.ListStatsResponse
+	20, // 24: novaforge.agents.v1.AgentService.ListToolCalls:output_type -> novaforge.agents.v1.ListToolCallsResponse
+	22, // 25: novaforge.agents.v1.AgentService.ListRunsForWorkItem:output_type -> novaforge.agents.v1.ListRunsForWorkItemResponse
+	17, // [17:26] is the sub-list for method output_type
+	8,  // [8:17] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_novaforge_agents_v1_agents_proto_init() }
@@ -1159,7 +1592,7 @@ func file_novaforge_agents_v1_agents_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_novaforge_agents_v1_agents_proto_rawDesc), len(file_novaforge_agents_v1_agents_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   16,
+			NumMessages:   23,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

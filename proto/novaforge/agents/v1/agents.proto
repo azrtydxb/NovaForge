@@ -13,6 +13,9 @@ service AgentService {
   rpc GetRun(GetRunRequest) returns (GetRunResponse);
   rpc CancelRun(CancelRunRequest) returns (CancelRunResponse);
   rpc StreamRunEvents(StreamRunEventsRequest) returns (stream StreamRunEventsResponse);
+  rpc ListStats(ListStatsRequest) returns (ListStatsResponse);
+  rpc ListToolCalls(ListToolCallsRequest) returns (ListToolCallsResponse);
+  rpc ListRunsForWorkItem(ListRunsForWorkItemRequest) returns (ListRunsForWorkItemResponse);
 }
 
 message Agent {
@@ -111,7 +114,46 @@ message StateChange {
   string to_state = 2;
 }
 
+// ToolCall is one tool call an agent run made — carried live on the run
+// event stream, and read back afterwards from the audit log. The later
+// fields are empty on a live event, which reports a call as it happens
+// rather than a completed record of one.
 message ToolCall {
   string tool = 1;
   string outcome = 2;
+  string args = 3;
+  string error = 4;
+  string started_at = 5;
+}
+
+// AgentStats is one agent's run history: how many runs it started, how they
+// ended, and what they spent.
+message AgentStats {
+  string agent_id = 1;
+  int32 runs = 2;
+  int32 succeeded = 3;
+  int32 failed = 4;
+  int32 over_budget = 5;
+  int32 running = 6;
+  int64 tokens_used = 7;
+  int64 token_limit = 8;
+}
+
+message ListStatsRequest {}
+message ListStatsResponse {
+  repeated AgentStats stats = 1;
+}
+
+message ListToolCallsRequest {
+  string run_id = 1;
+}
+message ListToolCallsResponse {
+  repeated ToolCall calls = 1;
+}
+
+message ListRunsForWorkItemRequest {
+  string work_item_id = 1;
+}
+message ListRunsForWorkItemResponse {
+  repeated string run_ids = 1;
 }

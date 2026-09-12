@@ -59,6 +59,7 @@ func Routes() []Route {
 		{http.MethodGet, "/api/v1/orgs/{org}/agents", "listAgents", "Agents in an organization"},
 		{http.MethodPost, "/api/v1/orgs/{org}/agents", "createAgent", "Define an agent"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/agent-runs", "startAgentRun", "Start an Agent Run against a Work Item"},
+		{http.MethodGet, "/api/v1/orgs/{org}/agents/stats", "agentStats", "Per-agent run history"},
 		{http.MethodGet, "/api/v1/orgs/{org}/agent-runs/{id}", "getAgentRun", "One Agent Run"},
 		{http.MethodDelete, "/api/v1/orgs/{org}/agent-runs/{id}", "cancelAgentRun", "Cancel an Agent Run"},
 
@@ -68,6 +69,8 @@ func Routes() []Route {
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}/proof", "getRunProof", "Per-gate proof for a run"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}/reviews", "submitReview", "Submit a review verdict"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}/merge", "mergeRun", "Merge, if the gates allow it"},
+		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}/plan", "getRunPlan", "A run's plan"},
+		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}/tools", "getRunToolCalls", "The tool calls the agent run behind this run made"},
 
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/ci/runs", "listCIRuns", "CI runs for a repository"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/ci/runs/{id}", "getCIRun", "One CI run and its jobs"},

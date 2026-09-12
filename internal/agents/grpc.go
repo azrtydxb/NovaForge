@@ -49,6 +49,11 @@ type GRPCServer struct {
 	RDB     *redis.Client
 	Work    workv1.WorkServiceClient
 	Execute ExecuteFunc
+
+	// Audit backs ListToolCalls: the audited record of what a run did. It is
+	// nil in a deployment that records none, and ListToolCalls says so rather
+	// than answering with an empty list, which would read as "it did nothing".
+	Audit *AuditLog
 }
 
 // NewGRPCServer wraps the given dependencies as an agentsv1.AgentServiceServer.

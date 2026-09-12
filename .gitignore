@@ -27,3 +27,7 @@
 
 # machine-local credentials for the cluster scripts
 hack/env.local.sh
+
+# the built web application, embedded into the edge image at build time
+internal/edge/dist/*
+!internal/edge/dist/.gitkeep

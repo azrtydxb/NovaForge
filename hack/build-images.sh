@@ -52,7 +52,11 @@ build_one() {
 }
 
 for svc in "${services[@]}"; do
-	if needs_cgo "$svc"; then
+	if [ "$svc" = edge ]; then
+		# The edge serves the web application as well as the API, so its
+		# image is the only one that needs a Node toolchain to build.
+		df=deploy/docker/Dockerfile.edge
+	elif needs_cgo "$svc"; then
 		df=deploy/docker/Dockerfile.cgo
 	elif needs_git "$svc"; then
 		df=deploy/docker/Dockerfile.git

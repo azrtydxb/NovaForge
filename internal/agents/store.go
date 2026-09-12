@@ -368,3 +368,101 @@ func (s *Store) RecordProvenance(ctx context.Context, runID uuid.UUID, p Provena
 	}
 	return nil
 }
+
+// Stats is one agent's run history: how many runs it has started, how they
+// ended, and what they spent. It is the record a person reads before deciding
+// whether to keep trusting an agent with work.
+type Stats struct {
+	AgentID    uuid.UUID
+	Runs       int
+	Succeeded  int
+	Failed     int
+	OverBudget int
+	Running    int
+	TokensUsed int64
+	TokenLimit int64
+}
+
+// ListStats aggregates run history per agent for the caller's organization.
+// It is one query rather than one per agent: a screen showing every agent
+// would otherwise issue a request per row.
+func (s *Store) ListStats(ctx context.Context) ([]Stats, error) {
+	scope, err := authz.FromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT r.agent_id,
+		       count(*),
+		       count(*) FILTER (WHERE r.state = 'succeeded'),
+		       count(*) FILTER (WHERE r.state = 'failed'),
+		       count(*) FILTER (WHERE r.state = 'over_budget'),
+		       count(*) FILTER (WHERE r.state IN ('queued', 'running')),
+		       coalesce(sum(r.tokens_used), 0),
+		       coalesce(sum(r.token_limit), 0)
+		FROM agents.agent_runs r
+		WHERE r.org_id = $1
+		GROUP BY r.agent_id`,
+		scope.OrgID)
+	if err != nil {
+		return nil, fmt.Errorf("list agent stats: %w", err)
+	}
+	defer rows.Close()
+
+	var out []Stats
+	for rows.Next() {
+		var st Stats
+		if err := rows.Scan(&st.AgentID, &st.Runs, &st.Succeeded, &st.Failed,
+			&st.OverBudget, &st.Running, &st.TokensUsed, &st.TokenLimit); err != nil {
+			return nil, fmt.Errorf("scan agent stats: %w", err)
+		}
+		out = append(out, st)
+	}
+	return out, rows.Err()
+}
+
+// RunsForWorkItem returns the agent runs started against workItemID, newest
+// first. An Engineering Run shows the tool calls of the agent run that
+// produced it, and this is how the two are connected.
+func (s *Store) RunsForWorkItem(ctx context.Context, workItemID uuid.UUID) ([]uuid.UUID, error) {
+	scope, err := authz.FromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT id FROM agents.agent_runs
+		WHERE org_id = $1 AND work_item_id = $2
+		ORDER BY started_at DESC NULLS LAST`,
+		scope.OrgID, workItemID)
+	if err != nil {
+		return nil, fmt.Errorf("list runs for work item: %w", err)
+	}
+	defer rows.Close()
+
+	var out []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan run id: %w", err)
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
+// RecordSpend persists what a finished run actually consumed. The budget is
+// enforced while the run is alive; this is what makes the spend answerable
+// afterwards.
+func (s *Store) RecordSpend(ctx context.Context, runID uuid.UUID, tokensUsed int64) error {
+	scope, err := authz.FromContext(ctx)
+	if err != nil {
+		return err
+	}
+	if _, err := s.pool.Exec(ctx,
+		`UPDATE agents.agent_runs SET tokens_used = $1 WHERE id = $2 AND org_id = $3`,
+		tokensUsed, runID, scope.OrgID,
+	); err != nil {
+		return fmt.Errorf("record spend for run %s: %w", runID, err)
+	}
+	return nil
+}

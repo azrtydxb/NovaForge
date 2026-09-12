@@ -1,0 +1,32 @@
+# The edge serves both the REST API and the web application, so its image is
+# the one place a Node toolchain is needed. Every other service uses the
+# parameterised Dockerfile.static; giving the edge its own avoids putting a
+# Node stage in front of ten builds that have no use for it.
+ARG GO_VERSION=1.27
+ARG NODE_VERSION=22
+
+FROM node:${NODE_VERSION} AS web
+WORKDIR /web
+# The lockfile is copied first so a change to application source does not
+# invalidate the dependency layer.
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web/ ./
+RUN npm run build
+
+FROM golang:${GO_VERSION} AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+# The built application is embedded into the binary (see internal/edge/web.go),
+# so the runtime image stays a single static file with nothing to mount.
+COPY --from=web /web/dist ./internal/edge/dist
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath \
+      -ldflags "-s -w" \
+      -o /out/app ./cmd/edge
+
+FROM gcr.io/distroless/static-debian12:nonroot
+COPY --from=build /out/app /app
+USER nonroot:nonroot
+ENTRYPOINT ["/app"]

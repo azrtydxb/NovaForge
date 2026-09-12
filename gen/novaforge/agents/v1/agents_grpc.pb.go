@@ -19,12 +19,15 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AgentService_CreateAgent_FullMethodName     = "/novaforge.agents.v1.AgentService/CreateAgent"
-	AgentService_ListAgents_FullMethodName      = "/novaforge.agents.v1.AgentService/ListAgents"
-	AgentService_StartRun_FullMethodName        = "/novaforge.agents.v1.AgentService/StartRun"
-	AgentService_GetRun_FullMethodName          = "/novaforge.agents.v1.AgentService/GetRun"
-	AgentService_CancelRun_FullMethodName       = "/novaforge.agents.v1.AgentService/CancelRun"
-	AgentService_StreamRunEvents_FullMethodName = "/novaforge.agents.v1.AgentService/StreamRunEvents"
+	AgentService_CreateAgent_FullMethodName         = "/novaforge.agents.v1.AgentService/CreateAgent"
+	AgentService_ListAgents_FullMethodName          = "/novaforge.agents.v1.AgentService/ListAgents"
+	AgentService_StartRun_FullMethodName            = "/novaforge.agents.v1.AgentService/StartRun"
+	AgentService_GetRun_FullMethodName              = "/novaforge.agents.v1.AgentService/GetRun"
+	AgentService_CancelRun_FullMethodName           = "/novaforge.agents.v1.AgentService/CancelRun"
+	AgentService_StreamRunEvents_FullMethodName     = "/novaforge.agents.v1.AgentService/StreamRunEvents"
+	AgentService_ListStats_FullMethodName           = "/novaforge.agents.v1.AgentService/ListStats"
+	AgentService_ListToolCalls_FullMethodName       = "/novaforge.agents.v1.AgentService/ListToolCalls"
+	AgentService_ListRunsForWorkItem_FullMethodName = "/novaforge.agents.v1.AgentService/ListRunsForWorkItem"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -42,6 +45,9 @@ type AgentServiceClient interface {
 	GetRun(ctx context.Context, in *GetRunRequest, opts ...grpc.CallOption) (*GetRunResponse, error)
 	CancelRun(ctx context.Context, in *CancelRunRequest, opts ...grpc.CallOption) (*CancelRunResponse, error)
 	StreamRunEvents(ctx context.Context, in *StreamRunEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[StreamRunEventsResponse], error)
+	ListStats(ctx context.Context, in *ListStatsRequest, opts ...grpc.CallOption) (*ListStatsResponse, error)
+	ListToolCalls(ctx context.Context, in *ListToolCallsRequest, opts ...grpc.CallOption) (*ListToolCallsResponse, error)
+	ListRunsForWorkItem(ctx context.Context, in *ListRunsForWorkItemRequest, opts ...grpc.CallOption) (*ListRunsForWorkItemResponse, error)
 }
 
 type agentServiceClient struct {
@@ -121,6 +127,36 @@ func (c *agentServiceClient) StreamRunEvents(ctx context.Context, in *StreamRunE
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_StreamRunEventsClient = grpc.ServerStreamingClient[StreamRunEventsResponse]
 
+func (c *agentServiceClient) ListStats(ctx context.Context, in *ListStatsRequest, opts ...grpc.CallOption) (*ListStatsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListStatsResponse)
+	err := c.cc.Invoke(ctx, AgentService_ListStats_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) ListToolCalls(ctx context.Context, in *ListToolCallsRequest, opts ...grpc.CallOption) (*ListToolCallsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListToolCallsResponse)
+	err := c.cc.Invoke(ctx, AgentService_ListToolCalls_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) ListRunsForWorkItem(ctx context.Context, in *ListRunsForWorkItemRequest, opts ...grpc.CallOption) (*ListRunsForWorkItemResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRunsForWorkItemResponse)
+	err := c.cc.Invoke(ctx, AgentService_ListRunsForWorkItem_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AgentServiceServer is the server API for AgentService service.
 // All implementations should embed UnimplementedAgentServiceServer
 // for forward compatibility.
@@ -136,6 +172,9 @@ type AgentServiceServer interface {
 	GetRun(context.Context, *GetRunRequest) (*GetRunResponse, error)
 	CancelRun(context.Context, *CancelRunRequest) (*CancelRunResponse, error)
 	StreamRunEvents(*StreamRunEventsRequest, grpc.ServerStreamingServer[StreamRunEventsResponse]) error
+	ListStats(context.Context, *ListStatsRequest) (*ListStatsResponse, error)
+	ListToolCalls(context.Context, *ListToolCallsRequest) (*ListToolCallsResponse, error)
+	ListRunsForWorkItem(context.Context, *ListRunsForWorkItemRequest) (*ListRunsForWorkItemResponse, error)
 }
 
 // UnimplementedAgentServiceServer should be embedded to have
@@ -162,6 +201,15 @@ func (UnimplementedAgentServiceServer) CancelRun(context.Context, *CancelRunRequ
 }
 func (UnimplementedAgentServiceServer) StreamRunEvents(*StreamRunEventsRequest, grpc.ServerStreamingServer[StreamRunEventsResponse]) error {
 	return status.Error(codes.Unimplemented, "method StreamRunEvents not implemented")
+}
+func (UnimplementedAgentServiceServer) ListStats(context.Context, *ListStatsRequest) (*ListStatsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListStats not implemented")
+}
+func (UnimplementedAgentServiceServer) ListToolCalls(context.Context, *ListToolCallsRequest) (*ListToolCallsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListToolCalls not implemented")
+}
+func (UnimplementedAgentServiceServer) ListRunsForWorkItem(context.Context, *ListRunsForWorkItemRequest) (*ListRunsForWorkItemResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRunsForWorkItem not implemented")
 }
 func (UnimplementedAgentServiceServer) testEmbeddedByValue() {}
 
@@ -284,6 +332,60 @@ func _AgentService_StreamRunEvents_Handler(srv interface{}, stream grpc.ServerSt
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_StreamRunEventsServer = grpc.ServerStreamingServer[StreamRunEventsResponse]
 
+func _AgentService_ListStats_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListStatsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ListStats(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ListStats_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ListStats(ctx, req.(*ListStatsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_ListToolCalls_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListToolCallsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ListToolCalls(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ListToolCalls_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ListToolCalls(ctx, req.(*ListToolCallsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_ListRunsForWorkItem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRunsForWorkItemRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ListRunsForWorkItem(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ListRunsForWorkItem_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ListRunsForWorkItem(ctx, req.(*ListRunsForWorkItemRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AgentService_ServiceDesc is the grpc.ServiceDesc for AgentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -310,6 +412,18 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CancelRun",
 			Handler:    _AgentService_CancelRun_Handler,
+		},
+		{
+			MethodName: "ListStats",
+			Handler:    _AgentService_ListStats_Handler,
+		},
+		{
+			MethodName: "ListToolCalls",
+			Handler:    _AgentService_ListToolCalls_Handler,
+		},
+		{
+			MethodName: "ListRunsForWorkItem",
+			Handler:    _AgentService_ListRunsForWorkItem_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

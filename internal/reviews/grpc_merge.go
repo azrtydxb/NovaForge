@@ -90,3 +90,25 @@ func (g *GRPCServer) resolveRun(ctx context.Context, id, repoID string, number i
 	}
 	return run, nil
 }
+
+// ListPlan returns a run's plan in order: what it intended, shown next to the
+// proof of what it demonstrated.
+func (g *GRPCServer) ListPlan(ctx context.Context, req *reviewsv1.ListPlanRequest) (*reviewsv1.ListPlanResponse, error) {
+	run, err := g.resolveRun(ctx, req.GetRunId(), req.GetRepoId(), req.GetNumber())
+	if err != nil {
+		return nil, err
+	}
+	steps, err := g.Store.ListPlanSteps(ctx, run.ID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "list plan: %v", err)
+	}
+	out := make([]*reviewsv1.PlanStep, 0, len(steps))
+	for _, s := range steps {
+		out = append(out, &reviewsv1.PlanStep{
+			Ordinal: int32(s.Ordinal),
+			Text:    s.Text,
+			State:   s.State,
+		})
+	}
+	return &reviewsv1.ListPlanResponse{Steps: out}, nil
+}
