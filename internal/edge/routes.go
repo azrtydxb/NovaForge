@@ -42,6 +42,7 @@ func Routes() []Route {
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}", "getRepo", "One repository"},
 		{http.MethodDelete, "/api/v1/orgs/{org}/repos/{repo}", "deleteRepo", "Delete a repository"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/branches", "listBranches", "Branches"},
+		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/branches", "createBranch", "Create a branch"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/tags", "listTags", "Tags"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/commits/{ref}", "listCommits", "Commit history for a ref"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/tree/{ref}/*", "getTree", "Tree listing at a path"},
@@ -51,6 +52,9 @@ func Routes() []Route {
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/work", "listWorkItems", "Work Items"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/work", "createWorkItem", "Create a Work Item"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/work/{key}", "getWorkItem", "One Work Item"},
+		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/work/{key}/comments", "listWorkComments", "A Work Item's discussion"},
+		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/work/{key}/comments", "addWorkComment", "Comment on a Work Item"},
+		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/work/{key}/assign", "assignWorkItem", "Assign a Work Item"},
 
 		{http.MethodGet, "/api/v1/orgs/{org}/dashboard", "getDashboard", "What needs human attention"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/work/{key}/subtasks", "listSubtasks", "An epic's subtasks and their readiness"},
@@ -73,6 +77,7 @@ func Routes() []Route {
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}/tools", "getRunToolCalls", "The tool calls the agent run behind this run made"},
 
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/ci/runs", "listCIRuns", "CI runs for a repository"},
+		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/ci/runs", "triggerCIRun", "Run the repository's workflow at a ref"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/ci/runs/{id}", "getCIRun", "One CI run and its jobs"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/ci/logs", "getLatestJobLogs", "The newest run's first job log"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/ci/jobs/{id}/logs", "getJobLogs", "One job's log"},

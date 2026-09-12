@@ -11,6 +11,7 @@ import type { Dashboard, User } from "./lib/types";
 
 import { Home } from "./screens/Home";
 import { Work } from "./screens/Work";
+import { WorkItemDetail } from "./screens/WorkItem";
 import { Swarm } from "./screens/Swarm";
 import { Repos } from "./screens/Repos";
 import { CI } from "./screens/CI";
@@ -92,6 +93,7 @@ function Shell({
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/work" element={<Work />} />
+            <Route path="/work/:repo/:key" element={<WorkItemDetail />} />
             <Route path="/swarm" element={<Swarm />} />
             <Route path="/repos" element={<Repos />} />
             <Route path="/repos/*" element={<Repos />} />

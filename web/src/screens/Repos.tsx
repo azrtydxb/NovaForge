@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, enc } from "../lib/api";
 import { useWorkspace } from "../lib/workspace";
 import { Async, Empty, Page, Panel, PanelHead } from "../components/ui";
+import { Dialog } from "../components/Dialog";
 import type { Commit, Ref, TreeEntry } from "../lib/types";
 
 /** Repos is the design's browser: a repository, its tree, and a file. The
@@ -71,6 +72,18 @@ function Browser({
   const [file, setFile] = useState<string | null>(null);
 
   const [branch, setBranch] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const qc = useQueryClient();
+
+  const createBranch = useMutation({
+    mutationFn: (v: Record<string, string>) =>
+      api.post(`${base}/branches`, { name: v.name, from: v.from }),
+    onSuccess: (_d, v) => {
+      setCreating(false);
+      setBranch(v.name!);
+      qc.invalidateQueries({ queryKey: ["branches"] });
+    },
+  });
 
   const branches = useQuery({
     queryKey: ["branches", org, repo],
@@ -120,11 +133,49 @@ function Browser({
         gap: 14,
       }}
     >
+      {creating ? (
+        <Dialog
+          title="New branch"
+          submitLabel="Create"
+          fields={[
+            {
+              name: "name",
+              label: "Name",
+              required: true,
+              placeholder: "feature/x",
+            },
+            {
+              name: "from",
+              label: "From",
+              placeholder: head,
+              help: "Empty starts from the repository's default branch.",
+            },
+          ]}
+          busy={createBranch.isPending}
+          error={createBranch.error}
+          onSubmit={(v) => createBranch.mutate(v)}
+          onClose={() => setCreating(false)}
+        />
+      ) : null}
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <Panel>
           <PanelHead>
             {repo}
             <div style={{ flex: 1 }} />
+            <button
+              onClick={() => setCreating(true)}
+              style={{
+                background: "transparent",
+                border: "1px solid var(--line-2)",
+                borderRadius: 6,
+                color: "var(--fg-muted)",
+                font: "10px var(--sans)",
+                padding: "3px 7px",
+                cursor: "pointer",
+              }}
+            >
+              new branch
+            </button>
             <select
               value={head}
               onChange={(e) => {

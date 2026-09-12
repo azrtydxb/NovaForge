@@ -1,16 +1,23 @@
 import { useState } from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { api, enc } from "../lib/api";
 import { scopedRepos, useWorkspace } from "../lib/workspace";
 import {
   Async,
   Empty,
+  Failed,
   Loading,
   Page,
   Panel,
   PanelHead,
   StatePill,
 } from "../components/ui";
+import { Dialog, NewButton } from "../components/Dialog";
 import type { Artifact, CIJob, CIRun } from "../lib/types";
 
 /** CI is the design's run list plus a live log. The log polls rather than
@@ -22,6 +29,19 @@ export function CI() {
   const [selected, setSelected] = useState<{ repo: string; id: string } | null>(
     null,
   );
+  const [triggering, setTriggering] = useState(false);
+  const qc = useQueryClient();
+
+  const trigger = useMutation({
+    mutationFn: (v: Record<string, string>) =>
+      api.post(`/api/v1/orgs/${enc(w.org!)}/repos/${enc(v.repo!)}/ci/runs`, {
+        ref: v.ref,
+      }),
+    onSuccess: () => {
+      setTriggering(false);
+      qc.invalidateQueries();
+    },
+  });
 
   const queries = useQueries({
     queries: repos.map((r) => ({
@@ -45,7 +65,45 @@ export function CI() {
     selected ?? (rows[0] ? { repo: rows[0].repo, id: rows[0].run.id } : null);
 
   return (
-    <Page title="CI" subtitle="Every job runs in its own Kubernetes pod">
+    <Page
+      title="CI"
+      subtitle="Every job runs in its own Kubernetes pod"
+      actions={
+        repos.length > 0 ? (
+          <NewButton label="Run CI" onClick={() => setTriggering(true)} />
+        ) : null
+      }
+    >
+      {triggering ? (
+        <Dialog
+          title="Run CI"
+          submitLabel="Run"
+          fields={[
+            {
+              name: "repo",
+              label: "Repository",
+              type: "select",
+              options: repos.map((r) => r.name),
+              required: true,
+            },
+            {
+              name: "ref",
+              label: "Ref",
+              placeholder: "leave empty for the default branch",
+              help: "The repository's own .novaforge/workflow.yaml at this ref is what runs.",
+            },
+          ]}
+          busy={trigger.isPending}
+          error={trigger.error}
+          onSubmit={(v) => trigger.mutate(v)}
+          onClose={() => setTriggering(false)}
+        />
+      ) : null}
+      {trigger.error ? (
+        <div style={{ marginBottom: 14 }}>
+          <Failed error={trigger.error} />
+        </div>
+      ) : null}
       <div
         style={{
           display: "grid",

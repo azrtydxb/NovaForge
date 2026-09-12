@@ -13,6 +13,7 @@ import {
   PanelHead,
   StatePill,
 } from "../components/ui";
+import { Dialog } from "../components/Dialog";
 import type { EngineeringRun, ProofRecord } from "../lib/types";
 
 interface PlanStep {
@@ -46,6 +47,17 @@ export function RunDetail() {
     enabled: w.org !== null,
   });
 
+  const [reviewing, setReviewing] = useState(false);
+
+  const review = useMutation({
+    mutationFn: (v: Record<string, string>) =>
+      api.post(`${base}/reviews`, { verdict: v.verdict, summary: v.summary }),
+    onSuccess: () => {
+      setReviewing(false);
+      qc.invalidateQueries();
+    },
+  });
+
   const merge = useMutation({
     mutationFn: () => api.post<{ merge_sha: string }>(`${base}/merge`, {}),
     onSuccess: () => qc.invalidateQueries(),
@@ -71,6 +83,22 @@ export function RunDetail() {
             <StatePill state={run.data.state} />
             {run.data.state === "open" ? (
               <button
+                onClick={() => setReviewing(true)}
+                style={{
+                  padding: "7px 14px",
+                  background: "transparent",
+                  border: "1px solid var(--line-2)",
+                  borderRadius: 8,
+                  color: "var(--fg-dim)",
+                  font: "12px var(--sans)",
+                  cursor: "pointer",
+                }}
+              >
+                Review
+              </button>
+            ) : null}
+            {run.data.state === "open" ? (
+              <button
                 onClick={() => merge.mutate()}
                 disabled={merge.isPending}
                 style={{
@@ -90,6 +118,27 @@ export function RunDetail() {
         ) : null
       }
     >
+      {reviewing ? (
+        <Dialog
+          title={`Review #${number}`}
+          submitLabel="Submit"
+          fields={[
+            {
+              name: "verdict",
+              label: "Verdict",
+              type: "select",
+              options: ["approve", "request_changes", "comment"],
+              required: true,
+              help: "An approval from the run's own author never counts; the platform refuses it.",
+            },
+            { name: "summary", label: "Summary", type: "textarea" },
+          ]}
+          busy={review.isPending}
+          error={review.error}
+          onSubmit={(v) => review.mutate(v)}
+          onClose={() => setReviewing(false)}
+        />
+      ) : null}
       {merge.error ? (
         <div style={{ marginBottom: 14 }}>
           <Failed error={merge.error} />

@@ -12,7 +12,21 @@ import type { OrgMember } from "../lib/types";
 export function Orgs() {
   const w = useWorkspace();
   const qc = useQueryClient();
-  const [creating, setCreating] = useState<"org" | "repo" | null>(null);
+  const [creating, setCreating] = useState<"org" | "repo" | "member" | null>(
+    null,
+  );
+
+  const addMember = useMutation({
+    mutationFn: (v: Record<string, string>) =>
+      api.post(`/api/v1/orgs/${enc(w.org!)}/members`, {
+        username: v.username,
+        role: v.role,
+      }),
+    onSuccess: () => {
+      setCreating(null);
+      qc.invalidateQueries({ queryKey: ["members"] });
+    },
+  });
 
   const createOrg = useMutation({
     mutationFn: (v: Record<string, string>) =>
@@ -77,6 +91,26 @@ export function Orgs() {
           busy={createOrg.isPending}
           error={createOrg.error}
           onSubmit={(v) => createOrg.mutate(v)}
+          onClose={() => setCreating(null)}
+        />
+      ) : null}
+      {creating === "member" ? (
+        <Dialog
+          title="Add a member"
+          submitLabel="Add"
+          fields={[
+            { name: "username", label: "Username", required: true },
+            {
+              name: "role",
+              label: "Role",
+              type: "select",
+              options: ["member", "admin"],
+              required: true,
+            },
+          ]}
+          busy={addMember.isPending}
+          error={addMember.error}
+          onSubmit={(v) => addMember.mutate(v)}
           onClose={() => setCreating(null)}
         />
       ) : null}

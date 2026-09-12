@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import {
   useMutation,
   useQueries,
@@ -235,15 +236,12 @@ export function Work() {
         ) : (
           rows.map(({ item, repo }) => (
             <Row key={item.id}>
-              <span
-                style={{
-                  width: 80,
-                  font: "600 12px var(--mono)",
-                  color: "var(--link)",
-                }}
+              <Link
+                to={`/work/${enc(repo)}/${enc(item.key)}`}
+                style={{ width: 80, font: "600 12px var(--mono)" }}
               >
                 {item.key}
-              </span>
+              </Link>
               <span style={{ flex: 1, font: "13px var(--sans)" }}>
                 {item.goal}
               </span>
