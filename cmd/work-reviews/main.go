@@ -6,6 +6,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/novaforge/novaforge/internal/agentrun"
+	"github.com/novaforge/novaforge/internal/swarm"
 	"log"
 	"strings"
 
@@ -65,6 +67,25 @@ func main() {
 	reviewsStore := reviews.NewStore(pool)
 
 	workServer := work.NewGRPCServer(workStore)
+
+	// Decomposition needs a model. Where none is configured the RPC reports
+	// that plainly rather than returning an epic with no subtasks, which would
+	// read as "this epic did not need breaking down".
+	if cfg.AIEndpoint != "" && cfg.AIModel != "" {
+		model, err := agentrun.NewModelClient(agentrun.ModelConfig{
+			Endpoint: cfg.AIEndpoint, Model: cfg.AIModel,
+		})
+		if err != nil {
+			log.Printf("work-reviews: no decomposition (%v)", err)
+		} else {
+			workServer.SetDecomposer(swarm.PlannerDecomposer{
+				Planner: swarm.NewPlanner(model, workStore, nil),
+			})
+			log.Printf("work-reviews: decomposition enabled via %s", cfg.AIEndpoint)
+		}
+	} else {
+		log.Println("work-reviews: no AI endpoint configured, decomposition is unavailable")
+	}
 	reviewsServer := reviews.NewGRPCServer(reviewsStore)
 
 	srv := grpc.NewServer(grpc.UnaryInterceptor(authInterceptor(identityClient)))

@@ -19,11 +19,12 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	WorkService_CreateItem_FullMethodName   = "/novaforge.work.v1.WorkService/CreateItem"
-	WorkService_GetItem_FullMethodName      = "/novaforge.work.v1.WorkService/GetItem"
-	WorkService_ListItems_FullMethodName    = "/novaforge.work.v1.WorkService/ListItems"
-	WorkService_AssignItem_FullMethodName   = "/novaforge.work.v1.WorkService/AssignItem"
-	WorkService_ListSubtasks_FullMethodName = "/novaforge.work.v1.WorkService/ListSubtasks"
+	WorkService_CreateItem_FullMethodName    = "/novaforge.work.v1.WorkService/CreateItem"
+	WorkService_GetItem_FullMethodName       = "/novaforge.work.v1.WorkService/GetItem"
+	WorkService_ListItems_FullMethodName     = "/novaforge.work.v1.WorkService/ListItems"
+	WorkService_AssignItem_FullMethodName    = "/novaforge.work.v1.WorkService/AssignItem"
+	WorkService_ListSubtasks_FullMethodName  = "/novaforge.work.v1.WorkService/ListSubtasks"
+	WorkService_DecomposeEpic_FullMethodName = "/novaforge.work.v1.WorkService/DecomposeEpic"
 )
 
 // WorkServiceClient is the client API for WorkService service.
@@ -39,6 +40,7 @@ type WorkServiceClient interface {
 	ListItems(ctx context.Context, in *ListItemsRequest, opts ...grpc.CallOption) (*ListItemsResponse, error)
 	AssignItem(ctx context.Context, in *AssignItemRequest, opts ...grpc.CallOption) (*AssignItemResponse, error)
 	ListSubtasks(ctx context.Context, in *ListSubtasksRequest, opts ...grpc.CallOption) (*ListSubtasksResponse, error)
+	DecomposeEpic(ctx context.Context, in *DecomposeEpicRequest, opts ...grpc.CallOption) (*DecomposeEpicResponse, error)
 }
 
 type workServiceClient struct {
@@ -99,6 +101,16 @@ func (c *workServiceClient) ListSubtasks(ctx context.Context, in *ListSubtasksRe
 	return out, nil
 }
 
+func (c *workServiceClient) DecomposeEpic(ctx context.Context, in *DecomposeEpicRequest, opts ...grpc.CallOption) (*DecomposeEpicResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DecomposeEpicResponse)
+	err := c.cc.Invoke(ctx, WorkService_DecomposeEpic_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // WorkServiceServer is the server API for WorkService service.
 // All implementations should embed UnimplementedWorkServiceServer
 // for forward compatibility.
@@ -112,6 +124,7 @@ type WorkServiceServer interface {
 	ListItems(context.Context, *ListItemsRequest) (*ListItemsResponse, error)
 	AssignItem(context.Context, *AssignItemRequest) (*AssignItemResponse, error)
 	ListSubtasks(context.Context, *ListSubtasksRequest) (*ListSubtasksResponse, error)
+	DecomposeEpic(context.Context, *DecomposeEpicRequest) (*DecomposeEpicResponse, error)
 }
 
 // UnimplementedWorkServiceServer should be embedded to have
@@ -135,6 +148,9 @@ func (UnimplementedWorkServiceServer) AssignItem(context.Context, *AssignItemReq
 }
 func (UnimplementedWorkServiceServer) ListSubtasks(context.Context, *ListSubtasksRequest) (*ListSubtasksResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListSubtasks not implemented")
+}
+func (UnimplementedWorkServiceServer) DecomposeEpic(context.Context, *DecomposeEpicRequest) (*DecomposeEpicResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DecomposeEpic not implemented")
 }
 func (UnimplementedWorkServiceServer) testEmbeddedByValue() {}
 
@@ -246,6 +262,24 @@ func _WorkService_ListSubtasks_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _WorkService_DecomposeEpic_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DecomposeEpicRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkServiceServer).DecomposeEpic(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WorkService_DecomposeEpic_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkServiceServer).DecomposeEpic(ctx, req.(*DecomposeEpicRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // WorkService_ServiceDesc is the grpc.ServiceDesc for WorkService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -272,6 +306,10 @@ var WorkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListSubtasks",
 			Handler:    _WorkService_ListSubtasks_Handler,
+		},
+		{
+			MethodName: "DecomposeEpic",
+			Handler:    _WorkService_DecomposeEpic_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

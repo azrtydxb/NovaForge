@@ -11,6 +11,7 @@ service WorkService {
   rpc ListItems(ListItemsRequest) returns (ListItemsResponse);
   rpc AssignItem(AssignItemRequest) returns (AssignItemResponse);
   rpc ListSubtasks(ListSubtasksRequest) returns (ListSubtasksResponse);
+  rpc DecomposeEpic(DecomposeEpicRequest) returns (DecomposeEpicResponse);
 }
 
 // WorkItem mirrors a row in the work.work_items table.
@@ -86,4 +87,11 @@ message ListSubtasksRequest {
 }
 message ListSubtasksResponse {
   repeated Subtask subtasks = 1;
+}
+
+message DecomposeEpicRequest {
+  string epic_key = 1;
+}
+message DecomposeEpicResponse {
+  repeated WorkItem subtasks = 1;
 }

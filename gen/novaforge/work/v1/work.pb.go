@@ -731,6 +731,94 @@ func (x *ListSubtasksResponse) GetSubtasks() []*Subtask {
 	return nil
 }
 
+type DecomposeEpicRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	EpicKey       string                 `protobuf:"bytes,1,opt,name=epic_key,json=epicKey,proto3" json:"epic_key,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DecomposeEpicRequest) Reset() {
+	*x = DecomposeEpicRequest{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DecomposeEpicRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DecomposeEpicRequest) ProtoMessage() {}
+
+func (x *DecomposeEpicRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DecomposeEpicRequest.ProtoReflect.Descriptor instead.
+func (*DecomposeEpicRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *DecomposeEpicRequest) GetEpicKey() string {
+	if x != nil {
+		return x.EpicKey
+	}
+	return ""
+}
+
+type DecomposeEpicResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Subtasks      []*WorkItem            `protobuf:"bytes,1,rep,name=subtasks,proto3" json:"subtasks,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DecomposeEpicResponse) Reset() {
+	*x = DecomposeEpicResponse{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DecomposeEpicResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DecomposeEpicResponse) ProtoMessage() {}
+
+func (x *DecomposeEpicResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DecomposeEpicResponse.ProtoReflect.Descriptor instead.
+func (*DecomposeEpicResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *DecomposeEpicResponse) GetSubtasks() []*WorkItem {
+	if x != nil {
+		return x.Subtasks
+	}
+	return nil
+}
+
 var File_novaforge_work_v1_work_proto protoreflect.FileDescriptor
 
 const file_novaforge_work_v1_work_proto_rawDesc = "" +
@@ -789,7 +877,11 @@ const file_novaforge_work_v1_work_proto_rawDesc = "" +
 	"\x13ListSubtasksRequest\x12\x19\n" +
 	"\bepic_key\x18\x01 \x01(\tR\aepicKey\"N\n" +
 	"\x14ListSubtasksResponse\x126\n" +
-	"\bsubtasks\x18\x01 \x03(\v2\x1a.novaforge.work.v1.SubtaskR\bsubtasks2\xce\x03\n" +
+	"\bsubtasks\x18\x01 \x03(\v2\x1a.novaforge.work.v1.SubtaskR\bsubtasks\"1\n" +
+	"\x14DecomposeEpicRequest\x12\x19\n" +
+	"\bepic_key\x18\x01 \x01(\tR\aepicKey\"P\n" +
+	"\x15DecomposeEpicResponse\x127\n" +
+	"\bsubtasks\x18\x01 \x03(\v2\x1b.novaforge.work.v1.WorkItemR\bsubtasks2\xb2\x04\n" +
 	"\vWorkService\x12Y\n" +
 	"\n" +
 	"CreateItem\x12$.novaforge.work.v1.CreateItemRequest\x1a%.novaforge.work.v1.CreateItemResponse\x12P\n" +
@@ -797,7 +889,8 @@ const file_novaforge_work_v1_work_proto_rawDesc = "" +
 	"\tListItems\x12#.novaforge.work.v1.ListItemsRequest\x1a$.novaforge.work.v1.ListItemsResponse\x12Y\n" +
 	"\n" +
 	"AssignItem\x12$.novaforge.work.v1.AssignItemRequest\x1a%.novaforge.work.v1.AssignItemResponse\x12_\n" +
-	"\fListSubtasks\x12&.novaforge.work.v1.ListSubtasksRequest\x1a'.novaforge.work.v1.ListSubtasksResponseB\xc5\x01\n" +
+	"\fListSubtasks\x12&.novaforge.work.v1.ListSubtasksRequest\x1a'.novaforge.work.v1.ListSubtasksResponse\x12b\n" +
+	"\rDecomposeEpic\x12'.novaforge.work.v1.DecomposeEpicRequest\x1a(.novaforge.work.v1.DecomposeEpicResponseB\xc5\x01\n" +
 	"\x15com.novaforge.work.v1B\tWorkProtoP\x01Z;github.com/novaforge/novaforge/gen/novaforge/work/v1;workv1\xa2\x02\x03NWX\xaa\x02\x11Novaforge.Work.V1\xca\x02\x11Novaforge\\Work\\V1\xe2\x02\x1dNovaforge\\Work\\V1\\GPBMetadata\xea\x02\x13Novaforge::Work::V1b\x06proto3"
 
 var (
@@ -812,20 +905,22 @@ func file_novaforge_work_v1_work_proto_rawDescGZIP() []byte {
 	return file_novaforge_work_v1_work_proto_rawDescData
 }
 
-var file_novaforge_work_v1_work_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_novaforge_work_v1_work_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_novaforge_work_v1_work_proto_goTypes = []any{
-	(*WorkItem)(nil),             // 0: novaforge.work.v1.WorkItem
-	(*CreateItemRequest)(nil),    // 1: novaforge.work.v1.CreateItemRequest
-	(*CreateItemResponse)(nil),   // 2: novaforge.work.v1.CreateItemResponse
-	(*GetItemRequest)(nil),       // 3: novaforge.work.v1.GetItemRequest
-	(*GetItemResponse)(nil),      // 4: novaforge.work.v1.GetItemResponse
-	(*ListItemsRequest)(nil),     // 5: novaforge.work.v1.ListItemsRequest
-	(*ListItemsResponse)(nil),    // 6: novaforge.work.v1.ListItemsResponse
-	(*AssignItemRequest)(nil),    // 7: novaforge.work.v1.AssignItemRequest
-	(*AssignItemResponse)(nil),   // 8: novaforge.work.v1.AssignItemResponse
-	(*Subtask)(nil),              // 9: novaforge.work.v1.Subtask
-	(*ListSubtasksRequest)(nil),  // 10: novaforge.work.v1.ListSubtasksRequest
-	(*ListSubtasksResponse)(nil), // 11: novaforge.work.v1.ListSubtasksResponse
+	(*WorkItem)(nil),              // 0: novaforge.work.v1.WorkItem
+	(*CreateItemRequest)(nil),     // 1: novaforge.work.v1.CreateItemRequest
+	(*CreateItemResponse)(nil),    // 2: novaforge.work.v1.CreateItemResponse
+	(*GetItemRequest)(nil),        // 3: novaforge.work.v1.GetItemRequest
+	(*GetItemResponse)(nil),       // 4: novaforge.work.v1.GetItemResponse
+	(*ListItemsRequest)(nil),      // 5: novaforge.work.v1.ListItemsRequest
+	(*ListItemsResponse)(nil),     // 6: novaforge.work.v1.ListItemsResponse
+	(*AssignItemRequest)(nil),     // 7: novaforge.work.v1.AssignItemRequest
+	(*AssignItemResponse)(nil),    // 8: novaforge.work.v1.AssignItemResponse
+	(*Subtask)(nil),               // 9: novaforge.work.v1.Subtask
+	(*ListSubtasksRequest)(nil),   // 10: novaforge.work.v1.ListSubtasksRequest
+	(*ListSubtasksResponse)(nil),  // 11: novaforge.work.v1.ListSubtasksResponse
+	(*DecomposeEpicRequest)(nil),  // 12: novaforge.work.v1.DecomposeEpicRequest
+	(*DecomposeEpicResponse)(nil), // 13: novaforge.work.v1.DecomposeEpicResponse
 }
 var file_novaforge_work_v1_work_proto_depIdxs = []int32{
 	0,  // 0: novaforge.work.v1.CreateItemResponse.item:type_name -> novaforge.work.v1.WorkItem
@@ -834,21 +929,24 @@ var file_novaforge_work_v1_work_proto_depIdxs = []int32{
 	0,  // 3: novaforge.work.v1.AssignItemResponse.item:type_name -> novaforge.work.v1.WorkItem
 	0,  // 4: novaforge.work.v1.Subtask.item:type_name -> novaforge.work.v1.WorkItem
 	9,  // 5: novaforge.work.v1.ListSubtasksResponse.subtasks:type_name -> novaforge.work.v1.Subtask
-	1,  // 6: novaforge.work.v1.WorkService.CreateItem:input_type -> novaforge.work.v1.CreateItemRequest
-	3,  // 7: novaforge.work.v1.WorkService.GetItem:input_type -> novaforge.work.v1.GetItemRequest
-	5,  // 8: novaforge.work.v1.WorkService.ListItems:input_type -> novaforge.work.v1.ListItemsRequest
-	7,  // 9: novaforge.work.v1.WorkService.AssignItem:input_type -> novaforge.work.v1.AssignItemRequest
-	10, // 10: novaforge.work.v1.WorkService.ListSubtasks:input_type -> novaforge.work.v1.ListSubtasksRequest
-	2,  // 11: novaforge.work.v1.WorkService.CreateItem:output_type -> novaforge.work.v1.CreateItemResponse
-	4,  // 12: novaforge.work.v1.WorkService.GetItem:output_type -> novaforge.work.v1.GetItemResponse
-	6,  // 13: novaforge.work.v1.WorkService.ListItems:output_type -> novaforge.work.v1.ListItemsResponse
-	8,  // 14: novaforge.work.v1.WorkService.AssignItem:output_type -> novaforge.work.v1.AssignItemResponse
-	11, // 15: novaforge.work.v1.WorkService.ListSubtasks:output_type -> novaforge.work.v1.ListSubtasksResponse
-	11, // [11:16] is the sub-list for method output_type
-	6,  // [6:11] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	0,  // 6: novaforge.work.v1.DecomposeEpicResponse.subtasks:type_name -> novaforge.work.v1.WorkItem
+	1,  // 7: novaforge.work.v1.WorkService.CreateItem:input_type -> novaforge.work.v1.CreateItemRequest
+	3,  // 8: novaforge.work.v1.WorkService.GetItem:input_type -> novaforge.work.v1.GetItemRequest
+	5,  // 9: novaforge.work.v1.WorkService.ListItems:input_type -> novaforge.work.v1.ListItemsRequest
+	7,  // 10: novaforge.work.v1.WorkService.AssignItem:input_type -> novaforge.work.v1.AssignItemRequest
+	10, // 11: novaforge.work.v1.WorkService.ListSubtasks:input_type -> novaforge.work.v1.ListSubtasksRequest
+	12, // 12: novaforge.work.v1.WorkService.DecomposeEpic:input_type -> novaforge.work.v1.DecomposeEpicRequest
+	2,  // 13: novaforge.work.v1.WorkService.CreateItem:output_type -> novaforge.work.v1.CreateItemResponse
+	4,  // 14: novaforge.work.v1.WorkService.GetItem:output_type -> novaforge.work.v1.GetItemResponse
+	6,  // 15: novaforge.work.v1.WorkService.ListItems:output_type -> novaforge.work.v1.ListItemsResponse
+	8,  // 16: novaforge.work.v1.WorkService.AssignItem:output_type -> novaforge.work.v1.AssignItemResponse
+	11, // 17: novaforge.work.v1.WorkService.ListSubtasks:output_type -> novaforge.work.v1.ListSubtasksResponse
+	13, // 18: novaforge.work.v1.WorkService.DecomposeEpic:output_type -> novaforge.work.v1.DecomposeEpicResponse
+	13, // [13:19] is the sub-list for method output_type
+	7,  // [7:13] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_novaforge_work_v1_work_proto_init() }
@@ -862,7 +960,7 @@ func file_novaforge_work_v1_work_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_novaforge_work_v1_work_proto_rawDesc), len(file_novaforge_work_v1_work_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   12,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

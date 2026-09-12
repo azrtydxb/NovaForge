@@ -88,6 +88,21 @@ func addWorkHandlers(h map[string]http.HandlerFunc, g gitv1.GitServiceClient, w 
 	}
 
 	if w != nil {
+		h["decomposeEpic"] = func(wr http.ResponseWriter, r *http.Request) {
+			resp, err := w.DecomposeEpic(r.Context(), &workv1.DecomposeEpicRequest{
+				EpicKey: chi.URLParam(r, "key"),
+			})
+			if err != nil {
+				WriteError(wr, StatusFromGRPC(err), err)
+				return
+			}
+			out := make([]map[string]any, 0, len(resp.GetSubtasks()))
+			for _, it := range resp.GetSubtasks() {
+				out = append(out, workItemJSON(it))
+			}
+			WriteJSON(wr, http.StatusCreated, map[string]any{"subtasks": out})
+		}
+
 		h["listSubtasks"] = func(wr http.ResponseWriter, r *http.Request) {
 			resp, err := w.ListSubtasks(r.Context(), &workv1.ListSubtasksRequest{
 				EpicKey: chi.URLParam(r, "key"),

@@ -19,6 +19,8 @@ type GRPCServer struct {
 	workv1.UnimplementedWorkServiceServer
 
 	Store *Store
+
+	decomposer Decomposer
 }
 
 // NewGRPCServer wraps store as a workv1.WorkServiceServer.
