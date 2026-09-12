@@ -45,25 +45,48 @@ export function Repos() {
           <Empty>This organization has no repositories yet.</Empty>
         </Panel>
       ) : (
-        <Browser org={w.org!} repo={active} />
+        <Browser
+          org={w.org!}
+          repo={active}
+          defaultBranch={
+            w.repos.find((r) => r.name === active)?.default_branch ?? "main"
+          }
+        />
       )}
     </Page>
   );
 }
 
-function Browser({ org, repo }: { org: string; repo: string }) {
+function Browser({
+  org,
+  repo,
+  defaultBranch,
+}: {
+  org: string;
+  repo: string;
+  defaultBranch: string;
+}) {
   const base = `/api/v1/orgs/${enc(org)}/repos/${enc(repo)}`;
   const [path, setPath] = useState("");
   const [file, setFile] = useState<string | null>(null);
+
+  const [branch, setBranch] = useState<string | null>(null);
 
   const branches = useQuery({
     queryKey: ["branches", org, repo],
     queryFn: () => api.get<{ refs: Ref[] }>(`${base}/branches`),
   });
+  const refs = branches.data?.refs ?? [];
+
+  // The branch shown is the one chosen, else the repository's default, else
+  // whatever exists. A repository whose default branch has no commit yet —
+  // which is every repository an agent has written to and nobody has pushed
+  // to — would otherwise show nothing at all.
   const head =
-    branches.data?.refs.find((r) => r.name === "main")?.name ??
-    branches.data?.refs[0]?.name ??
-    "main";
+    (branch && refs.some((r) => r.name === branch) ? branch : null) ??
+    refs.find((r) => r.name === defaultBranch)?.name ??
+    refs[0]?.name ??
+    defaultBranch;
 
   const tree = useQuery({
     queryKey: ["tree", org, repo, head, path],
@@ -99,7 +122,33 @@ function Browser({ org, repo }: { org: string; repo: string }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <Panel>
           <PanelHead>
-            {repo} · {head}
+            {repo}
+            <div style={{ flex: 1 }} />
+            <select
+              value={head}
+              onChange={(e) => {
+                setBranch(e.target.value);
+                setPath("");
+                setFile(null);
+              }}
+              style={{
+                background: "var(--bg)",
+                border: "1px solid var(--line-2)",
+                borderRadius: 6,
+                color: "var(--fg-dim)",
+                font: "11px var(--mono)",
+                padding: "3px 6px",
+                outline: "none",
+                maxWidth: 200,
+              }}
+            >
+              {refs.length === 0 ? <option>{head}</option> : null}
+              {refs.map((r) => (
+                <option key={r.name} value={r.name}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
           </PanelHead>
           <div
             style={{

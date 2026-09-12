@@ -3,6 +3,7 @@ package edge
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
@@ -364,7 +365,7 @@ func addGitHandlers(h map[string]http.HandlerFunc, c gitv1.GitServiceClient) {
 			}
 		}
 		resp, err := c.ListCommits(r.Context(), &gitv1.ListCommitsRequest{
-			Repo: chi.URLParam(r, "repo"), Ref: chi.URLParam(r, "ref"), Limit: int32(limit),
+			Repo: chi.URLParam(r, "repo"), Ref: refParam(r), Limit: int32(limit),
 		})
 		if err != nil {
 			WriteError(w, StatusFromGRPC(err), err)
@@ -383,7 +384,7 @@ func addGitHandlers(h map[string]http.HandlerFunc, c gitv1.GitServiceClient) {
 
 	h["getTree"] = func(w http.ResponseWriter, r *http.Request) {
 		resp, err := c.GetTree(r.Context(), &gitv1.GetTreeRequest{
-			Repo: chi.URLParam(r, "repo"), Ref: chi.URLParam(r, "ref"), Path: chi.URLParam(r, "*"),
+			Repo: chi.URLParam(r, "repo"), Ref: refParam(r), Path: chi.URLParam(r, "*"),
 		})
 		if err != nil {
 			WriteError(w, StatusFromGRPC(err), err)
@@ -401,7 +402,7 @@ func addGitHandlers(h map[string]http.HandlerFunc, c gitv1.GitServiceClient) {
 
 	h["getBlob"] = func(w http.ResponseWriter, r *http.Request) {
 		resp, err := c.GetBlob(r.Context(), &gitv1.GetBlobRequest{
-			Repo: chi.URLParam(r, "repo"), Ref: chi.URLParam(r, "ref"), Path: chi.URLParam(r, "*"),
+			Repo: chi.URLParam(r, "repo"), Ref: refParam(r), Path: chi.URLParam(r, "*"),
 		})
 		if err != nil {
 			WriteError(w, StatusFromGRPC(err), err)
@@ -438,4 +439,19 @@ func refsJSON(refs []*gitv1.Ref) []map[string]any {
 		out = append(out, map[string]any{"name": rf.GetName(), "sha": rf.GetSha(), "kind": rf.GetKind()})
 	}
 	return out
+}
+
+// refParam reads the {ref} path segment and undoes its percent-encoding.
+//
+// A ref is one path segment in these routes, but a git ref routinely contains
+// slashes — every branch this platform's own agents write to is
+// "agents/<work item>/work". A client has to encode those slashes to keep the
+// ref in one segment, and chi hands the segment back still encoded, so
+// without this the repository browser cannot open any branch an agent wrote.
+func refParam(r *http.Request) string {
+	raw := chi.URLParam(r, "ref")
+	if decoded, err := url.PathUnescape(raw); err == nil {
+		return decoded
+	}
+	return raw
 }
