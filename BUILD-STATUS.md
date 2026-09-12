@@ -165,6 +165,37 @@ the approval policy, the MCP tool list, and the secrets and leases surface.
 Two of those were already answerable by a service and had no way for a person
 to reach them; the rest needed a store query or an RPC.
 
+## Driven in a browser
+
+The GUI was exercised with Chrome DevTools against the live cluster, doing the
+whole loop through the interface rather than through the API: create an
+account, create an organization, create a repository, create a Work Item with
+acceptance criteria, define an agent, start an Agent Run on that Work Item,
+and then read the file the agent committed. All seventeen screens were walked
+with the console open; every request answered 200 except reads of a
+repository that genuinely had no commits yet.
+
+It found six defects that no API-level test could have:
+
+- The application had **no way to create anything** — every create endpoint
+  existed and no screen offered a form, so it could show the platform and
+  never add to it.
+- Creating an organization took the whole application to a **blank page**: the
+  members list returns "username" and this client read "name". Four more of
+  the same followed, because the types had been written from the design rather
+  than from the handlers.
+- A **branch with a slash in it could not be browsed**, which is every branch
+  an agent writes (`agents/<key>/work`).
+- The **file viewer asked for JSON and got a file** — the blob endpoint serves
+  raw bytes.
+- The agent list showed **"running" for an agent that was merely enabled**.
+- Two of the mismatches were the API's own fault: `WorkItemJSON` and `RunJSON`
+  carried only descriptive fields, leaving every listing with no stable key,
+  nothing to order by, and no way to say who held an item.
+
+An ErrorBoundary now contains a screen's crash to that screen; the blank page
+is what made the first of these hard to see at all.
+
 ## Known limitations
 
 These are real and are not worked around:
