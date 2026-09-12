@@ -44,8 +44,13 @@ type Provenance struct {
 // Run is a row in the agents.agent_runs table: one execution of an agent
 // against a work item, bounded by wall-clock, token, and cost limits.
 type Run struct {
-	ID              uuid.UUID
-	OrgID           uuid.UUID
+	ID    uuid.UUID
+	OrgID uuid.UUID
+	// RepoID is the repository this run works in. Without it the run loop
+	// cannot tell the agent which repository it is in, and every repo.* tool
+	// is unusable: the column existed from the branch-lock migration onward,
+	// but nothing carried it out of the database.
+	RepoID          uuid.UUID
 	AgentID         uuid.UUID
 	WorkItemID      uuid.UUID
 	SponsorID       uuid.UUID
@@ -206,10 +211,10 @@ func (s *Store) CreateRun(ctx context.Context, r Run) (Run, error) {
 
 	_, err := s.pool.Exec(ctx,
 		`INSERT INTO agents.agent_runs
-		   (id, org_id, agent_id, work_item_id, sponsor_id, grant_id, branch, state,
+		   (id, org_id, repo_id, agent_id, work_item_id, sponsor_id, grant_id, branch, state,
 		    wallclock_limit_seconds, token_limit, cost_limit_micros)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, 'queued', $8, $9, $10)`,
-		r.ID, r.OrgID, r.AgentID, workItemID, r.SponsorID, r.GrantID, r.Branch,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'queued', $9, $10, $11)`,
+		r.ID, r.OrgID, r.RepoID, r.AgentID, workItemID, r.SponsorID, r.GrantID, r.Branch,
 		wallclockSeconds, tokenLimit, costLimit,
 	)
 	if err != nil {
@@ -234,12 +239,12 @@ func (s *Store) GetRun(ctx context.Context, id uuid.UUID) (Run, error) {
 	var wallclockSeconds int
 	var startedAt, endedAt *time.Time
 	err = s.pool.QueryRow(ctx,
-		`SELECT id, org_id, agent_id, COALESCE(work_item_id, '00000000-0000-0000-0000-000000000000'),
+		`SELECT id, org_id, repo_id, agent_id, COALESCE(work_item_id, '00000000-0000-0000-0000-000000000000'),
 		        sponsor_id, grant_id, branch, state, started_at, ended_at,
 		        wallclock_limit_seconds, token_limit, cost_limit_micros
 		 FROM agents.agent_runs WHERE id = $1 AND org_id = $2`,
 		id, scope.OrgID,
-	).Scan(&r.ID, &r.OrgID, &r.AgentID, &workItemID, &sponsorID, &grantID, &r.Branch,
+	).Scan(&r.ID, &r.OrgID, &r.RepoID, &r.AgentID, &workItemID, &sponsorID, &grantID, &r.Branch,
 		&r.State, &startedAt, &endedAt, &wallclockSeconds, &r.TokenLimit, &r.CostLimitMicros)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

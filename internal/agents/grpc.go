@@ -169,7 +169,8 @@ func (g *GRPCServer) StartRun(ctx context.Context, req *agentsv1.StartRunRequest
 	if err != nil {
 		return nil, err
 	}
-	if _, err := parseUUID("repo_id", req.GetRepoId()); err != nil {
+	repoID, err := parseUUID("repo_id", req.GetRepoId())
+	if err != nil {
 		return nil, err
 	}
 	if req.GetWorkItemKey() == "" {
@@ -208,6 +209,7 @@ func (g *GRPCServer) StartRun(ctx context.Context, req *agentsv1.StartRunRequest
 
 	run, err := g.Store.CreateRun(ctx, Run{
 		OrgID:           orgID,
+		RepoID:          repoID,
 		AgentID:         agentID,
 		WorkItemID:      workItemID,
 		SponsorID:       sponsorID,

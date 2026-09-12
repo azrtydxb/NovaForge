@@ -263,3 +263,28 @@ func scopedTestCtx(orgID uuid.UUID) context.Context {
 		ActorKind: "agent",
 	})
 }
+
+// TestOpeningBriefNamesTheWork pins a defect that made every agent run
+// useless: the opening turn said only "Begin work on run <uuid>". The agent
+// was never told which work item it was for, which repository it was in, or
+// which branch it could write to — so work.get, which needs the work item's
+// id, and every repo.* tool, which needs the repository, were uncallable.
+func TestOpeningBriefNamesTheWork(t *testing.T) {
+	run := agents.Run{
+		ID:         uuid.New(),
+		RepoID:     uuid.New(),
+		WorkItemID: uuid.New(),
+		Branch:     "agents/NF-7/",
+	}
+	brief := agentrun.OpeningBrief(run)
+
+	for _, want := range []string{
+		run.WorkItemID.String(),
+		run.RepoID.String(),
+		run.Branch,
+	} {
+		if !strings.Contains(brief, want) {
+			t.Errorf("the opening brief never mentions %q:\n%s", want, brief)
+		}
+	}
+}

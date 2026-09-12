@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+
+	"github.com/google/uuid"
 
 	"github.com/azrtydxb/go-ai-sdk/provider"
 
@@ -62,10 +65,17 @@ func NewLoop(model provider.LanguageModel, budget *agents.Budget, audit *agents.
 func (l *Loop) Execute(ctx context.Context, run agents.Run, reg *tools.Registry) (Result, error) {
 	toolDefs := buildToolDefs(reg)
 
+	// The agent is told what it is working on, not just that it is working.
+	// "Begin work on run <uuid>" was all it used to get: no work item, no
+	// repository, no branch — so it could not call work.get (which needs the
+	// work item's id) or any repo.* tool (which needs the repository), and
+	// had nothing to do but guess.
 	messages := []provider.Message{
 		provider.SystemText("You are an autonomous NovaForge engineering agent. Use the " +
-			"provided tools to accomplish the assigned work item; call no tool that isn't offered."),
-		provider.UserText(fmt.Sprintf("Begin work on run %s.", run.ID)),
+			"provided tools to accomplish the assigned work item; call no tool that isn't offered. " +
+			"Start by reading the work item to learn what is being asked of you. " +
+			"You may write only to the branch named below."),
+		provider.UserText(OpeningBrief(run)),
 	}
 
 	var steps int
@@ -172,4 +182,21 @@ func (l *Loop) finish(ctx context.Context, run agents.Run, state string, steps i
 		}
 	}
 	return Result{State: state, Steps: steps, TokensUsed: tokensUsed, Summary: summary}, nil
+}
+
+// OpeningBrief renders what an agent needs to begin: which work item, which
+// repository, and the one branch its capability grant lets it write to.
+func OpeningBrief(run agents.Run) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Run %s.\n", run.ID)
+	if run.WorkItemID != uuid.Nil {
+		fmt.Fprintf(&b, "Work item: %s — read it with work.get before doing anything else.\n", run.WorkItemID)
+	}
+	if run.RepoID != uuid.Nil {
+		fmt.Fprintf(&b, "Repository: %s — pass this as the \"repo\" argument to repo.* and git.* tools.\n", run.RepoID)
+	}
+	if run.Branch != "" {
+		fmt.Fprintf(&b, "Branch: %s — the only branch you may write to.\n", run.Branch)
+	}
+	return b.String()
 }
