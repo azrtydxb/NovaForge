@@ -31,6 +31,7 @@ import (
 	"github.com/novaforge/novaforge/internal/capability"
 	"github.com/novaforge/novaforge/internal/database"
 	"github.com/novaforge/novaforge/internal/service"
+	"github.com/novaforge/novaforge/internal/svcauth"
 	"github.com/novaforge/novaforge/internal/tools"
 	"github.com/novaforge/novaforge/internal/workspace"
 )
@@ -155,7 +156,13 @@ func main() {
 	execute := newExecuteFunc(store, grants, audit, provisioner, gitClient, graphClient, workClient, cfg)
 	grpcServer := agents.NewGRPCServer(store, grants, rdb, workClient, execute)
 
-	srv := grpc.NewServer(grpc.UnaryInterceptor(authInterceptor(identityClient)))
+	// Callers are resolved the same way every other service resolves them:
+	// a person's credential through identity, or a platform service token
+	// verified locally. The swarm scheduler in work-reviews starts runs with
+	// the latter, so an interceptor that only understood the former would
+	// silently refuse every autonomously started run.
+	srv := grpc.NewServer(grpc.UnaryInterceptor(
+		svcauth.UnaryServerInterceptor(identityClient, cfg.HMACSecret)))
 	agentsv1.RegisterAgentServiceServer(srv, grpcServer)
 
 	if provisioner != nil {

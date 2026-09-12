@@ -1,6 +1,7 @@
 package work_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -183,4 +184,77 @@ func TestSelfDependencyRejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("want error for self-dependency")
 	}
+}
+
+// TestOpenEpicsFindsDecomposedEpics pins the query the swarm scheduler
+// ticks from. It is the one query in this package with no organization
+// predicate — the scheduler is a platform worker — so the test also pins
+// that it returns each epic paired with the organization the scheduler must
+// re-enter before touching anything.
+func TestOpenEpicsFindsDecomposedEpics(t *testing.T) {
+	store := newStore(t)
+	orgID := uuid.New()
+	repoID := uuid.New()
+	ctx := scopedCtx(orgID)
+
+	epic, err := store.Create(ctx, work.Item{OrgID: orgID, RepoID: repoID, Type: "feature", Goal: "an epic"})
+	if err != nil {
+		t.Fatalf("create epic: %v", err)
+	}
+	child, err := store.Create(ctx, work.Item{OrgID: orgID, RepoID: repoID, Type: "feature", Goal: "a subtask"})
+	if err != nil {
+		t.Fatalf("create subtask: %v", err)
+	}
+	if err := store.SetParent(ctx, child.ID, epic.ID); err != nil {
+		t.Fatalf("SetParent: %v", err)
+	}
+
+	// An item with no children is not an epic and must not be ticked.
+	lone, err := store.Create(ctx, work.Item{OrgID: orgID, RepoID: repoID, Type: "bug", Goal: "not an epic"})
+	if err != nil {
+		t.Fatalf("create lone item: %v", err)
+	}
+
+	epics, err := store.OpenEpics(context.Background())
+	if err != nil {
+		t.Fatalf("OpenEpics: %v", err)
+	}
+	var foundEpic, foundLone bool
+	for _, e := range epics {
+		if e.ID == epic.ID {
+			foundEpic = true
+			if e.OrgID != orgID {
+				t.Fatalf("epic came back under org %s, want %s", e.OrgID, orgID)
+			}
+		}
+		if e.ID == lone.ID {
+			foundLone = true
+		}
+	}
+	if !foundEpic {
+		t.Fatal("the decomposed epic is not listed, so the swarm scheduler would never tick it")
+	}
+	if foundLone {
+		t.Fatal("an item with no subtasks was listed as an epic")
+	}
+}
+
+func TestOrganizationsWithWorkListsTheOrg(t *testing.T) {
+	store := newStore(t)
+	orgID := uuid.New()
+	ctx := scopedCtx(orgID)
+
+	if _, err := store.Create(ctx, work.Item{OrgID: orgID, RepoID: uuid.New(), Type: "bug", Goal: "x"}); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	orgs, err := store.OrganizationsWithWork(context.Background())
+	if err != nil {
+		t.Fatalf("OrganizationsWithWork: %v", err)
+	}
+	for _, id := range orgs {
+		if id == orgID {
+			return
+		}
+	}
+	t.Fatal("the organization is not listed, so the maintenance sweep would skip it")
 }

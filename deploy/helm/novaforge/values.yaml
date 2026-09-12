@@ -54,6 +54,19 @@ ai:
     chat_template_kwargs:
       enable_thinking: false
 
+# The software-factory layer: what the platform does on its own.
+factory:
+  autoMerge:
+    # Off by default. A fresh installation must never merge anything without
+    # an explicit opt-in, however green its gates are.
+    enabled: false
+    # A change above this many files is never auto-merged, whatever its gates
+    # say — size is its own kind of risk. 0 means no cap.
+    maxFilesChanged: 20
+  maintenance:
+    # How often the maintenance scanners sweep every repository.
+    intervalHours: 24
+
 resources:
   requests: { cpu: 100m, memory: 128Mi }
   limits: { cpu: "2", memory: 1Gi }

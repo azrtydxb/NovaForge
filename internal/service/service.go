@@ -55,6 +55,14 @@ type Config struct {
 	EmbedEndpoint     string
 	EmbedModel        string
 
+	// AutoMergeEnabled and AutoMergeMaxFiles configure reviews.AutoMergePolicy.
+	// Auto-merge is off unless a deployment turns it on: a fresh installation
+	// must never merge anything without an explicit opt-in.
+	AutoMergeEnabled  bool
+	AutoMergeMaxFiles int
+	// MaintenanceIntervalHours is how often the maintenance scanners run.
+	MaintenanceIntervalHours int
+
 	JWTSecret  string
 	HMACSecret string
 	SecretsKEK string

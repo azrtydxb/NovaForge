@@ -97,6 +97,12 @@ spec:
               value: {{ $.Values.ai.embedModel | quote }}
             - name: AI_PROVIDER_OPTIONS
               value: {{ $.Values.ai.providerOptions | toJson | quote }}
+            - name: AUTO_MERGE_ENABLED
+              value: {{ $.Values.factory.autoMerge.enabled | quote }}
+            - name: AUTO_MERGE_MAX_FILES_CHANGED
+              value: {{ $.Values.factory.autoMerge.maxFilesChanged | quote }}
+            - name: MAINTENANCE_INTERVAL_HOURS
+              value: {{ $.Values.factory.maintenance.intervalHours | quote }}
           ports:
             - name: health
               containerPort: 8090

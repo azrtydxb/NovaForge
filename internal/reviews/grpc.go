@@ -2,6 +2,7 @@ package reviews
 
 import (
 	"context"
+	"log"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
@@ -21,6 +22,13 @@ type GRPCServer struct {
 	reviewsv1.UnimplementedReviewsServiceServer
 
 	Store *Store
+
+	// AutoMerge, when set, is consulted after every review submission: a
+	// run whose last blocking review has just landed is exactly the moment
+	// policy can be re-evaluated. It is nil when the deployment has not
+	// enabled auto-merge, and Consider itself refuses when the policy is
+	// off, so this is two independent "no"s rather than one.
+	AutoMerge *AutoMerger
 }
 
 // NewGRPCServer wraps store as a reviewsv1.ReviewsServiceServer.
@@ -243,6 +251,7 @@ func (g *GRPCServer) SubmitReview(ctx context.Context, req *reviewsv1.SubmitRevi
 	if err := g.Store.SubmitReview(ctx, runID, reviewerID, req.GetReviewerKind(), req.GetVerdict()); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "submit review: %v", err)
 	}
+	g.considerAutoMerge(ctx, runID)
 	return &reviewsv1.SubmitReviewResponse{Ok: true}, nil
 }
 
@@ -264,4 +273,24 @@ func (g *GRPCServer) AddComment(ctx context.Context, req *reviewsv1.AddCommentRe
 		return nil, status.Errorf(codes.InvalidArgument, "add comment: %v", err)
 	}
 	return &reviewsv1.AddCommentResponse{Id: comment.ID.String(), CreatedAt: comment.CreatedAt.Format(rfc3339)}, nil
+}
+
+// considerAutoMerge re-evaluates auto-merge policy for runID after a review
+// lands. A refusal is not an error the submitter should see — their review
+// was recorded either way — so the outcome is logged, not returned.
+// Consider merges only through Merger.Merge, which asks the gate controller
+// first, so this can never merge something a person could not have merged.
+func (g *GRPCServer) considerAutoMerge(ctx context.Context, runID uuid.UUID) {
+	if g.AutoMerge == nil {
+		return
+	}
+	merged, reason, err := g.AutoMerge.Consider(ctx, runID)
+	switch {
+	case err != nil:
+		log.Printf("reviews: auto-merge could not evaluate run %s: %v", runID, err)
+	case merged:
+		log.Printf("reviews: auto-merged run %s", runID)
+	case reason != "":
+		log.Printf("reviews: run %s not auto-merged: %s", runID, reason)
+	}
 }

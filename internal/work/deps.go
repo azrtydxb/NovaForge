@@ -245,3 +245,64 @@ func scanItems(rows pgx.Rows) ([]Item, error) {
 	}
 	return items, nil
 }
+
+// Epic identifies one epic the swarm scheduler should tick, together with
+// the organization it belongs to.
+type Epic struct {
+	OrgID uuid.UUID
+	ID    uuid.UUID
+}
+
+// OpenEpics returns every Work Item that has at least one child subtask and
+// is not yet finished, across all organizations. It is deliberately the one
+// query in this package with no organization predicate: the swarm
+// scheduler is a platform worker that has no organization of its own, and
+// it re-enters each organization's scope explicitly before touching that
+// organization's rows. Nothing here returns a Work Item's contents — only
+// the pair of ids the scheduler needs to scope itself — so no organization
+// boundary is crossed by what is read.
+func (s *Store) OpenEpics(ctx context.Context) ([]Epic, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT p.org_id, p.id
+		FROM work.work_items p
+		JOIN work.work_items c ON c.parent_id = p.id
+		WHERE p.state <> 'done'`)
+	if err != nil {
+		return nil, fmt.Errorf("list open epics: %w", err)
+	}
+	defer rows.Close()
+
+	var out []Epic
+	for rows.Next() {
+		var e Epic
+		if err := rows.Scan(&e.OrgID, &e.ID); err != nil {
+			return nil, fmt.Errorf("scan epic: %w", err)
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// OrganizationsWithWork returns every organization that has at least one
+// Work Item. Like OpenEpics it deliberately carries no organization
+// predicate: the maintenance sweeper is a platform worker with no
+// organization of its own, and it re-enters each organization's scope
+// before reading anything belonging to it. Only ids are returned, so
+// nothing of one organization's content is visible to another.
+func (s *Store) OrganizationsWithWork(ctx context.Context) ([]uuid.UUID, error) {
+	rows, err := s.pool.Query(ctx, `SELECT DISTINCT org_id FROM work.work_items`)
+	if err != nil {
+		return nil, fmt.Errorf("list organizations with work: %w", err)
+	}
+	defer rows.Close()
+
+	var out []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan organization: %w", err)
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}

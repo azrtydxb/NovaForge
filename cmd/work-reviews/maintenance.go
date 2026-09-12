@@ -1,0 +1,185 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"time"
+
+	"github.com/google/uuid"
+
+	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
+	"github.com/novaforge/novaforge/internal/authz"
+	"github.com/novaforge/novaforge/internal/maintenance"
+	"github.com/novaforge/novaforge/internal/work"
+)
+
+// runMaintenanceScanners sweeps every repository on an interval, proposing
+// a Work Item for each finding. Nothing executes a fix and nothing starts
+// an agent: a proposal is a plain, unassigned Work Item a person decides
+// about. Without this the scanners and the proposer both existed, both
+// tested, and nothing ever swept anything.
+func runMaintenanceScanners(ctx context.Context, workStore *work.Store, git gitv1.GitServiceClient, hmacSecret string, every time.Duration) {
+	proposer := &maintenance.Proposer{Work: workStore}
+	ticker := time.NewTicker(every)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			sweep(ctx, proposer, workStore, git, hmacSecret)
+		}
+	}
+}
+
+// sweep scans every repository of every organization that has work items,
+// once. One repository's failure is logged and skipped.
+func sweep(ctx context.Context, proposer *maintenance.Proposer, workStore *work.Store, git gitv1.GitServiceClient, hmacSecret string) {
+	orgs, err := workStore.OrganizationsWithWork(ctx)
+	if err != nil {
+		log.Printf("work-reviews: maintenance: list organizations: %v", err)
+		return
+	}
+	for _, orgID := range orgs {
+		orgCtx := authz.WithScope(ctx, authz.Scope{OrgID: orgID, ActorKind: "service"})
+		callCtx, err := withServiceIdentity(orgCtx, hmacSecret, orgID)
+		if err != nil {
+			log.Printf("work-reviews: maintenance: %v", err)
+			continue
+		}
+		repos, err := git.ListRepos(callCtx, &gitv1.ListReposRequest{})
+		if err != nil {
+			log.Printf("work-reviews: maintenance: list repos for org %s: %v", orgID, err)
+			continue
+		}
+		for _, r := range repos.GetRepos() {
+			repoID, perr := uuid.Parse(r.GetId())
+			if perr != nil {
+				continue
+			}
+			findings, serr := scanRepository(callCtx, git, orgID, repoID, r.GetName(), r.GetDefaultBranch())
+			if serr != nil {
+				log.Printf("work-reviews: maintenance: scan %s: %v", r.GetName(), serr)
+				continue
+			}
+			if len(findings) == 0 {
+				continue
+			}
+			items, perr := proposer.Propose(orgCtx, orgID, repoID, findings)
+			if perr != nil {
+				log.Printf("work-reviews: maintenance: propose for %s: %v", r.GetName(), perr)
+				continue
+			}
+			if len(items) > 0 {
+				log.Printf("work-reviews: maintenance: proposed %d work item(s) for %s", len(items), r.GetName())
+			}
+		}
+	}
+}
+
+// scanRepository checks the repository out into a temporary directory and
+// runs every scanner against it. Scanners whose tooling is absent from this
+// image report that through onError and are skipped; the remaining
+// scanners still run and still report, which is the isolation the scanner
+// registry is built around.
+func scanRepository(ctx context.Context, git gitv1.GitServiceClient, orgID, repoID uuid.UUID, name, defaultBranch string) ([]maintenance.Finding, error) {
+	dir, err := os.MkdirTemp("", "novaforge-maintenance-*")
+	if err != nil {
+		return nil, fmt.Errorf("create scan directory: %w", err)
+	}
+	defer os.RemoveAll(dir)
+
+	if err := materialiseTree(ctx, git, repoID, defaultBranch, dir); err != nil {
+		return nil, err
+	}
+
+	in := maintenance.ScanInput{
+		OrgID:     orgID,
+		RepoID:    repoID,
+		WorkDir:   dir,
+		TargetRef: defaultBranch,
+		Proc:      procRunner,
+		Git:       git,
+	}
+	return maintenance.RunAll(ctx, in, func(kind string, err error) {
+		log.Printf("work-reviews: maintenance: %s scanner on %s: %v", kind, name, err)
+	}), nil
+}
+
+// materialiseTree writes the repository's default-branch tree into dir
+// through the git service, so a scanner that walks files on disk has files
+// to walk. It reads through the platform rather than cloning directly: the
+// service that owns the repositories is the one that decides what may be
+// read.
+func materialiseTree(ctx context.Context, git gitv1.GitServiceClient, repoID uuid.UUID, ref, dir string) error {
+	return materialiseDir(ctx, git, repoID, ref, "", dir, 0)
+}
+
+// maxTreeDepth bounds the recursive walk. A repository is not expected to
+// nest this deeply, and a bound means a pathological or cyclic tree cannot
+// spin this loop forever.
+const maxTreeDepth = 32
+
+func materialiseDir(ctx context.Context, git gitv1.GitServiceClient, repoID uuid.UUID, ref, path, dir string, depth int) error {
+	if depth > maxTreeDepth {
+		return nil
+	}
+	tree, err := git.GetTree(ctx, &gitv1.GetTreeRequest{Repo: repoID.String(), Ref: ref, Path: path})
+	if err != nil {
+		return fmt.Errorf("read tree at %q: %w", path, err)
+	}
+	for _, entry := range tree.GetEntries() {
+		child := entry.GetName()
+		if path != "" {
+			child = path + "/" + entry.GetName()
+		}
+		if entry.GetKind() == "tree" {
+			if err := materialiseDir(ctx, git, repoID, ref, child, dir, depth+1); err != nil {
+				return err
+			}
+			continue
+		}
+		blob, err := git.GetBlob(ctx, &gitv1.GetBlobRequest{Repo: repoID.String(), Ref: ref, Path: child})
+		if err != nil {
+			return fmt.Errorf("read %s: %w", child, err)
+		}
+		full := filepath.Join(dir, filepath.Clean(child))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			return fmt.Errorf("create directory for %s: %w", child, err)
+		}
+		if err := os.WriteFile(full, blob.GetContent(), 0o644); err != nil {
+			return fmt.Errorf("write %s: %w", child, err)
+		}
+	}
+	return nil
+}
+
+// procRunner invokes procoder for the scanners that need it. Where the
+// binary is not present in this image, the scanners that depend on it
+// report that plainly and the rest still run.
+func procRunner(ctx context.Context, workdir string, args ...string) ([]byte, int, error) {
+	cmd := exec.CommandContext(ctx, "procoder", args...)
+	cmd.Dir = workdir
+	out, err := cmd.Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if ok := asExitError(err, &exitErr); ok {
+			return out, exitErr.ExitCode(), nil
+		}
+		return nil, 0, fmt.Errorf("run procoder %v: %w", args, err)
+	}
+	return out, 0, nil
+}
+
+func asExitError(err error, target **exec.ExitError) bool {
+	e, ok := err.(*exec.ExitError)
+	if ok {
+		*target = e
+	}
+	return ok
+}

@@ -43,8 +43,12 @@ API use in-process doubles, which is what they are for.
    cloned and pushed over **SSH**.
 6. Both pushed commits read back through the REST API.
 
-31 Go packages pass `go test`, 0 failures, against the real PostgreSQL, Redis
+32 Go packages pass `go test`, 0 failures, against the real PostgreSQL, Redis
 and MinIO — no datastore is mocked anywhere.
+
+`bash tests/e2e/work_ci_test.sh` passes: a Work Item is created and listed, a
+push schedules a CI run from the repository's workflow file, a runner in its
+own pod executes it, and the job's log and declared artifact come back.
 
 ## Defects found by running it, not by reading it
 
@@ -67,24 +71,42 @@ Each was fixed with a test that pins it:
 - Creating a token with no scopes violated a NOT NULL constraint.
 - A push-event test read the first message of a durable shared Redis stream, so
   an event from an earlier run won.
+- `ClaimJob` and `Dispatch` were both written, both tested, and never called by
+  anything. No run ever reached a runner.
+- A runner in one organization could be handed another organization's job — the
+  claim carried no org predicate, so it leaked the source and its credentials.
+- Artifact collection ran `kubectl exec` against a job's pod after the job
+  finished, which can never work: the container has terminated. A job now
+  captures its declared artifacts before it exits.
+- The platform sent no credential to the model gateway and named models
+  (`qwen`, `qwen-embed`) that it does not serve, so every model-backed feature
+  was dark in a deployment that looked configured.
+- The planner refused every decomposition it was given: it validates each
+  subtask's agent role against a known set, never told the model what that set
+  was, and was wired up with no roles at all.
+- Asked for structured output, the cluster's reasoning model spent its entire
+  completion budget on chain-of-thought and returned no answer at all. The
+  deployment now names the wire parameter that turns thinking off.
 
 ## Known limitations
 
 These are real and are not worked around:
 
-- **No model is available in the cluster.** The FastLLM proxy at
-  `192.168.10.125:4000` authenticates but `/v1/models` returns an empty list.
-  Everything that needs an LLM — the agent run loop, epic decomposition, agent
-  reviewers, semantic embeddings — is implemented and unit-tested against
-  in-process stub models, which is the correct double for an external service,
-  but **has not been exercised against a real model**. Point `ai.endpoint` at a
-  served model and those paths become testable.
-- **CI job isolation is real, agent workspace isolation is untested in anger.**
+- **The model gateway needs a credential this repository does not carry.**
+  `hack/env.local.sh` is untracked and holds `AI_API_KEY` and
+  `REGISTRY_PASSWORD`; `hack/deploy.sh` refuses to deploy without the first,
+  because a deployment with no gateway credential looks configured and is not.
+  A fresh clone must create that file before deploying.
+- **Model choice is not free on this cluster.** The 27B dense model takes over
+  120 seconds to first token for a planner-sized prompt, which is past the
+  gateway's upstream header timeout, so every such call 502s. The chart points
+  at the MoE model (`qwen3-6-35b-a3b`), which answers the same prompt in about
+  six seconds.
+- **Agent workspace isolation is implemented but not exercised in anger.**
   CI jobs run in their own Kubernetes pod, proven by test. Agent Run namespaces
-  are implemented and unit-tested against the client-go fake, but a full agent
-  run needs a model (above).
-- **Some typed agent tools report an honest error rather than working**:
-  `repo.search`, `repo.get_symbol`, `repo.get_dependencies` need the graph
-  client wired into the tool adapter, and `git.commit` and `work.comment` need
-  RPCs that do not exist yet on git-platform and work. They fail loudly with the
-  reason instead of returning a plausible empty result.
+  are implemented and unit-tested against the client-go fake; a full agent run
+  through the tool loop against the live model has not been driven end to end.
+- **Embeddings are configured but not proven end to end.** `embed`/`bge-m3`
+  answer on the gateway (verified by hand), and the indexing path is tested
+  against the real pgvector database, but no acceptance test drives a push all
+  the way through to a semantic search result.

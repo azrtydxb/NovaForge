@@ -10,12 +10,16 @@ import (
 	"github.com/novaforge/novaforge/internal/swarm"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 
+	agentsv1 "github.com/novaforge/novaforge/gen/novaforge/agents/v1"
+	gatesv1 "github.com/novaforge/novaforge/gen/novaforge/gates/v1"
+	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
 	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
 	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
@@ -91,6 +95,66 @@ func main() {
 		log.Println("work-reviews: no AI endpoint configured, decomposition is unavailable")
 	}
 	reviewsServer := reviews.NewGRPCServer(reviewsStore)
+
+	// Auto-merge is considered after every review submission, and only ever
+	// merges through the same gate check a person's merge passes.
+	if cfg.GitAddr != "" && cfg.GatesAddr != "" {
+		gitConn, err := grpc.NewClient(cfg.GitAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			log.Fatalf("work-reviews: dial git-platform: %v", err)
+		}
+		defer gitConn.Close()
+		gatesConn, err := grpc.NewClient(cfg.GatesAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			log.Fatalf("work-reviews: dial gates: %v", err)
+		}
+		defer gatesConn.Close()
+
+		gitClient := gitv1.NewGitServiceClient(gitConn)
+
+		// The maintenance scanners sweep every repository on an interval,
+		// proposing Work Items for what they find. Nothing here executes a
+		// fix or starts an agent: a proposal is a plain, unassigned Work
+		// Item somebody decides about.
+		if hours := cfg.MaintenanceIntervalHours; hours > 0 {
+			go runMaintenanceScanners(ctx, workStore, gitClient, cfg.HMACSecret, time.Duration(hours)*time.Hour)
+			log.Printf("work-reviews: maintenance scanners sweeping every %dh", hours)
+		} else {
+			log.Println("work-reviews: MAINTENANCE_INTERVAL_HOURS is unset; no maintenance sweep runs")
+		}
+
+		reviewsServer.AutoMerge = newAutoMerger(
+			reviews.AutoMergePolicy{
+				Enabled:         cfg.AutoMergeEnabled,
+				MaxFilesChanged: cfg.AutoMergeMaxFiles,
+			},
+			reviewsStore,
+			gitClient,
+			gatesv1.NewGatesServiceClient(gatesConn),
+			workStore,
+		)
+		if reviewsServer.AutoMerge != nil {
+			log.Printf("work-reviews: auto-merge enabled, cap %d files", cfg.AutoMergeMaxFiles)
+		} else {
+			log.Println("work-reviews: auto-merge is disabled by policy")
+		}
+	}
+
+	// A decomposed epic is only worth decomposing if something then starts
+	// its ready subtasks. AGENTS_ADDR unset means this deployment runs no
+	// agents, which is a legitimate configuration — it is said out loud
+	// rather than left as silence.
+	if cfg.AgentsAddr != "" {
+		agentsConn, err := grpc.NewClient(cfg.AgentsAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			log.Fatalf("work-reviews: dial agent-runtime: %v", err)
+		}
+		defer agentsConn.Close()
+		go runSwarmScheduler(ctx, workStore, agentsv1.NewAgentServiceClient(agentsConn), cfg.HMACSecret)
+		log.Printf("work-reviews: swarm scheduler ticking every %s via %s", swarmTickInterval, cfg.AgentsAddr)
+	} else {
+		log.Println("work-reviews: AGENTS_ADDR is unset; ready subtasks will not be started automatically")
+	}
 
 	srv := grpc.NewServer(grpc.UnaryInterceptor(authInterceptor(identityClient)))
 	workv1.RegisterWorkServiceServer(srv, workServer)
