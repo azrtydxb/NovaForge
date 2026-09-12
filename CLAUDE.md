@@ -43,6 +43,7 @@ source hack/env.sh          # BuildKit, registry, kube context, test datastores
 bash tests/e2e/deploy_test.sh     # git round trip over HTTPS and SSH
 bash tests/e2e/work_ci_test.sh    # Work Item, push, CI run in a pod, log and artifact
 bash tests/e2e/factory_test.sh    # epic decomposition by the real model, dependency ordering
+bash tests/e2e/agent_test.sh      # an Agent Run executes and commits its work
 ```
 
 `hack/env.local.sh` is untracked and holds `REGISTRY_PASSWORD` and `AI_API_KEY`. A fresh
@@ -87,7 +88,11 @@ STANDARD lint), REST/OpenAPI only at the edge, Redis Streams for events.
 ### The defect class to watch for
 
 Almost every defect found here was a **seam**, not a component: both sides were correct and
-unit-tested, and nothing connected them. `ClaimJob` and `Dispatch` were both written, both
+unit-tested, and nothing connected them. The in-process doubles are where this hides: the
+client-go fake validates no Kubernetes schema, so a namespace with an illegal label and a
+pod with an empty PVC claim both passed every unit test and were refused by the API server.
+Assert against the real validator (`k8s.io/apimachinery/pkg/util/validation`) rather than
+against the fake's tolerance. `ClaimJob` and `Dispatch` were both written, both
 tested, and called by nothing. So were the swarm scheduler, the maintenance scanners and the
 auto-merger. Three config fields were declared, rendered into the chart, set in the pod, and
 never read. These are invisible to unit tests and usually present as _silence_ — a queued
