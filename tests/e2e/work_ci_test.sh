@@ -50,9 +50,40 @@ ORG_ID="$(curl -fsS "http://$EDGE_IP:8080/api/v1/orgs/$ORG" \
 	-H "Authorization: Bearer $(python3 -c "import json,os;print(json.load(open(os.environ['XDG_CONFIG_HOME']+'/novaforge/config.json'))['token'])")" |
 	python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')"
 [ -n "$ORG_ID" ] || fail "could not resolve the organization id"
-helm --kube-context "$KUBE_CONTEXT" upgrade "$REL" deploy/helm/novaforge \
-	--namespace "$NS" --reuse-values \
-	--set runner.orgId="$ORG_ID" --wait --timeout 5m >/dev/null || fail "deploying a runner failed"
+# Create only the runner rather than upgrading the release: a helm upgrade
+# restarts every deployment, which costs more than the test's budget and proves
+# nothing about CI.
+IMG_TAG="$(kubectl --context "$KUBE_CONTEXT" -n "$NS" get deploy "$REL-ci-runner" -o jsonpath='{.spec.template.spec.containers[0].image}' | sed 's/.*://')"
+kubectl --context "$KUBE_CONTEXT" -n "$NS" apply -f - >/dev/null <<YAML || fail "creating the runner failed"
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: e2e-runner
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: e2e-runner}
+  template:
+    metadata:
+      labels: {app: e2e-runner}
+    spec:
+      serviceAccountName: $REL-runner
+      imagePullSecrets:
+        - name: nexus-pull
+      containers:
+        - name: runner
+          image: 192.168.10.131/novaforge/runner:$IMG_TAG
+          envFrom:
+            - secretRef: {name: $REL-secrets}
+          env:
+            - {name: CI_ADDR, value: "$REL-ci-runner:9094"}
+            - {name: RUNNER_ORG_ID, value: "$ORG_ID"}
+            - {name: RUNNER_LABELS, value: "linux"}
+            - {name: RUNNER_JOB_NAMESPACE, value: "$NS"}
+            - {name: RUNNER_NAME, value: "e2e-runner"}
+YAML
+trap 'kubectl --context "$KUBE_CONTEXT" -n "$NS" delete deploy e2e-runner --ignore-not-found >/dev/null 2>&1' EXIT
+kubectl --context "$KUBE_CONTEXT" -n "$NS" rollout status deploy/e2e-runner --timeout=180s >/dev/null || fail "the runner did not become ready"
 ok "runner registered into $ORG_ID"
 
 echo "== 4. pushing a workflow schedules a CI run =="
