@@ -21,6 +21,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	agentsv1 "github.com/novaforge/novaforge/gen/novaforge/agents/v1"
+	civ1 "github.com/novaforge/novaforge/gen/novaforge/ci/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	graphv1 "github.com/novaforge/novaforge/gen/novaforge/graph/v1"
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
@@ -128,6 +129,20 @@ func main() {
 	// symbol lookup, dependency lookup — that git-platform has no RPC for.
 	// Without it those tools report themselves unavailable rather than
 	// returning a plausible empty result.
+	var ciClient civ1.CIServiceClient
+	if cfg.CIAddr != "" {
+		ciConn, err := grpc.NewClient(cfg.CIAddr,
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithChainUnaryInterceptor(svcauth.ForwardIncomingCredential))
+		if err != nil {
+			log.Fatalf("agent-runtime: dial ci-runner: %v", err)
+		}
+		defer ciConn.Close()
+		ciClient = civ1.NewCIServiceClient(ciConn)
+	} else {
+		log.Println("agent-runtime: CI_ADDR is unset; ci.* tools will report themselves unavailable")
+	}
+
 	var graphClient graphv1.GraphServiceClient
 	if cfg.GraphAddr != "" {
 		graphConn, err := grpc.NewClient(cfg.GraphAddr,
@@ -163,7 +178,7 @@ func main() {
 		log.Printf("agent-runtime: no in-cluster Kubernetes config available (%v); workspace provisioning and the reaper are disabled", err)
 	}
 
-	execute := newExecuteFunc(store, grants, audit, provisioner, gitClient, graphClient, workClient, reviewsClient, cfg)
+	execute := newExecuteFunc(store, grants, audit, provisioner, gitClient, graphClient, workClient, reviewsClient, ciClient, cfg)
 	grpcServer := agents.NewGRPCServer(store, grants, rdb, workClient, execute)
 
 	// Callers are resolved the same way every other service resolves them:
@@ -221,7 +236,7 @@ func runReaper(ctx context.Context, provisioner *workspace.Provisioner) {
 // runs the model/tool loop, persists the resulting terminal state, and
 // tears the workspace down. When provisioner is nil (no Kubernetes API
 // reachable), it returns nil so StartRun's degrade path applies instead.
-func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents.AuditLog, provisioner *workspace.Provisioner, gitClient gitv1.GitServiceClient, graphClient graphv1.GraphServiceClient, workClient workv1.WorkServiceClient, reviewsClient reviewsv1.ReviewsServiceClient, cfg service.Config) agents.ExecuteFunc {
+func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents.AuditLog, provisioner *workspace.Provisioner, gitClient gitv1.GitServiceClient, graphClient graphv1.GraphServiceClient, workClient workv1.WorkServiceClient, reviewsClient reviewsv1.ReviewsServiceClient, ciClient civ1.CIServiceClient, cfg service.Config) agents.ExecuteFunc {
 	if provisioner == nil {
 		return nil
 	}
@@ -301,8 +316,9 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 			WorkspaceRoot: stage,
 			Git:           newGitAdapter(gitClient, graphClient),
 			Work:          newWorkAdapter(workClient),
-			Graph:         newGraphAdapter(graphClient),
+			Graph:         newGraphAdapter(graphClient, run.RepoID.String()),
 			Reviews:       newReviewsAdapter(reviewsClient),
+			CI:            newCIAdapter(ciClient),
 		}, audit)
 
 		loop := agentrun.NewLoop(model, budget, audit)

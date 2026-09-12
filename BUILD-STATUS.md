@@ -50,6 +50,15 @@ and MinIO — no datastore is mocked anywhere.
 push schedules a CI run from the repository's workflow file, a runner in its
 own pod executes it, and the job's log and declared artifact come back.
 
+`bash tests/e2e/agent_test.sh` passes: an agent is defined through the API, a
+Work Item is created for it, an Agent Run is started, the run executes against
+the real model in its own Kubernetes namespace, and **the agent commits its
+work** — a written README on `agents/NF-1/work`, the one branch its capability
+grant allows. The test refuses to accept the run's own "succeeded" state as
+evidence: that only means the model stopped asking for tools, so it requires
+the branch to exist, which it can only do if a commit passed the capability
+check.
+
 `bash tests/e2e/factory_test.sh` passes: an epic is decomposed by the cluster's
 **real model** into dependency-ordered subtasks — eight on the final run — only
 the dependency-free one is startable, and the dashboard answers. This is the
@@ -109,6 +118,26 @@ Each was fixed with a test that pins it:
 - Four typed agent tools and four MCP tools reported that no service had an RPC
   behind them. Seven now do; the eighth needed no new RPC, only the two-step
   lookup nobody had written.
+- No agent workspace could ever be created: the namespace carried its creation
+  time as an RFC 3339 label value, and a label value may not contain a colon.
+  No agent pod could start either: it declared a repository volume with an
+  empty `persistentVolumeClaim.claimName`. Both passed every unit test, because
+  the client-go fake validates neither.
+- Every tool was offered to the model under one generic schema with its own
+  name as its description, so the model guessed each tool's arguments — and
+  sent `git.commit`'s `files` as a string, every time, until the run went over
+  budget.
+- The workspace tools wrote to a path the service's own container cannot
+  create, so every `workspace.write_file` failed and the agent had nothing to
+  commit.
+- An agent run's opening turn said only "Begin work on run <uuid>": no work
+  item, no repository, no branch.
+- A capability grant allows a branch PREFIX, and the run recorded that prefix
+  as its branch — a ref may not end in a slash, so the agent could not use what
+  it was given, and every sensible alternative was outside the grant.
+- Three services kept their own auth interceptor that understood a person's
+  credential but not a platform service token, while git-platform understood
+  both — so an agent's token was accepted by one service and refused by three.
 
 ## Known limitations
 
@@ -124,10 +153,18 @@ These are real and are not worked around:
   gateway's upstream header timeout, so every such call 502s. The chart points
   at the MoE model (`qwen3-6-35b-a3b`), which answers the same prompt in about
   six seconds.
-- **Agent workspace isolation is implemented but not exercised in anger.**
-  CI jobs run in their own Kubernetes pod, proven by test. Agent Run namespaces
-  are implemented and unit-tested against the client-go fake; a full agent run
-  through the tool loop against the live model has not been driven end to end.
+- **An agent's files are staged in the service, not in its workspace pod.**
+  The per-run namespace carries the run's network policy and resource quota and
+  is torn down with the run, but `workspace.write_file` stages into a per-run
+  directory inside agent-runtime rather than into that pod. Nothing executes
+  those files — they are the content of the commit the run makes through
+  git-platform, and running a repository's own code is CI's job, in a per-job
+  pod. Moving the staging into the workspace pod is real work that has not been
+  done.
+- **A run's "succeeded" state means the model stopped asking for tools**, not
+  that the Work Item was satisfied. `tests/e2e/agent_test.sh` therefore checks
+  for the commit rather than trusting the state; nothing yet judges whether the
+  work actually meets the item's acceptance criteria.
 - **Embeddings are configured but not proven end to end.** `embed`/`bge-m3`
   answer on the gateway (verified by hand), and the indexing path is tested
   against the real pgvector database, but no acceptance test drives a push all

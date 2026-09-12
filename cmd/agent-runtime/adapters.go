@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 
+	civ1 "github.com/novaforge/novaforge/gen/novaforge/ci/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	graphv1 "github.com/novaforge/novaforge/gen/novaforge/graph/v1"
 	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
@@ -178,19 +180,26 @@ func (a *workAdapter) Comment(ctx context.Context, workItemID, body string) erro
 // graphAdapter satisfies tools.GraphClient over the engineering-graph gRPC
 // client, so architecture.query answers from the graph rather than
 // reporting itself unconfigured.
+// repoID is carried rather than taken per call because tools.GraphClient's
+// Query has no repository parameter, and the graph scopes knowledge per
+// repository: without it every architecture.query was refused for an empty
+// repo_id.
 type graphAdapter struct {
-	graph graphv1.GraphServiceClient
+	graph  graphv1.GraphServiceClient
+	repoID string
 }
 
-func newGraphAdapter(graph graphv1.GraphServiceClient) tools.GraphClient {
+func newGraphAdapter(graph graphv1.GraphServiceClient, repoID string) tools.GraphClient {
 	if graph == nil {
 		return nil
 	}
-	return &graphAdapter{graph: graph}
+	return &graphAdapter{graph: graph, repoID: repoID}
 }
 
 func (a *graphAdapter) Query(ctx context.Context, query string) ([]string, error) {
-	resp, err := a.graph.SearchKnowledge(ctx, &graphv1.SearchKnowledgeRequest{Query: query, K: searchHitLimit})
+	resp, err := a.graph.SearchKnowledge(ctx, &graphv1.SearchKnowledgeRequest{
+		RepoId: a.repoID, Query: query, K: searchHitLimit,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("architecture query %q: %w", query, err)
 	}
@@ -225,4 +234,41 @@ func (a *reviewsAdapter) GateStatus(ctx context.Context, runID string) (map[stri
 		out[p.GetGate()] = p.GetStatus()
 	}
 	return out, nil
+}
+
+// ciAdapter satisfies tools.CIClient over the ci-runner gRPC client, so
+// ci.get_logs reads a real job's log instead of reporting itself
+// unconfigured.
+type ciAdapter struct {
+	ci civ1.CIServiceClient
+}
+
+func newCIAdapter(ci civ1.CIServiceClient) tools.CIClient {
+	if ci == nil {
+		return nil
+	}
+	return &ciAdapter{ci: ci}
+}
+
+// RunTest schedules a CI run for ref and returns its id. The workflow the
+// repository declares is what runs; suite is not a separate dispatch
+// mechanism, so a caller naming one is told plainly rather than having it
+// silently ignored.
+func (a *ciAdapter) RunTest(ctx context.Context, repo, ref, suite string) (string, error) {
+	if suite != "" {
+		return "", fmt.Errorf("ci.run_test runs the repository's declared workflow; it cannot run an arbitrary suite %q", suite)
+	}
+	resp, err := a.ci.TriggerRun(ctx, &civ1.TriggerRunRequest{RepoId: repo, Ref: ref})
+	if err != nil {
+		return "", fmt.Errorf("run tests for %s at %s: %w", repo, ref, err)
+	}
+	return resp.GetRun().GetId(), nil
+}
+
+func (a *ciAdapter) GetLogs(ctx context.Context, jobID string) (string, error) {
+	resp, err := a.ci.GetJobLogs(ctx, &civ1.GetJobLogsRequest{JobId: jobID})
+	if err != nil {
+		return "", fmt.Errorf("read log for job %s: %w", jobID, err)
+	}
+	return strings.Join(resp.GetLines(), "\n"), nil
 }
