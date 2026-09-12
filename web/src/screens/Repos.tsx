@@ -95,10 +95,11 @@ function Browser({
     enabled: branches.data !== undefined,
   });
 
+  // A blob is served as raw bytes, not JSON: a file is bytes, and wrapping it
+  // in JSON would mean base64 and a size limit.
   const blob = useQuery({
     queryKey: ["blob", org, repo, head, file],
-    queryFn: () =>
-      api.get<{ content: string }>(`${base}/blob/${enc(head)}/${file}`),
+    queryFn: () => api.text(`${base}/blob/${enc(head)}/${file}`),
     enabled: file !== null,
   });
 
@@ -275,9 +276,11 @@ function Browser({
                   overflow: "auto",
                   font: "12px/1.65 var(--mono)",
                   color: "var(--fg-dim)",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
                 }}
               >
-                {atobSafe(d.content)}
+                {d}
               </pre>
             )}
           </Async>
@@ -285,19 +288,6 @@ function Browser({
       </Panel>
     </div>
   );
-}
-
-/** The edge returns file contents base64-encoded, because a blob is bytes and
- * not every blob is text. A file that is not valid UTF-8 is reported as such
- * rather than rendered as replacement characters. */
-function atobSafe(content: string): string {
-  try {
-    const bin = atob(content);
-    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
-    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-  } catch {
-    return "(this file is not UTF-8 text)";
-  }
 }
 
 const crumb: React.CSSProperties = {

@@ -98,8 +98,36 @@ function flagged(parsed: unknown, field: string): boolean {
   return (parsed as Record<string, unknown>)[field] === true;
 }
 
+/** text fetches a response that is not JSON. The blob endpoint serves a
+ * file's raw bytes with Content-Type application/octet-stream — a file is
+ * bytes, and wrapping it in JSON would mean base64 and a size limit. Asking
+ * for it as JSON is how the file viewer first failed: the parse produced
+ * null and the screen read a field off it. */
+async function text(path: string): Promise<string> {
+  const headers: Record<string, string> = {};
+  const token = storedToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(path, { method: "GET", headers });
+  const body = await res.text();
+  if (!res.ok) {
+    let parsed: unknown = null;
+    try {
+      parsed = JSON.parse(body);
+    } catch {
+      parsed = null;
+    }
+    throw new ApiError(
+      res.status,
+      errorMessage(parsed) || body || res.statusText,
+    );
+  }
+  return body;
+}
+
 export const api = {
   get: <T>(path: string) => request<T>("GET", path),
+  text,
   post: <T>(path: string, body?: unknown) => request<T>("POST", path, body),
   del: <T>(path: string) => request<T>("DELETE", path),
 };
