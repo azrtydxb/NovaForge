@@ -189,12 +189,25 @@ It found six defects that no API-level test could have:
 - The **file viewer asked for JSON and got a file** — the blob endpoint serves
   raw bytes.
 - The agent list showed **"running" for an agent that was merely enabled**.
+- An **agent's own comment was attributed to a person**. A run presents a
+  service token because it outlives the request that started it, and the
+  interceptor classified every service token as the platform — so the one
+  distinction `author_kind` exists to make was wrong for every agent.
 - Two of the mismatches were the API's own fault: `WorkItemJSON` and `RunJSON`
   carried only descriptive fields, leaving every listing with no stable key,
   nothing to order by, and no way to say who held an item.
 
 An ErrorBoundary now contains a screen's crash to that screen; the blank page
 is what made the first of these hard to see at all.
+
+It also found the largest gap: **the interface was read-only in all but a few
+places.** Sixteen endpoints existed with nothing calling them, and the core
+object — a Work Item — had no detail screen. That has been closed: a Work Item
+now has a page showing what is asked of it, its subtasks, and its discussion
+(where a person corrects an agent and an agent records what it decided), and
+the interface can decompose an epic, run CI, submit a review verdict, create a
+branch, assign work, add a member, add an SSH key, mint a token and enable
+two-factor. Four of those needed edge routes that were never written.
 
 ## Known limitations
 
