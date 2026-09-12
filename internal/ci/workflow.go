@@ -20,6 +20,10 @@ type Job struct {
 	Image   string            `yaml:"image"`
 	Env     map[string]string `yaml:"env"`
 	Secrets []string          `yaml:"secrets"`
+	// Artifacts are paths, relative to the checkout, to keep after the job.
+	// They are declared rather than inferred: collecting everything a job
+	// wrote would ship its whole working tree, including its credentials.
+	Artifacts []string `yaml:"artifacts"`
 }
 
 // Workflow is a parsed .novaforge/workflow.yaml document.

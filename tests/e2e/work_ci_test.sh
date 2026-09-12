@@ -99,6 +99,8 @@ jobs:
     run: |
       echo "hello from novaforge ci"
       mkdir -p out && echo "artifact body" > out/report.txt
+    artifacts:
+      - out/report.txt
 YAML
 git config user.email ci@example.com
 git config user.name "CI E2E"

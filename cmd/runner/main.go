@@ -71,6 +71,24 @@ func main() {
 		log.Fatalf("runner: register: %v", err)
 	}
 	runnerID := regResp.GetRunnerId()
+
+	// Artifacts go back through the platform, not straight to object storage:
+	// only the platform knows which job an artifact belongs to, and giving
+	// every runner store credentials would make a runner a far more valuable
+	// thing to compromise.
+	if podExec != nil {
+		podExec.OnArtifacts = func(ctx context.Context, jobID string, arts []runner.Artifact) error {
+			for _, a := range arts {
+				if _, err := client.UploadArtifact(ctx, &civ1.UploadArtifactRequest{
+					RunnerId: runnerID, JobId: jobID,
+					Name: a.Name, Content: a.Content,
+				}); err != nil {
+					return fmt.Errorf("upload %s: %w", a.Name, err)
+				}
+			}
+			return nil
+		}
+	}
 	log.Printf("runner: registered as %s (%s), labels %v", name, runnerID, labels)
 
 	backoff := initialBackoff

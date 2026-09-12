@@ -32,18 +32,19 @@ type Run struct {
 // Job is a row in the ci.workflow_jobs table: one job of a Run, either a
 // shell command or an agent role, gated on the jobs named in Needs.
 type WorkflowJob struct {
-	ID         uuid.UUID
-	RunID      uuid.UUID
-	Name       string
-	Needs      []string
-	RunCmd     string
-	AgentRole  string
-	Image      string
-	Status     string
-	RunnerID   *uuid.UUID
-	Detail     string
-	StartedAt  *time.Time
-	FinishedAt *time.Time
+	ID            uuid.UUID
+	RunID         uuid.UUID
+	Name          string
+	Needs         []string
+	RunCmd        string
+	AgentRole     string
+	Image         string
+	Status        string
+	ArtifactPaths []string
+	RunnerID      *uuid.UUID
+	Detail        string
+	StartedAt     *time.Time
+	FinishedAt    *time.Time
 }
 
 // ErrNoClaimableJob is returned by ClaimJob when no pending job with
@@ -169,11 +170,15 @@ func (s *Store) CreateJob(ctx context.Context, job WorkflowJob) (WorkflowJob, er
 	if job.Needs == nil {
 		job.Needs = []string{}
 	}
+	if job.ArtifactPaths == nil {
+		job.ArtifactPaths = []string{}
+	}
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO ci.workflow_jobs (id, run_id, name, needs, run_cmd, agent_role, image, status)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		INSERT INTO ci.workflow_jobs (id, run_id, name, needs, run_cmd, agent_role, image, status, artifact_paths)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
 		job.ID, job.RunID, job.Name, job.Needs,
 		nullString(job.RunCmd), nullString(job.AgentRole), nullString(job.Image), job.Status,
+		job.ArtifactPaths,
 	)
 	if err != nil {
 		return WorkflowJob{}, fmt.Errorf("create job: %w", err)
@@ -478,7 +483,7 @@ func (s *Store) ClaimForDispatch(ctx context.Context, runnerID uuid.UUID, labels
 	// another's job, which would make the hard boundary organizations are
 	// meant to be into a soft one.
 	err = tx.QueryRow(ctx, `
-		SELECT j.id, j.run_id, j.run_cmd, j.agent_role, j.image,
+		SELECT j.id, j.run_id, j.run_cmd, j.agent_role, j.image, j.artifact_paths,
 		       r.org_id, r.repo_name, r.commit_sha
 		FROM ci.workflow_jobs j
 		JOIN ci.workflow_runs r ON r.id = j.run_id
@@ -494,7 +499,7 @@ func (s *Store) ClaimForDispatch(ctx context.Context, runnerID uuid.UUID, labels
 		ORDER BY j.id
 		FOR UPDATE OF j SKIP LOCKED
 		LIMIT 1`, runnerID,
-	).Scan(&dj.JobID, &dj.RunID, &runCmd, &agent, &image, &orgID, &repoName, &sha)
+	).Scan(&dj.JobID, &dj.RunID, &runCmd, &agent, &image, &dj.ArtifactPaths, &orgID, &repoName, &sha)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return DispatchJob{}, uuid.Nil, ErrNoClaimableJob

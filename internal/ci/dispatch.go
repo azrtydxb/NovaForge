@@ -26,6 +26,8 @@ type DispatchJob struct {
 	AgentRole    string
 	Image        string
 	Env          map[string]string
+	// ArtifactPaths are declared by the workflow; the runner keeps only these.
+	ArtifactPaths []string
 }
 
 // registeredRunner is one runner currently holding an open Connect stream.
@@ -179,13 +181,14 @@ func (d *Dispatcher) DispatchTo(ctx context.Context, runnerID uuid.UUID, job Dis
 // toConnectResponse renders a job as the message a runner receives.
 func toConnectResponse(job DispatchJob) *civ1.ConnectResponse {
 	return &civ1.ConnectResponse{
-		JobId:        job.JobID.String(),
-		RunId:        job.RunID.String(),
-		RepoCloneUrl: job.RepoCloneURL,
-		CommitSha:    job.CommitSHA,
-		RunCmd:       job.RunCmd,
-		AgentRole:    job.AgentRole,
-		Image:        job.Image,
-		Env:          job.Env,
+		JobId:         job.JobID.String(),
+		RunId:         job.RunID.String(),
+		RepoCloneUrl:  job.RepoCloneURL,
+		CommitSha:     job.CommitSHA,
+		RunCmd:        job.RunCmd,
+		AgentRole:     job.AgentRole,
+		Image:         job.Image,
+		Env:           job.Env,
+		ArtifactPaths: job.ArtifactPaths,
 	}
 }

@@ -249,9 +249,10 @@ var CIService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	RunnerService_Register_FullMethodName     = "/novaforge.ci.v1.RunnerService/Register"
-	RunnerService_Connect_FullMethodName      = "/novaforge.ci.v1.RunnerService/Connect"
-	RunnerService_ReportStatus_FullMethodName = "/novaforge.ci.v1.RunnerService/ReportStatus"
+	RunnerService_Register_FullMethodName       = "/novaforge.ci.v1.RunnerService/Register"
+	RunnerService_Connect_FullMethodName        = "/novaforge.ci.v1.RunnerService/Connect"
+	RunnerService_ReportStatus_FullMethodName   = "/novaforge.ci.v1.RunnerService/ReportStatus"
+	RunnerService_UploadArtifact_FullMethodName = "/novaforge.ci.v1.RunnerService/UploadArtifact"
 )
 
 // RunnerServiceClient is the client API for RunnerService service.
@@ -261,6 +262,7 @@ type RunnerServiceClient interface {
 	Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterResponse, error)
 	Connect(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ConnectRequest, ConnectResponse], error)
 	ReportStatus(ctx context.Context, in *ReportStatusRequest, opts ...grpc.CallOption) (*ReportStatusResponse, error)
+	UploadArtifact(ctx context.Context, in *UploadArtifactRequest, opts ...grpc.CallOption) (*UploadArtifactResponse, error)
 }
 
 type runnerServiceClient struct {
@@ -304,6 +306,16 @@ func (c *runnerServiceClient) ReportStatus(ctx context.Context, in *ReportStatus
 	return out, nil
 }
 
+func (c *runnerServiceClient) UploadArtifact(ctx context.Context, in *UploadArtifactRequest, opts ...grpc.CallOption) (*UploadArtifactResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UploadArtifactResponse)
+	err := c.cc.Invoke(ctx, RunnerService_UploadArtifact_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // RunnerServiceServer is the server API for RunnerService service.
 // All implementations should embed UnimplementedRunnerServiceServer
 // for forward compatibility.
@@ -311,6 +323,7 @@ type RunnerServiceServer interface {
 	Register(context.Context, *RegisterRequest) (*RegisterResponse, error)
 	Connect(grpc.BidiStreamingServer[ConnectRequest, ConnectResponse]) error
 	ReportStatus(context.Context, *ReportStatusRequest) (*ReportStatusResponse, error)
+	UploadArtifact(context.Context, *UploadArtifactRequest) (*UploadArtifactResponse, error)
 }
 
 // UnimplementedRunnerServiceServer should be embedded to have
@@ -328,6 +341,9 @@ func (UnimplementedRunnerServiceServer) Connect(grpc.BidiStreamingServer[Connect
 }
 func (UnimplementedRunnerServiceServer) ReportStatus(context.Context, *ReportStatusRequest) (*ReportStatusResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReportStatus not implemented")
+}
+func (UnimplementedRunnerServiceServer) UploadArtifact(context.Context, *UploadArtifactRequest) (*UploadArtifactResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UploadArtifact not implemented")
 }
 func (UnimplementedRunnerServiceServer) testEmbeddedByValue() {}
 
@@ -392,6 +408,24 @@ func _RunnerService_ReportStatus_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RunnerService_UploadArtifact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UploadArtifactRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RunnerServiceServer).UploadArtifact(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RunnerService_UploadArtifact_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RunnerServiceServer).UploadArtifact(ctx, req.(*UploadArtifactRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // RunnerService_ServiceDesc is the grpc.ServiceDesc for RunnerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -406,6 +440,10 @@ var RunnerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReportStatus",
 			Handler:    _RunnerService_ReportStatus_Handler,
+		},
+		{
+			MethodName: "UploadArtifact",
+			Handler:    _RunnerService_UploadArtifact_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

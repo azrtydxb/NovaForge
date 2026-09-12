@@ -20,6 +20,7 @@ service RunnerService {
   rpc Register(RegisterRequest) returns (RegisterResponse);
   rpc Connect(stream ConnectRequest) returns (stream ConnectResponse);
   rpc ReportStatus(ReportStatusRequest) returns (ReportStatusResponse);
+  rpc UploadArtifact(UploadArtifactRequest) returns (UploadArtifactResponse);
 }
 
 message RegisterRequest {
@@ -66,6 +67,7 @@ message ConnectResponse {
   string agent_role = 6;
   string image = 7;
   map<string, string> env = 8;
+  repeated string artifact_paths = 9;
 }
 
 message ReportStatusRequest {
@@ -133,4 +135,14 @@ message ListArtifactsRequest {
 }
 message ListArtifactsResponse {
   repeated ArtifactSummary artifacts = 1;
+}
+
+message UploadArtifactRequest {
+  string runner_id = 1;
+  string job_id = 2;
+  string name = 3;
+  bytes content = 4;
+}
+message UploadArtifactResponse {
+  string artifact_id = 1;
 }

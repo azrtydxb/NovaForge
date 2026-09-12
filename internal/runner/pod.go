@@ -31,11 +31,16 @@ var ErrLocalExecutionNotPermitted = errors.New(
 // PodExecutor runs each job in its own Kubernetes pod, in the namespace the
 // runner is given. The pod is deleted when the job finishes.
 type PodExecutor struct {
-	Client    kubernetes.Interface
-	Namespace string
+	Client kubernetes.Interface
+	// RestConfig is needed for the exec API that copies artifacts out of a
+	// finished job's pod; the typed client alone cannot stream.
+	RestConfig *rest.Config
+	Namespace  string
 	// Timeout bounds the whole job, so a wedged pod cannot occupy a runner slot
 	// indefinitely.
 	Timeout time.Duration
+	// OnArtifacts receives whatever the job declared, once, after it succeeds.
+	OnArtifacts func(ctx context.Context, jobID string, artifacts []Artifact) error
 }
 
 // NewPodExecutorFromCluster builds an executor from the in-cluster service
@@ -53,7 +58,7 @@ func NewPodExecutorFromCluster(namespace string) (*PodExecutor, error) {
 	if err != nil {
 		return nil, fmt.Errorf("kubernetes client: %w", err)
 	}
-	return &PodExecutor{Client: cs, Namespace: namespace, Timeout: 2 * time.Hour}, nil
+	return &PodExecutor{Client: cs, RestConfig: cfg, Namespace: namespace, Timeout: 2 * time.Hour}, nil
 }
 
 // LocalExecutionAllowed reports whether running job commands directly on the
@@ -136,7 +141,25 @@ func (p *PodExecutor) Run(ctx context.Context, job *civ1.ConnectResponse, logs c
 	if err := p.streamLogs(ctx, created.Name, logs); err != nil {
 		return 0, err
 	}
-	return p.waitForExit(ctx, created.Name)
+	code, err := p.waitForExit(ctx, created.Name)
+	if err != nil {
+		return code, err
+	}
+
+	// Artifacts are collected before the deferred delete removes the pod, and
+	// only from a job that succeeded: a failed job's outputs are usually
+	// half-written and keeping them invites trusting them.
+	if code == 0 && len(job.GetArtifactPaths()) > 0 && p.OnArtifacts != nil {
+		arts, cerr := p.CollectArtifacts(ctx, created.Name, job.GetArtifactPaths())
+		if cerr != nil {
+			// Losing artifacts does not change whether the job passed, so this
+			// is reported rather than turned into a failure.
+			logs <- "novaforge: collecting artifacts failed: " + cerr.Error()
+		} else if uerr := p.OnArtifacts(ctx, job.GetJobId(), arts); uerr != nil {
+			logs <- "novaforge: uploading artifacts failed: " + uerr.Error()
+		}
+	}
+	return code, nil
 }
 
 // defaultJobImage is used when a workflow job names no image. It must contain

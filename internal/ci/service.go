@@ -50,6 +50,7 @@ func NewService(pool *pgxpool.Pool, rdb *redis.Client, blobs *blobstore.Client, 
 	query := NewQueryServer(store, logs, artifacts, blobs)
 	server := NewServer(store, dispatcher)
 	server.SetLogSink(logs)
+	server.SetArtifactStore(artifacts)
 
 	scheduler := NewScheduler(rdb, store, git, SchedulerConfig{HMACSecret: hmacSecret})
 	pump := NewPump(store, dispatcher, cloneBase, hmacSecret)

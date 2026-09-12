@@ -75,3 +75,30 @@ func TestTopoSortDetectsCycle(t *testing.T) {
 		t.Fatalf("want error containing %q, got %q", "cycle", err.Error())
 	}
 }
+
+// TestParseWorkflowCarriesDeclaredArtifacts pins that artifacts are declared
+// rather than inferred: collecting whatever a job left behind would ship its
+// whole working tree, credentials included.
+func TestParseWorkflowCarriesDeclaredArtifacts(t *testing.T) {
+	wf, err := ci.ParseWorkflow([]byte(
+		"jobs:\n  build:\n    run: make\n    artifacts:\n      - out/report.txt\n      - dist/app\n"))
+	if err != nil {
+		t.Fatalf("ParseWorkflow: %v", err)
+	}
+	got := wf.Jobs["build"].Artifacts
+	if len(got) != 2 || got[0] != "out/report.txt" || got[1] != "dist/app" {
+		t.Fatalf("declared artifacts not carried: %v", got)
+	}
+}
+
+// TestParseWorkflowWithoutArtifactsKeepsNothing is the default: a job that
+// declares none keeps none.
+func TestParseWorkflowWithoutArtifactsKeepsNothing(t *testing.T) {
+	wf, err := ci.ParseWorkflow([]byte("jobs:\n  build:\n    run: make\n"))
+	if err != nil {
+		t.Fatalf("ParseWorkflow: %v", err)
+	}
+	if len(wf.Jobs["build"].Artifacts) != 0 {
+		t.Fatalf("want no artifacts by default, got %v", wf.Jobs["build"].Artifacts)
+	}
+}

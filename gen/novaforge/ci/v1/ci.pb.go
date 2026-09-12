@@ -336,6 +336,7 @@ type ConnectResponse struct {
 	AgentRole     string                 `protobuf:"bytes,6,opt,name=agent_role,json=agentRole,proto3" json:"agent_role,omitempty"`
 	Image         string                 `protobuf:"bytes,7,opt,name=image,proto3" json:"image,omitempty"`
 	Env           map[string]string      `protobuf:"bytes,8,rep,name=env,proto3" json:"env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	ArtifactPaths []string               `protobuf:"bytes,9,rep,name=artifact_paths,json=artifactPaths,proto3" json:"artifact_paths,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -422,6 +423,13 @@ func (x *ConnectResponse) GetImage() string {
 func (x *ConnectResponse) GetEnv() map[string]string {
 	if x != nil {
 		return x.Env
+	}
+	return nil
+}
+
+func (x *ConnectResponse) GetArtifactPaths() []string {
+	if x != nil {
+		return x.ArtifactPaths
 	}
 	return nil
 }
@@ -1150,6 +1158,118 @@ func (x *ListArtifactsResponse) GetArtifacts() []*ArtifactSummary {
 	return nil
 }
 
+type UploadArtifactRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RunnerId      string                 `protobuf:"bytes,1,opt,name=runner_id,json=runnerId,proto3" json:"runner_id,omitempty"`
+	JobId         string                 `protobuf:"bytes,2,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
+	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Content       []byte                 `protobuf:"bytes,4,opt,name=content,proto3" json:"content,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UploadArtifactRequest) Reset() {
+	*x = UploadArtifactRequest{}
+	mi := &file_novaforge_ci_v1_ci_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UploadArtifactRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UploadArtifactRequest) ProtoMessage() {}
+
+func (x *UploadArtifactRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_ci_v1_ci_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UploadArtifactRequest.ProtoReflect.Descriptor instead.
+func (*UploadArtifactRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_ci_v1_ci_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *UploadArtifactRequest) GetRunnerId() string {
+	if x != nil {
+		return x.RunnerId
+	}
+	return ""
+}
+
+func (x *UploadArtifactRequest) GetJobId() string {
+	if x != nil {
+		return x.JobId
+	}
+	return ""
+}
+
+func (x *UploadArtifactRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *UploadArtifactRequest) GetContent() []byte {
+	if x != nil {
+		return x.Content
+	}
+	return nil
+}
+
+type UploadArtifactResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ArtifactId    string                 `protobuf:"bytes,1,opt,name=artifact_id,json=artifactId,proto3" json:"artifact_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UploadArtifactResponse) Reset() {
+	*x = UploadArtifactResponse{}
+	mi := &file_novaforge_ci_v1_ci_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UploadArtifactResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UploadArtifactResponse) ProtoMessage() {}
+
+func (x *UploadArtifactResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_ci_v1_ci_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UploadArtifactResponse.ProtoReflect.Descriptor instead.
+func (*UploadArtifactResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_ci_v1_ci_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *UploadArtifactResponse) GetArtifactId() string {
+	if x != nil {
+		return x.ArtifactId
+	}
+	return ""
+}
+
 var File_novaforge_ci_v1_ci_proto protoreflect.FileDescriptor
 
 const file_novaforge_ci_v1_ci_proto_rawDesc = "" +
@@ -1171,7 +1291,7 @@ const file_novaforge_ci_v1_ci_proto_rawDesc = "" +
 	"\trunner_id\x18\x01 \x01(\tR\brunnerId\x12:\n" +
 	"\theartbeat\x18\x02 \x01(\v2\x1a.novaforge.ci.v1.HeartbeatH\x00R\theartbeat\x128\n" +
 	"\tlog_chunk\x18\x03 \x01(\v2\x19.novaforge.ci.v1.LogChunkH\x00R\blogChunkB\t\n" +
-	"\apayload\"\xc7\x02\n" +
+	"\apayload\"\xee\x02\n" +
 	"\x0fConnectResponse\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x15\n" +
 	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12$\n" +
@@ -1182,7 +1302,8 @@ const file_novaforge_ci_v1_ci_proto_rawDesc = "" +
 	"\n" +
 	"agent_role\x18\x06 \x01(\tR\tagentRole\x12\x14\n" +
 	"\x05image\x18\a \x01(\tR\x05image\x12;\n" +
-	"\x03env\x18\b \x03(\v2).novaforge.ci.v1.ConnectResponse.EnvEntryR\x03env\x1a6\n" +
+	"\x03env\x18\b \x03(\v2).novaforge.ci.v1.ConnectResponse.EnvEntryR\x03env\x12%\n" +
+	"\x0eartifact_paths\x18\t \x03(\tR\rartifactPaths\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x96\x01\n" +
@@ -1233,17 +1354,26 @@ const file_novaforge_ci_v1_ci_proto_rawDesc = "" +
 	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x15\n" +
 	"\x06job_id\x18\x02 \x01(\tR\x05jobId\"W\n" +
 	"\x15ListArtifactsResponse\x12>\n" +
-	"\tartifacts\x18\x01 \x03(\v2 .novaforge.ci.v1.ArtifactSummaryR\tartifacts2\xde\x02\n" +
+	"\tartifacts\x18\x01 \x03(\v2 .novaforge.ci.v1.ArtifactSummaryR\tartifacts\"y\n" +
+	"\x15UploadArtifactRequest\x12\x1b\n" +
+	"\trunner_id\x18\x01 \x01(\tR\brunnerId\x12\x15\n" +
+	"\x06job_id\x18\x02 \x01(\tR\x05jobId\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12\x18\n" +
+	"\acontent\x18\x04 \x01(\fR\acontent\"9\n" +
+	"\x16UploadArtifactResponse\x12\x1f\n" +
+	"\vartifact_id\x18\x01 \x01(\tR\n" +
+	"artifactId2\xde\x02\n" +
 	"\tCIService\x12O\n" +
 	"\bListRuns\x12 .novaforge.ci.v1.ListRunsRequest\x1a!.novaforge.ci.v1.ListRunsResponse\x12I\n" +
 	"\x06GetRun\x12\x1e.novaforge.ci.v1.GetRunRequest\x1a\x1f.novaforge.ci.v1.GetRunResponse\x12U\n" +
 	"\n" +
 	"GetJobLogs\x12\".novaforge.ci.v1.GetJobLogsRequest\x1a#.novaforge.ci.v1.GetJobLogsResponse\x12^\n" +
-	"\rListArtifacts\x12%.novaforge.ci.v1.ListArtifactsRequest\x1a&.novaforge.ci.v1.ListArtifactsResponse2\x8f\x02\n" +
+	"\rListArtifacts\x12%.novaforge.ci.v1.ListArtifactsRequest\x1a&.novaforge.ci.v1.ListArtifactsResponse2\xf2\x02\n" +
 	"\rRunnerService\x12O\n" +
 	"\bRegister\x12 .novaforge.ci.v1.RegisterRequest\x1a!.novaforge.ci.v1.RegisterResponse\x12P\n" +
 	"\aConnect\x12\x1f.novaforge.ci.v1.ConnectRequest\x1a .novaforge.ci.v1.ConnectResponse(\x010\x01\x12[\n" +
-	"\fReportStatus\x12$.novaforge.ci.v1.ReportStatusRequest\x1a%.novaforge.ci.v1.ReportStatusResponseB\xb5\x01\n" +
+	"\fReportStatus\x12$.novaforge.ci.v1.ReportStatusRequest\x1a%.novaforge.ci.v1.ReportStatusResponse\x12a\n" +
+	"\x0eUploadArtifact\x12&.novaforge.ci.v1.UploadArtifactRequest\x1a'.novaforge.ci.v1.UploadArtifactResponseB\xb5\x01\n" +
 	"\x13com.novaforge.ci.v1B\aCiProtoP\x01Z7github.com/novaforge/novaforge/gen/novaforge/ci/v1;civ1\xa2\x02\x03NCX\xaa\x02\x0fNovaforge.Ci.V1\xca\x02\x0fNovaforge\\Ci\\V1\xe2\x02\x1bNovaforge\\Ci\\V1\\GPBMetadata\xea\x02\x11Novaforge::Ci::V1b\x06proto3"
 
 var (
@@ -1258,33 +1388,35 @@ func file_novaforge_ci_v1_ci_proto_rawDescGZIP() []byte {
 	return file_novaforge_ci_v1_ci_proto_rawDescData
 }
 
-var file_novaforge_ci_v1_ci_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
+var file_novaforge_ci_v1_ci_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
 var file_novaforge_ci_v1_ci_proto_goTypes = []any{
-	(*RegisterRequest)(nil),       // 0: novaforge.ci.v1.RegisterRequest
-	(*RegisterResponse)(nil),      // 1: novaforge.ci.v1.RegisterResponse
-	(*Heartbeat)(nil),             // 2: novaforge.ci.v1.Heartbeat
-	(*LogChunk)(nil),              // 3: novaforge.ci.v1.LogChunk
-	(*ConnectRequest)(nil),        // 4: novaforge.ci.v1.ConnectRequest
-	(*ConnectResponse)(nil),       // 5: novaforge.ci.v1.ConnectResponse
-	(*ReportStatusRequest)(nil),   // 6: novaforge.ci.v1.ReportStatusRequest
-	(*ReportStatusResponse)(nil),  // 7: novaforge.ci.v1.ReportStatusResponse
-	(*WorkflowRunSummary)(nil),    // 8: novaforge.ci.v1.WorkflowRunSummary
-	(*WorkflowJobSummary)(nil),    // 9: novaforge.ci.v1.WorkflowJobSummary
-	(*ArtifactSummary)(nil),       // 10: novaforge.ci.v1.ArtifactSummary
-	(*ListRunsRequest)(nil),       // 11: novaforge.ci.v1.ListRunsRequest
-	(*ListRunsResponse)(nil),      // 12: novaforge.ci.v1.ListRunsResponse
-	(*GetRunRequest)(nil),         // 13: novaforge.ci.v1.GetRunRequest
-	(*GetRunResponse)(nil),        // 14: novaforge.ci.v1.GetRunResponse
-	(*GetJobLogsRequest)(nil),     // 15: novaforge.ci.v1.GetJobLogsRequest
-	(*GetJobLogsResponse)(nil),    // 16: novaforge.ci.v1.GetJobLogsResponse
-	(*ListArtifactsRequest)(nil),  // 17: novaforge.ci.v1.ListArtifactsRequest
-	(*ListArtifactsResponse)(nil), // 18: novaforge.ci.v1.ListArtifactsResponse
-	nil,                           // 19: novaforge.ci.v1.ConnectResponse.EnvEntry
+	(*RegisterRequest)(nil),        // 0: novaforge.ci.v1.RegisterRequest
+	(*RegisterResponse)(nil),       // 1: novaforge.ci.v1.RegisterResponse
+	(*Heartbeat)(nil),              // 2: novaforge.ci.v1.Heartbeat
+	(*LogChunk)(nil),               // 3: novaforge.ci.v1.LogChunk
+	(*ConnectRequest)(nil),         // 4: novaforge.ci.v1.ConnectRequest
+	(*ConnectResponse)(nil),        // 5: novaforge.ci.v1.ConnectResponse
+	(*ReportStatusRequest)(nil),    // 6: novaforge.ci.v1.ReportStatusRequest
+	(*ReportStatusResponse)(nil),   // 7: novaforge.ci.v1.ReportStatusResponse
+	(*WorkflowRunSummary)(nil),     // 8: novaforge.ci.v1.WorkflowRunSummary
+	(*WorkflowJobSummary)(nil),     // 9: novaforge.ci.v1.WorkflowJobSummary
+	(*ArtifactSummary)(nil),        // 10: novaforge.ci.v1.ArtifactSummary
+	(*ListRunsRequest)(nil),        // 11: novaforge.ci.v1.ListRunsRequest
+	(*ListRunsResponse)(nil),       // 12: novaforge.ci.v1.ListRunsResponse
+	(*GetRunRequest)(nil),          // 13: novaforge.ci.v1.GetRunRequest
+	(*GetRunResponse)(nil),         // 14: novaforge.ci.v1.GetRunResponse
+	(*GetJobLogsRequest)(nil),      // 15: novaforge.ci.v1.GetJobLogsRequest
+	(*GetJobLogsResponse)(nil),     // 16: novaforge.ci.v1.GetJobLogsResponse
+	(*ListArtifactsRequest)(nil),   // 17: novaforge.ci.v1.ListArtifactsRequest
+	(*ListArtifactsResponse)(nil),  // 18: novaforge.ci.v1.ListArtifactsResponse
+	(*UploadArtifactRequest)(nil),  // 19: novaforge.ci.v1.UploadArtifactRequest
+	(*UploadArtifactResponse)(nil), // 20: novaforge.ci.v1.UploadArtifactResponse
+	nil,                            // 21: novaforge.ci.v1.ConnectResponse.EnvEntry
 }
 var file_novaforge_ci_v1_ci_proto_depIdxs = []int32{
 	2,  // 0: novaforge.ci.v1.ConnectRequest.heartbeat:type_name -> novaforge.ci.v1.Heartbeat
 	3,  // 1: novaforge.ci.v1.ConnectRequest.log_chunk:type_name -> novaforge.ci.v1.LogChunk
-	19, // 2: novaforge.ci.v1.ConnectResponse.env:type_name -> novaforge.ci.v1.ConnectResponse.EnvEntry
+	21, // 2: novaforge.ci.v1.ConnectResponse.env:type_name -> novaforge.ci.v1.ConnectResponse.EnvEntry
 	8,  // 3: novaforge.ci.v1.ListRunsResponse.runs:type_name -> novaforge.ci.v1.WorkflowRunSummary
 	8,  // 4: novaforge.ci.v1.GetRunResponse.run:type_name -> novaforge.ci.v1.WorkflowRunSummary
 	9,  // 5: novaforge.ci.v1.GetRunResponse.jobs:type_name -> novaforge.ci.v1.WorkflowJobSummary
@@ -1296,15 +1428,17 @@ var file_novaforge_ci_v1_ci_proto_depIdxs = []int32{
 	0,  // 11: novaforge.ci.v1.RunnerService.Register:input_type -> novaforge.ci.v1.RegisterRequest
 	4,  // 12: novaforge.ci.v1.RunnerService.Connect:input_type -> novaforge.ci.v1.ConnectRequest
 	6,  // 13: novaforge.ci.v1.RunnerService.ReportStatus:input_type -> novaforge.ci.v1.ReportStatusRequest
-	12, // 14: novaforge.ci.v1.CIService.ListRuns:output_type -> novaforge.ci.v1.ListRunsResponse
-	14, // 15: novaforge.ci.v1.CIService.GetRun:output_type -> novaforge.ci.v1.GetRunResponse
-	16, // 16: novaforge.ci.v1.CIService.GetJobLogs:output_type -> novaforge.ci.v1.GetJobLogsResponse
-	18, // 17: novaforge.ci.v1.CIService.ListArtifacts:output_type -> novaforge.ci.v1.ListArtifactsResponse
-	1,  // 18: novaforge.ci.v1.RunnerService.Register:output_type -> novaforge.ci.v1.RegisterResponse
-	5,  // 19: novaforge.ci.v1.RunnerService.Connect:output_type -> novaforge.ci.v1.ConnectResponse
-	7,  // 20: novaforge.ci.v1.RunnerService.ReportStatus:output_type -> novaforge.ci.v1.ReportStatusResponse
-	14, // [14:21] is the sub-list for method output_type
-	7,  // [7:14] is the sub-list for method input_type
+	19, // 14: novaforge.ci.v1.RunnerService.UploadArtifact:input_type -> novaforge.ci.v1.UploadArtifactRequest
+	12, // 15: novaforge.ci.v1.CIService.ListRuns:output_type -> novaforge.ci.v1.ListRunsResponse
+	14, // 16: novaforge.ci.v1.CIService.GetRun:output_type -> novaforge.ci.v1.GetRunResponse
+	16, // 17: novaforge.ci.v1.CIService.GetJobLogs:output_type -> novaforge.ci.v1.GetJobLogsResponse
+	18, // 18: novaforge.ci.v1.CIService.ListArtifacts:output_type -> novaforge.ci.v1.ListArtifactsResponse
+	1,  // 19: novaforge.ci.v1.RunnerService.Register:output_type -> novaforge.ci.v1.RegisterResponse
+	5,  // 20: novaforge.ci.v1.RunnerService.Connect:output_type -> novaforge.ci.v1.ConnectResponse
+	7,  // 21: novaforge.ci.v1.RunnerService.ReportStatus:output_type -> novaforge.ci.v1.ReportStatusResponse
+	20, // 22: novaforge.ci.v1.RunnerService.UploadArtifact:output_type -> novaforge.ci.v1.UploadArtifactResponse
+	15, // [15:23] is the sub-list for method output_type
+	7,  // [7:15] is the sub-list for method input_type
 	7,  // [7:7] is the sub-list for extension type_name
 	7,  // [7:7] is the sub-list for extension extendee
 	0,  // [0:7] is the sub-list for field type_name
@@ -1325,7 +1459,7 @@ func file_novaforge_ci_v1_ci_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_novaforge_ci_v1_ci_proto_rawDesc), len(file_novaforge_ci_v1_ci_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   20,
+			NumMessages:   22,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

@@ -257,6 +257,9 @@ func (s *Scheduler) handlePush(ctx context.Context, evt events.PushEvent) error 
 			RunCmd:    job.Run,
 			AgentRole: job.Agent,
 			Image:     job.Image,
+			// Only declared paths are kept: collecting everything a job wrote
+			// would ship its whole working tree, credentials included.
+			ArtifactPaths: job.Artifacts,
 		}); err != nil {
 			return fmt.Errorf("create job %q: %w", name, err)
 		}

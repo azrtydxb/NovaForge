@@ -1,10 +1,14 @@
 package ci
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/google/uuid"
 
@@ -27,7 +31,11 @@ type Server struct {
 	store      *Store
 	dispatcher *Dispatcher
 	logs       logAppender
+	artifacts  *ArtifactStore
 }
+
+// SetArtifactStore wires artifact storage, which the runner uploads through.
+func (s *Server) SetArtifactStore(a *ArtifactStore) { s.artifacts = a }
 
 // NewServer builds a Server backed by store and dispatcher.
 func NewServer(store *Store, dispatcher *Dispatcher) *Server {
@@ -148,4 +156,49 @@ func (s *Server) ReportStatus(ctx context.Context, req *civ1.ReportStatusRequest
 		return nil, err
 	}
 	return &civ1.ReportStatusResponse{Ok: true}, nil
+}
+
+// maxArtifactBytes bounds one uploaded artifact. CI artifacts are reports and
+// binaries, not disk images; a cap keeps one job from filling the object store
+// and is far easier to reason about than a streaming quota.
+const maxArtifactBytes = 64 << 20
+
+// UploadArtifact stores one artifact a runner collected from a finished job.
+//
+// The runner uploads through this service rather than straight to object
+// storage: only the platform knows which job an artifact belongs to, and
+// handing every runner object-store credentials would make a runner a far more
+// valuable thing to compromise.
+func (s *Server) UploadArtifact(ctx context.Context, req *civ1.UploadArtifactRequest) (*civ1.UploadArtifactResponse, error) {
+	if s.artifacts == nil {
+		return nil, status.Error(codes.FailedPrecondition, "artifact storage is not configured")
+	}
+	jobID, err := uuid.Parse(req.GetJobId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid job id")
+	}
+	if req.GetName() == "" {
+		return nil, status.Error(codes.InvalidArgument, "artifact name is required")
+	}
+	if len(req.GetContent()) > maxArtifactBytes {
+		return nil, status.Errorf(codes.InvalidArgument,
+			"artifact %q is %d bytes, over the %d byte limit", req.GetName(), len(req.GetContent()), maxArtifactBytes)
+	}
+	// The job must exist and must belong to the runner presenting it, so a
+	// runner cannot attach an artifact to somebody else's job.
+	job, err := s.store.GetJob(ctx, jobID)
+	if err != nil {
+		return nil, status.Error(codes.NotFound, "no such job")
+	}
+	runnerID, err := uuid.Parse(req.GetRunnerId())
+	if err != nil || job.RunnerID == nil || *job.RunnerID != runnerID {
+		return nil, status.Error(codes.PermissionDenied, "this job is not assigned to that runner")
+	}
+
+	art, err := s.artifacts.Upload(ctx, jobID, req.GetName(),
+		bytes.NewReader(req.GetContent()), int64(len(req.GetContent())))
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "store artifact: %v", err)
+	}
+	return &civ1.UploadArtifactResponse{ArtifactId: art.ID.String()}, nil
 }
