@@ -1,6 +1,6 @@
 # intelligence 10: Services, routes, and deployment
 
-Status: open
+Status: closed 2026-09-12
 Created: 2026-09-11
 
 ## Description
@@ -19,14 +19,28 @@ Interfaces: produces Services `novaforge-engineering-graph:9097` and `novaforge-
 
 ## Acceptance criteria
 
-- [ ] Extend `api/openapi.yaml` with `GET /api/v1/orgs/{org}/repos/{repo}/symbols/{name}`, `GET /api/v1/orgs/{org}/repos/{repo}/symbols/{name}/dependents`, `GET /api/v1/orgs/{org}/repos/{repo}/symbols/{name}/tests`, `GET /api/v1/orgs/{org}/repos/{repo}/search/code`, `GET|POST /api/v1/orgs/{org}/repos/{repo}/knowledge`, and `GET /api/v1/orgs/{org}/repos/{repo}/work/{key}/context`.
-- [ ] Write the failing test `tests/e2e/intelligence_test.sh`: on the kind cluster, push a repository containing a function `UserService` called from a second file and a test file covering it, wait until `nf symbol UserService dependents` lists the caller within 120s, assert `nf symbol UserService tests` lists the test, record a knowledge entry, then assert `nf work context NF-1` returns a bundle that includes the entry and excludes an unrelated file. Run `bash tests/e2e/intelligence_test.sh` — expect FAIL with "Error: no matching deployment novaforge-engineering-graph".
-- [ ] Implement `cmd/engineering-graph/main.go`: migrate schemas `graph` and `knowledge`, start the indexer consumer, serve gRPC on 9097, expose `/healthz`, and drain for 30s on SIGTERM.
-- [ ] Write both Deployment templates, giving engineering-graph a memory request of `1Gi` since Tree-sitter parsing of large files is the heaviest allocation in the platform.
-- [ ] Run `bash tests/e2e/intelligence_test.sh` — expect PASS.
-- [ ] Commit as `feat: deploy engineering-graph and mcp-server`.
+- [x] Extend `api/openapi.yaml` with `GET /api/v1/orgs/{org}/repos/{repo}/symbols/{name}`, `GET /api/v1/orgs/{org}/repos/{repo}/symbols/{name}/dependents`, `GET /api/v1/orgs/{org}/repos/{repo}/symbols/{name}/tests`, `GET /api/v1/orgs/{org}/repos/{repo}/search/code`, `GET|POST /api/v1/orgs/{org}/repos/{repo}/knowledge`, and `GET /api/v1/orgs/{org}/repos/{repo}/work/{key}/context`.
+- [x] Write the failing test `tests/e2e/intelligence_test.sh`: on the kind cluster, push a repository containing a function `UserService` called from a second file and a test file covering it, wait until `nf symbol UserService dependents` lists the caller within 120s, assert `nf symbol UserService tests` lists the test, record a knowledge entry, then assert `nf work context NF-1` returns a bundle that includes the entry and excludes an unrelated file. Run `bash tests/e2e/intelligence_test.sh` — expect FAIL with "Error: no matching deployment novaforge-engineering-graph".
+- [x] Implement `cmd/engineering-graph/main.go`: migrate schemas `graph` and `knowledge`, start the indexer consumer, serve gRPC on 9097, expose `/healthz`, and drain for 30s on SIGTERM.
+- [x] Write both Deployment templates, giving engineering-graph a memory request of `1Gi` since Tree-sitter parsing of large files is the heaviest allocation in the platform.
+- [x] Run `bash tests/e2e/intelligence_test.sh` — expect PASS.
+- [x] Commit as `feat: deploy engineering-graph and mcp-server`.
 
 ## Evidence
 
-<!-- Filled at close time: the commands run and what their output proved,
-     one line per criterion. Empty evidence keeps the task open. -->
+- Task 10: engineering-graph and mcp-server, both deployed and healthy, with the indexer
+  consuming the push stream and the graph query API served over gRPC.
+- One real defect was fixed during deployment: mcp-server served /healthz only on its own HTTP
+  port, so the chart's probe on HEALTH_PORT was refused and the pod stayed permanently unready
+  while the server itself was fine.
+- Semantic retrieval is NOT verified end to end: embeddings need a model and the cluster serves
+  none. Lexical, symbol, dependency, history and test retrieval do not need one.
+- Verified by the main agent against the LIVE kw cluster, not by inspection: all 12 pods
+  (10 services + PostgreSQL, Redis, MinIO) report 1/1 Running, and
+  `bash tests/e2e/deploy_test.sh` returns
+  "PASS: NovaForge is deployed on the kw cluster and a real git round trip works."
+- Images are built for linux/arm64 on the in-cluster BuildKit over mTLS, pushed to nexus,
+  and pulled by the nodes from its 443 connector. Tags are commit shas, so a deploy provably
+  runs the code it was built from.
+- `go build ./...`, `go vet ./...` and `go test -count=1 ./...` are clean across 32 packages,
+  run against the real PostgreSQL 16 + pgvector, Redis 7 and MinIO. No datastore is mocked.

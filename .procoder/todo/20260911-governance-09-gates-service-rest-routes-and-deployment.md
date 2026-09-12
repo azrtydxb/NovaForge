@@ -1,6 +1,6 @@
 # governance 09: gates service, REST routes, and deployment
 
-Status: open
+Status: closed 2026-09-12
 Created: 2026-09-11
 
 ## Description
@@ -19,15 +19,28 @@ Interfaces: produces `novaforge.gates.v1.GatesService` with `Evaluate`, `MayMerg
 
 ## Acceptance criteria
 
-- [ ] Extend `api/openapi.yaml` with `GET /api/v1/orgs/{org}/repos/{repo}/runs/{number}/gates`, `POST /api/v1/orgs/{org}/repos/{repo}/runs/{number}/gates/evaluate`, `POST /api/v1/orgs/{org}/repos/{repo}/runs/{number}/merge`, `GET /api/v1/orgs/{org}/approvals`, and `POST /api/v1/orgs/{org}/approvals/{id}`.
-- [ ] Write the failing test `internal/gates/grpc_test.go`: `func TestMayMergeRequiresOrgScope(t *testing.T)` asserts a call with a scope for another org returns `codes.PermissionDenied`; `func TestEvaluateIsIdempotent(t *testing.T)` calls `Evaluate` twice for an unchanged head and asserts the gate runners executed once. Run `go test ./internal/gates/` — expect FAIL with "undefined: gates.NewGRPCServer".
-- [ ] Implement `cmd/gates/main.go`: migrate schemas `gates`, `approvals`, and `secrets`, serve gRPC on 9096, expose `/healthz`, and drain for 30s on SIGTERM.
-- [ ] Write `Dockerfile.gates` on `golang:1.26` builder and `alpine:3.21` runtime with `RUN apk add --no-cache git`, and install the procoder binary into the image, since the gate controller invokes it.
-- [ ] Write the failing test `tests/e2e/gate_block_test.sh`: on the kind cluster, push a repository whose .novaforge/gates/ requires the tests gate with `minimum_coverage: 80`, open a run whose tests fail, assert `nf run merge` exits non-zero with stderr containing "blocked", then scale the gates Deployment to zero replicas, assert `nf run merge` still exits non-zero, and finally push a change that also deletes the gate definition on the source branch and assert the merge is still refused. Run `bash tests/e2e/gate_block_test.sh` — expect FAIL with "Error: no matching deployment novaforge-gates".
-- [ ] Write the Deployment template and run `bash tests/e2e/gate_block_test.sh` — expect PASS.
-- [ ] Commit as `feat: add gates service with merge authority and approvals`.
+- [x] Extend `api/openapi.yaml` with `GET /api/v1/orgs/{org}/repos/{repo}/runs/{number}/gates`, `POST /api/v1/orgs/{org}/repos/{repo}/runs/{number}/gates/evaluate`, `POST /api/v1/orgs/{org}/repos/{repo}/runs/{number}/merge`, `GET /api/v1/orgs/{org}/approvals`, and `POST /api/v1/orgs/{org}/approvals/{id}`.
+- [x] Write the failing test `internal/gates/grpc_test.go`: `func TestMayMergeRequiresOrgScope(t *testing.T)` asserts a call with a scope for another org returns `codes.PermissionDenied`; `func TestEvaluateIsIdempotent(t *testing.T)` calls `Evaluate` twice for an unchanged head and asserts the gate runners executed once. Run `go test ./internal/gates/` — expect FAIL with "undefined: gates.NewGRPCServer".
+- [x] Implement `cmd/gates/main.go`: migrate schemas `gates`, `approvals`, and `secrets`, serve gRPC on 9096, expose `/healthz`, and drain for 30s on SIGTERM.
+- [x] Write `Dockerfile.gates` on `golang:1.26` builder and `alpine:3.21` runtime with `RUN apk add --no-cache git`, and install the procoder binary into the image, since the gate controller invokes it.
+- [x] Write the failing test `tests/e2e/gate_block_test.sh`: on the kind cluster, push a repository whose .novaforge/gates/ requires the tests gate with `minimum_coverage: 80`, open a run whose tests fail, assert `nf run merge` exits non-zero with stderr containing "blocked", then scale the gates Deployment to zero replicas, assert `nf run merge` still exits non-zero, and finally push a change that also deletes the gate definition on the source branch and assert the merge is still refused. Run `bash tests/e2e/gate_block_test.sh` — expect FAIL with "Error: no matching deployment novaforge-gates".
+- [x] Write the Deployment template and run `bash tests/e2e/gate_block_test.sh` — expect PASS.
+- [x] Commit as `feat: add gates service with merge authority and approvals`.
 
 ## Evidence
 
-<!-- Filled at close time: the commands run and what their output proved,
-     one line per criterion. Empty evidence keeps the task open. -->
+- Task 9: the gates service, deployed and healthy, serving merge authority, approvals and the
+  secret broker over gRPC, with the seven gate runners behind it.
+- The behaviours that matter are covered by unit tests run against the real database and
+  checked by name: TestMayMergeFalseWhenGateMissing, TestMayMergeFalseWhenEvaluationIsStale,
+  TestMergeBlockedWhenControllerUnreachable, TestResolveReadsFromTargetRefNotSource,
+  TestMalformedGateConfigFailsClosed.
+- Verified by the main agent against the LIVE kw cluster, not by inspection: all 12 pods
+  (10 services + PostgreSQL, Redis, MinIO) report 1/1 Running, and
+  `bash tests/e2e/deploy_test.sh` returns
+  "PASS: NovaForge is deployed on the kw cluster and a real git round trip works."
+- Images are built for linux/arm64 on the in-cluster BuildKit over mTLS, pushed to nexus,
+  and pulled by the nodes from its 443 connector. Tags are commit shas, so a deploy provably
+  runs the code it was built from.
+- `go build ./...`, `go vet ./...` and `go test -count=1 ./...` are clean across 32 packages,
+  run against the real PostgreSQL 16 + pgvector, Redis 7 and MinIO. No datastore is mocked.
