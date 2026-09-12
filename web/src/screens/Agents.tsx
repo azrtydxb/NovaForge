@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, enc } from "../lib/api";
 import { useWorkspace } from "../lib/workspace";
 import {
@@ -10,6 +10,19 @@ import {
   PanelHead,
   StatePill,
 } from "../components/ui";
+import { Dialog, NewButton } from "../components/Dialog";
+
+/** ROLES are the roles a decomposition may assign work to. They match
+ * swarm.DefaultAgentRoles, so an agent created here can actually be given a
+ * subtask by the planner. */
+const ROLES = [
+  "implementer",
+  "architect",
+  "reviewer",
+  "security",
+  "test",
+  "documentation",
+];
 import type { Agent } from "../lib/types";
 
 /** AgentStats is the per-agent record the platform keeps: how many runs it has
@@ -28,6 +41,21 @@ interface AgentStats {
 export function Agents() {
   const w = useWorkspace();
   const [selected, setSelected] = useState(0);
+  const [creating, setCreating] = useState(false);
+  const qc = useQueryClient();
+
+  const create = useMutation({
+    mutationFn: (v: Record<string, string>) =>
+      api.post(`/api/v1/orgs/${enc(w.org!)}/agents`, {
+        name: v.name,
+        role: v.role,
+        model_ref: v.model_ref,
+      }),
+    onSuccess: () => {
+      setCreating(false);
+      qc.invalidateQueries();
+    },
+  });
 
   const agents = useQuery({
     queryKey: ["agents", w.org],
@@ -52,7 +80,42 @@ export function Agents() {
     <Page
       title="Agents"
       subtitle="Agents are organization members whose authority is a capability grant, not a token"
+      actions={
+        <NewButton label="New agent" onClick={() => setCreating(true)} />
+      }
     >
+      {creating ? (
+        <Dialog
+          title="New agent"
+          submitLabel="Create"
+          fields={[
+            {
+              name: "name",
+              label: "Name",
+              required: true,
+              placeholder: "builder",
+            },
+            {
+              name: "role",
+              label: "Role",
+              type: "select",
+              options: ROLES,
+              required: true,
+            },
+            {
+              name: "model_ref",
+              label: "Model",
+              placeholder: "leave empty for the deployment's default",
+              help: "The deployment's configured model is used when this is empty.",
+            },
+          ]}
+          busy={create.isPending}
+          error={create.error}
+          onSubmit={(v) => create.mutate(v)}
+          onClose={() => setCreating(false)}
+        />
+      ) : null}
+
       <Async query={agents}>
         {(d) =>
           d.agents.length === 0 ? (

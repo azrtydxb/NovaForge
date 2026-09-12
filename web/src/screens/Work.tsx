@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQueries } from "@tanstack/react-query";
+import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import { api, enc } from "../lib/api";
 import { scopedRepos, useWorkspace } from "../lib/workspace";
 import {
@@ -11,7 +11,23 @@ import {
   StatePill,
 } from "../components/ui";
 import { Row } from "./Home";
+import { Dialog, NewButton } from "../components/Dialog";
 import type { WorkItem } from "../lib/types";
+
+/** TYPES is the closed set the work schema allows. Offering anything else
+ * would be offering an item the platform will refuse to create. */
+const TYPES = [
+  "feature",
+  "bug",
+  "refactor",
+  "security",
+  "tech_debt",
+  "research",
+  "architecture",
+  "upgrade",
+  "incident",
+  "documentation",
+];
 
 /** FILTERS are the design's status filters, mapped onto the states the work
  * schema actually allows (work/migrations/000001: open, planning, in_progress,
@@ -30,6 +46,24 @@ export function Work() {
   const w = useWorkspace();
   const repos = scopedRepos(w);
   const [filter, setFilter] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const qc = useQueryClient();
+
+  const create = useMutation({
+    mutationFn: (v: Record<string, string>) =>
+      api.post(`/api/v1/orgs/${enc(w.org!)}/repos/${enc(v.repo!)}/work`, {
+        type: v.type,
+        goal: v.goal,
+        acceptance: (v.acceptance ?? "")
+          .split("\n")
+          .map((l) => l.trim())
+          .filter(Boolean),
+      }),
+    onSuccess: () => {
+      setCreating(false);
+      qc.invalidateQueries();
+    },
+  });
 
   const queries = useQueries({
     queries: repos.map((r) => ({
@@ -54,7 +88,52 @@ export function Work() {
     <Page
       title="Work"
       subtitle="Typed engineering intent: goal, acceptance criteria, constraints, required gates"
+      actions={
+        repos.length > 0 ? (
+          <NewButton label="New Work Item" onClick={() => setCreating(true)} />
+        ) : null
+      }
     >
+      {creating ? (
+        <Dialog
+          title="New Work Item"
+          submitLabel="Create"
+          fields={[
+            {
+              name: "repo",
+              label: "Repository",
+              type: "select",
+              options: repos.map((r) => r.name),
+              required: true,
+            },
+            {
+              name: "type",
+              label: "Type",
+              type: "select",
+              options: TYPES,
+              required: true,
+            },
+            {
+              name: "goal",
+              label: "Goal",
+              required: true,
+              placeholder: "Add a README describing this service",
+            },
+            {
+              name: "acceptance",
+              label: "Acceptance criteria",
+              type: "textarea",
+              placeholder: "One per line",
+              help: "What must be true when this is done. An agent is judged against these.",
+            },
+          ]}
+          busy={create.isPending}
+          error={create.error}
+          onSubmit={(v) => create.mutate(v)}
+          onClose={() => setCreating(false)}
+        />
+      ) : null}
+
       <div
         style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}
       >

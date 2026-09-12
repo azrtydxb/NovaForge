@@ -11,6 +11,8 @@ interface LoginResponse {
  * when the server says it is required, so a user without it never sees a
  * field they cannot fill. */
 export function Login({ onSignedIn }: { onSignedIn: () => void }) {
+  const [mode, setMode] = useState<"sign-in" | "create">("sign-in");
+  const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [totp, setTotp] = useState("");
@@ -26,6 +28,12 @@ export function Login({ onSignedIn }: { onSignedIn: () => void }) {
       // The field names are the edge's own: totp_code on the way in,
       // session_token on the way back. Reading "token" instead is how this
       // screen first failed against the real service.
+      if (mode === "create") {
+        // Registering does not sign you in: the platform issues a session
+        // through the login path only, so the account is created and then
+        // authenticated with the same credentials.
+        await api.post("/api/v1/auth/register", { email, username, password });
+      }
       const body: Record<string, string> = { username, password };
       if (totp) body.totp_code = totp;
       const res = await api.post<LoginResponse>("/api/v1/auth/login", body);
@@ -98,6 +106,9 @@ export function Login({ onSignedIn }: { onSignedIn: () => void }) {
           <span style={{ font: "600 15px var(--sans)" }}>NovaForge</span>
         </div>
 
+        {mode === "create" ? (
+          <Field label="Email" value={email} onChange={setEmail} />
+        ) : null}
         <Field label="Username" value={username} onChange={setUsername} />
         <Field
           label="Password"
@@ -142,7 +153,35 @@ export function Login({ onSignedIn }: { onSignedIn: () => void }) {
             opacity: busy ? 0.6 : 1,
           }}
         >
-          {busy ? "Signing in…" : "Sign in"}
+          {busy
+            ? mode === "create"
+              ? "Creating…"
+              : "Signing in…"
+            : mode === "create"
+              ? "Create account"
+              : "Sign in"}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setMode(mode === "create" ? "sign-in" : "create");
+            setError(null);
+          }}
+          style={{
+            width: "100%",
+            marginTop: 10,
+            padding: "6px",
+            background: "transparent",
+            border: "none",
+            color: "var(--fg-muted)",
+            font: "12px var(--sans)",
+            cursor: "pointer",
+          }}
+        >
+          {mode === "create"
+            ? "I already have an account"
+            : "Create an account"}
         </button>
       </form>
     </div>

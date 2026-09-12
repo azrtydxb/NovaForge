@@ -1,7 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, enc } from "../lib/api";
 import { useWorkspace } from "../lib/workspace";
 import { Async, Empty, Page, Panel, PanelHead } from "../components/ui";
+import { Dialog, NewButton } from "../components/Dialog";
 import type { OrgMember } from "../lib/types";
 
 /** Orgs is the design's admin view: the organization's repositories and its
@@ -9,6 +11,29 @@ import type { OrgMember } from "../lib/types";
  * with an authority that is a capability grant rather than a token. */
 export function Orgs() {
   const w = useWorkspace();
+  const qc = useQueryClient();
+  const [creating, setCreating] = useState<"org" | "repo" | null>(null);
+
+  const createOrg = useMutation({
+    mutationFn: (v: Record<string, string>) =>
+      api.post("/api/v1/orgs", { name: v.name }),
+    onSuccess: (_data, v) => {
+      setCreating(null);
+      // The new organization becomes the current scope: creating one and then
+      // having to go and find it is not what anyone meant by creating it.
+      w.setOrg(v.name!);
+      qc.invalidateQueries();
+    },
+  });
+
+  const createRepo = useMutation({
+    mutationFn: (v: Record<string, string>) =>
+      api.post(`/api/v1/orgs/${enc(w.org!)}/repos`, { name: v.name }),
+    onSuccess: () => {
+      setCreating(null);
+      qc.invalidateQueries();
+    },
+  });
 
   const members = useQuery({
     queryKey: ["members", w.org],
@@ -18,7 +43,62 @@ export function Orgs() {
   });
 
   return (
-    <Page title="Org & repositories" subtitle={w.org ?? ""}>
+    <Page
+      title="Org & repositories"
+      subtitle={w.org ?? ""}
+      actions={
+        <div style={{ display: "flex", gap: 8 }}>
+          <NewButton
+            label="New organization"
+            onClick={() => setCreating("org")}
+          />
+          {w.org ? (
+            <NewButton
+              label="New repository"
+              onClick={() => setCreating("repo")}
+            />
+          ) : null}
+        </div>
+      }
+    >
+      {creating === "org" ? (
+        <Dialog
+          title="New organization"
+          submitLabel="Create"
+          fields={[
+            {
+              name: "name",
+              label: "Name",
+              required: true,
+              placeholder: "acme",
+              help: "Organizations are the platform's hard security boundary: nothing reads across one.",
+            },
+          ]}
+          busy={createOrg.isPending}
+          error={createOrg.error}
+          onSubmit={(v) => createOrg.mutate(v)}
+          onClose={() => setCreating(null)}
+        />
+      ) : null}
+      {creating === "repo" ? (
+        <Dialog
+          title="New repository"
+          submitLabel="Create"
+          fields={[
+            {
+              name: "name",
+              label: "Name",
+              required: true,
+              placeholder: "platform",
+            },
+          ]}
+          busy={createRepo.isPending}
+          error={createRepo.error}
+          onSubmit={(v) => createRepo.mutate(v)}
+          onClose={() => setCreating(null)}
+        />
+      ) : null}
+
       <div
         style={{
           display: "grid",
