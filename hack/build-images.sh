@@ -34,15 +34,11 @@ fi
 	exit 0
 }
 
-for svc in "${services[@]}"; do
-	if needs_cgo "$svc"; then
-		df=deploy/docker/Dockerfile.cgo
-	elif needs_git "$svc"; then
-		df=deploy/docker/Dockerfile.git
-	else
-		df=deploy/docker/Dockerfile.static
-	fi
-	echo "==> $svc  ($df)"
+# build_one builds and pushes one service. BuildKit is reached over the network
+# and a dropped connection mid-build is transient, so callers retry: losing a
+# ten-minute build to one reset is not worth it.
+build_one() {
+	local svc="$1" df="$2"
 	buildctl \
 		--tlscacert "$BK_CERTS/ca.crt" --tlscert "$BK_CERTS/tls.crt" --tlskey "$BK_CERTS/tls.key" \
 		build --frontend dockerfile.v0 \
@@ -52,6 +48,28 @@ for svc in "${services[@]}"; do
 		--opt platform=linux/arm64 \
 		--opt build-arg:SERVICE="$svc" \
 		--output "type=image,name=$REGISTRY_PUSH/$REGISTRY_REPO/$svc:$TAG,push=true" \
-		--progress plain 2>&1 | tail -3
+		--progress plain >/tmp/buildctl.$svc.log 2>&1
+}
+
+for svc in "${services[@]}"; do
+	if needs_cgo "$svc"; then
+		df=deploy/docker/Dockerfile.cgo
+	elif needs_git "$svc"; then
+		df=deploy/docker/Dockerfile.git
+	else
+		df=deploy/docker/Dockerfile.static
+	fi
+	echo "==> $svc  ($df)"
+	attempt=1
+	until build_one "$svc" "$df"; do
+		tail -3 "/tmp/buildctl.$svc.log" >&2
+		attempt=$((attempt + 1))
+		if [ "$attempt" -gt 3 ]; then
+			echo "build of $svc failed after 3 attempts" >&2
+			exit 1
+		fi
+		echo "    retrying $svc (attempt $attempt)" >&2
+		sleep 10
+	done
 done
 echo "built: ${services[*]}"
