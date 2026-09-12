@@ -1223,6 +1223,295 @@ func (x *GetExceptionsResponse) GetItems() []*ExceptionItem {
 	return nil
 }
 
+// ProofRecord is one gate's recorded outcome for a run — the evidence an
+// Engineering Run presents alongside its diff.
+type ProofRecord struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Gate          string                 `protobuf:"bytes,1,opt,name=gate,proto3" json:"gate,omitempty"`
+	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	Detail        string                 `protobuf:"bytes,3,opt,name=detail,proto3" json:"detail,omitempty"`
+	RecordedAt    string                 `protobuf:"bytes,4,opt,name=recorded_at,json=recordedAt,proto3" json:"recorded_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProofRecord) Reset() {
+	*x = ProofRecord{}
+	mi := &file_novaforge_reviews_v1_reviews_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProofRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProofRecord) ProtoMessage() {}
+
+func (x *ProofRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_reviews_v1_reviews_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProofRecord.ProtoReflect.Descriptor instead.
+func (*ProofRecord) Descriptor() ([]byte, []int) {
+	return file_novaforge_reviews_v1_reviews_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *ProofRecord) GetGate() string {
+	if x != nil {
+		return x.Gate
+	}
+	return ""
+}
+
+func (x *ProofRecord) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *ProofRecord) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+func (x *ProofRecord) GetRecordedAt() string {
+	if x != nil {
+		return x.RecordedAt
+	}
+	return ""
+}
+
+type ListProofRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	RepoId        string                 `protobuf:"bytes,2,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	Number        int32                  `protobuf:"varint,3,opt,name=number,proto3" json:"number,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListProofRequest) Reset() {
+	*x = ListProofRequest{}
+	mi := &file_novaforge_reviews_v1_reviews_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListProofRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListProofRequest) ProtoMessage() {}
+
+func (x *ListProofRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_reviews_v1_reviews_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListProofRequest.ProtoReflect.Descriptor instead.
+func (*ListProofRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_reviews_v1_reviews_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *ListProofRequest) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *ListProofRequest) GetRepoId() string {
+	if x != nil {
+		return x.RepoId
+	}
+	return ""
+}
+
+func (x *ListProofRequest) GetNumber() int32 {
+	if x != nil {
+		return x.Number
+	}
+	return 0
+}
+
+type ListProofResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Proof         []*ProofRecord         `protobuf:"bytes,1,rep,name=proof,proto3" json:"proof,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListProofResponse) Reset() {
+	*x = ListProofResponse{}
+	mi := &file_novaforge_reviews_v1_reviews_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListProofResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListProofResponse) ProtoMessage() {}
+
+func (x *ListProofResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_reviews_v1_reviews_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListProofResponse.ProtoReflect.Descriptor instead.
+func (*ListProofResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_reviews_v1_reviews_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *ListProofResponse) GetProof() []*ProofRecord {
+	if x != nil {
+		return x.Proof
+	}
+	return nil
+}
+
+// MergeRunRequest merges a run. method is "merge", "squash", or "rebase";
+// empty means "merge". The gate controller is asked first, so this cannot
+// merge anything the gates refuse.
+type MergeRunRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	RepoId        string                 `protobuf:"bytes,2,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	Number        int32                  `protobuf:"varint,3,opt,name=number,proto3" json:"number,omitempty"`
+	Method        string                 `protobuf:"bytes,4,opt,name=method,proto3" json:"method,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MergeRunRequest) Reset() {
+	*x = MergeRunRequest{}
+	mi := &file_novaforge_reviews_v1_reviews_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MergeRunRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MergeRunRequest) ProtoMessage() {}
+
+func (x *MergeRunRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_reviews_v1_reviews_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MergeRunRequest.ProtoReflect.Descriptor instead.
+func (*MergeRunRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_reviews_v1_reviews_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *MergeRunRequest) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *MergeRunRequest) GetRepoId() string {
+	if x != nil {
+		return x.RepoId
+	}
+	return ""
+}
+
+func (x *MergeRunRequest) GetNumber() int32 {
+	if x != nil {
+		return x.Number
+	}
+	return 0
+}
+
+func (x *MergeRunRequest) GetMethod() string {
+	if x != nil {
+		return x.Method
+	}
+	return ""
+}
+
+type MergeRunResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MergeSha      string                 `protobuf:"bytes,1,opt,name=merge_sha,json=mergeSha,proto3" json:"merge_sha,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MergeRunResponse) Reset() {
+	*x = MergeRunResponse{}
+	mi := &file_novaforge_reviews_v1_reviews_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MergeRunResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MergeRunResponse) ProtoMessage() {}
+
+func (x *MergeRunResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_reviews_v1_reviews_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MergeRunResponse.ProtoReflect.Descriptor instead.
+func (*MergeRunResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_reviews_v1_reviews_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *MergeRunResponse) GetMergeSha() string {
+	if x != nil {
+		return x.MergeSha
+	}
+	return ""
+}
+
 var File_novaforge_reviews_v1_reviews_proto protoreflect.FileDescriptor
 
 const file_novaforge_reviews_v1_reviews_proto_rawDesc = "" +
@@ -1327,7 +1616,26 @@ const file_novaforge_reviews_v1_reviews_proto_rawDesc = "" +
 	"\x14GetExceptionsRequest\"\x94\x01\n" +
 	"\x15GetExceptionsResponse\x12@\n" +
 	"\asummary\x18\x01 \x01(\v2&.novaforge.reviews.v1.ExceptionSummaryR\asummary\x129\n" +
-	"\x05items\x18\x02 \x03(\v2#.novaforge.reviews.v1.ExceptionItemR\x05items2\x98\x06\n" +
+	"\x05items\x18\x02 \x03(\v2#.novaforge.reviews.v1.ExceptionItemR\x05items\"r\n" +
+	"\vProofRecord\x12\x12\n" +
+	"\x04gate\x18\x01 \x01(\tR\x04gate\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12\x16\n" +
+	"\x06detail\x18\x03 \x01(\tR\x06detail\x12\x1f\n" +
+	"\vrecorded_at\x18\x04 \x01(\tR\n" +
+	"recordedAt\"Z\n" +
+	"\x10ListProofRequest\x12\x15\n" +
+	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x17\n" +
+	"\arepo_id\x18\x02 \x01(\tR\x06repoId\x12\x16\n" +
+	"\x06number\x18\x03 \x01(\x05R\x06number\"L\n" +
+	"\x11ListProofResponse\x127\n" +
+	"\x05proof\x18\x01 \x03(\v2!.novaforge.reviews.v1.ProofRecordR\x05proof\"q\n" +
+	"\x0fMergeRunRequest\x12\x15\n" +
+	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x17\n" +
+	"\arepo_id\x18\x02 \x01(\tR\x06repoId\x12\x16\n" +
+	"\x06number\x18\x03 \x01(\x05R\x06number\x12\x16\n" +
+	"\x06method\x18\x04 \x01(\tR\x06method\"/\n" +
+	"\x10MergeRunResponse\x12\x1b\n" +
+	"\tmerge_sha\x18\x01 \x01(\tR\bmergeSha2\xd1\a\n" +
 	"\x0eReviewsService\x12\\\n" +
 	"\tCreateRun\x12&.novaforge.reviews.v1.CreateRunRequest\x1a'.novaforge.reviews.v1.CreateRunResponse\x12S\n" +
 	"\x06GetRun\x12#.novaforge.reviews.v1.GetRunRequest\x1a$.novaforge.reviews.v1.GetRunResponse\x12Y\n" +
@@ -1337,7 +1645,9 @@ const file_novaforge_reviews_v1_reviews_proto_rawDesc = "" +
 	"\fSubmitReview\x12).novaforge.reviews.v1.SubmitReviewRequest\x1a*.novaforge.reviews.v1.SubmitReviewResponse\x12_\n" +
 	"\n" +
 	"AddComment\x12'.novaforge.reviews.v1.AddCommentRequest\x1a(.novaforge.reviews.v1.AddCommentResponse\x12h\n" +
-	"\rGetExceptions\x12*.novaforge.reviews.v1.GetExceptionsRequest\x1a+.novaforge.reviews.v1.GetExceptionsResponseB\xdd\x01\n" +
+	"\rGetExceptions\x12*.novaforge.reviews.v1.GetExceptionsRequest\x1a+.novaforge.reviews.v1.GetExceptionsResponse\x12\\\n" +
+	"\tListProof\x12&.novaforge.reviews.v1.ListProofRequest\x1a'.novaforge.reviews.v1.ListProofResponse\x12Y\n" +
+	"\bMergeRun\x12%.novaforge.reviews.v1.MergeRunRequest\x1a&.novaforge.reviews.v1.MergeRunResponseB\xdd\x01\n" +
 	"\x18com.novaforge.reviews.v1B\fReviewsProtoP\x01ZAgithub.com/novaforge/novaforge/gen/novaforge/reviews/v1;reviewsv1\xa2\x02\x03NRX\xaa\x02\x14Novaforge.Reviews.V1\xca\x02\x14Novaforge\\Reviews\\V1\xe2\x02 Novaforge\\Reviews\\V1\\GPBMetadata\xea\x02\x16Novaforge::Reviews::V1b\x06proto3"
 
 var (
@@ -1352,7 +1662,7 @@ func file_novaforge_reviews_v1_reviews_proto_rawDescGZIP() []byte {
 	return file_novaforge_reviews_v1_reviews_proto_rawDescData
 }
 
-var file_novaforge_reviews_v1_reviews_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_novaforge_reviews_v1_reviews_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_novaforge_reviews_v1_reviews_proto_goTypes = []any{
 	(*Run)(nil),                   // 0: novaforge.reviews.v1.Run
 	(*CreateRunRequest)(nil),      // 1: novaforge.reviews.v1.CreateRunRequest
@@ -1373,6 +1683,11 @@ var file_novaforge_reviews_v1_reviews_proto_goTypes = []any{
 	(*ExceptionItem)(nil),         // 16: novaforge.reviews.v1.ExceptionItem
 	(*GetExceptionsRequest)(nil),  // 17: novaforge.reviews.v1.GetExceptionsRequest
 	(*GetExceptionsResponse)(nil), // 18: novaforge.reviews.v1.GetExceptionsResponse
+	(*ProofRecord)(nil),           // 19: novaforge.reviews.v1.ProofRecord
+	(*ListProofRequest)(nil),      // 20: novaforge.reviews.v1.ListProofRequest
+	(*ListProofResponse)(nil),     // 21: novaforge.reviews.v1.ListProofResponse
+	(*MergeRunRequest)(nil),       // 22: novaforge.reviews.v1.MergeRunRequest
+	(*MergeRunResponse)(nil),      // 23: novaforge.reviews.v1.MergeRunResponse
 }
 var file_novaforge_reviews_v1_reviews_proto_depIdxs = []int32{
 	0,  // 0: novaforge.reviews.v1.CreateRunResponse.run:type_name -> novaforge.reviews.v1.Run
@@ -1380,27 +1695,32 @@ var file_novaforge_reviews_v1_reviews_proto_depIdxs = []int32{
 	0,  // 2: novaforge.reviews.v1.ListRunsResponse.runs:type_name -> novaforge.reviews.v1.Run
 	15, // 3: novaforge.reviews.v1.GetExceptionsResponse.summary:type_name -> novaforge.reviews.v1.ExceptionSummary
 	16, // 4: novaforge.reviews.v1.GetExceptionsResponse.items:type_name -> novaforge.reviews.v1.ExceptionItem
-	1,  // 5: novaforge.reviews.v1.ReviewsService.CreateRun:input_type -> novaforge.reviews.v1.CreateRunRequest
-	3,  // 6: novaforge.reviews.v1.ReviewsService.GetRun:input_type -> novaforge.reviews.v1.GetRunRequest
-	5,  // 7: novaforge.reviews.v1.ReviewsService.ListRuns:input_type -> novaforge.reviews.v1.ListRunsRequest
-	7,  // 8: novaforge.reviews.v1.ReviewsService.AddPlanStep:input_type -> novaforge.reviews.v1.AddPlanStepRequest
-	9,  // 9: novaforge.reviews.v1.ReviewsService.RecordProof:input_type -> novaforge.reviews.v1.RecordProofRequest
-	11, // 10: novaforge.reviews.v1.ReviewsService.SubmitReview:input_type -> novaforge.reviews.v1.SubmitReviewRequest
-	13, // 11: novaforge.reviews.v1.ReviewsService.AddComment:input_type -> novaforge.reviews.v1.AddCommentRequest
-	17, // 12: novaforge.reviews.v1.ReviewsService.GetExceptions:input_type -> novaforge.reviews.v1.GetExceptionsRequest
-	2,  // 13: novaforge.reviews.v1.ReviewsService.CreateRun:output_type -> novaforge.reviews.v1.CreateRunResponse
-	4,  // 14: novaforge.reviews.v1.ReviewsService.GetRun:output_type -> novaforge.reviews.v1.GetRunResponse
-	6,  // 15: novaforge.reviews.v1.ReviewsService.ListRuns:output_type -> novaforge.reviews.v1.ListRunsResponse
-	8,  // 16: novaforge.reviews.v1.ReviewsService.AddPlanStep:output_type -> novaforge.reviews.v1.AddPlanStepResponse
-	10, // 17: novaforge.reviews.v1.ReviewsService.RecordProof:output_type -> novaforge.reviews.v1.RecordProofResponse
-	12, // 18: novaforge.reviews.v1.ReviewsService.SubmitReview:output_type -> novaforge.reviews.v1.SubmitReviewResponse
-	14, // 19: novaforge.reviews.v1.ReviewsService.AddComment:output_type -> novaforge.reviews.v1.AddCommentResponse
-	18, // 20: novaforge.reviews.v1.ReviewsService.GetExceptions:output_type -> novaforge.reviews.v1.GetExceptionsResponse
-	13, // [13:21] is the sub-list for method output_type
-	5,  // [5:13] is the sub-list for method input_type
-	5,  // [5:5] is the sub-list for extension type_name
-	5,  // [5:5] is the sub-list for extension extendee
-	0,  // [0:5] is the sub-list for field type_name
+	19, // 5: novaforge.reviews.v1.ListProofResponse.proof:type_name -> novaforge.reviews.v1.ProofRecord
+	1,  // 6: novaforge.reviews.v1.ReviewsService.CreateRun:input_type -> novaforge.reviews.v1.CreateRunRequest
+	3,  // 7: novaforge.reviews.v1.ReviewsService.GetRun:input_type -> novaforge.reviews.v1.GetRunRequest
+	5,  // 8: novaforge.reviews.v1.ReviewsService.ListRuns:input_type -> novaforge.reviews.v1.ListRunsRequest
+	7,  // 9: novaforge.reviews.v1.ReviewsService.AddPlanStep:input_type -> novaforge.reviews.v1.AddPlanStepRequest
+	9,  // 10: novaforge.reviews.v1.ReviewsService.RecordProof:input_type -> novaforge.reviews.v1.RecordProofRequest
+	11, // 11: novaforge.reviews.v1.ReviewsService.SubmitReview:input_type -> novaforge.reviews.v1.SubmitReviewRequest
+	13, // 12: novaforge.reviews.v1.ReviewsService.AddComment:input_type -> novaforge.reviews.v1.AddCommentRequest
+	17, // 13: novaforge.reviews.v1.ReviewsService.GetExceptions:input_type -> novaforge.reviews.v1.GetExceptionsRequest
+	20, // 14: novaforge.reviews.v1.ReviewsService.ListProof:input_type -> novaforge.reviews.v1.ListProofRequest
+	22, // 15: novaforge.reviews.v1.ReviewsService.MergeRun:input_type -> novaforge.reviews.v1.MergeRunRequest
+	2,  // 16: novaforge.reviews.v1.ReviewsService.CreateRun:output_type -> novaforge.reviews.v1.CreateRunResponse
+	4,  // 17: novaforge.reviews.v1.ReviewsService.GetRun:output_type -> novaforge.reviews.v1.GetRunResponse
+	6,  // 18: novaforge.reviews.v1.ReviewsService.ListRuns:output_type -> novaforge.reviews.v1.ListRunsResponse
+	8,  // 19: novaforge.reviews.v1.ReviewsService.AddPlanStep:output_type -> novaforge.reviews.v1.AddPlanStepResponse
+	10, // 20: novaforge.reviews.v1.ReviewsService.RecordProof:output_type -> novaforge.reviews.v1.RecordProofResponse
+	12, // 21: novaforge.reviews.v1.ReviewsService.SubmitReview:output_type -> novaforge.reviews.v1.SubmitReviewResponse
+	14, // 22: novaforge.reviews.v1.ReviewsService.AddComment:output_type -> novaforge.reviews.v1.AddCommentResponse
+	18, // 23: novaforge.reviews.v1.ReviewsService.GetExceptions:output_type -> novaforge.reviews.v1.GetExceptionsResponse
+	21, // 24: novaforge.reviews.v1.ReviewsService.ListProof:output_type -> novaforge.reviews.v1.ListProofResponse
+	23, // 25: novaforge.reviews.v1.ReviewsService.MergeRun:output_type -> novaforge.reviews.v1.MergeRunResponse
+	16, // [16:26] is the sub-list for method output_type
+	6,  // [6:16] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_novaforge_reviews_v1_reviews_proto_init() }
@@ -1414,7 +1734,7 @@ func file_novaforge_reviews_v1_reviews_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_novaforge_reviews_v1_reviews_proto_rawDesc), len(file_novaforge_reviews_v1_reviews_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   19,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	agentsv1 "github.com/novaforge/novaforge/gen/novaforge/agents/v1"
 	civ1 "github.com/novaforge/novaforge/gen/novaforge/ci/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
@@ -53,12 +54,28 @@ func main() {
 	}
 	defer ciConn.Close()
 
+	// AGENTS_ADDR unset means this deployment runs no agents: the agent
+	// routes are then absent rather than present and failing, which is what
+	// the route table's "no client, no handler" rule gives us.
+	var agentsClient agentsv1.AgentServiceClient
+	if cfg.AgentsAddr != "" {
+		agentsConn, err := dial(cfg.AgentsAddr)
+		if err != nil {
+			log.Fatalf("edge: dial agent-runtime: %v", err)
+		}
+		defer agentsConn.Close()
+		agentsClient = agentsv1.NewAgentServiceClient(agentsConn)
+	} else {
+		log.Println("edge: AGENTS_ADDR is unset; the agent routes are not mounted")
+	}
+
 	ecfg := edge.Config{
 		Identity: identityv1.NewIdentityServiceClient(identityConn),
 		Git:      gitv1.NewGitServiceClient(gitConn),
 		Work:     workv1.NewWorkServiceClient(workConn),
 		Reviews:  reviewsv1.NewReviewsServiceClient(workConn),
 		CI:       civ1.NewCIServiceClient(ciConn),
+		Agents:   agentsClient,
 	}
 	ecfg.Handlers = edge.Handlers(ecfg)
 

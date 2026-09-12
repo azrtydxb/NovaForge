@@ -14,6 +14,8 @@ service ReviewsService {
   rpc SubmitReview(SubmitReviewRequest) returns (SubmitReviewResponse);
   rpc AddComment(AddCommentRequest) returns (AddCommentResponse);
   rpc GetExceptions(GetExceptionsRequest) returns (GetExceptionsResponse);
+  rpc ListProof(ListProofRequest) returns (ListProofResponse);
+  rpc MergeRun(MergeRunRequest) returns (MergeRunResponse);
 }
 
 // Run mirrors a row in the reviews.runs table.
@@ -139,4 +141,35 @@ message GetExceptionsRequest {}
 message GetExceptionsResponse {
   ExceptionSummary summary = 1;
   repeated ExceptionItem items = 2;
+}
+
+// ProofRecord is one gate's recorded outcome for a run — the evidence an
+// Engineering Run presents alongside its diff.
+message ProofRecord {
+  string gate = 1;
+  string status = 2;
+  string detail = 3;
+  string recorded_at = 4;
+}
+
+message ListProofRequest {
+  string run_id = 1;
+  string repo_id = 2;
+  int32 number = 3;
+}
+message ListProofResponse {
+  repeated ProofRecord proof = 1;
+}
+
+// MergeRunRequest merges a run. method is "merge", "squash", or "rebase";
+// empty means "merge". The gate controller is asked first, so this cannot
+// merge anything the gates refuse.
+message MergeRunRequest {
+  string run_id = 1;
+  string repo_id = 2;
+  int32 number = 3;
+  string method = 4;
+}
+message MergeRunResponse {
+  string merge_sha = 1;
 }

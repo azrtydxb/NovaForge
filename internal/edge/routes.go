@@ -56,6 +56,12 @@ func Routes() []Route {
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/work/{key}/subtasks", "listSubtasks", "An epic's subtasks and their readiness"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/work/{key}/decompose", "decomposeEpic", "Break an epic into dependency-ordered subtasks"},
 
+		{http.MethodGet, "/api/v1/orgs/{org}/agents", "listAgents", "Agents in an organization"},
+		{http.MethodPost, "/api/v1/orgs/{org}/agents", "createAgent", "Define an agent"},
+		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/agent-runs", "startAgentRun", "Start an Agent Run against a Work Item"},
+		{http.MethodGet, "/api/v1/orgs/{org}/agent-runs/{id}", "getAgentRun", "One Agent Run"},
+		{http.MethodDelete, "/api/v1/orgs/{org}/agent-runs/{id}", "cancelAgentRun", "Cancel an Agent Run"},
+
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/runs", "listRuns", "Engineering Runs"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/runs", "createRun", "Open an Engineering Run"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}", "getRun", "One Engineering Run"},

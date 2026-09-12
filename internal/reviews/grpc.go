@@ -23,6 +23,10 @@ type GRPCServer struct {
 
 	Store *Store
 
+	// Merger backs the MergeRun RPC — a person merging deliberately. It is
+	// the same Merger AutoMerge uses, so both pass the identical gate check.
+	Merger *Merger
+
 	// AutoMerge, when set, is consulted after every review submission: a
 	// run whose last blocking review has just landed is exactly the moment
 	// policy can be re-evaluated. It is nil when the deployment has not

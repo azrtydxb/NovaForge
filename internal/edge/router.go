@@ -16,6 +16,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	agentsv1 "github.com/novaforge/novaforge/gen/novaforge/agents/v1"
 	civ1 "github.com/novaforge/novaforge/gen/novaforge/ci/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
@@ -31,6 +32,7 @@ type Config struct {
 	CI       civ1.CIServiceClient
 	Work     workv1.WorkServiceClient
 	Reviews  reviewsv1.ReviewsServiceClient
+	Agents   agentsv1.AgentServiceClient
 	Handlers map[string]http.HandlerFunc
 }
 

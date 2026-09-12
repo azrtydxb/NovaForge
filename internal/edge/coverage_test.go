@@ -7,8 +7,15 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/novaforge/novaforge/internal/edge"
 	"gopkg.in/yaml.v3"
+
+	agentsv1 "github.com/novaforge/novaforge/gen/novaforge/agents/v1"
+	civ1 "github.com/novaforge/novaforge/gen/novaforge/ci/v1"
+	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
+	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
+	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
+	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
+	"github.com/novaforge/novaforge/internal/edge"
 )
 
 // TestEveryRouteIsInOpenAPI fails the build when the router and the published
@@ -77,4 +84,45 @@ func TestRouterMountsEveryRoute(t *testing.T) {
 // openAPIPath converts a chi wildcard into the OpenAPI spelling.
 func openAPIPath(p string) string {
 	return strings.ReplaceAll(p, "/*", "/{path}")
+}
+
+// TestEveryRouteHasAHandlerWhenWired pins the seam the other two tests leave
+// open: a route can be in the table, in the contract, and mounted, and still
+// have no handler behind it — the router then answers 501, or 404 where the
+// route was never added at all. That is what happened to the decompose
+// route, which existed everywhere except in the router, and presented as a
+// bare 404 to anyone who called it.
+//
+// Every client is non-nil here (they are only dialled when used), so this
+// asserts the fully-wired deployment: every operation the table declares
+// must have a handler.
+func TestEveryRouteHasAHandlerWhenWired(t *testing.T) {
+	cfg := edge.Config{
+		Identity: identityv1.NewIdentityServiceClient(nil),
+		Git:      gitv1.NewGitServiceClient(nil),
+		Work:     workv1.NewWorkServiceClient(nil),
+		Reviews:  reviewsv1.NewReviewsServiceClient(nil),
+		CI:       civ1.NewCIServiceClient(nil),
+		Agents:   agentsv1.NewAgentServiceClient(nil),
+	}
+	handlers := edge.Handlers(cfg)
+
+	for _, r := range edge.Routes() {
+		if _, ok := handlers[r.OpID]; !ok {
+			t.Errorf("route %s %s declares operation %q, but no handler is built for it",
+				r.Method, r.Pattern, r.OpID)
+		}
+	}
+	for op := range handlers {
+		var declared bool
+		for _, r := range edge.Routes() {
+			if r.OpID == op {
+				declared = true
+				break
+			}
+		}
+		if !declared {
+			t.Errorf("handler %q is built but no route declares it, so nothing can reach it", op)
+		}
+	}
 }

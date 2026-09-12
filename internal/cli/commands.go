@@ -26,6 +26,7 @@ func commands() map[string]command {
 		"whoami":    {"whoami", "Show the authenticated user", cmdWhoami},
 		"ci":        {"ci", "Inspect CI runs, logs and artifacts", cmdCI},
 		"dashboard": {"dashboard", "Show what needs human attention", cmdDashboard},
+		"agent":     {"agent", "Define agents and drive Agent Runs", cmdAgent},
 	}
 }
 
@@ -513,4 +514,145 @@ func cmdDashboard(args []string, stdout, stderr io.Writer) error {
 	fmt.Fprintf(stdout, "%d gate failures\n", out.GateFailures)
 	fmt.Fprintf(stdout, "%d agents blocked\n", out.AgentsBlocked)
 	return nil
+}
+
+// cmdAgent defines agents and drives Agent Runs. Without it an agent could
+// only be created, and a run only started, from inside the cluster over
+// gRPC — so the thing this platform exists to do had no command.
+func cmdAgent(args []string, stdout, stderr io.Writer) error {
+	if len(args) < 1 {
+		return fmt.Errorf("usage: nf agent <list|create|start|get|cancel> [...]")
+	}
+	c, cfg, err := session()
+	if err != nil {
+		return err
+	}
+	org, err := requireOrg(cfg)
+	if err != nil {
+		return err
+	}
+
+	switch args[0] {
+	case "list":
+		var out struct {
+			Agents []struct {
+				ID       string `json:"id"`
+				Name     string `json:"name"`
+				Role     string `json:"role"`
+				ModelRef string `json:"model_ref"`
+				Enabled  bool   `json:"enabled"`
+			} `json:"agents"`
+		}
+		if err := c.Do("GET", "/api/v1/orgs/"+org+"/agents", nil, &out); err != nil {
+			return err
+		}
+		for _, a := range out.Agents {
+			state := "disabled"
+			if a.Enabled {
+				state = "enabled"
+			}
+			fmt.Fprintf(stdout, "%s\t%s\t%s\t%s\t%s\n", a.ID, a.Name, a.Role, a.ModelRef, state)
+		}
+		return nil
+
+	case "create":
+		if len(args) < 2 {
+			return fmt.Errorf("usage: nf agent create <name> [--role <role>] [--model <ref>]")
+		}
+		fs := flag.NewFlagSet("agent create", flag.ContinueOnError)
+		fs.SetOutput(stderr)
+		role := fs.String("role", "implementer", "the agent's role")
+		model := fs.String("model", "", "model reference, or empty for the deployment's default")
+		if err := fs.Parse(args[2:]); err != nil {
+			return err
+		}
+		var out struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+			Role string `json:"role"`
+		}
+		body := map[string]any{"name": args[1], "role": *role, "model_ref": *model}
+		if err := c.Do("POST", "/api/v1/orgs/"+org+"/agents", body, &out); err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "created %s (%s, role %s)\n", out.Name, out.ID, out.Role)
+		return nil
+
+	case "start":
+		if len(args) < 3 {
+			return fmt.Errorf("usage: nf agent start <repo> <work-item-key> [--agent <id>]")
+		}
+		fs := flag.NewFlagSet("agent start", flag.ContinueOnError)
+		fs.SetOutput(stderr)
+		agentID := fs.String("agent", "", "the agent to run; defaults to the organization's first enabled agent")
+		if err := fs.Parse(args[3:]); err != nil {
+			return err
+		}
+		id := *agentID
+		if id == "" {
+			id, err = firstEnabledAgent(c, org)
+			if err != nil {
+				return err
+			}
+		}
+		var out struct {
+			ID     string `json:"id"`
+			State  string `json:"state"`
+			Branch string `json:"branch"`
+		}
+		body := map[string]any{"agent_id": id, "work_item_key": args[2]}
+		if err := c.Do("POST", "/api/v1/orgs/"+org+"/repos/"+args[1]+"/agent-runs", body, &out); err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "%s\t%s\t%s\n", out.ID, out.State, out.Branch)
+		return nil
+
+	case "get":
+		if len(args) < 2 {
+			return fmt.Errorf("usage: nf agent get <run-id>")
+		}
+		var out struct {
+			ID      string `json:"id"`
+			State   string `json:"state"`
+			Branch  string `json:"branch"`
+			EndedAt string `json:"ended_at"`
+		}
+		if err := c.Do("GET", "/api/v1/orgs/"+org+"/agent-runs/"+args[1], nil, &out); err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "%s\t%s\t%s\t%s\n", out.ID, out.State, out.Branch, out.EndedAt)
+		return nil
+
+	case "cancel":
+		if len(args) < 2 {
+			return fmt.Errorf("usage: nf agent cancel <run-id>")
+		}
+		var out map[string]any
+		if err := c.Do("DELETE", "/api/v1/orgs/"+org+"/agent-runs/"+args[1], nil, &out); err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "cancelled %s\n", args[1])
+		return nil
+	}
+	return fmt.Errorf("unknown agent subcommand %q", args[0])
+}
+
+// firstEnabledAgent picks the organization's first enabled agent, so the
+// common case — one agent configured — needs no --agent flag.
+func firstEnabledAgent(c *Client, org string) (string, error) {
+	var out struct {
+		Agents []struct {
+			ID      string `json:"id"`
+			Enabled bool   `json:"enabled"`
+		} `json:"agents"`
+	}
+	if err := c.Do("GET", "/api/v1/orgs/"+org+"/agents", nil, &out); err != nil {
+		return "", err
+	}
+	for _, a := range out.Agents {
+		if a.Enabled {
+			return a.ID, nil
+		}
+	}
+	return "", fmt.Errorf("this organization has no enabled agent; create one with: nf agent create <name>")
 }

@@ -219,6 +219,64 @@ func addWorkHandlers(h map[string]http.HandlerFunc, g gitv1.GitServiceClient, w 
 			WriteError(wr, http.StatusNotFound, errRunNotFound(n))
 		}
 
+		// The by-number addressing now reaches the service directly: getRun
+		// above still scans ListRuns because it predates ReviewsService
+		// accepting (repo_id, number), which these two use.
+		h["getRunProof"] = func(wr http.ResponseWriter, r *http.Request) {
+			n, err := strconv.Atoi(chi.URLParam(r, "number"))
+			if err != nil {
+				WriteError(wr, http.StatusBadRequest, err)
+				return
+			}
+			rid, err := repoID(r)
+			if err != nil {
+				WriteError(wr, StatusFromGRPC(err), err)
+				return
+			}
+			resp, err := rv.ListProof(r.Context(), &reviewsv1.ListProofRequest{RepoId: rid, Number: int32(n)})
+			if err != nil {
+				WriteError(wr, StatusFromGRPC(err), err)
+				return
+			}
+			out := make([]map[string]any, 0, len(resp.GetProof()))
+			for _, p := range resp.GetProof() {
+				out = append(out, map[string]any{
+					"gate":        p.GetGate(),
+					"status":      p.GetStatus(),
+					"detail":      p.GetDetail(),
+					"recorded_at": p.GetRecordedAt(),
+				})
+			}
+			WriteJSON(wr, http.StatusOK, map[string]any{"proof": out})
+		}
+
+		h["mergeRun"] = func(wr http.ResponseWriter, r *http.Request) {
+			n, err := strconv.Atoi(chi.URLParam(r, "number"))
+			if err != nil {
+				WriteError(wr, http.StatusBadRequest, err)
+				return
+			}
+			var req struct {
+				Method string `json:"method"`
+			}
+			// A merge with no body is an ordinary merge; an absent body is
+			// not an error.
+			_ = decode(r, &req)
+			rid, err := repoID(r)
+			if err != nil {
+				WriteError(wr, StatusFromGRPC(err), err)
+				return
+			}
+			resp, err := rv.MergeRun(r.Context(), &reviewsv1.MergeRunRequest{
+				RepoId: rid, Number: int32(n), Method: req.Method,
+			})
+			if err != nil {
+				WriteError(wr, StatusFromGRPC(err), err)
+				return
+			}
+			WriteJSON(wr, http.StatusOK, map[string]any{"merge_sha": resp.GetMergeSha()})
+		}
+
 		h["submitReview"] = func(wr http.ResponseWriter, r *http.Request) {
 			n, err := strconv.Atoi(chi.URLParam(r, "number"))
 			if err != nil {
