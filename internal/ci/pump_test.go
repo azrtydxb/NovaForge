@@ -27,7 +27,8 @@ func TestPumpHandsAPendingJobToAConnectedRunner(t *testing.T) {
 
 	ctx := context.Background()
 	run, _, err := store.CreateRun(ctx, ci.Run{
-		OrgID: orgID, RepoID: repoID, CommitSHA: "cafebabe", Ref: "refs/heads/main",
+		OrgID: orgID, RepoID: repoID, RepoName: "widgets",
+		CommitSHA: "cafebabe", Ref: "refs/heads/main",
 	})
 	if err != nil {
 		t.Fatalf("CreateRun: %v", err)
@@ -68,6 +69,12 @@ func TestPumpHandsAPendingJobToAConnectedRunner(t *testing.T) {
 		if !strings.Contains(job.GetRepoCloneUrl(), "nfsvc.") {
 			t.Fatalf("clone url does not carry a service token: %q", job.GetRepoCloneUrl())
 		}
+		// The URL must address the repository by NAME: the on-disk path and the
+		// smart-HTTP route are keyed by name, and an id there fails the clone
+		// with git's opaque exit 128.
+		if !strings.HasSuffix(job.GetRepoCloneUrl(), "/widgets.git") {
+			t.Fatalf("clone url does not address the repository by name: %q", job.GetRepoCloneUrl())
+		}
 	case <-time.After(20 * time.Second):
 		t.Fatal("no job reached the connected runner within 20s")
 	}
@@ -101,7 +108,8 @@ func TestClaimNeverCrossesOrganizations(t *testing.T) {
 
 	// A pending job belonging to org A.
 	runA, _, err := store.CreateRun(ctx, ci.Run{
-		OrgID: orgA, RepoID: uuid.New(), CommitSHA: "aaaa", Ref: "refs/heads/main",
+		OrgID: orgA, RepoID: uuid.New(), RepoName: "a-repo",
+		CommitSHA: "aaaa", Ref: "refs/heads/main",
 	})
 	if err != nil {
 		t.Fatalf("CreateRun: %v", err)

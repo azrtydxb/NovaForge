@@ -36,8 +36,13 @@ type AgentEvent struct {
 
 // PushEvent describes one ref update accepted by a git push.
 type PushEvent struct {
-	OrgID    uuid.UUID `json:"org_id"`
-	RepoID   uuid.UUID `json:"repo_id"`
+	OrgID  uuid.UUID `json:"org_id"`
+	RepoID uuid.UUID `json:"repo_id"`
+	// RepoName is carried alongside the id because consumers address the
+	// repository both ways: CI stores the id, but a clone URL and the on-disk
+	// path are keyed by name, and a consumer cannot resolve one from the other
+	// without reading another service's schema.
+	RepoName string    `json:"repo_name"`
 	PusherID uuid.UUID `json:"pusher_id"`
 	Ref      string    `json:"ref"`
 	OldSHA   string    `json:"old_sha"`

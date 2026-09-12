@@ -48,6 +48,7 @@ func repoIDPublisher(rdb *redis.Client, resolve RepoIDFunc) func(context.Context
 			evt := events.PushEvent{
 				OrgID:    orgID,
 				RepoID:   repoID,
+				RepoName: repo,
 				PusherID: scope.ActorID,
 				Ref:      u.Ref,
 				OldSHA:   u.OldSHA,

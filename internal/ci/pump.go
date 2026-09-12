@@ -80,6 +80,8 @@ func (p *Pump) tick(ctx context.Context) error {
 			}
 			continue
 		}
+		// ClaimForDispatch hands back the repository NAME here; the pump turns
+		// it into a credentialed URL.
 		job.RepoCloneURL, err = p.cloneURL(orgID, job.RepoCloneURL)
 		if err != nil {
 			p.log.Error("ci pump: build clone url", "job", job.JobID, "error", err)
@@ -104,7 +106,7 @@ func (p *Pump) tick(ctx context.Context) error {
 // A CI job has no person behind it, so it cannot borrow anyone's credential;
 // without one the clone simply fails with git's generic exit 128 and no
 // indication that authentication was the problem.
-func (p *Pump) cloneURL(orgID uuid.UUID, repoID string) (string, error) {
+func (p *Pump) cloneURL(orgID uuid.UUID, repoName string) (string, error) {
 	if p.cloneBase == "" {
 		return "", nil
 	}
@@ -117,7 +119,10 @@ func (p *Pump) cloneURL(orgID uuid.UUID, repoID string) (string, error) {
 		return "", fmt.Errorf("parse clone base %q: %w", p.cloneBase, err)
 	}
 	u.User = url.UserPassword("ci", tok)
-	u.Path = fmt.Sprintf("/%s/%s.git", orgID, repoID)
+	if repoName == "" {
+		return "", fmt.Errorf("run carries no repository name, so a clone url cannot be built")
+	}
+	u.Path = fmt.Sprintf("/%s/%s.git", orgID, repoName)
 	return u.String(), nil
 }
 

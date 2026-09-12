@@ -22,6 +22,7 @@ type Run struct {
 	ID        uuid.UUID
 	OrgID     uuid.UUID
 	RepoID    uuid.UUID
+	RepoName  string
 	CommitSHA string
 	Ref       string
 	Status    string
@@ -81,11 +82,11 @@ func (s *Store) CreateRun(ctx context.Context, run Run) (Run, bool, error) {
 		run.Status = "queued"
 	}
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO ci.workflow_runs (id, org_id, repo_id, commit_sha, ref, status)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO ci.workflow_runs (id, org_id, repo_id, repo_name, commit_sha, ref, status)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		ON CONFLICT (repo_id, commit_sha, ref) DO NOTHING
 		RETURNING id, created_at`,
-		run.ID, run.OrgID, run.RepoID, run.CommitSHA, run.Ref, run.Status,
+		run.ID, run.OrgID, run.RepoID, run.RepoName, run.CommitSHA, run.Ref, run.Status,
 	).Scan(&run.ID, &run.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -429,13 +430,13 @@ func (s *Store) ClaimForDispatch(ctx context.Context, runnerID uuid.UUID, labels
 	defer tx.Rollback(ctx)
 
 	var (
-		dj     DispatchJob
-		orgID  uuid.UUID
-		runCmd *string
-		agent  *string
-		image  *string
-		repoID uuid.UUID
-		sha    string
+		dj       DispatchJob
+		orgID    uuid.UUID
+		runCmd   *string
+		agent    *string
+		image    *string
+		repoName string
+		sha      string
 	)
 	// The job must belong to the runner's own organization. Without this
 	// predicate a runner registered to one organization could be handed
@@ -443,7 +444,7 @@ func (s *Store) ClaimForDispatch(ctx context.Context, runnerID uuid.UUID, labels
 	// meant to be into a soft one.
 	err = tx.QueryRow(ctx, `
 		SELECT j.id, j.run_id, j.run_cmd, j.agent_role, j.image,
-		       r.org_id, r.repo_id, r.commit_sha
+		       r.org_id, r.repo_name, r.commit_sha
 		FROM ci.workflow_jobs j
 		JOIN ci.workflow_runs r ON r.id = j.run_id
 		JOIN ci.runners rn ON rn.id = $1 AND rn.org_id = r.org_id
@@ -458,7 +459,7 @@ func (s *Store) ClaimForDispatch(ctx context.Context, runnerID uuid.UUID, labels
 		ORDER BY j.id
 		FOR UPDATE OF j SKIP LOCKED
 		LIMIT 1`, runnerID,
-	).Scan(&dj.JobID, &dj.RunID, &runCmd, &agent, &image, &orgID, &repoID, &sha)
+	).Scan(&dj.JobID, &dj.RunID, &runCmd, &agent, &image, &orgID, &repoName, &sha)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return DispatchJob{}, uuid.Nil, ErrNoClaimableJob
@@ -489,8 +490,9 @@ func (s *Store) ClaimForDispatch(ctx context.Context, runnerID uuid.UUID, labels
 	if err := tx.Commit(ctx); err != nil {
 		return DispatchJob{}, uuid.Nil, fmt.Errorf("commit claim: %w", err)
 	}
-	// The clone URL addresses the repository by id, which git-platform resolves
-	// the same way it resolves a name.
-	dj.RepoCloneURL = repoID.String()
+	// The caller turns this into a full clone URL. The NAME is carried, not the
+	// id: the on-disk repository path and the smart-HTTP route are keyed by
+	// name, and CI must not read git-platform's schema to translate.
+	dj.RepoCloneURL = repoName
 	return dj, orgID, nil
 }

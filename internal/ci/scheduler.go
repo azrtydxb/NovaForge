@@ -236,6 +236,7 @@ func (s *Scheduler) handlePush(ctx context.Context, evt events.PushEvent) error 
 	run, created, err := s.store.CreateRun(ctx, Run{
 		OrgID:     evt.OrgID,
 		RepoID:    evt.RepoID,
+		RepoName:  evt.RepoName,
 		CommitSHA: evt.NewSHA,
 		Ref:       evt.Ref,
 	})
