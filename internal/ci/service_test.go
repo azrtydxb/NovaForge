@@ -71,7 +71,7 @@ func TestNewServiceWiresEveryComponent(t *testing.T) {
 	blobs := serviceBlobstore(t)
 	git := &stubGitClient{content: []byte(oneJobWorkflow)}
 
-	svc := ci.NewService(pool, rdb, blobs, git, "test-secret")
+	svc := ci.NewService(pool, rdb, blobs, git, "test-secret", "http://git.test")
 	if svc.Store == nil || svc.Dispatcher == nil || svc.Logs == nil || svc.Artifacts == nil {
 		t.Fatalf("NewService left a storage component nil: %+v", svc)
 	}
@@ -114,7 +114,7 @@ func TestRunSweepsOnATightTicker(t *testing.T) {
 		t.Fatalf("seed sealed log: %v", err)
 	}
 
-	svc := ci.NewService(pool, rdb, blobs, git, "test-secret")
+	svc := ci.NewService(pool, rdb, blobs, git, "test-secret", "http://git.test")
 	svc.SweepEvery = 20 * time.Millisecond
 
 	ctx, cancel := context.WithCancel(context.Background())

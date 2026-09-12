@@ -111,16 +111,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, job DispatchJob, requiredLabe
 	ch := best.ch
 	d.mu.Unlock()
 
-	msg := &civ1.ConnectResponse{
-		JobId:        job.JobID.String(),
-		RunId:        job.RunID.String(),
-		RepoCloneUrl: job.RepoCloneURL,
-		CommitSha:    job.CommitSHA,
-		RunCmd:       job.RunCmd,
-		AgentRole:    job.AgentRole,
-		Image:        job.Image,
-		Env:          job.Env,
-	}
+	msg := toConnectResponse(job)
 	select {
 	case ch <- msg:
 		return nil
@@ -138,4 +129,63 @@ func hasAllLabels(have map[string]struct{}, want []string) bool {
 		}
 	}
 	return true
+}
+
+// ConnectedRunner is one runner currently holding an open stream.
+type ConnectedRunner struct {
+	ID     uuid.UUID
+	Labels []string
+}
+
+// Connected returns the runners currently able to receive work. The pump asks
+// each of them for a job rather than picking a job and hunting for a runner,
+// because claiming is per-runner in the database.
+func (d *Dispatcher) Connected() []ConnectedRunner {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	out := make([]ConnectedRunner, 0, len(d.runners))
+	for id, r := range d.runners {
+		labels := make([]string, 0, len(r.labels))
+		for l := range r.labels {
+			labels = append(labels, l)
+		}
+		out = append(out, ConnectedRunner{ID: id, Labels: labels})
+	}
+	return out
+}
+
+// DispatchTo sends job to one specific runner, which is what the pump wants
+// once the database has already decided who claimed it.
+func (d *Dispatcher) DispatchTo(ctx context.Context, runnerID uuid.UUID, job DispatchJob) error {
+	d.mu.Lock()
+	r, ok := d.runners[runnerID]
+	if ok {
+		r.lastDispatch = time.Now()
+	}
+	d.mu.Unlock()
+	if !ok {
+		return fmt.Errorf("runner %s is no longer connected", runnerID)
+	}
+	select {
+	case r.ch <- toConnectResponse(job):
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(5 * time.Second):
+		return fmt.Errorf("runner %s did not accept the job within 5s", runnerID)
+	}
+}
+
+// toConnectResponse renders a job as the message a runner receives.
+func toConnectResponse(job DispatchJob) *civ1.ConnectResponse {
+	return &civ1.ConnectResponse{
+		JobId:        job.JobID.String(),
+		RunId:        job.RunID.String(),
+		RepoCloneUrl: job.RepoCloneURL,
+		CommitSha:    job.CommitSHA,
+		RunCmd:       job.RunCmd,
+		AgentRole:    job.AgentRole,
+		Image:        job.Image,
+		Env:          job.Env,
+	}
 }

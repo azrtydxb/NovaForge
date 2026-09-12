@@ -30,6 +30,7 @@ type Service struct {
 	Server       *Server
 	Query        *QueryServer
 	Scheduler    *Scheduler
+	Pump         *Pump
 	Sweeper      *retention.Sweeper
 	SweepEvery   time.Duration
 	RetentionLog *log.Logger
@@ -39,7 +40,8 @@ type Service struct {
 // the client the scheduler uses to fetch each push's workflow file.
 // hmacSecret signs the service tokens the scheduler presents to git-platform
 // when it reads a workflow on its own behalf.
-func NewService(pool *pgxpool.Pool, rdb *redis.Client, blobs *blobstore.Client, git gitv1.GitServiceClient, hmacSecret string) *Service {
+// cloneBase is the base URL runners clone repositories from.
+func NewService(pool *pgxpool.Pool, rdb *redis.Client, blobs *blobstore.Client, git gitv1.GitServiceClient, hmacSecret, cloneBase string) *Service {
 	store := NewStore(pool)
 	dispatcher := NewDispatcher(store)
 	logs := NewLogSink(rdb, blobs)
@@ -50,11 +52,13 @@ func NewService(pool *pgxpool.Pool, rdb *redis.Client, blobs *blobstore.Client, 
 	server.SetLogSink(logs)
 
 	scheduler := NewScheduler(rdb, store, git, SchedulerConfig{HMACSecret: hmacSecret})
+	pump := NewPump(store, dispatcher, cloneBase)
 	sweeper := retention.NewSweeper(pool, blobs)
 
 	return &Service{
 		Store:      store,
 		Query:      query,
+		Pump:       pump,
 		Dispatcher: dispatcher,
 		Logs:       logs,
 		Artifacts:  artifacts,
@@ -78,6 +82,7 @@ func (s *Service) Run(ctx context.Context) {
 		}
 	}()
 
+	go s.Pump.Run(ctx)
 	go s.runSweeper(ctx)
 }
 

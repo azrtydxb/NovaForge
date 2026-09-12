@@ -411,3 +411,81 @@ func nullString(s string) *string {
 	}
 	return &s
 }
+
+// ClaimForDispatch claims one job for runnerID and returns everything needed to
+// send it, in a single query.
+//
+// The dispatcher is a background worker with no caller's scope, so it cannot
+// use the org-scoped readers. It does not need them: the row it is allowed to
+// act on is decided by the claim itself, under FOR UPDATE SKIP LOCKED, and the
+// organization comes back with it rather than being asserted by the caller.
+func (s *Store) ClaimForDispatch(ctx context.Context, runnerID uuid.UUID, labels []string) (DispatchJob, uuid.UUID, error) {
+	_ = labels
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return DispatchJob{}, uuid.Nil, fmt.Errorf("begin claim: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var (
+		dj     DispatchJob
+		orgID  uuid.UUID
+		runCmd *string
+		agent  *string
+		image  *string
+		repoID uuid.UUID
+		sha    string
+	)
+	err = tx.QueryRow(ctx, `
+		SELECT j.id, j.run_id, j.run_cmd, j.agent_role, j.image,
+		       r.org_id, r.repo_id, r.commit_sha
+		FROM ci.workflow_jobs j
+		JOIN ci.workflow_runs r ON r.id = j.run_id
+		WHERE j.status = 'pending'
+		  AND NOT EXISTS (
+		    SELECT 1 FROM unnest(j.needs) AS need(name)
+		    WHERE NOT EXISTS (
+		      SELECT 1 FROM ci.workflow_jobs dep
+		      WHERE dep.run_id = j.run_id AND dep.name = need.name AND dep.status = 'success'
+		    )
+		  )
+		ORDER BY j.id
+		FOR UPDATE OF j SKIP LOCKED
+		LIMIT 1`,
+	).Scan(&dj.JobID, &dj.RunID, &runCmd, &agent, &image, &orgID, &repoID, &sha)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return DispatchJob{}, uuid.Nil, ErrNoClaimableJob
+		}
+		return DispatchJob{}, uuid.Nil, fmt.Errorf("claim job: %w", err)
+	}
+	if runCmd != nil {
+		dj.RunCmd = *runCmd
+	}
+	if agent != nil {
+		dj.AgentRole = *agent
+	}
+	if image != nil {
+		dj.Image = *image
+	}
+	dj.CommitSHA = sha
+
+	if _, err := tx.Exec(ctx, `
+		UPDATE ci.workflow_jobs SET status = 'running', runner_id = $1, started_at = now()
+		WHERE id = $2`, runnerID, dj.JobID); err != nil {
+		return DispatchJob{}, uuid.Nil, fmt.Errorf("mark job running: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE ci.workflow_runs SET status = 'running' WHERE id = $1 AND status = 'queued'`,
+		dj.RunID); err != nil {
+		return DispatchJob{}, uuid.Nil, fmt.Errorf("mark run running: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return DispatchJob{}, uuid.Nil, fmt.Errorf("commit claim: %w", err)
+	}
+	// The clone URL addresses the repository by id, which git-platform resolves
+	// the same way it resolves a name.
+	dj.RepoCloneURL = repoID.String()
+	return dj, orgID, nil
+}

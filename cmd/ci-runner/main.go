@@ -10,6 +10,7 @@ import (
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
 	"github.com/novaforge/novaforge/internal/svcauth"
 	"log"
+	"os"
 
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
@@ -88,7 +89,7 @@ func main() {
 	defer gitConn.Close()
 	gitClient := gitv1.NewGitServiceClient(gitConn)
 
-	svc := ci.NewService(pool, rdb, blobs, gitClient, cfg.HMACSecret)
+	svc := ci.NewService(pool, rdb, blobs, gitClient, cfg.HMACSecret, env("GIT_CLONE_BASE", "http://novaforge-git-platform:8081"))
 
 	// RunnerService has no authz.Scope to resolve: a runner authenticates
 	// with the bearer token Register returned, verified inside Server's own
@@ -141,4 +142,12 @@ func logInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServer
 		log.Printf("ci-runner: %s: %v", info.FullMethod, err)
 	}
 	return resp, err
+}
+
+// env returns the environment value for k, or def when it is unset.
+func env(k, def string) string {
+	if v := os.Getenv(k); v != "" {
+		return v
+	}
+	return def
 }
