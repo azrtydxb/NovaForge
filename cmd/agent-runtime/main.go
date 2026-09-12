@@ -254,6 +254,13 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 		}, audit)
 
 		loop := agentrun.NewLoop(model, budget, audit)
+		providerOptions, poErr := agentrun.ParseProviderOptions(cfg.AIProviderOptions)
+		if poErr != nil {
+			log.Printf("agent-runtime: %v", poErr)
+			finishRun(ctx, store, run, "failed")
+			return
+		}
+		loop.ProviderOptions = providerOptions
 		result, err := loop.Execute(ctx, run, reg)
 		state := "failed"
 		if err == nil {

@@ -6,6 +6,7 @@
 package agentrun
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/azrtydxb/go-ai-sdk/provider"
@@ -53,4 +54,35 @@ func NewModelClient(cfg ModelConfig) (provider.LanguageModel, error) {
 
 	p := gateway.New(opts...)
 	return p.Model(id), nil
+}
+
+// ProviderOptionsKey is the provider name go-ai-sdk merges per-provider
+// escape-hatch parameters under. NovaForge always builds its model client
+// through the gateway provider (NewModelClient above), so every
+// provider-specific wire parameter a deployment configures is keyed here.
+const ProviderOptionsKey = "gateway"
+
+// ParseProviderOptions turns a JSON object of extra wire parameters into
+// the shape go-ai-sdk's ai.GenerateTextOpts.ProviderOptions expects. It
+// exists because some model servers need a parameter no vendor-neutral API
+// has: a Qwen server behind vLLM, for instance, keeps its chain-of-thought
+// on unless the request carries {"chat_template_kwargs":
+// {"enable_thinking": false}}, and a reasoning model asked for structured
+// output will spend its whole token budget thinking and return nothing
+// decodable. Naming such a parameter in configuration keeps it out of the
+// code: NovaForge still has no per-provider branch.
+//
+// An empty raw yields nil options, which is the "send nothing extra" case.
+func ParseProviderOptions(raw string) (map[string]any, error) {
+	if raw == "" {
+		return nil, nil
+	}
+	var opts map[string]any
+	if err := json.Unmarshal([]byte(raw), &opts); err != nil {
+		return nil, fmt.Errorf("agentrun: parse provider options %q: %w", raw, err)
+	}
+	if len(opts) == 0 {
+		return nil, nil
+	}
+	return map[string]any{ProviderOptionsKey: opts}, nil
 }

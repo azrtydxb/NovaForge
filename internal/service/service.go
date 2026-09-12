@@ -46,11 +46,14 @@ type Config struct {
 	S3AccessKey string
 	S3SecretKey string
 
-	AIEndpoint    string
-	AIAPIKey      string
-	AIModel       string
-	EmbedEndpoint string
-	EmbedModel    string
+	AIEndpoint string
+	AIAPIKey   string
+	// AIProviderOptions is a JSON object of extra wire parameters for the
+	// model server, parsed by agentrun.ParseProviderOptions.
+	AIProviderOptions string
+	AIModel           string
+	EmbedEndpoint     string
+	EmbedModel        string
 
 	JWTSecret  string
 	HMACSecret string
@@ -61,33 +64,34 @@ type Config struct {
 // chart sets, so a binary run without an environment still starts.
 func LoadConfig() Config {
 	return Config{
-		Name:          env("SERVICE_NAME", ""),
-		DBSchema:      env("DB_SCHEMA", ""),
-		DatabaseURL:   env("DATABASE_URL", ""),
-		RedisURL:      env("REDIS_URL", ""),
-		GRPCPort:      envInt("GRPC_PORT", 0),
-		HTTPPort:      envInt("HTTP_PORT", 0),
-		SSHPort:       envInt("SSH_PORT", 0),
-		HealthPort:    envInt("HEALTH_PORT", 8090),
-		GitDataDir:    env("GIT_DATA_DIR", "/data/repos"),
-		IdentityAddr:  env("IDENTITY_ADDR", ""),
-		GitAddr:       env("GIT_ADDR", ""),
-		WorkAddr:      env("WORK_ADDR", ""),
-		CIAddr:        env("CI_ADDR", ""),
-		GatesAddr:     env("GATES_ADDR", ""),
-		AgentsAddr:    env("AGENTS_ADDR", ""),
-		GraphAddr:     env("GRAPH_ADDR", ""),
-		S3Endpoint:    env("S3_ENDPOINT", ""),
-		S3AccessKey:   env("S3_ACCESS_KEY", ""),
-		S3SecretKey:   env("S3_SECRET_KEY", ""),
-		AIEndpoint:    env("AI_ENDPOINT", ""),
-		AIAPIKey:      env("AI_API_KEY", ""),
-		AIModel:       env("AI_MODEL", ""),
-		EmbedEndpoint: env("EMBED_ENDPOINT", ""),
-		EmbedModel:    env("EMBED_MODEL", ""),
-		JWTSecret:     env("JWT_SECRET", ""),
-		HMACSecret:    env("HMAC_SECRET", ""),
-		SecretsKEK:    env("SECRETS_KEK", ""),
+		Name:              env("SERVICE_NAME", ""),
+		DBSchema:          env("DB_SCHEMA", ""),
+		DatabaseURL:       env("DATABASE_URL", ""),
+		RedisURL:          env("REDIS_URL", ""),
+		GRPCPort:          envInt("GRPC_PORT", 0),
+		HTTPPort:          envInt("HTTP_PORT", 0),
+		SSHPort:           envInt("SSH_PORT", 0),
+		HealthPort:        envInt("HEALTH_PORT", 8090),
+		GitDataDir:        env("GIT_DATA_DIR", "/data/repos"),
+		IdentityAddr:      env("IDENTITY_ADDR", ""),
+		GitAddr:           env("GIT_ADDR", ""),
+		WorkAddr:          env("WORK_ADDR", ""),
+		CIAddr:            env("CI_ADDR", ""),
+		GatesAddr:         env("GATES_ADDR", ""),
+		AgentsAddr:        env("AGENTS_ADDR", ""),
+		GraphAddr:         env("GRAPH_ADDR", ""),
+		S3Endpoint:        env("S3_ENDPOINT", ""),
+		S3AccessKey:       env("S3_ACCESS_KEY", ""),
+		S3SecretKey:       env("S3_SECRET_KEY", ""),
+		AIEndpoint:        env("AI_ENDPOINT", ""),
+		AIAPIKey:          env("AI_API_KEY", ""),
+		AIProviderOptions: env("AI_PROVIDER_OPTIONS", ""),
+		AIModel:           env("AI_MODEL", ""),
+		EmbedEndpoint:     env("EMBED_ENDPOINT", ""),
+		EmbedModel:        env("EMBED_MODEL", ""),
+		JWTSecret:         env("JWT_SECRET", ""),
+		HMACSecret:        env("HMAC_SECRET", ""),
+		SecretsKEK:        env("SECRETS_KEK", ""),
 	}
 }
 

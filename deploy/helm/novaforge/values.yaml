@@ -39,11 +39,20 @@ secrets:
 # so no hosted provider is reachable and air-gapped operation holds.
 ai:
   endpoint: "http://fastllm-proxy.fastllm.svc.cluster.local:4000/v1"
-  model: "qwen3-8-27b"
+  model: "qwen3-6-35b-a3b"
   embedEndpoint: "http://fastllm-proxy.fastllm.svc.cluster.local:4000/v1"
   embedModel: "embed"
   # Bearer token for the proxy. Set with --set ai.apiKey=... at install time.
   apiKey: ""
+  # Extra wire parameters this model server needs, merged into every request.
+  # A Qwen model behind vLLM keeps its chain-of-thought on unless told not to,
+  # and a reasoning model asked for structured output spends its whole token
+  # budget thinking and returns nothing decodable — measured on this cluster:
+  # 4096 tokens of reasoning, no answer, versus a complete answer in under five
+  # seconds with thinking off.
+  providerOptions:
+    chat_template_kwargs:
+      enable_thinking: false
 
 resources:
   requests: { cpu: 100m, memory: 128Mi }

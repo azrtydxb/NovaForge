@@ -40,6 +40,11 @@ type Loop struct {
 	// tool calls the registry itself audits. Model reasoning is never
 	// written here or anywhere else.
 	Audit *agents.AuditLog
+
+	// ProviderOptions carries deployment-configured wire parameters for the
+	// model server (see ParseProviderOptions), merged into every call this
+	// loop makes.
+	ProviderOptions map[string]any
 }
 
 // NewLoop builds a Loop bound to model and budget, persisting its final
@@ -75,8 +80,9 @@ func (l *Loop) Execute(ctx context.Context, run agents.Run, reg *tools.Registry)
 		}
 
 		resp, err := l.Model.Generate(ctx, provider.Call{
-			Messages: messages,
-			Tools:    toolDefs,
+			Messages:        messages,
+			Tools:           toolDefs,
+			ProviderOptions: l.ProviderOptions,
 		})
 		if err != nil {
 			return l.finish(ctx, run, "failed", steps, tokensUsed, fmt.Sprintf("model call failed: %v", err))

@@ -61,6 +61,13 @@ type Planner struct {
 	// A subtask naming any other role is refused rather than materialised,
 	// since there would be no agent able to pick it up.
 	KnownRoles map[string]bool
+
+	// ProviderOptions carries deployment-configured wire parameters for the
+	// model server (see agentrun.ParseProviderOptions). A reasoning model
+	// left thinking will spend the whole token budget before emitting the
+	// structured decomposition, so this is what a deployment uses to turn
+	// that off without NovaForge naming a provider.
+	ProviderOptions map[string]any
 }
 
 // NewPlanner builds a Planner bound to model, store, and the set of agent
@@ -72,6 +79,17 @@ func NewPlanner(model provider.LanguageModel, store *work.Store, knownRoles []st
 	}
 	return &Planner{Model: model, Work: store, KnownRoles: roles}
 }
+
+// decomposeMaxTokens bounds the decomposition response. A reasoning model
+// asked for structured output with no ceiling will happily spend its whole
+// context window thinking, which turns a fifteen-second call into one that
+// never returns inside any sane request deadline. A decomposition is a
+// handful of short objects; this is several times what one needs.
+const decomposeMaxTokens = 4096
+
+// decomposeMaxTokensValue is decomposeMaxTokens as an addressable value,
+// which is the shape go-ai-sdk's optional parameters take.
+var decomposeMaxTokensValue = decomposeMaxTokens
 
 // decomposeSystemPrompt instructs the model to decompose one epic into
 // dependency-ordered subtasks assigned to specialized agent roles.
@@ -98,10 +116,12 @@ func (p *Planner) Decompose(ctx context.Context, epic work.Item, bundle Bundle) 
 
 	prompt := buildDecomposePrompt(epic, bundle)
 	result, err := ai.GenerateText(ctx, ai.GenerateTextOpts{
-		Model:  p.Model,
-		System: decomposeSystemPrompt + "\nThe \"agentRole\" of every subtask must be exactly one of: " + p.allowedRoles() + ".",
-		Prompt: prompt,
-		Output: ai.OutputArray[Subtask](),
+		Model:           p.Model,
+		System:          decomposeSystemPrompt + "\nThe \"agentRole\" of every subtask must be exactly one of: " + p.allowedRoles() + ".",
+		Prompt:          prompt,
+		Output:          ai.OutputArray[Subtask](),
+		MaxTokens:       &decomposeMaxTokensValue,
+		ProviderOptions: p.ProviderOptions,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("swarm: decompose epic %s: %w", epic.Key, err)

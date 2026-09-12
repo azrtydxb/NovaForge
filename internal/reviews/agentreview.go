@@ -62,6 +62,12 @@ type AgentReviewer struct {
 	// Warn receives a human-readable note when model diversity degrades
 	// (e.g. to a single shared model). Nil is fine: nothing is logged.
 	Warn func(msg string)
+
+	// ProviderOptions carries deployment-configured wire parameters for the
+	// model server (see agentrun.ParseProviderOptions) — the same options
+	// the planner sends, for the same reason: a reviewer asked for a
+	// structured verdict must produce one, not a monologue.
+	ProviderOptions map[string]any
 }
 
 // ReviewRun dispatches independent review to every role in roles (or
@@ -110,7 +116,7 @@ func (r *AgentReviewer) ReviewRun(ctx context.Context, runID uuid.UUID, roles []
 	for i, c := range candidates {
 		model := r.Models[i%len(r.Models)]
 
-		out, err := dispatchReview(ctx, model, run, c.role)
+		out, err := dispatchReview(ctx, model, run, c.role, r.ProviderOptions)
 		if err != nil {
 			return nil, fmt.Errorf("review run %s: dispatch role %q: %w", runID, c.role, err)
 		}
@@ -182,13 +188,14 @@ const reviewSystemPromptTemplate = "You are the %s reviewer in an independent, m
 
 // dispatchReview makes one structured-output model call for role against
 // run, decoding the model's verdict and summary.
-func dispatchReview(ctx context.Context, model provider.LanguageModel, run Run, role string) (reviewOutput, error) {
+func dispatchReview(ctx context.Context, model provider.LanguageModel, run Run, role string, providerOptions map[string]any) (reviewOutput, error) {
 	prompt := fmt.Sprintf("Run %q: %s -> %s, authored by %s.", run.Title, run.SourceRef, run.TargetRef, run.AgentName)
 	result, err := ai.GenerateText(ctx, ai.GenerateTextOpts{
-		Model:  model,
-		System: fmt.Sprintf(reviewSystemPromptTemplate, role, role),
-		Prompt: prompt,
-		Output: ai.OutputObject[reviewOutput](),
+		Model:           model,
+		System:          fmt.Sprintf(reviewSystemPromptTemplate, role, role),
+		Prompt:          prompt,
+		Output:          ai.OutputObject[reviewOutput](),
+		ProviderOptions: providerOptions,
 	})
 	if err != nil {
 		return reviewOutput{}, err

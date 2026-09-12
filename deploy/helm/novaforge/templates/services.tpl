@@ -95,6 +95,8 @@ spec:
               value: {{ $.Values.ai.embedEndpoint | quote }}
             - name: EMBED_MODEL
               value: {{ $.Values.ai.embedModel | quote }}
+            - name: AI_PROVIDER_OPTIONS
+              value: {{ $.Values.ai.providerOptions | toJson | quote }}
           ports:
             - name: health
               containerPort: 8090

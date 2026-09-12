@@ -72,15 +72,19 @@ func main() {
 	// that plainly rather than returning an epic with no subtasks, which would
 	// read as "this epic did not need breaking down".
 	if cfg.AIEndpoint != "" && cfg.AIModel != "" {
+		providerOptions, poErr := agentrun.ParseProviderOptions(cfg.AIProviderOptions)
+		if poErr != nil {
+			log.Fatalf("work-reviews: %v", poErr)
+		}
 		model, err := agentrun.NewModelClient(agentrun.ModelConfig{
 			Endpoint: cfg.AIEndpoint, Model: cfg.AIModel, APIKey: cfg.AIAPIKey,
 		})
 		if err != nil {
 			log.Printf("work-reviews: no decomposition (%v)", err)
 		} else {
-			workServer.SetDecomposer(swarm.PlannerDecomposer{
-				Planner: swarm.NewPlanner(model, workStore, swarm.DefaultAgentRoles),
-			})
+			planner := swarm.NewPlanner(model, workStore, swarm.DefaultAgentRoles)
+			planner.ProviderOptions = providerOptions
+			workServer.SetDecomposer(swarm.PlannerDecomposer{Planner: planner})
 			log.Printf("work-reviews: decomposition enabled via %s", cfg.AIEndpoint)
 		}
 	} else {
