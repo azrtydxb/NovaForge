@@ -161,7 +161,44 @@ func (p *Provisioner) createPod(ctx context.Context, ns string, runID uuid.UUID,
 		resources.Limits[corev1.ResourceMemory] = resource.MustParse(spec.MemLimit)
 	}
 
-	const repoVolume = "repo"
+	// A workspace always has writable scratch space of its own; it mounts a
+	// repository checkout only when the caller supplied a claim for one.
+	// Declaring the repo volume unconditionally produced a pod with an empty
+	// persistentVolumeClaim.claimName, which the API server refuses outright
+	// — so no agent pod could ever start. The fake clientset accepts it,
+	// which is why every unit test passed.
+	const (
+		repoVolume  = "repo"
+		scratchVol  = "workspace"
+		workspaceAt = "/workspace"
+	)
+
+	mounts := []corev1.VolumeMount{
+		{Name: scratchVol, MountPath: workspaceAt},
+	}
+	volumes := []corev1.Volume{
+		{
+			Name:         scratchVol,
+			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+		},
+	}
+	if spec.RepoPVC != "" {
+		mounts = append(mounts, corev1.VolumeMount{
+			Name:      repoVolume,
+			MountPath: workspaceAt + "/repo",
+			ReadOnly:  true,
+		})
+		volumes = append(volumes, corev1.Volume{
+			Name: repoVolume,
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: spec.RepoPVC,
+					ReadOnly:  true,
+				},
+			},
+		})
+	}
+
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
@@ -174,30 +211,14 @@ func (p *Provisioner) createPod(ctx context.Context, ns string, runID uuid.UUID,
 			RestartPolicy: corev1.RestartPolicyNever,
 			Containers: []corev1.Container{
 				{
-					Name:      "agent",
-					Image:     spec.Image,
-					Env:       env,
-					Resources: resources,
-					VolumeMounts: []corev1.VolumeMount{
-						{
-							Name:      repoVolume,
-							MountPath: "/workspace/repo",
-							ReadOnly:  true,
-						},
-					},
+					Name:         "agent",
+					Image:        spec.Image,
+					Env:          env,
+					Resources:    resources,
+					VolumeMounts: mounts,
 				},
 			},
-			Volumes: []corev1.Volume{
-				{
-					Name: repoVolume,
-					VolumeSource: corev1.VolumeSource{
-						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-							ClaimName: spec.RepoPVC,
-							ReadOnly:  true,
-						},
-					},
-				},
-			},
+			Volumes: volumes,
 		},
 	}
 

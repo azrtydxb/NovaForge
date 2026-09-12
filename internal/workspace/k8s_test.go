@@ -189,3 +189,76 @@ func TestProvisionedLabelsAreLegal(t *testing.T) {
 		}
 	}
 }
+
+// TestProvisionedPodIsStructurallyValid pins the second defect the fake
+// clientset accepted and the API server refused: the pod declared a repo
+// volume unconditionally, so with no claim supplied its
+// persistentVolumeClaim.claimName was empty and its volumeMount referenced
+// a volume that could not exist. No agent pod could start.
+//
+// The fake performs no schema validation at all, so these two invariants —
+// every mount names a declared volume, and no PVC volume has an empty claim
+// — are asserted directly.
+func TestProvisionedPodIsStructurallyValid(t *testing.T) {
+	clientset := fake.NewSimpleClientset()
+	p := workspace.NewProvisioner(clientset)
+	runID := uuid.New()
+
+	ws, err := p.Create(context.Background(), runID, workspace.Spec{Image: "busybox"})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	pod, err := clientset.CoreV1().Pods("nf-run-"+runID.String()).Get(context.Background(), ws.PodName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get pod: %v", err)
+	}
+
+	declared := map[string]bool{}
+	for _, v := range pod.Spec.Volumes {
+		declared[v.Name] = true
+		if v.PersistentVolumeClaim != nil && v.PersistentVolumeClaim.ClaimName == "" {
+			t.Errorf("volume %q is a persistentVolumeClaim with an empty claimName; the API server refuses this pod", v.Name)
+		}
+	}
+	for _, c := range pod.Spec.Containers {
+		for _, m := range c.VolumeMounts {
+			if !declared[m.Name] {
+				t.Errorf("container %q mounts volume %q, which the pod does not declare", c.Name, m.Name)
+			}
+		}
+	}
+	if len(pod.Spec.Volumes) == 0 {
+		t.Error("the workspace has no writable volume of its own")
+	}
+}
+
+// TestProvisionedPodMountsASuppliedRepoClaim pins that a caller who does
+// supply a claim still gets the repository mounted, read-only.
+func TestProvisionedPodMountsASuppliedRepoClaim(t *testing.T) {
+	clientset := fake.NewSimpleClientset()
+	p := workspace.NewProvisioner(clientset)
+	runID := uuid.New()
+
+	ws, err := p.Create(context.Background(), runID, workspace.Spec{Image: "busybox", RepoPVC: "repo-claim"})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	pod, err := clientset.CoreV1().Pods("nf-run-"+runID.String()).Get(context.Background(), ws.PodName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get pod: %v", err)
+	}
+
+	var found bool
+	for _, v := range pod.Spec.Volumes {
+		if v.PersistentVolumeClaim != nil && v.PersistentVolumeClaim.ClaimName == "repo-claim" {
+			found = true
+			if !v.PersistentVolumeClaim.ReadOnly {
+				t.Error("the repository is mounted writable; an agent writes through the platform, not the volume")
+			}
+		}
+	}
+	if !found {
+		t.Fatal("the supplied repository claim is not mounted")
+	}
+}
