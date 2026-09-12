@@ -24,3 +24,6 @@
 /nf
 /runner
 /work-reviews
+
+# machine-local credentials for the cluster scripts
+hack/env.local.sh

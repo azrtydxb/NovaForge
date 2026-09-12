@@ -40,6 +40,7 @@ fi
 helm --kube-context "$KUBE_CONTEXT" upgrade --install "$REL" deploy/helm/novaforge \
 	--namespace "$NS" \
 	--set image.tag="$TAG" \
+	--set ai.apiKey="${AI_API_KEY:?set AI_API_KEY (hack/env.local.sh) — the model gateway rejects unauthenticated calls}" \
 	--wait --timeout 15m "$@"
 
 kubectl --context "$KUBE_CONTEXT" -n "$NS" get pods

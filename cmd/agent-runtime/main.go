@@ -204,7 +204,7 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 			}
 		}()
 
-		model, err := agentrun.NewModelClient(agentrun.ModelConfig{Endpoint: cfg.AIEndpoint, Model: cfg.AIModel})
+		model, err := agentrun.NewModelClient(agentrun.ModelConfig{Endpoint: cfg.AIEndpoint, Model: cfg.AIModel, APIKey: cfg.AIAPIKey})
 		if err != nil {
 			log.Printf("agent-runtime: build model client for run %s: %v", run.ID, err)
 			finishRun(ctx, store, run, "failed")

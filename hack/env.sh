@@ -21,3 +21,10 @@ export TEST_S3_ACCESS_KEY=minioadmin
 export TEST_S3_SECRET_KEY=minioadmin
 export TEST_S3_BUCKET=novaforge-test
 bk() { buildctl --tlscacert "$BK_CERTS/ca.crt" --tlscert "$BK_CERTS/tls.crt" --tlskey "$BK_CERTS/tls.key" "$@"; }
+
+# Machine-local credentials (registry password, model-gateway API key) live in
+# an untracked sibling file so no secret is ever committed. Absent, the build
+# still sources cleanly and the scripts that need a secret say which is missing.
+if [ -f "$(dirname "${BASH_SOURCE[0]:-hack/env.sh}")/env.local.sh" ]; then
+	. "$(dirname "${BASH_SOURCE[0]:-hack/env.sh}")/env.local.sh"
+fi

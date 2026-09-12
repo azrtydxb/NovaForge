@@ -86,6 +86,11 @@ spec:
               value: {{ $.Values.ai.endpoint | quote }}
             - name: AI_MODEL
               value: {{ $.Values.ai.model | quote }}
+            - name: AI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Release.Name }}-secrets
+                  key: AI_API_KEY
             - name: EMBED_ENDPOINT
               value: {{ $.Values.ai.embedEndpoint | quote }}
             - name: EMBED_MODEL

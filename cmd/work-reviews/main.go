@@ -73,7 +73,7 @@ func main() {
 	// read as "this epic did not need breaking down".
 	if cfg.AIEndpoint != "" && cfg.AIModel != "" {
 		model, err := agentrun.NewModelClient(agentrun.ModelConfig{
-			Endpoint: cfg.AIEndpoint, Model: cfg.AIModel,
+			Endpoint: cfg.AIEndpoint, Model: cfg.AIModel, APIKey: cfg.AIAPIKey,
 		})
 		if err != nil {
 			log.Printf("work-reviews: no decomposition (%v)", err)

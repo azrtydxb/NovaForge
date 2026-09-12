@@ -13,3 +13,4 @@ stringData:
   S3_ENDPOINT: "{{ .Release.Name }}-minio:9000"
   S3_ACCESS_KEY: {{ .Values.secrets.minioAccessKey | quote }}
   S3_SECRET_KEY: {{ .Values.secrets.minioSecretKey | quote }}
+  AI_API_KEY: {{ .Values.ai.apiKey | quote }}

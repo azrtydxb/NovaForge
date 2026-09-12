@@ -47,6 +47,7 @@ type Config struct {
 	S3SecretKey string
 
 	AIEndpoint    string
+	AIAPIKey      string
 	AIModel       string
 	EmbedEndpoint string
 	EmbedModel    string
@@ -80,6 +81,7 @@ func LoadConfig() Config {
 		S3AccessKey:   env("S3_ACCESS_KEY", ""),
 		S3SecretKey:   env("S3_SECRET_KEY", ""),
 		AIEndpoint:    env("AI_ENDPOINT", ""),
+		AIAPIKey:      env("AI_API_KEY", ""),
 		AIModel:       env("AI_MODEL", ""),
 		EmbedEndpoint: env("EMBED_ENDPOINT", ""),
 		EmbedModel:    env("EMBED_MODEL", ""),
