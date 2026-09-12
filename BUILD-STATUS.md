@@ -50,6 +50,12 @@ and MinIO — no datastore is mocked anywhere.
 push schedules a CI run from the repository's workflow file, a runner in its
 own pod executes it, and the job's log and declared artifact come back.
 
+`bash tests/e2e/factory_test.sh` passes: an epic is decomposed by the cluster's
+**real model** into dependency-ordered subtasks — eight on the final run — only
+the dependency-free one is startable, and the dashboard answers. This is the
+whole model path exercised for real: gateway credential, model choice,
+structured output, validation, and materialisation into the work schema.
+
 ## Defects found by running it, not by reading it
 
 Each was fixed with a test that pins it:
@@ -87,6 +93,22 @@ Each was fixed with a test that pins it:
 - Asked for structured output, the cluster's reasoning model spent its entire
   completion budget on chain-of-thought and returned no answer at all. The
   deployment now names the wire parameter that turns thinking off.
+- The model put an agent role in a subtask's work-item **type**, and nothing
+  checked types until the insert — so a sound eight-subtask decomposition was
+  lost half-way through being written. Types are validated before anything is
+  written, and a rejected decomposition is retried once with the violation
+  quoted back.
+- The swarm scheduler, the maintenance scanners and the auto-merger were each
+  implemented, unit-tested, and **called by nothing**. A decomposed epic sat
+  with its ready subtasks open forever, which from outside is indistinguishable
+  from a platform that decided not to start them.
+- Three configuration fields were declared, rendered into the chart, set in the
+  pod's environment, and never read, so the service reported a feature
+  unconfigured while its operator could see the variable set. A test now fails
+  on any field `LoadConfig` forgets.
+- Four typed agent tools and four MCP tools reported that no service had an RPC
+  behind them. Seven now do; the eighth needed no new RPC, only the two-step
+  lookup nobody had written.
 
 ## Known limitations
 
