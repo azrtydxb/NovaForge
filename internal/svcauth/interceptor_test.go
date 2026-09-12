@@ -4,9 +4,11 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
+	"github.com/novaforge/novaforge/internal/authz"
 	"github.com/novaforge/novaforge/internal/svcauth"
 )
 
@@ -60,4 +62,63 @@ func TestForwardIncomingCredentialWithNoCaller(t *testing.T) {
 	if len(seen.Get("authorization")) != 0 {
 		t.Fatalf("a credential appeared from nowhere: %v", seen)
 	}
+}
+
+// TestAgentRunTokenIsAnAgentNotAService pins a mis-attribution found by
+// reading a Work Item in the browser: an agent's own comment appeared as a
+// person's.
+//
+// An agent run presents a service token because it outlives the request that
+// started it, and everything the platform records is attributed by actor
+// kind. Classifying the run as the platform made the one distinction the
+// field exists to make — which of the two wrote this line — wrong.
+func TestAgentRunTokenIsAnAgentNotAService(t *testing.T) {
+	const secret = "test-secret"
+	orgID := uuid.New()
+
+	tok, err := svcauth.Mint(secret, svcauth.AgentRunService, orgID, svcauth.DefaultTTL)
+	if err != nil {
+		t.Fatalf("Mint: %v", err)
+	}
+
+	scope := scopeFromToken(t, secret, tok)
+	if scope.ActorKind != "agent" {
+		t.Fatalf("an agent run resolved as %q, want agent", scope.ActorKind)
+	}
+	if scope.OrgID != orgID {
+		t.Fatalf("scope org = %s, want %s", scope.OrgID, orgID)
+	}
+
+	// Every other platform worker is still the platform.
+	other, err := svcauth.Mint(secret, "ci-scheduler", orgID, svcauth.DefaultTTL)
+	if err != nil {
+		t.Fatalf("Mint: %v", err)
+	}
+	if got := scopeFromToken(t, secret, other).ActorKind; got != "service" {
+		t.Fatalf("the CI scheduler resolved as %q, want service", got)
+	}
+}
+
+// scopeFromToken runs the interceptor with token presented and returns the
+// scope the handler was given.
+func scopeFromToken(t *testing.T, secret, token string) authz.Scope {
+	t.Helper()
+	ctx := metadata.NewIncomingContext(context.Background(),
+		metadata.Pairs("authorization", "Bearer "+token))
+
+	var got authz.Scope
+	interceptor := svcauth.UnaryServerInterceptor(nil, secret)
+	_, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{},
+		func(ctx context.Context, _ any) (any, error) {
+			scope, err := authz.FromContext(ctx)
+			if err != nil {
+				return nil, err
+			}
+			got = scope
+			return nil, nil
+		})
+	if err != nil {
+		t.Fatalf("interceptor: %v", err)
+	}
+	return got
 }

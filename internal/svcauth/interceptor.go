@@ -32,11 +32,14 @@ func UnaryServerInterceptor(identity identityv1.IdentityServiceClient, hmacSecre
 		org := first(md, "x-novaforge-org")
 
 		if strings.HasPrefix(token, Prefix) {
-			_, orgID, err := Verify(hmacSecret, token)
+			service, orgID, err := Verify(hmacSecret, token)
 			if err != nil {
 				return handler(ctx, req)
 			}
-			return handler(authz.WithScope(ctx, authz.Scope{OrgID: orgID, ActorKind: "service"}), req)
+			return handler(authz.WithScope(ctx, authz.Scope{
+				OrgID:     orgID,
+				ActorKind: actorKindFor(service),
+			}), req)
 		}
 
 		if identity == nil {
@@ -103,4 +106,23 @@ func ForwardIncomingCredential(
 		}
 	}
 	return invoker(ctx, method, req, reply, cc, opts...)
+}
+
+// AgentRunService is the service name an agent run mints its token under.
+// The platform has one identity that is not the platform acting for itself:
+// a run acting on behalf of an agent.
+const AgentRunService = "agent-run"
+
+// actorKindFor classifies a service token's holder.
+//
+// An agent run presents a service token because it outlives the request that
+// started it, but it is an agent, not the platform — and things the platform
+// records are attributed by actor kind. Calling it a service made an agent's
+// own comment on a Work Item appear as a person's, which is exactly the
+// distinction the field exists to make.
+func actorKindFor(service string) string {
+	if service == AgentRunService {
+		return "agent"
+	}
+	return "service"
 }

@@ -435,7 +435,7 @@ func bearerTokenFromContext(ctx context.Context) string {
 // an agent run makes. The token names one organization, so a run cannot
 // reach outside the organization it belongs to even if a tool were asked to.
 func withRunIdentity(ctx context.Context, hmacSecret string, orgID uuid.UUID) (context.Context, error) {
-	tok, err := svcauth.Mint(hmacSecret, "agent-run", orgID, svcauth.DefaultTTL)
+	tok, err := svcauth.Mint(hmacSecret, svcauth.AgentRunService, orgID, svcauth.DefaultTTL)
 	if err != nil {
 		return ctx, fmt.Errorf("mint service token: %w", err)
 	}
