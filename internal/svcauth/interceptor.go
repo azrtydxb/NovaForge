@@ -76,3 +76,31 @@ func first(md metadata.MD, key string) string {
 	}
 	return ""
 }
+
+// ForwardIncomingCredential is a gRPC client interceptor that copies the
+// caller's credential from the incoming request onto every outbound call a
+// handler makes.
+//
+// A service that authenticates a request and then calls its peers
+// anonymously is a service whose peers refuse everything: they see no
+// caller and, correctly, deny. The edge hit exactly this and fixed it with
+// its own interceptor; a service calling another service on a caller's
+// behalf needs the same, and needs it here rather than as a third copy.
+//
+// Only the two headers that carry identity are forwarded. Copying the whole
+// metadata set would forward whatever else a client attached, which is a
+// way to smuggle values into a service that never asked for them.
+func ForwardIncomingCredential(
+	ctx context.Context, method string, req, reply any,
+	cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption,
+) error {
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		if v := first(md, "authorization"); v != "" {
+			ctx = metadata.AppendToOutgoingContext(ctx, "authorization", v)
+		}
+		if v := first(md, "x-novaforge-org"); v != "" {
+			ctx = metadata.AppendToOutgoingContext(ctx, "x-novaforge-org", v)
+		}
+	}
+	return invoker(ctx, method, req, reply, cc, opts...)
+}

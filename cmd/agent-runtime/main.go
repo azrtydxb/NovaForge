@@ -101,14 +101,22 @@ func main() {
 	defer identityConn.Close()
 	identityClient := identityv1.NewIdentityServiceClient(identityConn)
 
-	gitConn, err := grpc.NewClient(cfg.GitAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	gitConn, err := grpc.NewClient(cfg.GitAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(svcauth.ForwardIncomingCredential))
 	if err != nil {
 		log.Fatalf("agent-runtime: dial git-platform: %v", err)
 	}
 	defer gitConn.Close()
 	gitClient := gitv1.NewGitServiceClient(gitConn)
 
-	workConn, err := grpc.NewClient(cfg.WorkAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// Calls this service makes on a caller's behalf carry that caller's
+	// credential. Without it agent-runtime authenticated a request and then
+	// called work-reviews anonymously, which refused — the same defect the
+	// edge had, one hop further in.
+	workConn, err := grpc.NewClient(cfg.WorkAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(svcauth.ForwardIncomingCredential))
 	if err != nil {
 		log.Fatalf("agent-runtime: dial work-reviews: %v", err)
 	}
@@ -121,7 +129,9 @@ func main() {
 	// returning a plausible empty result.
 	var graphClient graphv1.GraphServiceClient
 	if cfg.GraphAddr != "" {
-		graphConn, err := grpc.NewClient(cfg.GraphAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		graphConn, err := grpc.NewClient(cfg.GraphAddr,
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithChainUnaryInterceptor(svcauth.ForwardIncomingCredential))
 		if err != nil {
 			log.Fatalf("agent-runtime: dial engineering-graph: %v", err)
 		}
@@ -216,6 +226,21 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 		return nil
 	}
 	return func(ctx context.Context, run agents.Run) {
+		// An agent run outlives the request that started it, so it cannot
+		// borrow that caller's credential: by the time a tool calls
+		// git-platform the request is long gone. The run presents a service
+		// token naming only its own organization, which is how the CI
+		// scheduler reaches git-platform for the same reason. Without it
+		// every tool call reaches its service anonymously and is refused —
+		// an agent that can call nothing looks exactly like an agent that
+		// chose to do nothing.
+		ctx, err := withRunIdentity(ctx, cfg.HMACSecret, run.OrgID)
+		if err != nil {
+			log.Printf("agent-runtime: run %s: %v", run.ID, err)
+			finishRun(ctx, store, run, "failed")
+			return
+		}
+
 		ws, err := provisioner.Create(ctx, run.ID, workspace.Spec{Image: defaultWorkspaceImage})
 		if err != nil {
 			log.Printf("agent-runtime: provision workspace for run %s: %v", run.ID, err)
@@ -366,4 +391,18 @@ func bearerTokenFromContext(ctx context.Context) string {
 		return ""
 	}
 	return strings.TrimPrefix(values[0], "Bearer ")
+}
+
+// withRunIdentity attaches a service token for orgID to every outbound call
+// an agent run makes. The token names one organization, so a run cannot
+// reach outside the organization it belongs to even if a tool were asked to.
+func withRunIdentity(ctx context.Context, hmacSecret string, orgID uuid.UUID) (context.Context, error) {
+	tok, err := svcauth.Mint(hmacSecret, "agent-run", orgID, svcauth.DefaultTTL)
+	if err != nil {
+		return ctx, fmt.Errorf("mint service token: %w", err)
+	}
+	return metadata.AppendToOutgoingContext(ctx,
+		"authorization", "Bearer "+tok,
+		"x-novaforge-org", orgID.String(),
+	), nil
 }
