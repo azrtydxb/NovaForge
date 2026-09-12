@@ -173,3 +173,37 @@ func seedInitialCommit(t *testing.T, repoPath string) {
 	runGit(t, work, "-c", "user.email=t@example.com", "-c", "user.name=T", "commit", "-m", "initial commit")
 	runGit(t, work, "push", "origin", "HEAD:main")
 }
+
+// TestRepoResolvableByIDAndName pins a defect that silently disabled all of CI:
+// the scheduler carries a repository id from the push event it is handling,
+// but reads resolved only by name, so every GetBlob returned NotFound and the
+// scheduler's "no workflow here" branch swallowed it.
+func TestRepoResolvableByIDAndName(t *testing.T) {
+	srv, _ := newGitGRPCServer(t)
+	orgID := uuid.New()
+	ctx := scopedCtx(orgID)
+
+	created, err := srv.CreateRepo(ctx, &gitv1.CreateRepoRequest{Name: "byref"})
+	if err != nil {
+		t.Fatalf("CreateRepo: %v", err)
+	}
+	id := created.GetRepo().GetId()
+
+	byName, err := srv.GetRepo(ctx, &gitv1.GetRepoRequest{Name: "byref"})
+	if err != nil {
+		t.Fatalf("GetRepo by name: %v", err)
+	}
+	byID, err := srv.GetRepo(ctx, &gitv1.GetRepoRequest{Name: id})
+	if err != nil {
+		t.Fatalf("GetRepo by id: %v", err)
+	}
+	if byName.GetRepo().GetId() != byID.GetRepo().GetId() {
+		t.Fatalf("name and id resolved to different repositories: %s vs %s",
+			byName.GetRepo().GetId(), byID.GetRepo().GetId())
+	}
+
+	// The read path the scheduler actually uses must accept an id too.
+	if _, err := srv.ListBranches(ctx, &gitv1.ListBranchesRequest{Repo: id}); err != nil {
+		t.Fatalf("ListBranches by id: %v", err)
+	}
+}

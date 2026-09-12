@@ -310,18 +310,29 @@ func (s *Server) Merge(ctx context.Context, req *gitv1.MergeRequest) (*gitv1.Mer
 
 // repoByName looks up a repository by name scoped to orgID, returning
 // codes.NotFound when it does not exist in that organization.
-func (s *Server) repoByName(ctx context.Context, orgID uuid.UUID, name string) (repoRow, error) {
-	if name == "" {
+// repoByName resolves a repository from either its name or its id.
+//
+// People and URLs name repositories; platform workers carry ids — the CI
+// scheduler knows only the id from the push event it is handling. Accepting
+// one spelling meant the scheduler's reads returned NotFound and every CI run
+// silently did nothing. Resolving both here keeps the ownership of repository
+// identity in the service that owns it, exactly as organizations are resolved.
+func (s *Server) repoByName(ctx context.Context, orgID uuid.UUID, ref string) (repoRow, error) {
+	if ref == "" {
 		return repoRow{}, status.Error(codes.InvalidArgument, "repo is required")
+	}
+	column, value := "name", any(ref)
+	if id, err := uuid.Parse(ref); err == nil {
+		column, value = "id", any(id)
 	}
 	var r repoRow
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, org_id, name, default_branch FROM gitplatform.repositories WHERE org_id = $1 AND name = $2`,
-		orgID, name,
+		`SELECT id, org_id, name, default_branch FROM gitplatform.repositories WHERE org_id = $1 AND `+column+` = $2`,
+		orgID, value,
 	).Scan(&r.ID, &r.OrgID, &r.Name, &r.DefaultBranch)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return repoRow{}, status.Errorf(codes.NotFound, "repository %q not found", name)
+			return repoRow{}, status.Errorf(codes.NotFound, "repository %q not found", ref)
 		}
 		return repoRow{}, status.Errorf(codes.Internal, "lookup repository: %v", err)
 	}
