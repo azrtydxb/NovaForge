@@ -19,10 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	WorkService_CreateItem_FullMethodName = "/novaforge.work.v1.WorkService/CreateItem"
-	WorkService_GetItem_FullMethodName    = "/novaforge.work.v1.WorkService/GetItem"
-	WorkService_ListItems_FullMethodName  = "/novaforge.work.v1.WorkService/ListItems"
-	WorkService_AssignItem_FullMethodName = "/novaforge.work.v1.WorkService/AssignItem"
+	WorkService_CreateItem_FullMethodName   = "/novaforge.work.v1.WorkService/CreateItem"
+	WorkService_GetItem_FullMethodName      = "/novaforge.work.v1.WorkService/GetItem"
+	WorkService_ListItems_FullMethodName    = "/novaforge.work.v1.WorkService/ListItems"
+	WorkService_AssignItem_FullMethodName   = "/novaforge.work.v1.WorkService/AssignItem"
+	WorkService_ListSubtasks_FullMethodName = "/novaforge.work.v1.WorkService/ListSubtasks"
 )
 
 // WorkServiceClient is the client API for WorkService service.
@@ -37,6 +38,7 @@ type WorkServiceClient interface {
 	GetItem(ctx context.Context, in *GetItemRequest, opts ...grpc.CallOption) (*GetItemResponse, error)
 	ListItems(ctx context.Context, in *ListItemsRequest, opts ...grpc.CallOption) (*ListItemsResponse, error)
 	AssignItem(ctx context.Context, in *AssignItemRequest, opts ...grpc.CallOption) (*AssignItemResponse, error)
+	ListSubtasks(ctx context.Context, in *ListSubtasksRequest, opts ...grpc.CallOption) (*ListSubtasksResponse, error)
 }
 
 type workServiceClient struct {
@@ -87,6 +89,16 @@ func (c *workServiceClient) AssignItem(ctx context.Context, in *AssignItemReques
 	return out, nil
 }
 
+func (c *workServiceClient) ListSubtasks(ctx context.Context, in *ListSubtasksRequest, opts ...grpc.CallOption) (*ListSubtasksResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSubtasksResponse)
+	err := c.cc.Invoke(ctx, WorkService_ListSubtasks_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // WorkServiceServer is the server API for WorkService service.
 // All implementations should embed UnimplementedWorkServiceServer
 // for forward compatibility.
@@ -99,6 +111,7 @@ type WorkServiceServer interface {
 	GetItem(context.Context, *GetItemRequest) (*GetItemResponse, error)
 	ListItems(context.Context, *ListItemsRequest) (*ListItemsResponse, error)
 	AssignItem(context.Context, *AssignItemRequest) (*AssignItemResponse, error)
+	ListSubtasks(context.Context, *ListSubtasksRequest) (*ListSubtasksResponse, error)
 }
 
 // UnimplementedWorkServiceServer should be embedded to have
@@ -119,6 +132,9 @@ func (UnimplementedWorkServiceServer) ListItems(context.Context, *ListItemsReque
 }
 func (UnimplementedWorkServiceServer) AssignItem(context.Context, *AssignItemRequest) (*AssignItemResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AssignItem not implemented")
+}
+func (UnimplementedWorkServiceServer) ListSubtasks(context.Context, *ListSubtasksRequest) (*ListSubtasksResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListSubtasks not implemented")
 }
 func (UnimplementedWorkServiceServer) testEmbeddedByValue() {}
 
@@ -212,6 +228,24 @@ func _WorkService_AssignItem_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _WorkService_ListSubtasks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSubtasksRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkServiceServer).ListSubtasks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WorkService_ListSubtasks_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkServiceServer).ListSubtasks(ctx, req.(*ListSubtasksRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // WorkService_ServiceDesc is the grpc.ServiceDesc for WorkService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -234,6 +268,10 @@ var WorkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AssignItem",
 			Handler:    _WorkService_AssignItem_Handler,
+		},
+		{
+			MethodName: "ListSubtasks",
+			Handler:    _WorkService_ListSubtasks_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

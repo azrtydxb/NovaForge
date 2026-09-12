@@ -962,6 +962,248 @@ func (x *AddCommentResponse) GetCreatedAt() string {
 	return ""
 }
 
+// ExceptionSummary is the count per category a person scanning for what needs
+// them would read first.
+type ExceptionSummary struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	AgentsRunning         int32                  `protobuf:"varint,1,opt,name=agents_running,json=agentsRunning,proto3" json:"agents_running,omitempty"`
+	ReadyToAutoMerge      int32                  `protobuf:"varint,2,opt,name=ready_to_auto_merge,json=readyToAutoMerge,proto3" json:"ready_to_auto_merge,omitempty"`
+	NeedHumanReview       int32                  `protobuf:"varint,3,opt,name=need_human_review,json=needHumanReview,proto3" json:"need_human_review,omitempty"`
+	ArchitectureDecisions int32                  `protobuf:"varint,4,opt,name=architecture_decisions,json=architectureDecisions,proto3" json:"architecture_decisions,omitempty"`
+	GateFailures          int32                  `protobuf:"varint,5,opt,name=gate_failures,json=gateFailures,proto3" json:"gate_failures,omitempty"`
+	AgentsBlocked         int32                  `protobuf:"varint,6,opt,name=agents_blocked,json=agentsBlocked,proto3" json:"agents_blocked,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *ExceptionSummary) Reset() {
+	*x = ExceptionSummary{}
+	mi := &file_novaforge_reviews_v1_reviews_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExceptionSummary) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExceptionSummary) ProtoMessage() {}
+
+func (x *ExceptionSummary) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_reviews_v1_reviews_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExceptionSummary.ProtoReflect.Descriptor instead.
+func (*ExceptionSummary) Descriptor() ([]byte, []int) {
+	return file_novaforge_reviews_v1_reviews_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *ExceptionSummary) GetAgentsRunning() int32 {
+	if x != nil {
+		return x.AgentsRunning
+	}
+	return 0
+}
+
+func (x *ExceptionSummary) GetReadyToAutoMerge() int32 {
+	if x != nil {
+		return x.ReadyToAutoMerge
+	}
+	return 0
+}
+
+func (x *ExceptionSummary) GetNeedHumanReview() int32 {
+	if x != nil {
+		return x.NeedHumanReview
+	}
+	return 0
+}
+
+func (x *ExceptionSummary) GetArchitectureDecisions() int32 {
+	if x != nil {
+		return x.ArchitectureDecisions
+	}
+	return 0
+}
+
+func (x *ExceptionSummary) GetGateFailures() int32 {
+	if x != nil {
+		return x.GateFailures
+	}
+	return 0
+}
+
+func (x *ExceptionSummary) GetAgentsBlocked() int32 {
+	if x != nil {
+		return x.AgentsBlocked
+	}
+	return 0
+}
+
+type ExceptionItem struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Title         string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
+	State         string                 `protobuf:"bytes,3,opt,name=state,proto3" json:"state,omitempty"`
+	Reason        string                 `protobuf:"bytes,4,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExceptionItem) Reset() {
+	*x = ExceptionItem{}
+	mi := &file_novaforge_reviews_v1_reviews_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExceptionItem) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExceptionItem) ProtoMessage() {}
+
+func (x *ExceptionItem) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_reviews_v1_reviews_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExceptionItem.ProtoReflect.Descriptor instead.
+func (*ExceptionItem) Descriptor() ([]byte, []int) {
+	return file_novaforge_reviews_v1_reviews_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *ExceptionItem) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *ExceptionItem) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *ExceptionItem) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *ExceptionItem) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+type GetExceptionsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetExceptionsRequest) Reset() {
+	*x = GetExceptionsRequest{}
+	mi := &file_novaforge_reviews_v1_reviews_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetExceptionsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetExceptionsRequest) ProtoMessage() {}
+
+func (x *GetExceptionsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_reviews_v1_reviews_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetExceptionsRequest.ProtoReflect.Descriptor instead.
+func (*GetExceptionsRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_reviews_v1_reviews_proto_rawDescGZIP(), []int{17}
+}
+
+type GetExceptionsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Summary       *ExceptionSummary      `protobuf:"bytes,1,opt,name=summary,proto3" json:"summary,omitempty"`
+	Items         []*ExceptionItem       `protobuf:"bytes,2,rep,name=items,proto3" json:"items,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetExceptionsResponse) Reset() {
+	*x = GetExceptionsResponse{}
+	mi := &file_novaforge_reviews_v1_reviews_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetExceptionsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetExceptionsResponse) ProtoMessage() {}
+
+func (x *GetExceptionsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_reviews_v1_reviews_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetExceptionsResponse.ProtoReflect.Descriptor instead.
+func (*GetExceptionsResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_reviews_v1_reviews_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *GetExceptionsResponse) GetSummary() *ExceptionSummary {
+	if x != nil {
+		return x.Summary
+	}
+	return nil
+}
+
+func (x *GetExceptionsResponse) GetItems() []*ExceptionItem {
+	if x != nil {
+		return x.Items
+	}
+	return nil
+}
+
 var File_novaforge_reviews_v1_reviews_proto protoreflect.FileDescriptor
 
 const file_novaforge_reviews_v1_reviews_proto_rawDesc = "" +
@@ -1048,7 +1290,23 @@ const file_novaforge_reviews_v1_reviews_proto_rawDesc = "" +
 	"\x12AddCommentResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
-	"created_at\x18\x02 \x01(\tR\tcreatedAt2\xae\x05\n" +
+	"created_at\x18\x02 \x01(\tR\tcreatedAt\"\x97\x02\n" +
+	"\x10ExceptionSummary\x12%\n" +
+	"\x0eagents_running\x18\x01 \x01(\x05R\ragentsRunning\x12-\n" +
+	"\x13ready_to_auto_merge\x18\x02 \x01(\x05R\x10readyToAutoMerge\x12*\n" +
+	"\x11need_human_review\x18\x03 \x01(\x05R\x0fneedHumanReview\x125\n" +
+	"\x16architecture_decisions\x18\x04 \x01(\x05R\x15architectureDecisions\x12#\n" +
+	"\rgate_failures\x18\x05 \x01(\x05R\fgateFailures\x12%\n" +
+	"\x0eagents_blocked\x18\x06 \x01(\x05R\ragentsBlocked\"e\n" +
+	"\rExceptionItem\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05title\x18\x02 \x01(\tR\x05title\x12\x14\n" +
+	"\x05state\x18\x03 \x01(\tR\x05state\x12\x16\n" +
+	"\x06reason\x18\x04 \x01(\tR\x06reason\"\x16\n" +
+	"\x14GetExceptionsRequest\"\x94\x01\n" +
+	"\x15GetExceptionsResponse\x12@\n" +
+	"\asummary\x18\x01 \x01(\v2&.novaforge.reviews.v1.ExceptionSummaryR\asummary\x129\n" +
+	"\x05items\x18\x02 \x03(\v2#.novaforge.reviews.v1.ExceptionItemR\x05items2\x98\x06\n" +
 	"\x0eReviewsService\x12\\\n" +
 	"\tCreateRun\x12&.novaforge.reviews.v1.CreateRunRequest\x1a'.novaforge.reviews.v1.CreateRunResponse\x12S\n" +
 	"\x06GetRun\x12#.novaforge.reviews.v1.GetRunRequest\x1a$.novaforge.reviews.v1.GetRunResponse\x12Y\n" +
@@ -1057,7 +1315,8 @@ const file_novaforge_reviews_v1_reviews_proto_rawDesc = "" +
 	"\vRecordProof\x12(.novaforge.reviews.v1.RecordProofRequest\x1a).novaforge.reviews.v1.RecordProofResponse\x12e\n" +
 	"\fSubmitReview\x12).novaforge.reviews.v1.SubmitReviewRequest\x1a*.novaforge.reviews.v1.SubmitReviewResponse\x12_\n" +
 	"\n" +
-	"AddComment\x12'.novaforge.reviews.v1.AddCommentRequest\x1a(.novaforge.reviews.v1.AddCommentResponseB\xdd\x01\n" +
+	"AddComment\x12'.novaforge.reviews.v1.AddCommentRequest\x1a(.novaforge.reviews.v1.AddCommentResponse\x12h\n" +
+	"\rGetExceptions\x12*.novaforge.reviews.v1.GetExceptionsRequest\x1a+.novaforge.reviews.v1.GetExceptionsResponseB\xdd\x01\n" +
 	"\x18com.novaforge.reviews.v1B\fReviewsProtoP\x01ZAgithub.com/novaforge/novaforge/gen/novaforge/reviews/v1;reviewsv1\xa2\x02\x03NRX\xaa\x02\x14Novaforge.Reviews.V1\xca\x02\x14Novaforge\\Reviews\\V1\xe2\x02 Novaforge\\Reviews\\V1\\GPBMetadata\xea\x02\x16Novaforge::Reviews::V1b\x06proto3"
 
 var (
@@ -1072,47 +1331,55 @@ func file_novaforge_reviews_v1_reviews_proto_rawDescGZIP() []byte {
 	return file_novaforge_reviews_v1_reviews_proto_rawDescData
 }
 
-var file_novaforge_reviews_v1_reviews_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_novaforge_reviews_v1_reviews_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_novaforge_reviews_v1_reviews_proto_goTypes = []any{
-	(*Run)(nil),                  // 0: novaforge.reviews.v1.Run
-	(*CreateRunRequest)(nil),     // 1: novaforge.reviews.v1.CreateRunRequest
-	(*CreateRunResponse)(nil),    // 2: novaforge.reviews.v1.CreateRunResponse
-	(*GetRunRequest)(nil),        // 3: novaforge.reviews.v1.GetRunRequest
-	(*GetRunResponse)(nil),       // 4: novaforge.reviews.v1.GetRunResponse
-	(*ListRunsRequest)(nil),      // 5: novaforge.reviews.v1.ListRunsRequest
-	(*ListRunsResponse)(nil),     // 6: novaforge.reviews.v1.ListRunsResponse
-	(*AddPlanStepRequest)(nil),   // 7: novaforge.reviews.v1.AddPlanStepRequest
-	(*AddPlanStepResponse)(nil),  // 8: novaforge.reviews.v1.AddPlanStepResponse
-	(*RecordProofRequest)(nil),   // 9: novaforge.reviews.v1.RecordProofRequest
-	(*RecordProofResponse)(nil),  // 10: novaforge.reviews.v1.RecordProofResponse
-	(*SubmitReviewRequest)(nil),  // 11: novaforge.reviews.v1.SubmitReviewRequest
-	(*SubmitReviewResponse)(nil), // 12: novaforge.reviews.v1.SubmitReviewResponse
-	(*AddCommentRequest)(nil),    // 13: novaforge.reviews.v1.AddCommentRequest
-	(*AddCommentResponse)(nil),   // 14: novaforge.reviews.v1.AddCommentResponse
+	(*Run)(nil),                   // 0: novaforge.reviews.v1.Run
+	(*CreateRunRequest)(nil),      // 1: novaforge.reviews.v1.CreateRunRequest
+	(*CreateRunResponse)(nil),     // 2: novaforge.reviews.v1.CreateRunResponse
+	(*GetRunRequest)(nil),         // 3: novaforge.reviews.v1.GetRunRequest
+	(*GetRunResponse)(nil),        // 4: novaforge.reviews.v1.GetRunResponse
+	(*ListRunsRequest)(nil),       // 5: novaforge.reviews.v1.ListRunsRequest
+	(*ListRunsResponse)(nil),      // 6: novaforge.reviews.v1.ListRunsResponse
+	(*AddPlanStepRequest)(nil),    // 7: novaforge.reviews.v1.AddPlanStepRequest
+	(*AddPlanStepResponse)(nil),   // 8: novaforge.reviews.v1.AddPlanStepResponse
+	(*RecordProofRequest)(nil),    // 9: novaforge.reviews.v1.RecordProofRequest
+	(*RecordProofResponse)(nil),   // 10: novaforge.reviews.v1.RecordProofResponse
+	(*SubmitReviewRequest)(nil),   // 11: novaforge.reviews.v1.SubmitReviewRequest
+	(*SubmitReviewResponse)(nil),  // 12: novaforge.reviews.v1.SubmitReviewResponse
+	(*AddCommentRequest)(nil),     // 13: novaforge.reviews.v1.AddCommentRequest
+	(*AddCommentResponse)(nil),    // 14: novaforge.reviews.v1.AddCommentResponse
+	(*ExceptionSummary)(nil),      // 15: novaforge.reviews.v1.ExceptionSummary
+	(*ExceptionItem)(nil),         // 16: novaforge.reviews.v1.ExceptionItem
+	(*GetExceptionsRequest)(nil),  // 17: novaforge.reviews.v1.GetExceptionsRequest
+	(*GetExceptionsResponse)(nil), // 18: novaforge.reviews.v1.GetExceptionsResponse
 }
 var file_novaforge_reviews_v1_reviews_proto_depIdxs = []int32{
 	0,  // 0: novaforge.reviews.v1.CreateRunResponse.run:type_name -> novaforge.reviews.v1.Run
 	0,  // 1: novaforge.reviews.v1.GetRunResponse.run:type_name -> novaforge.reviews.v1.Run
 	0,  // 2: novaforge.reviews.v1.ListRunsResponse.runs:type_name -> novaforge.reviews.v1.Run
-	1,  // 3: novaforge.reviews.v1.ReviewsService.CreateRun:input_type -> novaforge.reviews.v1.CreateRunRequest
-	3,  // 4: novaforge.reviews.v1.ReviewsService.GetRun:input_type -> novaforge.reviews.v1.GetRunRequest
-	5,  // 5: novaforge.reviews.v1.ReviewsService.ListRuns:input_type -> novaforge.reviews.v1.ListRunsRequest
-	7,  // 6: novaforge.reviews.v1.ReviewsService.AddPlanStep:input_type -> novaforge.reviews.v1.AddPlanStepRequest
-	9,  // 7: novaforge.reviews.v1.ReviewsService.RecordProof:input_type -> novaforge.reviews.v1.RecordProofRequest
-	11, // 8: novaforge.reviews.v1.ReviewsService.SubmitReview:input_type -> novaforge.reviews.v1.SubmitReviewRequest
-	13, // 9: novaforge.reviews.v1.ReviewsService.AddComment:input_type -> novaforge.reviews.v1.AddCommentRequest
-	2,  // 10: novaforge.reviews.v1.ReviewsService.CreateRun:output_type -> novaforge.reviews.v1.CreateRunResponse
-	4,  // 11: novaforge.reviews.v1.ReviewsService.GetRun:output_type -> novaforge.reviews.v1.GetRunResponse
-	6,  // 12: novaforge.reviews.v1.ReviewsService.ListRuns:output_type -> novaforge.reviews.v1.ListRunsResponse
-	8,  // 13: novaforge.reviews.v1.ReviewsService.AddPlanStep:output_type -> novaforge.reviews.v1.AddPlanStepResponse
-	10, // 14: novaforge.reviews.v1.ReviewsService.RecordProof:output_type -> novaforge.reviews.v1.RecordProofResponse
-	12, // 15: novaforge.reviews.v1.ReviewsService.SubmitReview:output_type -> novaforge.reviews.v1.SubmitReviewResponse
-	14, // 16: novaforge.reviews.v1.ReviewsService.AddComment:output_type -> novaforge.reviews.v1.AddCommentResponse
-	10, // [10:17] is the sub-list for method output_type
-	3,  // [3:10] is the sub-list for method input_type
-	3,  // [3:3] is the sub-list for extension type_name
-	3,  // [3:3] is the sub-list for extension extendee
-	0,  // [0:3] is the sub-list for field type_name
+	15, // 3: novaforge.reviews.v1.GetExceptionsResponse.summary:type_name -> novaforge.reviews.v1.ExceptionSummary
+	16, // 4: novaforge.reviews.v1.GetExceptionsResponse.items:type_name -> novaforge.reviews.v1.ExceptionItem
+	1,  // 5: novaforge.reviews.v1.ReviewsService.CreateRun:input_type -> novaforge.reviews.v1.CreateRunRequest
+	3,  // 6: novaforge.reviews.v1.ReviewsService.GetRun:input_type -> novaforge.reviews.v1.GetRunRequest
+	5,  // 7: novaforge.reviews.v1.ReviewsService.ListRuns:input_type -> novaforge.reviews.v1.ListRunsRequest
+	7,  // 8: novaforge.reviews.v1.ReviewsService.AddPlanStep:input_type -> novaforge.reviews.v1.AddPlanStepRequest
+	9,  // 9: novaforge.reviews.v1.ReviewsService.RecordProof:input_type -> novaforge.reviews.v1.RecordProofRequest
+	11, // 10: novaforge.reviews.v1.ReviewsService.SubmitReview:input_type -> novaforge.reviews.v1.SubmitReviewRequest
+	13, // 11: novaforge.reviews.v1.ReviewsService.AddComment:input_type -> novaforge.reviews.v1.AddCommentRequest
+	17, // 12: novaforge.reviews.v1.ReviewsService.GetExceptions:input_type -> novaforge.reviews.v1.GetExceptionsRequest
+	2,  // 13: novaforge.reviews.v1.ReviewsService.CreateRun:output_type -> novaforge.reviews.v1.CreateRunResponse
+	4,  // 14: novaforge.reviews.v1.ReviewsService.GetRun:output_type -> novaforge.reviews.v1.GetRunResponse
+	6,  // 15: novaforge.reviews.v1.ReviewsService.ListRuns:output_type -> novaforge.reviews.v1.ListRunsResponse
+	8,  // 16: novaforge.reviews.v1.ReviewsService.AddPlanStep:output_type -> novaforge.reviews.v1.AddPlanStepResponse
+	10, // 17: novaforge.reviews.v1.ReviewsService.RecordProof:output_type -> novaforge.reviews.v1.RecordProofResponse
+	12, // 18: novaforge.reviews.v1.ReviewsService.SubmitReview:output_type -> novaforge.reviews.v1.SubmitReviewResponse
+	14, // 19: novaforge.reviews.v1.ReviewsService.AddComment:output_type -> novaforge.reviews.v1.AddCommentResponse
+	18, // 20: novaforge.reviews.v1.ReviewsService.GetExceptions:output_type -> novaforge.reviews.v1.GetExceptionsResponse
+	13, // [13:21] is the sub-list for method output_type
+	5,  // [5:13] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_novaforge_reviews_v1_reviews_proto_init() }
@@ -1126,7 +1393,7 @@ func file_novaforge_reviews_v1_reviews_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_novaforge_reviews_v1_reviews_proto_rawDesc), len(file_novaforge_reviews_v1_reviews_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   15,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -19,13 +19,14 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ReviewsService_CreateRun_FullMethodName    = "/novaforge.reviews.v1.ReviewsService/CreateRun"
-	ReviewsService_GetRun_FullMethodName       = "/novaforge.reviews.v1.ReviewsService/GetRun"
-	ReviewsService_ListRuns_FullMethodName     = "/novaforge.reviews.v1.ReviewsService/ListRuns"
-	ReviewsService_AddPlanStep_FullMethodName  = "/novaforge.reviews.v1.ReviewsService/AddPlanStep"
-	ReviewsService_RecordProof_FullMethodName  = "/novaforge.reviews.v1.ReviewsService/RecordProof"
-	ReviewsService_SubmitReview_FullMethodName = "/novaforge.reviews.v1.ReviewsService/SubmitReview"
-	ReviewsService_AddComment_FullMethodName   = "/novaforge.reviews.v1.ReviewsService/AddComment"
+	ReviewsService_CreateRun_FullMethodName     = "/novaforge.reviews.v1.ReviewsService/CreateRun"
+	ReviewsService_GetRun_FullMethodName        = "/novaforge.reviews.v1.ReviewsService/GetRun"
+	ReviewsService_ListRuns_FullMethodName      = "/novaforge.reviews.v1.ReviewsService/ListRuns"
+	ReviewsService_AddPlanStep_FullMethodName   = "/novaforge.reviews.v1.ReviewsService/AddPlanStep"
+	ReviewsService_RecordProof_FullMethodName   = "/novaforge.reviews.v1.ReviewsService/RecordProof"
+	ReviewsService_SubmitReview_FullMethodName  = "/novaforge.reviews.v1.ReviewsService/SubmitReview"
+	ReviewsService_AddComment_FullMethodName    = "/novaforge.reviews.v1.ReviewsService/AddComment"
+	ReviewsService_GetExceptions_FullMethodName = "/novaforge.reviews.v1.ReviewsService/GetExceptions"
 )
 
 // ReviewsServiceClient is the client API for ReviewsService service.
@@ -43,6 +44,7 @@ type ReviewsServiceClient interface {
 	RecordProof(ctx context.Context, in *RecordProofRequest, opts ...grpc.CallOption) (*RecordProofResponse, error)
 	SubmitReview(ctx context.Context, in *SubmitReviewRequest, opts ...grpc.CallOption) (*SubmitReviewResponse, error)
 	AddComment(ctx context.Context, in *AddCommentRequest, opts ...grpc.CallOption) (*AddCommentResponse, error)
+	GetExceptions(ctx context.Context, in *GetExceptionsRequest, opts ...grpc.CallOption) (*GetExceptionsResponse, error)
 }
 
 type reviewsServiceClient struct {
@@ -123,6 +125,16 @@ func (c *reviewsServiceClient) AddComment(ctx context.Context, in *AddCommentReq
 	return out, nil
 }
 
+func (c *reviewsServiceClient) GetExceptions(ctx context.Context, in *GetExceptionsRequest, opts ...grpc.CallOption) (*GetExceptionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetExceptionsResponse)
+	err := c.cc.Invoke(ctx, ReviewsService_GetExceptions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ReviewsServiceServer is the server API for ReviewsService service.
 // All implementations should embed UnimplementedReviewsServiceServer
 // for forward compatibility.
@@ -138,6 +150,7 @@ type ReviewsServiceServer interface {
 	RecordProof(context.Context, *RecordProofRequest) (*RecordProofResponse, error)
 	SubmitReview(context.Context, *SubmitReviewRequest) (*SubmitReviewResponse, error)
 	AddComment(context.Context, *AddCommentRequest) (*AddCommentResponse, error)
+	GetExceptions(context.Context, *GetExceptionsRequest) (*GetExceptionsResponse, error)
 }
 
 // UnimplementedReviewsServiceServer should be embedded to have
@@ -167,6 +180,9 @@ func (UnimplementedReviewsServiceServer) SubmitReview(context.Context, *SubmitRe
 }
 func (UnimplementedReviewsServiceServer) AddComment(context.Context, *AddCommentRequest) (*AddCommentResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddComment not implemented")
+}
+func (UnimplementedReviewsServiceServer) GetExceptions(context.Context, *GetExceptionsRequest) (*GetExceptionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetExceptions not implemented")
 }
 func (UnimplementedReviewsServiceServer) testEmbeddedByValue() {}
 
@@ -314,6 +330,24 @@ func _ReviewsService_AddComment_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ReviewsService_GetExceptions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetExceptionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReviewsServiceServer).GetExceptions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ReviewsService_GetExceptions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReviewsServiceServer).GetExceptions(ctx, req.(*GetExceptionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ReviewsService_ServiceDesc is the grpc.ServiceDesc for ReviewsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -348,6 +382,10 @@ var ReviewsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AddComment",
 			Handler:    _ReviewsService_AddComment_Handler,
+		},
+		{
+			MethodName: "GetExceptions",
+			Handler:    _ReviewsService_GetExceptions_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

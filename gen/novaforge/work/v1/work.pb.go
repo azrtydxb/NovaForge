@@ -588,6 +588,149 @@ func (x *AssignItemResponse) GetItem() *WorkItem {
 	return nil
 }
 
+type Subtask struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Item  *WorkItem              `protobuf:"bytes,1,opt,name=item,proto3" json:"item,omitempty"`
+	// ready reports whether every blocker of this subtask is done. The caller
+	// should not recompute it from the dependency list: readiness is a single
+	// query against the same transaction the scheduler uses.
+	Ready         bool `protobuf:"varint,2,opt,name=ready,proto3" json:"ready,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Subtask) Reset() {
+	*x = Subtask{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Subtask) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Subtask) ProtoMessage() {}
+
+func (x *Subtask) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Subtask.ProtoReflect.Descriptor instead.
+func (*Subtask) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *Subtask) GetItem() *WorkItem {
+	if x != nil {
+		return x.Item
+	}
+	return nil
+}
+
+func (x *Subtask) GetReady() bool {
+	if x != nil {
+		return x.Ready
+	}
+	return false
+}
+
+type ListSubtasksRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	EpicKey       string                 `protobuf:"bytes,1,opt,name=epic_key,json=epicKey,proto3" json:"epic_key,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListSubtasksRequest) Reset() {
+	*x = ListSubtasksRequest{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListSubtasksRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListSubtasksRequest) ProtoMessage() {}
+
+func (x *ListSubtasksRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListSubtasksRequest.ProtoReflect.Descriptor instead.
+func (*ListSubtasksRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ListSubtasksRequest) GetEpicKey() string {
+	if x != nil {
+		return x.EpicKey
+	}
+	return ""
+}
+
+type ListSubtasksResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Subtasks      []*Subtask             `protobuf:"bytes,1,rep,name=subtasks,proto3" json:"subtasks,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListSubtasksResponse) Reset() {
+	*x = ListSubtasksResponse{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListSubtasksResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListSubtasksResponse) ProtoMessage() {}
+
+func (x *ListSubtasksResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListSubtasksResponse.ProtoReflect.Descriptor instead.
+func (*ListSubtasksResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ListSubtasksResponse) GetSubtasks() []*Subtask {
+	if x != nil {
+		return x.Subtasks
+	}
+	return nil
+}
+
 var File_novaforge_work_v1_work_proto protoreflect.FileDescriptor
 
 const file_novaforge_work_v1_work_proto_rawDesc = "" +
@@ -639,14 +782,22 @@ const file_novaforge_work_v1_work_proto_rawDesc = "" +
 	"assigneeId\x12#\n" +
 	"\rassignee_kind\x18\x03 \x01(\tR\fassigneeKind\"E\n" +
 	"\x12AssignItemResponse\x12/\n" +
-	"\x04item\x18\x01 \x01(\v2\x1b.novaforge.work.v1.WorkItemR\x04item2\xed\x02\n" +
+	"\x04item\x18\x01 \x01(\v2\x1b.novaforge.work.v1.WorkItemR\x04item\"P\n" +
+	"\aSubtask\x12/\n" +
+	"\x04item\x18\x01 \x01(\v2\x1b.novaforge.work.v1.WorkItemR\x04item\x12\x14\n" +
+	"\x05ready\x18\x02 \x01(\bR\x05ready\"0\n" +
+	"\x13ListSubtasksRequest\x12\x19\n" +
+	"\bepic_key\x18\x01 \x01(\tR\aepicKey\"N\n" +
+	"\x14ListSubtasksResponse\x126\n" +
+	"\bsubtasks\x18\x01 \x03(\v2\x1a.novaforge.work.v1.SubtaskR\bsubtasks2\xce\x03\n" +
 	"\vWorkService\x12Y\n" +
 	"\n" +
 	"CreateItem\x12$.novaforge.work.v1.CreateItemRequest\x1a%.novaforge.work.v1.CreateItemResponse\x12P\n" +
 	"\aGetItem\x12!.novaforge.work.v1.GetItemRequest\x1a\".novaforge.work.v1.GetItemResponse\x12V\n" +
 	"\tListItems\x12#.novaforge.work.v1.ListItemsRequest\x1a$.novaforge.work.v1.ListItemsResponse\x12Y\n" +
 	"\n" +
-	"AssignItem\x12$.novaforge.work.v1.AssignItemRequest\x1a%.novaforge.work.v1.AssignItemResponseB\xc5\x01\n" +
+	"AssignItem\x12$.novaforge.work.v1.AssignItemRequest\x1a%.novaforge.work.v1.AssignItemResponse\x12_\n" +
+	"\fListSubtasks\x12&.novaforge.work.v1.ListSubtasksRequest\x1a'.novaforge.work.v1.ListSubtasksResponseB\xc5\x01\n" +
 	"\x15com.novaforge.work.v1B\tWorkProtoP\x01Z;github.com/novaforge/novaforge/gen/novaforge/work/v1;workv1\xa2\x02\x03NWX\xaa\x02\x11Novaforge.Work.V1\xca\x02\x11Novaforge\\Work\\V1\xe2\x02\x1dNovaforge\\Work\\V1\\GPBMetadata\xea\x02\x13Novaforge::Work::V1b\x06proto3"
 
 var (
@@ -661,36 +812,43 @@ func file_novaforge_work_v1_work_proto_rawDescGZIP() []byte {
 	return file_novaforge_work_v1_work_proto_rawDescData
 }
 
-var file_novaforge_work_v1_work_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_novaforge_work_v1_work_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_novaforge_work_v1_work_proto_goTypes = []any{
-	(*WorkItem)(nil),           // 0: novaforge.work.v1.WorkItem
-	(*CreateItemRequest)(nil),  // 1: novaforge.work.v1.CreateItemRequest
-	(*CreateItemResponse)(nil), // 2: novaforge.work.v1.CreateItemResponse
-	(*GetItemRequest)(nil),     // 3: novaforge.work.v1.GetItemRequest
-	(*GetItemResponse)(nil),    // 4: novaforge.work.v1.GetItemResponse
-	(*ListItemsRequest)(nil),   // 5: novaforge.work.v1.ListItemsRequest
-	(*ListItemsResponse)(nil),  // 6: novaforge.work.v1.ListItemsResponse
-	(*AssignItemRequest)(nil),  // 7: novaforge.work.v1.AssignItemRequest
-	(*AssignItemResponse)(nil), // 8: novaforge.work.v1.AssignItemResponse
+	(*WorkItem)(nil),             // 0: novaforge.work.v1.WorkItem
+	(*CreateItemRequest)(nil),    // 1: novaforge.work.v1.CreateItemRequest
+	(*CreateItemResponse)(nil),   // 2: novaforge.work.v1.CreateItemResponse
+	(*GetItemRequest)(nil),       // 3: novaforge.work.v1.GetItemRequest
+	(*GetItemResponse)(nil),      // 4: novaforge.work.v1.GetItemResponse
+	(*ListItemsRequest)(nil),     // 5: novaforge.work.v1.ListItemsRequest
+	(*ListItemsResponse)(nil),    // 6: novaforge.work.v1.ListItemsResponse
+	(*AssignItemRequest)(nil),    // 7: novaforge.work.v1.AssignItemRequest
+	(*AssignItemResponse)(nil),   // 8: novaforge.work.v1.AssignItemResponse
+	(*Subtask)(nil),              // 9: novaforge.work.v1.Subtask
+	(*ListSubtasksRequest)(nil),  // 10: novaforge.work.v1.ListSubtasksRequest
+	(*ListSubtasksResponse)(nil), // 11: novaforge.work.v1.ListSubtasksResponse
 }
 var file_novaforge_work_v1_work_proto_depIdxs = []int32{
-	0, // 0: novaforge.work.v1.CreateItemResponse.item:type_name -> novaforge.work.v1.WorkItem
-	0, // 1: novaforge.work.v1.GetItemResponse.item:type_name -> novaforge.work.v1.WorkItem
-	0, // 2: novaforge.work.v1.ListItemsResponse.items:type_name -> novaforge.work.v1.WorkItem
-	0, // 3: novaforge.work.v1.AssignItemResponse.item:type_name -> novaforge.work.v1.WorkItem
-	1, // 4: novaforge.work.v1.WorkService.CreateItem:input_type -> novaforge.work.v1.CreateItemRequest
-	3, // 5: novaforge.work.v1.WorkService.GetItem:input_type -> novaforge.work.v1.GetItemRequest
-	5, // 6: novaforge.work.v1.WorkService.ListItems:input_type -> novaforge.work.v1.ListItemsRequest
-	7, // 7: novaforge.work.v1.WorkService.AssignItem:input_type -> novaforge.work.v1.AssignItemRequest
-	2, // 8: novaforge.work.v1.WorkService.CreateItem:output_type -> novaforge.work.v1.CreateItemResponse
-	4, // 9: novaforge.work.v1.WorkService.GetItem:output_type -> novaforge.work.v1.GetItemResponse
-	6, // 10: novaforge.work.v1.WorkService.ListItems:output_type -> novaforge.work.v1.ListItemsResponse
-	8, // 11: novaforge.work.v1.WorkService.AssignItem:output_type -> novaforge.work.v1.AssignItemResponse
-	8, // [8:12] is the sub-list for method output_type
-	4, // [4:8] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	0,  // 0: novaforge.work.v1.CreateItemResponse.item:type_name -> novaforge.work.v1.WorkItem
+	0,  // 1: novaforge.work.v1.GetItemResponse.item:type_name -> novaforge.work.v1.WorkItem
+	0,  // 2: novaforge.work.v1.ListItemsResponse.items:type_name -> novaforge.work.v1.WorkItem
+	0,  // 3: novaforge.work.v1.AssignItemResponse.item:type_name -> novaforge.work.v1.WorkItem
+	0,  // 4: novaforge.work.v1.Subtask.item:type_name -> novaforge.work.v1.WorkItem
+	9,  // 5: novaforge.work.v1.ListSubtasksResponse.subtasks:type_name -> novaforge.work.v1.Subtask
+	1,  // 6: novaforge.work.v1.WorkService.CreateItem:input_type -> novaforge.work.v1.CreateItemRequest
+	3,  // 7: novaforge.work.v1.WorkService.GetItem:input_type -> novaforge.work.v1.GetItemRequest
+	5,  // 8: novaforge.work.v1.WorkService.ListItems:input_type -> novaforge.work.v1.ListItemsRequest
+	7,  // 9: novaforge.work.v1.WorkService.AssignItem:input_type -> novaforge.work.v1.AssignItemRequest
+	10, // 10: novaforge.work.v1.WorkService.ListSubtasks:input_type -> novaforge.work.v1.ListSubtasksRequest
+	2,  // 11: novaforge.work.v1.WorkService.CreateItem:output_type -> novaforge.work.v1.CreateItemResponse
+	4,  // 12: novaforge.work.v1.WorkService.GetItem:output_type -> novaforge.work.v1.GetItemResponse
+	6,  // 13: novaforge.work.v1.WorkService.ListItems:output_type -> novaforge.work.v1.ListItemsResponse
+	8,  // 14: novaforge.work.v1.WorkService.AssignItem:output_type -> novaforge.work.v1.AssignItemResponse
+	11, // 15: novaforge.work.v1.WorkService.ListSubtasks:output_type -> novaforge.work.v1.ListSubtasksResponse
+	11, // [11:16] is the sub-list for method output_type
+	6,  // [6:11] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_novaforge_work_v1_work_proto_init() }
@@ -704,7 +862,7 @@ func file_novaforge_work_v1_work_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_novaforge_work_v1_work_proto_rawDesc), len(file_novaforge_work_v1_work_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

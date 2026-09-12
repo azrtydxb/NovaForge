@@ -52,6 +52,9 @@ func Routes() []Route {
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/work", "createWorkItem", "Create a Work Item"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/work/{key}", "getWorkItem", "One Work Item"},
 
+		{http.MethodGet, "/api/v1/orgs/{org}/dashboard", "getDashboard", "What needs human attention"},
+		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/work/{key}/subtasks", "listSubtasks", "An epic's subtasks and their readiness"},
+
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/runs", "listRuns", "Engineering Runs"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/runs", "createRun", "Open an Engineering Run"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}", "getRun", "One Engineering Run"},

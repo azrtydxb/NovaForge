@@ -87,7 +87,51 @@ func addWorkHandlers(h map[string]http.HandlerFunc, g gitv1.GitServiceClient, w 
 		}
 	}
 
+	if w != nil {
+		h["listSubtasks"] = func(wr http.ResponseWriter, r *http.Request) {
+			resp, err := w.ListSubtasks(r.Context(), &workv1.ListSubtasksRequest{
+				EpicKey: chi.URLParam(r, "key"),
+			})
+			if err != nil {
+				WriteError(wr, StatusFromGRPC(err), err)
+				return
+			}
+			out := make([]map[string]any, 0, len(resp.GetSubtasks()))
+			for _, st := range resp.GetSubtasks() {
+				body := workItemJSON(st.GetItem())
+				body["ready"] = st.GetReady()
+				out = append(out, body)
+			}
+			WriteJSON(wr, http.StatusOK, map[string]any{"subtasks": out})
+		}
+	}
+
 	if rv != nil {
+		h["getDashboard"] = func(wr http.ResponseWriter, r *http.Request) {
+			resp, err := rv.GetExceptions(r.Context(), &reviewsv1.GetExceptionsRequest{})
+			if err != nil {
+				WriteError(wr, StatusFromGRPC(err), err)
+				return
+			}
+			sm := resp.GetSummary()
+			items := make([]map[string]any, 0, len(resp.GetItems()))
+			for _, it := range resp.GetItems() {
+				items = append(items, map[string]any{
+					"key": it.GetKey(), "title": it.GetTitle(),
+					"state": it.GetState(), "reason": it.GetReason(),
+				})
+			}
+			WriteJSON(wr, http.StatusOK, map[string]any{
+				"agents_running":         sm.GetAgentsRunning(),
+				"ready_to_auto_merge":    sm.GetReadyToAutoMerge(),
+				"need_human_review":      sm.GetNeedHumanReview(),
+				"architecture_decisions": sm.GetArchitectureDecisions(),
+				"gate_failures":          sm.GetGateFailures(),
+				"agents_blocked":         sm.GetAgentsBlocked(),
+				"exceptions":             items,
+			})
+		}
+
 		h["createRun"] = func(wr http.ResponseWriter, r *http.Request) {
 			var req struct {
 				Title     string `json:"title"`

@@ -10,6 +10,7 @@ service WorkService {
   rpc GetItem(GetItemRequest) returns (GetItemResponse);
   rpc ListItems(ListItemsRequest) returns (ListItemsResponse);
   rpc AssignItem(AssignItemRequest) returns (AssignItemResponse);
+  rpc ListSubtasks(ListSubtasksRequest) returns (ListSubtasksResponse);
 }
 
 // WorkItem mirrors a row in the work.work_items table.
@@ -70,4 +71,19 @@ message AssignItemRequest {
 
 message AssignItemResponse {
   WorkItem item = 1;
+}
+
+message Subtask {
+  WorkItem item = 1;
+  // ready reports whether every blocker of this subtask is done. The caller
+  // should not recompute it from the dependency list: readiness is a single
+  // query against the same transaction the scheduler uses.
+  bool ready = 2;
+}
+
+message ListSubtasksRequest {
+  string epic_key = 1;
+}
+message ListSubtasksResponse {
+  repeated Subtask subtasks = 1;
 }
