@@ -4,101 +4,119 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-This repository contains **no source code**. It holds a single design document,
-`NovaForge_AI_Native_Git_Platform.md`, on a fresh single-commit history. A previous Go +
-React implementation existed and was deliberately deleted along with its history
-(2026-09-11); do not try to recover or reference it.
+The backend is built, deployed to the kw cluster, and covered by three acceptance tests
+that run against it. The GUI is deliberately not built yet — the spec scoped it out.
 
-Consequently there are no build, lint, or test commands yet. Do not invent them — add them
-to this file as the corresponding tooling is actually introduced.
+`NovaForge_AI_Native_Git_Platform.md` is the design document and remains the source of
+truth for intent. `.procoder/specs/backend-platform.md` is the spec actually built against,
+`.procoder/plans/` holds the six implementation plans, and `BUILD-STATUS.md` records what
+has been proven on the cluster, what defects running it exposed, and what is still not
+proven. **Read `BUILD-STATUS.md` before claiming anything works** — its "Known limitations"
+section is deliberately honest and kept current.
 
-## What NovaForge is
+## Commands
 
-A self-hosted Git platform where humans and AI agents are both first-class contributors.
-Git stays fully standard-compatible (clone/fetch/push, SSH + HTTPS); NovaForge is the
-**engineering control plane** layered above it.
+```bash
+make test          # go test ./...  — needs the datastore env below, or most suites skip
+make build lint    # go build ./... / go vet ./...
+make generate      # buf generate — regenerate gen/ after editing proto/
+make openapi       # regenerate api/openapi.yaml from the edge route table
 
-The single load-bearing idea, which most design decisions follow from:
+go test ./internal/work/ -run TestAddAndListComments -v   # one test
+gofmt -l internal cmd                                      # must print nothing
+```
 
-> The engineering system — not the agent — controls permissions, context, verification, and
-> merge authority.
+Tests run against **real** PostgreSQL, Redis and MinIO — no datastore is mocked anywhere.
+`source hack/env.sh` exports `TEST_DATABASE_URL`, `TEST_REDIS_URL` and the S3 variables
+pointing at the cluster's dev datastores. Without them the suites `t.Skip`, which looks
+like a pass; always source it before believing a green run.
 
-Practical consequences worth keeping in mind when implementing anything here:
+### Cluster build and deploy
 
-- Agents never get broad personal access tokens. They get scoped capabilities (e.g. write
-  only to `agent/NF-182`, staging deploy yes, production no), enforced by the platform.
-- Agents never decide their own permissions or approvals; policy is evaluated outside the
-  model.
-- Quality gates are enforced **after** an agent declares completion, and the agent must not
-  be able to bypass them.
-- An agent must not be both author and sole reviewer of a change — independent reviewer,
-  security, test, and architecture agents review it, ideally on different models to avoid
-  correlated failure.
-- Never dump a whole repository into a model. Context is assembled per Work Item via
-  lexical + symbol + dependency-graph + semantic search plus Git history, then reranked.
-- Store observable actions and evidence for provenance — never model chain-of-thought.
+There is no local Docker daemon — Docker Desktop's containerd store is broken and unusable.
+Everything builds in-cluster.
 
-## Intended architecture (from the design doc)
+```bash
+source hack/env.sh          # BuildKit, registry, kube context, test datastores
+./hack/build-images.sh      # arm64 images via in-cluster BuildKit, tagged with the commit sha
+./hack/deploy.sh            # helm upgrade --install, with an image preflight
+bash tests/e2e/deploy_test.sh     # git round trip over HTTPS and SSH
+bash tests/e2e/work_ci_test.sh    # Work Item, push, CI run in a pod, log and artifact
+bash tests/e2e/factory_test.sh    # epic decomposition by the real model, dependency ordering
+```
 
-Read `NovaForge_AI_Native_Git_Platform.md` before designing anything; it is the source of
-truth. The short version:
+`hack/env.local.sh` is untracked and holds `REGISTRY_PASSWORD` and `AI_API_KEY`. A fresh
+clone must create it: `deploy.sh` refuses to run without the model-gateway credential,
+because a deployment that cannot reach a model looks configured and is not.
 
-**Backend** — Go, as a modular monolith initially, with `cmd/` (`novaforge`, `runner`, `nf`
-CLI) and `internal/` split by domain (`auth`, `git`, `repositories`, `work`, `reviews`,
-`agents`, `runners`, `gates`, `ci`, `mcp`, `indexing`, `knowledge`). OpenAPI (`api/openapi.yaml`)
-is the API contract.
+Images are tagged with the commit sha, never a mutable tag — a mutable `dev` tag with
+`IfNotPresent` silently served stale code for a whole session. **Never `kubectl set image`
+or otherwise edit a resource Helm owns**: it takes server-side-apply field ownership and
+the next `helm upgrade` conflicts.
 
-**Frontend** — React + TypeScript + Vite, TanStack Router/Query, Shadcn/ui, Monaco.
-Transport rule: REST for normal operations, SSE for live agent/CI events, WebSockets **only**
-for genuinely interactive sessions.
+## Architecture
 
-**Infrastructure** — PostgreSQL, Redis (NATS possible later), native Git repositories,
-Docker/Kubernetes for execution, Tree-sitter/LSP/SCIP for code intelligence.
+Go microservices, module `github.com/novaforge/novaforge`. gRPC between services (buf,
+STANDARD lint), REST/OpenAPI only at the edge, Redis Streams for events.
 
-**AI layer** — all model work goes through [`go-ai-sdk`](https://github.com/azrtydxb/go-ai-sdk)
-(model abstraction, streaming, tool calling, structured output, agents, approvals, MCP
-clients, embeddings, reranking, telemetry). **NovaForge itself must contain no
-provider-specific AI logic.** FastLLM → vLLM → DGX Spark/Qwen sits underneath for routing and
-inference; local/air-gapped AI is a primary deployment target, not an afterthought.
+**Services** (`cmd/`, each with a matching slice of `internal/`): `identity`,
+`git-platform`, `work-reviews`, `ci-runner`, `gates`, `agent-runtime`,
+`engineering-graph`, `mcp-server`, `edge`. Plus `runner` (dials out, never dialled) and
+`nf` (the CLI).
 
-### Domain concepts that differ from a normal Git host
+### Rules that are load-bearing
 
-- **Work Items** replace basic issues — typed (Feature, Bug, Refactor, Security, Tech Debt,
-  Research, Architecture, Upgrade, Incident, Docs) with explicit goal, acceptance criteria,
-  constraints, and `required_gates`. Assignable to humans or agents.
-- **Pull Requests are Engineering Runs** — they present plan, change impact, and proof
-  (tests, type check, security, API compatibility, architecture gate), not just a diff.
-- **Engineering Graph** — models relationships (symbol → service → API → schema → test →
-  Work Item → ADR → deployment → owner → incident), not just files and commits.
-- **Agent Runs** execute in ephemeral, isolated environments (Docker → Kubernetes →
-  eventually Firecracker). Git changes, events, test evidence, and artifacts persist; the
-  environment is destroyed.
-- **Typed tools over shell** — agents call audited tools (`repo.search`, `repo.get_symbol`,
-  `workspace.write_file`, `git.commit`, `ci.run_test`, `work.comment`, `gate.status`, …)
-  rather than getting unrestricted shell access.
-- **MCP in both directions** — agents consume approved external MCP servers, and NovaForge
-  exposes its own so external agents (Claude Code, Codex) can drive it.
-- **Per-repo agent config under source control** in `.novaforge/` (`project.yaml`,
-  `agents/`, `gates/`, `context/`, `mcp/`) so AI behavior is reviewable and reproducible.
+- **Organizations are a hard security boundary.** Every query carries an org predicate
+  taken from `authz.FromContext` — never from a request field, or a caller could name
+  another org and be believed. The two exceptions (`work.Store.OpenEpics`,
+  `OrganizationsWithWork`) are platform-worker queries that return only ids and re-enter
+  each org's scope before reading anything; both say so in their doc comments.
+- **One PostgreSQL cluster, one schema per service, no cross-schema reads.** A service
+  needing another's data calls its RPC. `database.Migrate(url, schema, fs)` owns this.
+- **Capability grants constrain agents, not human members.** A member has ordinary write
+  access to their own repositories; demanding a grant of them is a bug, and was one.
+- **Git is the `git` binary**, shelled out to. Never go-git. Write operations happen in a
+  throwaway clone that is pushed back, so a failure part-way leaves the bare repo untouched.
+- **All model work goes through `go-ai-sdk`'s gateway provider.** No provider-specific logic
+  anywhere; a model server's quirks are configuration (`AI_PROVIDER_OPTIONS`), never a
+  branch in the code.
+- **Store observable actions and evidence, never model chain-of-thought.**
+- MCP: current spec revision only (`2025-06-18`), stdio + Streamable HTTP, no deprecated
+  HTTP+SSE.
 
-### Build order
+### The defect class to watch for
 
-The doc specifies six MVP phases; respect the ordering rather than jumping ahead:
-Git foundation → Work & CI → Agent runtime → Governance (gates, capabilities, provenance)
-→ Intelligence (graph, indexing, retrieval, knowledge) → Software factory (swarms,
-autonomous maintenance, policy auto-merge).
+Almost every defect found here was a **seam**, not a component: both sides were correct and
+unit-tested, and nothing connected them. `ClaimJob` and `Dispatch` were both written, both
+tested, and called by nothing. So were the swarm scheduler, the maintenance scanners and the
+auto-merger. Three config fields were declared, rendered into the chart, set in the pod, and
+never read. These are invisible to unit tests and usually present as _silence_ — a queued
+run that never starts, an event consumed and acked with nothing scheduled — which is
+indistinguishable from correct idle behaviour.
 
-Section 25 lists what to deliberately **not** build early: large wiki systems, portfolio
-management, full Kubernetes management, observability suites, many SCM integrations,
-complex enterprise project management.
+When adding anything, check what calls it, end to end, on the cluster. A test proving a
+component works is not evidence that anything uses it.
+
+## Working conventions
+
+- Write the failing test first and see it fail for the right reason. For a regression test,
+  revert the fix, watch it go red, restore it. A test never seen red proves nothing.
+- Comments explain _why_, especially where the obvious approach is wrong — much of this
+  codebase's commentary records a defect that was actually hit. Match that density.
+- `.procoder/todo/` tracks multi-step work; `launcher.sh todo close` refuses to close a task
+  without checked criteria and real evidence. Never edit `Status:` by hand.
+- Prefer fixing the design over widening a test's tolerance.
 
 ## Commit gate
 
-A procoder hook runs on commit in this repository and **blocks** on findings. Two behaviors
-that will otherwise surprise you:
+A procoder hook runs on commit and **blocks** on findings:
 
-- Commits carrying AI-attribution trailers (`Co-Authored-By: Claude …`) are rejected, and
-  the gate inspects history, not just `HEAD` — a bad commit anywhere in the range blocks
-  the commit.
-- When a turn ends by putting a decision to the user, the gate requires that decision to be
-  recorded in `.procoder/ask/decisions.md` and asked via the structured question tool.
+- AI-attribution trailers (`Co-Authored-By: Claude …`) are rejected, and the gate inspects
+  the whole range, not just `HEAD` — one bad commit anywhere blocks the push.
+- Vulnerable dependencies, merge markers, unformatted files, semgrep findings and oversized
+  files all block.
+- When a turn ends by putting a decision to the user, that decision must be recorded in
+  `.procoder/ask/decisions.md` and asked via the structured question tool.
+
+Helm templates live in `deploy/helm/novaforge/templates/*.tpl`, not `.yaml`: Go templates
+are not valid YAML and prettier cannot parse them.
