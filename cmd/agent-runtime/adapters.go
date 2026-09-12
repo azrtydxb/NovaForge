@@ -3,30 +3,53 @@ package main
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
+	graphv1 "github.com/novaforge/novaforge/gen/novaforge/graph/v1"
 	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
 	"github.com/novaforge/novaforge/internal/tools"
 )
 
-// gitAdapter satisfies tools.GitClient over the git-platform gRPC client.
-// git-platform's current RPC surface (proto/novaforge/git/v1/git.proto,
-// which this service does not own and this task does not touch) has no
-// symbol, dependency-graph, full-text search, or commit-creation RPCs yet
-// — tools.GitClient's own doc comment calls this out as future work. Search,
-// GetSymbol, and GetDependencies are therefore answered honestly as
-// unavailable rather than faked; ReadFile and Diff are fully real, backed
-// by GetBlob and GetDiff.
+// gitAdapter satisfies tools.GitClient over two services, because the
+// repo.* tools span two of them: content comes from git-platform (GetBlob,
+// GetDiff) and code intelligence from engineering-graph (SearchCode,
+// GetSymbol, Dependencies), which is where the parsed symbol and dependency
+// graph actually lives. graph may be nil when the deployment has no graph
+// service configured, in which case the three tools it backs report
+// themselves unavailable rather than returning an empty result that would
+// read as "nothing matched".
 type gitAdapter struct {
-	git gitv1.GitServiceClient
+	git   gitv1.GitServiceClient
+	graph graphv1.GraphServiceClient
 }
 
-func newGitAdapter(git gitv1.GitServiceClient) tools.GitClient {
-	return &gitAdapter{git: git}
+func newGitAdapter(git gitv1.GitServiceClient, graph graphv1.GraphServiceClient) tools.GitClient {
+	return &gitAdapter{git: git, graph: graph}
 }
+
+// searchHitLimit bounds how many chunks repo.search asks the graph for. An
+// agent reads results into a bounded context window, so an unbounded result
+// set would be spent on the tail nobody reads.
+const searchHitLimit = 20
 
 func (a *gitAdapter) Search(ctx context.Context, repo, query string) ([]tools.SearchHit, error) {
-	return nil, fmt.Errorf("git-platform has no full-text search RPC yet")
+	if a.graph == nil {
+		return nil, fmt.Errorf("repo.search needs the engineering-graph service, which this deployment has not configured")
+	}
+	resp, err := a.graph.SearchCode(ctx, &graphv1.SearchCodeRequest{RepoId: repo, Query: query, K: searchHitLimit})
+	if err != nil {
+		return nil, fmt.Errorf("search %s for %q: %w", repo, query, err)
+	}
+	hits := make([]tools.SearchHit, 0, len(resp.GetChunks()))
+	for _, c := range resp.GetChunks() {
+		hits = append(hits, tools.SearchHit{
+			Path: c.GetPath(),
+			Line: int(c.GetStartLine()),
+			Text: c.GetText(),
+		})
+	}
+	return hits, nil
 }
 
 func (a *gitAdapter) ReadFile(ctx context.Context, repo, ref, path string) ([]byte, error) {
@@ -37,12 +60,46 @@ func (a *gitAdapter) ReadFile(ctx context.Context, repo, ref, path string) ([]by
 	return resp.GetContent(), nil
 }
 
+// GetSymbol answers from the graph's indexed symbol table. ref is not a
+// parameter of the graph's GetSymbol: the graph indexes a repository's
+// default branch, so a symbol lookup pinned to an arbitrary ref would be
+// answered from the indexed ref anyway — saying so is better than silently
+// ignoring the argument.
 func (a *gitAdapter) GetSymbol(ctx context.Context, repo, ref, symbol string) (tools.SymbolInfo, error) {
-	return tools.SymbolInfo{}, fmt.Errorf("symbol lookup requires the engineering-graph service, not wired into this tool adapter")
+	if a.graph == nil {
+		return tools.SymbolInfo{}, fmt.Errorf("repo.get_symbol needs the engineering-graph service, which this deployment has not configured")
+	}
+	resp, err := a.graph.GetSymbol(ctx, &graphv1.GetSymbolRequest{RepoId: repo, Name: symbol})
+	if err != nil {
+		return tools.SymbolInfo{}, fmt.Errorf("get symbol %q in %s: %w", symbol, repo, err)
+	}
+	sym := resp.GetSymbol()
+	if sym == nil || sym.GetName() == "" {
+		return tools.SymbolInfo{}, fmt.Errorf("no symbol named %q is indexed in %s", symbol, repo)
+	}
+	return tools.SymbolInfo{
+		Name: sym.GetName(),
+		Kind: sym.GetKind(),
+		Path: sym.GetPath(),
+		Line: int(sym.GetStartLine()),
+	}, nil
 }
 
+// GetDependencies answers what the symbol or file at path depends on, from
+// the graph's dependency edges.
 func (a *gitAdapter) GetDependencies(ctx context.Context, repo, ref, path string) ([]string, error) {
-	return nil, fmt.Errorf("dependency lookup requires the engineering-graph service, not wired into this tool adapter")
+	if a.graph == nil {
+		return nil, fmt.Errorf("repo.get_dependencies needs the engineering-graph service, which this deployment has not configured")
+	}
+	resp, err := a.graph.Dependencies(ctx, &graphv1.DependenciesRequest{RepoId: repo, Symbol: path})
+	if err != nil {
+		return nil, fmt.Errorf("dependencies of %s in %s: %w", path, repo, err)
+	}
+	deps := make([]string, 0, len(resp.GetNodes()))
+	for _, n := range resp.GetNodes() {
+		deps = append(deps, n.GetKey())
+	}
+	return deps, nil
 }
 
 func (a *gitAdapter) Diff(ctx context.Context, repo, from, to string) (string, error) {
@@ -53,15 +110,41 @@ func (a *gitAdapter) Diff(ctx context.Context, repo, from, to string) (string, e
 	return resp.GetUnified(), nil
 }
 
+// Commit writes files onto branch through git-platform. An agent commits
+// this way rather than with a git credential of its own: the platform, not
+// the model, decides what may be written and to where.
 func (a *gitAdapter) Commit(ctx context.Context, repo, branch, message string, files map[string]string) (string, error) {
-	return "", fmt.Errorf("git-platform has no commit-creation RPC yet; this run's changes must be committed through a workspace-local git client instead")
+	if len(files) == 0 {
+		return "", fmt.Errorf("git.commit needs at least one file")
+	}
+	// Map iteration order is random; a commit's file list is sorted so the
+	// same change produces the same request twice running.
+	paths := make([]string, 0, len(files))
+	for p := range files {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+
+	changes := make([]*gitv1.FileChange, 0, len(paths))
+	for _, p := range paths {
+		changes = append(changes, &gitv1.FileChange{Path: p, Content: []byte(files[p])})
+	}
+	resp, err := a.git.CreateCommit(ctx, &gitv1.CreateCommitRequest{
+		Repo:    repo,
+		Branch:  branch,
+		Message: message,
+		Files:   changes,
+	})
+	if err != nil {
+		return "", fmt.Errorf("commit to %s on %s: %w", repo, branch, err)
+	}
+	return resp.GetSha(), nil
 }
 
 // workAdapter satisfies tools.WorkClient over the work-reviews gRPC client.
-// GetItem answers work.get for real; work.comment has no backing RPC on
-// WorkService (comments exist only on reviews.Run, addressed via
-// AddComment on a different service) and is answered honestly as
-// unavailable.
+// Both tools it backs — work.get and work.comment — are answered by
+// WorkService RPCs; a comment an agent writes lands on the Work Item's own
+// thread, attributed to the agent, which is where a reader looks for it.
 type workAdapter struct {
 	work workv1.WorkServiceClient
 }
@@ -85,5 +168,8 @@ func (a *workAdapter) Get(ctx context.Context, workItemID string) (tools.WorkIte
 }
 
 func (a *workAdapter) Comment(ctx context.Context, workItemID, body string) error {
-	return fmt.Errorf("work service has no comment RPC on Work Items yet; comments are only addressable on reviews.Run")
+	if _, err := a.work.AddComment(ctx, &workv1.AddCommentRequest{WorkItemId: workItemID, Body: body}); err != nil {
+		return fmt.Errorf("comment on work item %s: %w", workItemID, err)
+	}
+	return nil
 }

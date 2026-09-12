@@ -30,6 +30,8 @@ const (
 	GitService_GetBlob_FullMethodName      = "/novaforge.git.v1.GitService/GetBlob"
 	GitService_GetDiff_FullMethodName      = "/novaforge.git.v1.GitService/GetDiff"
 	GitService_Merge_FullMethodName        = "/novaforge.git.v1.GitService/Merge"
+	GitService_CreateBranch_FullMethodName = "/novaforge.git.v1.GitService/CreateBranch"
+	GitService_CreateCommit_FullMethodName = "/novaforge.git.v1.GitService/CreateCommit"
 )
 
 // GitServiceClient is the client API for GitService service.
@@ -51,6 +53,8 @@ type GitServiceClient interface {
 	GetBlob(ctx context.Context, in *GetBlobRequest, opts ...grpc.CallOption) (*GetBlobResponse, error)
 	GetDiff(ctx context.Context, in *GetDiffRequest, opts ...grpc.CallOption) (*GetDiffResponse, error)
 	Merge(ctx context.Context, in *MergeRequest, opts ...grpc.CallOption) (*MergeResponse, error)
+	CreateBranch(ctx context.Context, in *CreateBranchRequest, opts ...grpc.CallOption) (*CreateBranchResponse, error)
+	CreateCommit(ctx context.Context, in *CreateCommitRequest, opts ...grpc.CallOption) (*CreateCommitResponse, error)
 }
 
 type gitServiceClient struct {
@@ -171,6 +175,26 @@ func (c *gitServiceClient) Merge(ctx context.Context, in *MergeRequest, opts ...
 	return out, nil
 }
 
+func (c *gitServiceClient) CreateBranch(ctx context.Context, in *CreateBranchRequest, opts ...grpc.CallOption) (*CreateBranchResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateBranchResponse)
+	err := c.cc.Invoke(ctx, GitService_CreateBranch_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gitServiceClient) CreateCommit(ctx context.Context, in *CreateCommitRequest, opts ...grpc.CallOption) (*CreateCommitResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateCommitResponse)
+	err := c.cc.Invoke(ctx, GitService_CreateCommit_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // GitServiceServer is the server API for GitService service.
 // All implementations should embed UnimplementedGitServiceServer
 // for forward compatibility.
@@ -190,6 +214,8 @@ type GitServiceServer interface {
 	GetBlob(context.Context, *GetBlobRequest) (*GetBlobResponse, error)
 	GetDiff(context.Context, *GetDiffRequest) (*GetDiffResponse, error)
 	Merge(context.Context, *MergeRequest) (*MergeResponse, error)
+	CreateBranch(context.Context, *CreateBranchRequest) (*CreateBranchResponse, error)
+	CreateCommit(context.Context, *CreateCommitRequest) (*CreateCommitResponse, error)
 }
 
 // UnimplementedGitServiceServer should be embedded to have
@@ -231,6 +257,12 @@ func (UnimplementedGitServiceServer) GetDiff(context.Context, *GetDiffRequest) (
 }
 func (UnimplementedGitServiceServer) Merge(context.Context, *MergeRequest) (*MergeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Merge not implemented")
+}
+func (UnimplementedGitServiceServer) CreateBranch(context.Context, *CreateBranchRequest) (*CreateBranchResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateBranch not implemented")
+}
+func (UnimplementedGitServiceServer) CreateCommit(context.Context, *CreateCommitRequest) (*CreateCommitResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateCommit not implemented")
 }
 func (UnimplementedGitServiceServer) testEmbeddedByValue() {}
 
@@ -450,6 +482,42 @@ func _GitService_Merge_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GitService_CreateBranch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateBranchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GitServiceServer).CreateBranch(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GitService_CreateBranch_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GitServiceServer).CreateBranch(ctx, req.(*CreateBranchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GitService_CreateCommit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateCommitRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GitServiceServer).CreateCommit(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GitService_CreateCommit_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GitServiceServer).CreateCommit(ctx, req.(*CreateCommitRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // GitService_ServiceDesc is the grpc.ServiceDesc for GitService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -500,6 +568,14 @@ var GitService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Merge",
 			Handler:    _GitService_Merge_Handler,
+		},
+		{
+			MethodName: "CreateBranch",
+			Handler:    _GitService_CreateBranch_Handler,
+		},
+		{
+			MethodName: "CreateCommit",
+			Handler:    _GitService_CreateCommit_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

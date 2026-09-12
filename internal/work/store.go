@@ -245,3 +245,74 @@ func (s *Store) Assign(ctx context.Context, id, assigneeID uuid.UUID, kind strin
 	}
 	return nil
 }
+
+// Comment is one entry in a Work Item's discussion thread.
+type Comment struct {
+	ID         uuid.UUID
+	WorkItemID uuid.UUID
+	AuthorID   uuid.UUID
+	AuthorKind string
+	Body       string
+	CreatedAt  time.Time
+}
+
+// AddComment appends body to workItemID's thread, attributed to the caller
+// in scope. The Work Item is re-read under the caller's organization first,
+// so commenting cannot be used to discover that an item exists in another
+// organization.
+func (s *Store) AddComment(ctx context.Context, workItemID uuid.UUID, body string) (Comment, error) {
+	scope, err := authz.FromContext(ctx)
+	if err != nil {
+		return Comment{}, err
+	}
+	if body == "" {
+		return Comment{}, fmt.Errorf("a comment needs a body")
+	}
+	if _, err := s.get(ctx, scope.OrgID, workItemID); err != nil {
+		return Comment{}, err
+	}
+
+	kind := scope.ActorKind
+	if kind != "agent" {
+		kind = "user"
+	}
+	c := Comment{WorkItemID: workItemID, AuthorID: scope.ActorID, AuthorKind: kind, Body: body}
+	err = s.pool.QueryRow(ctx, `
+		INSERT INTO work.work_item_comments (org_id, work_item_id, author_id, author_kind, body)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, created_at`,
+		scope.OrgID, workItemID, scope.ActorID, kind, body,
+	).Scan(&c.ID, &c.CreatedAt)
+	if err != nil {
+		return Comment{}, fmt.Errorf("add comment: %w", err)
+	}
+	return c, nil
+}
+
+// ListComments returns workItemID's thread oldest first.
+func (s *Store) ListComments(ctx context.Context, workItemID uuid.UUID) ([]Comment, error) {
+	scope, err := authz.FromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, work_item_id, author_id, author_kind, body, created_at
+		FROM work.work_item_comments
+		WHERE org_id = $1 AND work_item_id = $2
+		ORDER BY created_at`,
+		scope.OrgID, workItemID)
+	if err != nil {
+		return nil, fmt.Errorf("list comments: %w", err)
+	}
+	defer rows.Close()
+
+	var out []Comment
+	for rows.Next() {
+		var c Comment
+		if err := rows.Scan(&c.ID, &c.WorkItemID, &c.AuthorID, &c.AuthorKind, &c.Body, &c.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan comment: %w", err)
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}

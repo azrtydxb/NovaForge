@@ -17,6 +17,8 @@ service GitService {
   rpc GetBlob(GetBlobRequest) returns (GetBlobResponse);
   rpc GetDiff(GetDiffRequest) returns (GetDiffResponse);
   rpc Merge(MergeRequest) returns (MergeResponse);
+  rpc CreateBranch(CreateBranchRequest) returns (CreateBranchResponse);
+  rpc CreateCommit(CreateCommitRequest) returns (CreateCommitResponse);
 }
 
 message Repo {
@@ -133,4 +135,35 @@ message MergeRequest {
 }
 message MergeResponse {
   string merge_sha = 1;
+}
+
+message CreateBranchRequest {
+  string repo = 1;
+  string name = 2;
+  // from_ref is the branch, tag, or commit the new branch starts at. Empty
+  // means the repository's default branch.
+  string from_ref = 3;
+}
+message CreateBranchResponse {
+  Ref ref = 1;
+}
+
+// FileChange is one file written by a commit. Deleting is expressed by
+// setting deleted, because an empty content is a legitimate empty file.
+message FileChange {
+  string path = 1;
+  bytes content = 2;
+  bool deleted = 3;
+}
+
+message CreateCommitRequest {
+  string repo = 1;
+  string branch = 2;
+  string message = 3;
+  repeated FileChange files = 4;
+  string author_name = 5;
+  string author_email = 6;
+}
+message CreateCommitResponse {
+  string sha = 1;
 }

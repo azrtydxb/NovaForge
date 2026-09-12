@@ -1357,6 +1357,302 @@ func (x *MergeResponse) GetMergeSha() string {
 	return ""
 }
 
+type CreateBranchRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Repo  string                 `protobuf:"bytes,1,opt,name=repo,proto3" json:"repo,omitempty"`
+	Name  string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// from_ref is the branch, tag, or commit the new branch starts at. Empty
+	// means the repository's default branch.
+	FromRef       string `protobuf:"bytes,3,opt,name=from_ref,json=fromRef,proto3" json:"from_ref,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateBranchRequest) Reset() {
+	*x = CreateBranchRequest{}
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateBranchRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateBranchRequest) ProtoMessage() {}
+
+func (x *CreateBranchRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateBranchRequest.ProtoReflect.Descriptor instead.
+func (*CreateBranchRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_git_v1_git_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *CreateBranchRequest) GetRepo() string {
+	if x != nil {
+		return x.Repo
+	}
+	return ""
+}
+
+func (x *CreateBranchRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *CreateBranchRequest) GetFromRef() string {
+	if x != nil {
+		return x.FromRef
+	}
+	return ""
+}
+
+type CreateBranchResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ref           *Ref                   `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateBranchResponse) Reset() {
+	*x = CreateBranchResponse{}
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateBranchResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateBranchResponse) ProtoMessage() {}
+
+func (x *CreateBranchResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateBranchResponse.ProtoReflect.Descriptor instead.
+func (*CreateBranchResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_git_v1_git_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *CreateBranchResponse) GetRef() *Ref {
+	if x != nil {
+		return x.Ref
+	}
+	return nil
+}
+
+// FileChange is one file written by a commit. Deleting is expressed by
+// setting deleted, because an empty content is a legitimate empty file.
+type FileChange struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	Content       []byte                 `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"`
+	Deleted       bool                   `protobuf:"varint,3,opt,name=deleted,proto3" json:"deleted,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FileChange) Reset() {
+	*x = FileChange{}
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FileChange) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FileChange) ProtoMessage() {}
+
+func (x *FileChange) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FileChange.ProtoReflect.Descriptor instead.
+func (*FileChange) Descriptor() ([]byte, []int) {
+	return file_novaforge_git_v1_git_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *FileChange) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *FileChange) GetContent() []byte {
+	if x != nil {
+		return x.Content
+	}
+	return nil
+}
+
+func (x *FileChange) GetDeleted() bool {
+	if x != nil {
+		return x.Deleted
+	}
+	return false
+}
+
+type CreateCommitRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Repo          string                 `protobuf:"bytes,1,opt,name=repo,proto3" json:"repo,omitempty"`
+	Branch        string                 `protobuf:"bytes,2,opt,name=branch,proto3" json:"branch,omitempty"`
+	Message       string                 `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
+	Files         []*FileChange          `protobuf:"bytes,4,rep,name=files,proto3" json:"files,omitempty"`
+	AuthorName    string                 `protobuf:"bytes,5,opt,name=author_name,json=authorName,proto3" json:"author_name,omitempty"`
+	AuthorEmail   string                 `protobuf:"bytes,6,opt,name=author_email,json=authorEmail,proto3" json:"author_email,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateCommitRequest) Reset() {
+	*x = CreateCommitRequest{}
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateCommitRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateCommitRequest) ProtoMessage() {}
+
+func (x *CreateCommitRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateCommitRequest.ProtoReflect.Descriptor instead.
+func (*CreateCommitRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_git_v1_git_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *CreateCommitRequest) GetRepo() string {
+	if x != nil {
+		return x.Repo
+	}
+	return ""
+}
+
+func (x *CreateCommitRequest) GetBranch() string {
+	if x != nil {
+		return x.Branch
+	}
+	return ""
+}
+
+func (x *CreateCommitRequest) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *CreateCommitRequest) GetFiles() []*FileChange {
+	if x != nil {
+		return x.Files
+	}
+	return nil
+}
+
+func (x *CreateCommitRequest) GetAuthorName() string {
+	if x != nil {
+		return x.AuthorName
+	}
+	return ""
+}
+
+func (x *CreateCommitRequest) GetAuthorEmail() string {
+	if x != nil {
+		return x.AuthorEmail
+	}
+	return ""
+}
+
+type CreateCommitResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Sha           string                 `protobuf:"bytes,1,opt,name=sha,proto3" json:"sha,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateCommitResponse) Reset() {
+	*x = CreateCommitResponse{}
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateCommitResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateCommitResponse) ProtoMessage() {}
+
+func (x *CreateCommitResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateCommitResponse.ProtoReflect.Descriptor instead.
+func (*CreateCommitResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_git_v1_git_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *CreateCommitResponse) GetSha() string {
+	if x != nil {
+		return x.Sha
+	}
+	return ""
+}
+
 var File_novaforge_git_v1_git_proto protoreflect.FileDescriptor
 
 const file_novaforge_git_v1_git_proto_rawDesc = "" +
@@ -1440,7 +1736,28 @@ const file_novaforge_git_v1_git_proto_rawDesc = "" +
 	"\x06method\x18\x04 \x01(\tR\x06method\x12\x18\n" +
 	"\amessage\x18\x05 \x01(\tR\amessage\",\n" +
 	"\rMergeResponse\x12\x1b\n" +
-	"\tmerge_sha\x18\x01 \x01(\tR\bmergeSha2\xac\a\n" +
+	"\tmerge_sha\x18\x01 \x01(\tR\bmergeSha\"X\n" +
+	"\x13CreateBranchRequest\x12\x12\n" +
+	"\x04repo\x18\x01 \x01(\tR\x04repo\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x19\n" +
+	"\bfrom_ref\x18\x03 \x01(\tR\afromRef\"?\n" +
+	"\x14CreateBranchResponse\x12'\n" +
+	"\x03ref\x18\x01 \x01(\v2\x15.novaforge.git.v1.RefR\x03ref\"T\n" +
+	"\n" +
+	"FileChange\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12\x18\n" +
+	"\acontent\x18\x02 \x01(\fR\acontent\x12\x18\n" +
+	"\adeleted\x18\x03 \x01(\bR\adeleted\"\xd3\x01\n" +
+	"\x13CreateCommitRequest\x12\x12\n" +
+	"\x04repo\x18\x01 \x01(\tR\x04repo\x12\x16\n" +
+	"\x06branch\x18\x02 \x01(\tR\x06branch\x12\x18\n" +
+	"\amessage\x18\x03 \x01(\tR\amessage\x122\n" +
+	"\x05files\x18\x04 \x03(\v2\x1c.novaforge.git.v1.FileChangeR\x05files\x12\x1f\n" +
+	"\vauthor_name\x18\x05 \x01(\tR\n" +
+	"authorName\x12!\n" +
+	"\fauthor_email\x18\x06 \x01(\tR\vauthorEmail\"(\n" +
+	"\x14CreateCommitResponse\x12\x10\n" +
+	"\x03sha\x18\x01 \x01(\tR\x03sha2\xea\b\n" +
 	"\n" +
 	"GitService\x12W\n" +
 	"\n" +
@@ -1455,7 +1772,9 @@ const file_novaforge_git_v1_git_proto_rawDesc = "" +
 	"\aGetTree\x12 .novaforge.git.v1.GetTreeRequest\x1a!.novaforge.git.v1.GetTreeResponse\x12N\n" +
 	"\aGetBlob\x12 .novaforge.git.v1.GetBlobRequest\x1a!.novaforge.git.v1.GetBlobResponse\x12N\n" +
 	"\aGetDiff\x12 .novaforge.git.v1.GetDiffRequest\x1a!.novaforge.git.v1.GetDiffResponse\x12H\n" +
-	"\x05Merge\x12\x1e.novaforge.git.v1.MergeRequest\x1a\x1f.novaforge.git.v1.MergeResponseB\xbd\x01\n" +
+	"\x05Merge\x12\x1e.novaforge.git.v1.MergeRequest\x1a\x1f.novaforge.git.v1.MergeResponse\x12]\n" +
+	"\fCreateBranch\x12%.novaforge.git.v1.CreateBranchRequest\x1a&.novaforge.git.v1.CreateBranchResponse\x12]\n" +
+	"\fCreateCommit\x12%.novaforge.git.v1.CreateCommitRequest\x1a&.novaforge.git.v1.CreateCommitResponseB\xbd\x01\n" +
 	"\x14com.novaforge.git.v1B\bGitProtoP\x01Z9github.com/novaforge/novaforge/gen/novaforge/git/v1;gitv1\xa2\x02\x03NGX\xaa\x02\x10Novaforge.Git.V1\xca\x02\x10Novaforge\\Git\\V1\xe2\x02\x1cNovaforge\\Git\\V1\\GPBMetadata\xea\x02\x12Novaforge::Git::V1b\x06proto3"
 
 var (
@@ -1470,7 +1789,7 @@ func file_novaforge_git_v1_git_proto_rawDescGZIP() []byte {
 	return file_novaforge_git_v1_git_proto_rawDescData
 }
 
-var file_novaforge_git_v1_git_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
+var file_novaforge_git_v1_git_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_novaforge_git_v1_git_proto_goTypes = []any{
 	(*Repo)(nil),                 // 0: novaforge.git.v1.Repo
 	(*Ref)(nil),                  // 1: novaforge.git.v1.Ref
@@ -1498,6 +1817,11 @@ var file_novaforge_git_v1_git_proto_goTypes = []any{
 	(*GetDiffResponse)(nil),      // 23: novaforge.git.v1.GetDiffResponse
 	(*MergeRequest)(nil),         // 24: novaforge.git.v1.MergeRequest
 	(*MergeResponse)(nil),        // 25: novaforge.git.v1.MergeResponse
+	(*CreateBranchRequest)(nil),  // 26: novaforge.git.v1.CreateBranchRequest
+	(*CreateBranchResponse)(nil), // 27: novaforge.git.v1.CreateBranchResponse
+	(*FileChange)(nil),           // 28: novaforge.git.v1.FileChange
+	(*CreateCommitRequest)(nil),  // 29: novaforge.git.v1.CreateCommitRequest
+	(*CreateCommitResponse)(nil), // 30: novaforge.git.v1.CreateCommitResponse
 }
 var file_novaforge_git_v1_git_proto_depIdxs = []int32{
 	0,  // 0: novaforge.git.v1.CreateRepoResponse.repo:type_name -> novaforge.git.v1.Repo
@@ -1507,33 +1831,39 @@ var file_novaforge_git_v1_git_proto_depIdxs = []int32{
 	1,  // 4: novaforge.git.v1.ListTagsResponse.refs:type_name -> novaforge.git.v1.Ref
 	2,  // 5: novaforge.git.v1.ListCommitsResponse.commits:type_name -> novaforge.git.v1.Commit
 	3,  // 6: novaforge.git.v1.GetTreeResponse.entries:type_name -> novaforge.git.v1.TreeEntry
-	4,  // 7: novaforge.git.v1.GitService.CreateRepo:input_type -> novaforge.git.v1.CreateRepoRequest
-	6,  // 8: novaforge.git.v1.GitService.GetRepo:input_type -> novaforge.git.v1.GetRepoRequest
-	8,  // 9: novaforge.git.v1.GitService.ListRepos:input_type -> novaforge.git.v1.ListReposRequest
-	10, // 10: novaforge.git.v1.GitService.DeleteRepo:input_type -> novaforge.git.v1.DeleteRepoRequest
-	12, // 11: novaforge.git.v1.GitService.ListBranches:input_type -> novaforge.git.v1.ListBranchesRequest
-	14, // 12: novaforge.git.v1.GitService.ListTags:input_type -> novaforge.git.v1.ListTagsRequest
-	16, // 13: novaforge.git.v1.GitService.ListCommits:input_type -> novaforge.git.v1.ListCommitsRequest
-	18, // 14: novaforge.git.v1.GitService.GetTree:input_type -> novaforge.git.v1.GetTreeRequest
-	20, // 15: novaforge.git.v1.GitService.GetBlob:input_type -> novaforge.git.v1.GetBlobRequest
-	22, // 16: novaforge.git.v1.GitService.GetDiff:input_type -> novaforge.git.v1.GetDiffRequest
-	24, // 17: novaforge.git.v1.GitService.Merge:input_type -> novaforge.git.v1.MergeRequest
-	5,  // 18: novaforge.git.v1.GitService.CreateRepo:output_type -> novaforge.git.v1.CreateRepoResponse
-	7,  // 19: novaforge.git.v1.GitService.GetRepo:output_type -> novaforge.git.v1.GetRepoResponse
-	9,  // 20: novaforge.git.v1.GitService.ListRepos:output_type -> novaforge.git.v1.ListReposResponse
-	11, // 21: novaforge.git.v1.GitService.DeleteRepo:output_type -> novaforge.git.v1.DeleteRepoResponse
-	13, // 22: novaforge.git.v1.GitService.ListBranches:output_type -> novaforge.git.v1.ListBranchesResponse
-	15, // 23: novaforge.git.v1.GitService.ListTags:output_type -> novaforge.git.v1.ListTagsResponse
-	17, // 24: novaforge.git.v1.GitService.ListCommits:output_type -> novaforge.git.v1.ListCommitsResponse
-	19, // 25: novaforge.git.v1.GitService.GetTree:output_type -> novaforge.git.v1.GetTreeResponse
-	21, // 26: novaforge.git.v1.GitService.GetBlob:output_type -> novaforge.git.v1.GetBlobResponse
-	23, // 27: novaforge.git.v1.GitService.GetDiff:output_type -> novaforge.git.v1.GetDiffResponse
-	25, // 28: novaforge.git.v1.GitService.Merge:output_type -> novaforge.git.v1.MergeResponse
-	18, // [18:29] is the sub-list for method output_type
-	7,  // [7:18] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	1,  // 7: novaforge.git.v1.CreateBranchResponse.ref:type_name -> novaforge.git.v1.Ref
+	28, // 8: novaforge.git.v1.CreateCommitRequest.files:type_name -> novaforge.git.v1.FileChange
+	4,  // 9: novaforge.git.v1.GitService.CreateRepo:input_type -> novaforge.git.v1.CreateRepoRequest
+	6,  // 10: novaforge.git.v1.GitService.GetRepo:input_type -> novaforge.git.v1.GetRepoRequest
+	8,  // 11: novaforge.git.v1.GitService.ListRepos:input_type -> novaforge.git.v1.ListReposRequest
+	10, // 12: novaforge.git.v1.GitService.DeleteRepo:input_type -> novaforge.git.v1.DeleteRepoRequest
+	12, // 13: novaforge.git.v1.GitService.ListBranches:input_type -> novaforge.git.v1.ListBranchesRequest
+	14, // 14: novaforge.git.v1.GitService.ListTags:input_type -> novaforge.git.v1.ListTagsRequest
+	16, // 15: novaforge.git.v1.GitService.ListCommits:input_type -> novaforge.git.v1.ListCommitsRequest
+	18, // 16: novaforge.git.v1.GitService.GetTree:input_type -> novaforge.git.v1.GetTreeRequest
+	20, // 17: novaforge.git.v1.GitService.GetBlob:input_type -> novaforge.git.v1.GetBlobRequest
+	22, // 18: novaforge.git.v1.GitService.GetDiff:input_type -> novaforge.git.v1.GetDiffRequest
+	24, // 19: novaforge.git.v1.GitService.Merge:input_type -> novaforge.git.v1.MergeRequest
+	26, // 20: novaforge.git.v1.GitService.CreateBranch:input_type -> novaforge.git.v1.CreateBranchRequest
+	29, // 21: novaforge.git.v1.GitService.CreateCommit:input_type -> novaforge.git.v1.CreateCommitRequest
+	5,  // 22: novaforge.git.v1.GitService.CreateRepo:output_type -> novaforge.git.v1.CreateRepoResponse
+	7,  // 23: novaforge.git.v1.GitService.GetRepo:output_type -> novaforge.git.v1.GetRepoResponse
+	9,  // 24: novaforge.git.v1.GitService.ListRepos:output_type -> novaforge.git.v1.ListReposResponse
+	11, // 25: novaforge.git.v1.GitService.DeleteRepo:output_type -> novaforge.git.v1.DeleteRepoResponse
+	13, // 26: novaforge.git.v1.GitService.ListBranches:output_type -> novaforge.git.v1.ListBranchesResponse
+	15, // 27: novaforge.git.v1.GitService.ListTags:output_type -> novaforge.git.v1.ListTagsResponse
+	17, // 28: novaforge.git.v1.GitService.ListCommits:output_type -> novaforge.git.v1.ListCommitsResponse
+	19, // 29: novaforge.git.v1.GitService.GetTree:output_type -> novaforge.git.v1.GetTreeResponse
+	21, // 30: novaforge.git.v1.GitService.GetBlob:output_type -> novaforge.git.v1.GetBlobResponse
+	23, // 31: novaforge.git.v1.GitService.GetDiff:output_type -> novaforge.git.v1.GetDiffResponse
+	25, // 32: novaforge.git.v1.GitService.Merge:output_type -> novaforge.git.v1.MergeResponse
+	27, // 33: novaforge.git.v1.GitService.CreateBranch:output_type -> novaforge.git.v1.CreateBranchResponse
+	30, // 34: novaforge.git.v1.GitService.CreateCommit:output_type -> novaforge.git.v1.CreateCommitResponse
+	22, // [22:35] is the sub-list for method output_type
+	9,  // [9:22] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_novaforge_git_v1_git_proto_init() }
@@ -1547,7 +1877,7 @@ func file_novaforge_git_v1_git_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_novaforge_git_v1_git_proto_rawDesc), len(file_novaforge_git_v1_git_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   26,
+			NumMessages:   31,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

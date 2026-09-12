@@ -21,6 +21,7 @@ import (
 
 	agentsv1 "github.com/novaforge/novaforge/gen/novaforge/agents/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
+	graphv1 "github.com/novaforge/novaforge/gen/novaforge/graph/v1"
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
 	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
 	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
@@ -112,6 +113,22 @@ func main() {
 	}
 	defer workConn.Close()
 	workClient := workv1.NewWorkServiceClient(workConn)
+
+	// The graph service answers the three code-intelligence tools — search,
+	// symbol lookup, dependency lookup — that git-platform has no RPC for.
+	// Without it those tools report themselves unavailable rather than
+	// returning a plausible empty result.
+	var graphClient graphv1.GraphServiceClient
+	if cfg.GraphAddr != "" {
+		graphConn, err := grpc.NewClient(cfg.GraphAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			log.Fatalf("agent-runtime: dial engineering-graph: %v", err)
+		}
+		defer graphConn.Close()
+		graphClient = graphv1.NewGraphServiceClient(graphConn)
+	} else {
+		log.Println("agent-runtime: GRAPH_ADDR is unset; repo.search, repo.get_symbol and repo.get_dependencies will report themselves unavailable")
+	}
 	reviewsClient := reviewsv1.NewReviewsServiceClient(workConn)
 	_ = reviewsClient // reserved for the reviews-backed gate.status tool once ReviewsService grows a GateStatus RPC.
 
@@ -135,7 +152,7 @@ func main() {
 		log.Printf("agent-runtime: no in-cluster Kubernetes config available (%v); workspace provisioning and the reaper are disabled", err)
 	}
 
-	execute := newExecuteFunc(store, grants, audit, provisioner, gitClient, workClient, cfg)
+	execute := newExecuteFunc(store, grants, audit, provisioner, gitClient, graphClient, workClient, cfg)
 	grpcServer := agents.NewGRPCServer(store, grants, rdb, workClient, execute)
 
 	srv := grpc.NewServer(grpc.UnaryInterceptor(authInterceptor(identityClient)))
@@ -187,7 +204,7 @@ func runReaper(ctx context.Context, provisioner *workspace.Provisioner) {
 // runs the model/tool loop, persists the resulting terminal state, and
 // tears the workspace down. When provisioner is nil (no Kubernetes API
 // reachable), it returns nil so StartRun's degrade path applies instead.
-func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents.AuditLog, provisioner *workspace.Provisioner, gitClient gitv1.GitServiceClient, workClient workv1.WorkServiceClient, cfg service.Config) agents.ExecuteFunc {
+func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents.AuditLog, provisioner *workspace.Provisioner, gitClient gitv1.GitServiceClient, graphClient graphv1.GraphServiceClient, workClient workv1.WorkServiceClient, cfg service.Config) agents.ExecuteFunc {
 	if provisioner == nil {
 		return nil
 	}
@@ -232,7 +249,7 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 			Grant:         grant,
 			Budget:        budget,
 			WorkspaceRoot: "/workspace/" + ws.PodName,
-			Git:           newGitAdapter(gitClient),
+			Git:           newGitAdapter(gitClient, graphClient),
 			Work:          newWorkAdapter(workClient),
 		}, audit)
 

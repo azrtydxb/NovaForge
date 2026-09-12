@@ -25,6 +25,8 @@ const (
 	WorkService_AssignItem_FullMethodName    = "/novaforge.work.v1.WorkService/AssignItem"
 	WorkService_ListSubtasks_FullMethodName  = "/novaforge.work.v1.WorkService/ListSubtasks"
 	WorkService_DecomposeEpic_FullMethodName = "/novaforge.work.v1.WorkService/DecomposeEpic"
+	WorkService_AddComment_FullMethodName    = "/novaforge.work.v1.WorkService/AddComment"
+	WorkService_ListComments_FullMethodName  = "/novaforge.work.v1.WorkService/ListComments"
 )
 
 // WorkServiceClient is the client API for WorkService service.
@@ -41,6 +43,8 @@ type WorkServiceClient interface {
 	AssignItem(ctx context.Context, in *AssignItemRequest, opts ...grpc.CallOption) (*AssignItemResponse, error)
 	ListSubtasks(ctx context.Context, in *ListSubtasksRequest, opts ...grpc.CallOption) (*ListSubtasksResponse, error)
 	DecomposeEpic(ctx context.Context, in *DecomposeEpicRequest, opts ...grpc.CallOption) (*DecomposeEpicResponse, error)
+	AddComment(ctx context.Context, in *AddCommentRequest, opts ...grpc.CallOption) (*AddCommentResponse, error)
+	ListComments(ctx context.Context, in *ListCommentsRequest, opts ...grpc.CallOption) (*ListCommentsResponse, error)
 }
 
 type workServiceClient struct {
@@ -111,6 +115,26 @@ func (c *workServiceClient) DecomposeEpic(ctx context.Context, in *DecomposeEpic
 	return out, nil
 }
 
+func (c *workServiceClient) AddComment(ctx context.Context, in *AddCommentRequest, opts ...grpc.CallOption) (*AddCommentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddCommentResponse)
+	err := c.cc.Invoke(ctx, WorkService_AddComment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *workServiceClient) ListComments(ctx context.Context, in *ListCommentsRequest, opts ...grpc.CallOption) (*ListCommentsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListCommentsResponse)
+	err := c.cc.Invoke(ctx, WorkService_ListComments_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // WorkServiceServer is the server API for WorkService service.
 // All implementations should embed UnimplementedWorkServiceServer
 // for forward compatibility.
@@ -125,6 +149,8 @@ type WorkServiceServer interface {
 	AssignItem(context.Context, *AssignItemRequest) (*AssignItemResponse, error)
 	ListSubtasks(context.Context, *ListSubtasksRequest) (*ListSubtasksResponse, error)
 	DecomposeEpic(context.Context, *DecomposeEpicRequest) (*DecomposeEpicResponse, error)
+	AddComment(context.Context, *AddCommentRequest) (*AddCommentResponse, error)
+	ListComments(context.Context, *ListCommentsRequest) (*ListCommentsResponse, error)
 }
 
 // UnimplementedWorkServiceServer should be embedded to have
@@ -151,6 +177,12 @@ func (UnimplementedWorkServiceServer) ListSubtasks(context.Context, *ListSubtask
 }
 func (UnimplementedWorkServiceServer) DecomposeEpic(context.Context, *DecomposeEpicRequest) (*DecomposeEpicResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DecomposeEpic not implemented")
+}
+func (UnimplementedWorkServiceServer) AddComment(context.Context, *AddCommentRequest) (*AddCommentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddComment not implemented")
+}
+func (UnimplementedWorkServiceServer) ListComments(context.Context, *ListCommentsRequest) (*ListCommentsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListComments not implemented")
 }
 func (UnimplementedWorkServiceServer) testEmbeddedByValue() {}
 
@@ -280,6 +312,42 @@ func _WorkService_DecomposeEpic_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _WorkService_AddComment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddCommentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkServiceServer).AddComment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WorkService_AddComment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkServiceServer).AddComment(ctx, req.(*AddCommentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WorkService_ListComments_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListCommentsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkServiceServer).ListComments(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WorkService_ListComments_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkServiceServer).ListComments(ctx, req.(*ListCommentsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // WorkService_ServiceDesc is the grpc.ServiceDesc for WorkService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -310,6 +378,14 @@ var WorkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DecomposeEpic",
 			Handler:    _WorkService_DecomposeEpic_Handler,
+		},
+		{
+			MethodName: "AddComment",
+			Handler:    _WorkService_AddComment_Handler,
+		},
+		{
+			MethodName: "ListComments",
+			Handler:    _WorkService_ListComments_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

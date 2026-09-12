@@ -819,6 +819,276 @@ func (x *DecomposeEpicResponse) GetSubtasks() []*WorkItem {
 	return nil
 }
 
+// Comment is one entry in a Work Item's discussion thread. author_kind is
+// "user" or "agent", so a reader can always tell which wrote a line.
+type Comment struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	WorkItemId    string                 `protobuf:"bytes,2,opt,name=work_item_id,json=workItemId,proto3" json:"work_item_id,omitempty"`
+	AuthorId      string                 `protobuf:"bytes,3,opt,name=author_id,json=authorId,proto3" json:"author_id,omitempty"`
+	AuthorKind    string                 `protobuf:"bytes,4,opt,name=author_kind,json=authorKind,proto3" json:"author_kind,omitempty"`
+	Body          string                 `protobuf:"bytes,5,opt,name=body,proto3" json:"body,omitempty"`
+	CreatedAt     string                 `protobuf:"bytes,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Comment) Reset() {
+	*x = Comment{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Comment) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Comment) ProtoMessage() {}
+
+func (x *Comment) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Comment.ProtoReflect.Descriptor instead.
+func (*Comment) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *Comment) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *Comment) GetWorkItemId() string {
+	if x != nil {
+		return x.WorkItemId
+	}
+	return ""
+}
+
+func (x *Comment) GetAuthorId() string {
+	if x != nil {
+		return x.AuthorId
+	}
+	return ""
+}
+
+func (x *Comment) GetAuthorKind() string {
+	if x != nil {
+		return x.AuthorKind
+	}
+	return ""
+}
+
+func (x *Comment) GetBody() string {
+	if x != nil {
+		return x.Body
+	}
+	return ""
+}
+
+func (x *Comment) GetCreatedAt() string {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return ""
+}
+
+type AddCommentRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	WorkItemId    string                 `protobuf:"bytes,1,opt,name=work_item_id,json=workItemId,proto3" json:"work_item_id,omitempty"`
+	Body          string                 `protobuf:"bytes,2,opt,name=body,proto3" json:"body,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AddCommentRequest) Reset() {
+	*x = AddCommentRequest{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddCommentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddCommentRequest) ProtoMessage() {}
+
+func (x *AddCommentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddCommentRequest.ProtoReflect.Descriptor instead.
+func (*AddCommentRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *AddCommentRequest) GetWorkItemId() string {
+	if x != nil {
+		return x.WorkItemId
+	}
+	return ""
+}
+
+func (x *AddCommentRequest) GetBody() string {
+	if x != nil {
+		return x.Body
+	}
+	return ""
+}
+
+type AddCommentResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Comment       *Comment               `protobuf:"bytes,1,opt,name=comment,proto3" json:"comment,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AddCommentResponse) Reset() {
+	*x = AddCommentResponse{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddCommentResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddCommentResponse) ProtoMessage() {}
+
+func (x *AddCommentResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddCommentResponse.ProtoReflect.Descriptor instead.
+func (*AddCommentResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *AddCommentResponse) GetComment() *Comment {
+	if x != nil {
+		return x.Comment
+	}
+	return nil
+}
+
+type ListCommentsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	WorkItemId    string                 `protobuf:"bytes,1,opt,name=work_item_id,json=workItemId,proto3" json:"work_item_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListCommentsRequest) Reset() {
+	*x = ListCommentsRequest{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListCommentsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListCommentsRequest) ProtoMessage() {}
+
+func (x *ListCommentsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListCommentsRequest.ProtoReflect.Descriptor instead.
+func (*ListCommentsRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *ListCommentsRequest) GetWorkItemId() string {
+	if x != nil {
+		return x.WorkItemId
+	}
+	return ""
+}
+
+type ListCommentsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Comments      []*Comment             `protobuf:"bytes,1,rep,name=comments,proto3" json:"comments,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListCommentsResponse) Reset() {
+	*x = ListCommentsResponse{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListCommentsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListCommentsResponse) ProtoMessage() {}
+
+func (x *ListCommentsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListCommentsResponse.ProtoReflect.Descriptor instead.
+func (*ListCommentsResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *ListCommentsResponse) GetComments() []*Comment {
+	if x != nil {
+		return x.Comments
+	}
+	return nil
+}
+
 var File_novaforge_work_v1_work_proto protoreflect.FileDescriptor
 
 const file_novaforge_work_v1_work_proto_rawDesc = "" +
@@ -881,7 +1151,28 @@ const file_novaforge_work_v1_work_proto_rawDesc = "" +
 	"\x14DecomposeEpicRequest\x12\x19\n" +
 	"\bepic_key\x18\x01 \x01(\tR\aepicKey\"P\n" +
 	"\x15DecomposeEpicResponse\x127\n" +
-	"\bsubtasks\x18\x01 \x03(\v2\x1b.novaforge.work.v1.WorkItemR\bsubtasks2\xb2\x04\n" +
+	"\bsubtasks\x18\x01 \x03(\v2\x1b.novaforge.work.v1.WorkItemR\bsubtasks\"\xac\x01\n" +
+	"\aComment\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12 \n" +
+	"\fwork_item_id\x18\x02 \x01(\tR\n" +
+	"workItemId\x12\x1b\n" +
+	"\tauthor_id\x18\x03 \x01(\tR\bauthorId\x12\x1f\n" +
+	"\vauthor_kind\x18\x04 \x01(\tR\n" +
+	"authorKind\x12\x12\n" +
+	"\x04body\x18\x05 \x01(\tR\x04body\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x06 \x01(\tR\tcreatedAt\"I\n" +
+	"\x11AddCommentRequest\x12 \n" +
+	"\fwork_item_id\x18\x01 \x01(\tR\n" +
+	"workItemId\x12\x12\n" +
+	"\x04body\x18\x02 \x01(\tR\x04body\"J\n" +
+	"\x12AddCommentResponse\x124\n" +
+	"\acomment\x18\x01 \x01(\v2\x1a.novaforge.work.v1.CommentR\acomment\"7\n" +
+	"\x13ListCommentsRequest\x12 \n" +
+	"\fwork_item_id\x18\x01 \x01(\tR\n" +
+	"workItemId\"N\n" +
+	"\x14ListCommentsResponse\x126\n" +
+	"\bcomments\x18\x01 \x03(\v2\x1a.novaforge.work.v1.CommentR\bcomments2\xee\x05\n" +
 	"\vWorkService\x12Y\n" +
 	"\n" +
 	"CreateItem\x12$.novaforge.work.v1.CreateItemRequest\x1a%.novaforge.work.v1.CreateItemResponse\x12P\n" +
@@ -890,7 +1181,10 @@ const file_novaforge_work_v1_work_proto_rawDesc = "" +
 	"\n" +
 	"AssignItem\x12$.novaforge.work.v1.AssignItemRequest\x1a%.novaforge.work.v1.AssignItemResponse\x12_\n" +
 	"\fListSubtasks\x12&.novaforge.work.v1.ListSubtasksRequest\x1a'.novaforge.work.v1.ListSubtasksResponse\x12b\n" +
-	"\rDecomposeEpic\x12'.novaforge.work.v1.DecomposeEpicRequest\x1a(.novaforge.work.v1.DecomposeEpicResponseB\xc5\x01\n" +
+	"\rDecomposeEpic\x12'.novaforge.work.v1.DecomposeEpicRequest\x1a(.novaforge.work.v1.DecomposeEpicResponse\x12Y\n" +
+	"\n" +
+	"AddComment\x12$.novaforge.work.v1.AddCommentRequest\x1a%.novaforge.work.v1.AddCommentResponse\x12_\n" +
+	"\fListComments\x12&.novaforge.work.v1.ListCommentsRequest\x1a'.novaforge.work.v1.ListCommentsResponseB\xc5\x01\n" +
 	"\x15com.novaforge.work.v1B\tWorkProtoP\x01Z;github.com/novaforge/novaforge/gen/novaforge/work/v1;workv1\xa2\x02\x03NWX\xaa\x02\x11Novaforge.Work.V1\xca\x02\x11Novaforge\\Work\\V1\xe2\x02\x1dNovaforge\\Work\\V1\\GPBMetadata\xea\x02\x13Novaforge::Work::V1b\x06proto3"
 
 var (
@@ -905,7 +1199,7 @@ func file_novaforge_work_v1_work_proto_rawDescGZIP() []byte {
 	return file_novaforge_work_v1_work_proto_rawDescData
 }
 
-var file_novaforge_work_v1_work_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_novaforge_work_v1_work_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_novaforge_work_v1_work_proto_goTypes = []any{
 	(*WorkItem)(nil),              // 0: novaforge.work.v1.WorkItem
 	(*CreateItemRequest)(nil),     // 1: novaforge.work.v1.CreateItemRequest
@@ -921,6 +1215,11 @@ var file_novaforge_work_v1_work_proto_goTypes = []any{
 	(*ListSubtasksResponse)(nil),  // 11: novaforge.work.v1.ListSubtasksResponse
 	(*DecomposeEpicRequest)(nil),  // 12: novaforge.work.v1.DecomposeEpicRequest
 	(*DecomposeEpicResponse)(nil), // 13: novaforge.work.v1.DecomposeEpicResponse
+	(*Comment)(nil),               // 14: novaforge.work.v1.Comment
+	(*AddCommentRequest)(nil),     // 15: novaforge.work.v1.AddCommentRequest
+	(*AddCommentResponse)(nil),    // 16: novaforge.work.v1.AddCommentResponse
+	(*ListCommentsRequest)(nil),   // 17: novaforge.work.v1.ListCommentsRequest
+	(*ListCommentsResponse)(nil),  // 18: novaforge.work.v1.ListCommentsResponse
 }
 var file_novaforge_work_v1_work_proto_depIdxs = []int32{
 	0,  // 0: novaforge.work.v1.CreateItemResponse.item:type_name -> novaforge.work.v1.WorkItem
@@ -930,23 +1229,29 @@ var file_novaforge_work_v1_work_proto_depIdxs = []int32{
 	0,  // 4: novaforge.work.v1.Subtask.item:type_name -> novaforge.work.v1.WorkItem
 	9,  // 5: novaforge.work.v1.ListSubtasksResponse.subtasks:type_name -> novaforge.work.v1.Subtask
 	0,  // 6: novaforge.work.v1.DecomposeEpicResponse.subtasks:type_name -> novaforge.work.v1.WorkItem
-	1,  // 7: novaforge.work.v1.WorkService.CreateItem:input_type -> novaforge.work.v1.CreateItemRequest
-	3,  // 8: novaforge.work.v1.WorkService.GetItem:input_type -> novaforge.work.v1.GetItemRequest
-	5,  // 9: novaforge.work.v1.WorkService.ListItems:input_type -> novaforge.work.v1.ListItemsRequest
-	7,  // 10: novaforge.work.v1.WorkService.AssignItem:input_type -> novaforge.work.v1.AssignItemRequest
-	10, // 11: novaforge.work.v1.WorkService.ListSubtasks:input_type -> novaforge.work.v1.ListSubtasksRequest
-	12, // 12: novaforge.work.v1.WorkService.DecomposeEpic:input_type -> novaforge.work.v1.DecomposeEpicRequest
-	2,  // 13: novaforge.work.v1.WorkService.CreateItem:output_type -> novaforge.work.v1.CreateItemResponse
-	4,  // 14: novaforge.work.v1.WorkService.GetItem:output_type -> novaforge.work.v1.GetItemResponse
-	6,  // 15: novaforge.work.v1.WorkService.ListItems:output_type -> novaforge.work.v1.ListItemsResponse
-	8,  // 16: novaforge.work.v1.WorkService.AssignItem:output_type -> novaforge.work.v1.AssignItemResponse
-	11, // 17: novaforge.work.v1.WorkService.ListSubtasks:output_type -> novaforge.work.v1.ListSubtasksResponse
-	13, // 18: novaforge.work.v1.WorkService.DecomposeEpic:output_type -> novaforge.work.v1.DecomposeEpicResponse
-	13, // [13:19] is the sub-list for method output_type
-	7,  // [7:13] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	14, // 7: novaforge.work.v1.AddCommentResponse.comment:type_name -> novaforge.work.v1.Comment
+	14, // 8: novaforge.work.v1.ListCommentsResponse.comments:type_name -> novaforge.work.v1.Comment
+	1,  // 9: novaforge.work.v1.WorkService.CreateItem:input_type -> novaforge.work.v1.CreateItemRequest
+	3,  // 10: novaforge.work.v1.WorkService.GetItem:input_type -> novaforge.work.v1.GetItemRequest
+	5,  // 11: novaforge.work.v1.WorkService.ListItems:input_type -> novaforge.work.v1.ListItemsRequest
+	7,  // 12: novaforge.work.v1.WorkService.AssignItem:input_type -> novaforge.work.v1.AssignItemRequest
+	10, // 13: novaforge.work.v1.WorkService.ListSubtasks:input_type -> novaforge.work.v1.ListSubtasksRequest
+	12, // 14: novaforge.work.v1.WorkService.DecomposeEpic:input_type -> novaforge.work.v1.DecomposeEpicRequest
+	15, // 15: novaforge.work.v1.WorkService.AddComment:input_type -> novaforge.work.v1.AddCommentRequest
+	17, // 16: novaforge.work.v1.WorkService.ListComments:input_type -> novaforge.work.v1.ListCommentsRequest
+	2,  // 17: novaforge.work.v1.WorkService.CreateItem:output_type -> novaforge.work.v1.CreateItemResponse
+	4,  // 18: novaforge.work.v1.WorkService.GetItem:output_type -> novaforge.work.v1.GetItemResponse
+	6,  // 19: novaforge.work.v1.WorkService.ListItems:output_type -> novaforge.work.v1.ListItemsResponse
+	8,  // 20: novaforge.work.v1.WorkService.AssignItem:output_type -> novaforge.work.v1.AssignItemResponse
+	11, // 21: novaforge.work.v1.WorkService.ListSubtasks:output_type -> novaforge.work.v1.ListSubtasksResponse
+	13, // 22: novaforge.work.v1.WorkService.DecomposeEpic:output_type -> novaforge.work.v1.DecomposeEpicResponse
+	16, // 23: novaforge.work.v1.WorkService.AddComment:output_type -> novaforge.work.v1.AddCommentResponse
+	18, // 24: novaforge.work.v1.WorkService.ListComments:output_type -> novaforge.work.v1.ListCommentsResponse
+	17, // [17:25] is the sub-list for method output_type
+	9,  // [9:17] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_novaforge_work_v1_work_proto_init() }
@@ -960,7 +1265,7 @@ func file_novaforge_work_v1_work_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_novaforge_work_v1_work_proto_rawDesc), len(file_novaforge_work_v1_work_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   14,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
