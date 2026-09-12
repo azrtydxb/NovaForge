@@ -2,14 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, enc } from "../lib/api";
 import { useWorkspace } from "../lib/workspace";
-import {
-  Async,
-  Empty,
-  Page,
-  Panel,
-  PanelHead,
-  StatePill,
-} from "../components/ui";
+import { Async, Empty, Page, Panel, PanelHead, Pill } from "../components/ui";
 import { Dialog, NewButton } from "../components/Dialog";
 
 /** ROLES are the roles a decomposition may assign work to. They match
@@ -189,7 +182,14 @@ export function Agents() {
                           {s && s.running > 0 ? ` · ${s.running} running` : ""}
                         </div>
                       </span>
-                      <StatePill state={a.enabled ? "running" : "cancelled"} />
+                      <Pill
+                        bg={
+                          a.enabled ? "var(--ok-bg)" : "rgba(255,255,255,.07)"
+                        }
+                        fg={a.enabled ? "var(--ok)" : "var(--fg-muted)"}
+                      >
+                        {a.enabled ? "enabled" : "disabled"}
+                      </Pill>
                     </button>
                   );
                 })}

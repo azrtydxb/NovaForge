@@ -1,5 +1,10 @@
 import { useState } from "react";
-import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { api, enc } from "../lib/api";
 import { scopedRepos, useWorkspace } from "../lib/workspace";
 import {
@@ -12,7 +17,7 @@ import {
 } from "../components/ui";
 import { Row } from "./Home";
 import { Dialog, NewButton } from "../components/Dialog";
-import type { WorkItem } from "../lib/types";
+import type { Agent, WorkItem } from "../lib/types";
 
 /** TYPES is the closed set the work schema allows. Offering anything else
  * would be offering an item the platform will refuse to create. */
@@ -47,7 +52,37 @@ export function Work() {
   const repos = scopedRepos(w);
   const [filter, setFilter] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [starting, setStarting] = useState<{
+    repo: string;
+    key: string;
+  } | null>(null);
   const qc = useQueryClient();
+
+  // Agents are listed so a run can be started against a named one: the
+  // platform requires an agent id, and asking a person to paste a uuid would
+  // be asking them to do the lookup the application can do.
+  const agents = useQuery({
+    queryKey: ["agents", w.org],
+    queryFn: () =>
+      api.get<{ agents: Agent[] }>(`/api/v1/orgs/${enc(w.org!)}/agents`),
+    enabled: w.org !== null,
+  });
+  const enabledAgents = (agents.data?.agents ?? []).filter((a) => a.enabled);
+
+  const startRun = useMutation({
+    mutationFn: (v: Record<string, string>) => {
+      const agent = enabledAgents.find((a) => a.name === v.agent);
+      if (!agent) throw new Error("pick an agent");
+      return api.post(
+        `/api/v1/orgs/${enc(w.org!)}/repos/${enc(starting!.repo)}/agent-runs`,
+        { agent_id: agent.id, work_item_key: starting!.key },
+      );
+    },
+    onSuccess: () => {
+      setStarting(null);
+      qc.invalidateQueries();
+    },
+  });
 
   const create = useMutation({
     mutationFn: (v: Record<string, string>) =>
@@ -94,6 +129,26 @@ export function Work() {
         ) : null
       }
     >
+      {starting ? (
+        <Dialog
+          title={`Start an Agent Run on ${starting.key}`}
+          submitLabel="Start"
+          fields={[
+            {
+              name: "agent",
+              label: "Agent",
+              type: "select",
+              options: enabledAgents.map((a) => a.name),
+              required: true,
+              help: "The run is sponsored by you: an agent always has a human answerable for it.",
+            },
+          ]}
+          busy={startRun.isPending}
+          error={startRun.error}
+          onSubmit={(v) => startRun.mutate(v)}
+          onClose={() => setStarting(null)}
+        />
+      ) : null}
       {creating ? (
         <Dialog
           title="New Work Item"
@@ -167,6 +222,7 @@ export function Work() {
           <span style={{ width: 110 }}>REPOSITORY</span>
           <span style={{ width: 90 }}>ASSIGNEE</span>
           <span style={{ width: 90 }}>STATE</span>
+          <span style={{ width: 74 }} />
         </PanelHead>
         {loading ? (
           <Loading />
@@ -220,6 +276,24 @@ export function Work() {
               </span>
               <span style={{ width: 90 }}>
                 <StatePill state={item.state} />
+              </span>
+              <span style={{ width: 74 }}>
+                {item.state === "open" && enabledAgents.length > 0 ? (
+                  <button
+                    onClick={() => setStarting({ repo, key: item.key })}
+                    style={{
+                      padding: "4px 10px",
+                      border: "1px solid var(--line-2)",
+                      borderRadius: 7,
+                      background: "transparent",
+                      color: "var(--link)",
+                      font: "11px var(--sans)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Start
+                  </button>
+                ) : null}
               </span>
             </Row>
           ))
