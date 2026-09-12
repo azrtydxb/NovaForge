@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	civ1 "github.com/novaforge/novaforge/gen/novaforge/ci/v1"
+	"github.com/novaforge/novaforge/internal/authz"
 	"github.com/novaforge/novaforge/internal/ci"
 )
 
@@ -145,5 +146,93 @@ func TestClaimNeverCrossesOrganizations(t *testing.T) {
 	}
 	if job.RunCmd != "echo a" {
 		t.Fatalf("wrong job claimed: %+v", job)
+	}
+}
+
+// TestRunSettlesWhenItsJobsFinish pins the last seam in CI: a run is only as
+// finished as its jobs. Without the roll-up the final job went green and the
+// run stayed "running" forever, which is indistinguishable from a job that
+// never finished — and is exactly what the cluster showed.
+func TestRunSettlesWhenItsJobsFinish(t *testing.T) {
+	pool := ciPool(t)
+	store := ci.NewStore(pool)
+	ctx := context.Background()
+
+	orgID := uuid.New()
+	t.Cleanup(func() { cleanupOrgRuns(t, pool, orgID) })
+	ctx = authz.WithScope(ctx, authz.Scope{OrgID: orgID, ActorID: uuid.New(), ActorKind: "user"})
+
+	run, _, err := store.CreateRun(ctx, ci.Run{
+		OrgID: orgID, RepoID: uuid.New(), RepoName: "r",
+		CommitSHA: "deadbeef", Ref: "refs/heads/main", Status: "running",
+	})
+	if err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+	first, err := store.CreateJob(ctx, ci.WorkflowJob{RunID: run.ID, Name: "a", RunCmd: "true"})
+	if err != nil {
+		t.Fatalf("CreateJob: %v", err)
+	}
+	second, err := store.CreateJob(ctx, ci.WorkflowJob{RunID: run.ID, Name: "b", RunCmd: "true"})
+	if err != nil {
+		t.Fatalf("CreateJob: %v", err)
+	}
+
+	// One job done is not a finished run.
+	if err := store.SetJobStatus(ctx, first.ID, "success", ""); err != nil {
+		t.Fatalf("SetJobStatus: %v", err)
+	}
+	got, err := store.GetRun(ctx, run.ID)
+	if err != nil {
+		t.Fatalf("GetRun: %v", err)
+	}
+	if got.Status != "running" {
+		t.Fatalf("run settled while a job was still pending: %q", got.Status)
+	}
+
+	if err := store.SetJobStatus(ctx, second.ID, "success", ""); err != nil {
+		t.Fatalf("SetJobStatus: %v", err)
+	}
+	got, err = store.GetRun(ctx, run.ID)
+	if err != nil {
+		t.Fatalf("GetRun: %v", err)
+	}
+	if got.Status != "success" {
+		t.Fatalf("want the run to settle success once every job succeeded, got %q", got.Status)
+	}
+}
+
+// TestRunFailsWhenAnyJobFails keeps a green job from hiding a red one.
+func TestRunFailsWhenAnyJobFails(t *testing.T) {
+	pool := ciPool(t)
+	store := ci.NewStore(pool)
+	ctx := context.Background()
+
+	orgID := uuid.New()
+	t.Cleanup(func() { cleanupOrgRuns(t, pool, orgID) })
+	ctx = authz.WithScope(ctx, authz.Scope{OrgID: orgID, ActorID: uuid.New(), ActorKind: "user"})
+
+	run, _, err := store.CreateRun(ctx, ci.Run{
+		OrgID: orgID, RepoID: uuid.New(), RepoName: "r",
+		CommitSHA: "f00d", Ref: "refs/heads/main", Status: "running",
+	})
+	if err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+	ok, _ := store.CreateJob(ctx, ci.WorkflowJob{RunID: run.ID, Name: "ok", RunCmd: "true"})
+	bad, _ := store.CreateJob(ctx, ci.WorkflowJob{RunID: run.ID, Name: "bad", RunCmd: "false"})
+
+	if err := store.SetJobStatus(ctx, ok.ID, "success", ""); err != nil {
+		t.Fatalf("SetJobStatus: %v", err)
+	}
+	if err := store.SetJobStatus(ctx, bad.ID, "failure", "exit code 1"); err != nil {
+		t.Fatalf("SetJobStatus: %v", err)
+	}
+	got, err := store.GetRun(ctx, run.ID)
+	if err != nil {
+		t.Fatalf("GetRun: %v", err)
+	}
+	if got.Status != "failure" {
+		t.Fatalf("one failed job must fail the run, got %q", got.Status)
 	}
 }

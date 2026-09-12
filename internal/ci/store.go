@@ -268,6 +268,41 @@ func (s *Store) SetJobStatus(ctx context.Context, jobID uuid.UUID, status string
 	if tag.RowsAffected() == 0 {
 		return fmt.Errorf("job %s not found", jobID)
 	}
+	if terminal {
+		// A run is only as finished as its jobs. Without this the last job
+		// would go green and the run would stay "running" forever, which looks
+		// exactly like a job that never finished.
+		if err := s.rollUpRunStatus(ctx, jobID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// rollUpRunStatus settles the run a job belongs to once no job of that run is
+// still pending or running: failure if any job failed or was cancelled,
+// success otherwise.
+func (s *Store) rollUpRunStatus(ctx context.Context, jobID uuid.UUID) error {
+	_, err := s.pool.Exec(ctx, `
+		WITH r AS (
+		  SELECT run_id FROM ci.workflow_jobs WHERE id = $1
+		), state AS (
+		  SELECT
+		    bool_or(j.status IN ('pending', 'running')) AS unfinished,
+		    bool_or(j.status IN ('failure', 'cancelled')) AS bad
+		  FROM ci.workflow_jobs j
+		  JOIN r ON r.run_id = j.run_id
+		)
+		UPDATE ci.workflow_runs wr
+		SET status = CASE WHEN state.bad THEN 'failure' ELSE 'success' END
+		FROM r, state
+		WHERE wr.id = r.run_id
+		  AND NOT state.unfinished
+		  AND wr.status NOT IN ('success', 'failure', 'cancelled')`,
+		jobID)
+	if err != nil {
+		return fmt.Errorf("roll up run status: %w", err)
+	}
 	return nil
 }
 
