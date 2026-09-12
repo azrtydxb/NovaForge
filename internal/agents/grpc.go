@@ -3,6 +3,7 @@ package agents
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -214,7 +215,7 @@ func (g *GRPCServer) StartRun(ctx context.Context, req *agentsv1.StartRunRequest
 		WorkItemID:      workItemID,
 		SponsorID:       sponsorID,
 		GrantID:         issued.ID,
-		Branch:          issued.WriteBranch,
+		Branch:          RunBranch(issued.WriteBranch),
 		WallclockLimit:  time.Duration(req.GetWallclockLimitSeconds()) * time.Second,
 		TokenLimit:      req.GetTokenLimit(),
 		CostLimitMicros: req.GetCostLimitMicros(),
@@ -369,4 +370,26 @@ func decodeAgentEvent(values map[string]interface{}) (events.AgentEvent, bool) {
 		return events.AgentEvent{}, false
 	}
 	return evt, true
+}
+
+// runBranchLeaf is the branch a run works on beneath its grant's prefix.
+const runBranchLeaf = "work"
+
+// RunBranch turns a grant's write-branch PREFIX into a concrete branch name
+// the run can actually push.
+//
+// The grant allows everything under "agents/NF-1/", and the run used to
+// record that prefix as its branch. An agent told its branch was
+// "agents/NF-1/" cannot use it — a ref may not end in a slash — and every
+// sensible thing it tried instead ("agents/NF-1") fell outside the prefix
+// and was refused by the capability check. The run now names a real branch
+// inside its own grant.
+func RunBranch(writeBranch string) string {
+	if writeBranch == "" {
+		return ""
+	}
+	if strings.HasSuffix(writeBranch, "/") {
+		return writeBranch + runBranchLeaf
+	}
+	return writeBranch
 }

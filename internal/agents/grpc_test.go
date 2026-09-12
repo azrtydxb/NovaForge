@@ -3,6 +3,7 @@ package agents_test
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -96,8 +97,16 @@ func TestStartRunIssuesScopedGrant(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StartRun: %v", err)
 	}
-	if resp.GetRun().GetBranch() != "agents/NF-1/" {
-		t.Fatalf("StartRun grant WriteBranch = %q, want %q", resp.GetRun().GetBranch(), "agents/NF-1/")
+	// The grant allows a prefix; the run must name a real branch inside it.
+	// Recording the prefix itself as the branch gave the agent a ref it
+	// could not push (a ref may not end in a slash) and refused every
+	// sensible alternative it tried.
+	branch := resp.GetRun().GetBranch()
+	if branch == "agents/NF-1/" || strings.HasSuffix(branch, "/") {
+		t.Fatalf("StartRun recorded the grant's prefix %q as the run's branch, which is not a usable ref", branch)
+	}
+	if !strings.HasPrefix(branch, "agents/NF-1/") {
+		t.Fatalf("run branch %q is outside its grant's prefix %q", branch, "agents/NF-1/")
 	}
 
 	grantID, err := uuid.Parse(resp.GetRun().GetGrantId())
@@ -206,3 +215,30 @@ func (f *fakeStreamServer) Send(resp *agentsv1.StreamRunEventsResponse) error {
 }
 
 func (f *fakeStreamServer) Context() context.Context { return f.ctx }
+
+// TestRunBranchIsUsableUnderItsGrant pins a defect that made every agent
+// commit impossible. The capability grant allows a PREFIX — everything
+// under "agents/NF-1/" — and the run recorded that prefix as its branch. A
+// git ref may not end in a slash, so the agent could not use what it was
+// given, and the obvious alternative ("agents/NF-1") falls outside the
+// prefix and is refused. The run must name a real branch inside its own
+// grant.
+func TestRunBranchIsUsableUnderItsGrant(t *testing.T) {
+	grant := capability.Grant{WriteBranch: "agents/NF-1/"}
+	branch := agents.RunBranch(grant.WriteBranch)
+
+	if branch == "" || strings.HasSuffix(branch, "/") {
+		t.Fatalf("run branch %q is not a usable git ref", branch)
+	}
+	if err := capability.CanWriteRef(grant, "refs/heads/"+branch); err != nil {
+		t.Fatalf("the run's own branch is refused by its own grant: %v", err)
+	}
+}
+
+// TestRunBranchLeavesAConcretePrefixAlone pins that a grant already naming
+// one branch is not turned into a different one.
+func TestRunBranchLeavesAConcretePrefixAlone(t *testing.T) {
+	if got := agents.RunBranch("agents/NF-2/work"); got != "agents/NF-2/work" {
+		t.Fatalf("want the branch unchanged, got %q", got)
+	}
+}

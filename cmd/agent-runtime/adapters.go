@@ -7,6 +7,7 @@ import (
 
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	graphv1 "github.com/novaforge/novaforge/gen/novaforge/graph/v1"
+	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
 	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
 	"github.com/novaforge/novaforge/internal/tools"
 )
@@ -172,4 +173,56 @@ func (a *workAdapter) Comment(ctx context.Context, workItemID, body string) erro
 		return fmt.Errorf("comment on work item %s: %w", workItemID, err)
 	}
 	return nil
+}
+
+// graphAdapter satisfies tools.GraphClient over the engineering-graph gRPC
+// client, so architecture.query answers from the graph rather than
+// reporting itself unconfigured.
+type graphAdapter struct {
+	graph graphv1.GraphServiceClient
+}
+
+func newGraphAdapter(graph graphv1.GraphServiceClient) tools.GraphClient {
+	if graph == nil {
+		return nil
+	}
+	return &graphAdapter{graph: graph}
+}
+
+func (a *graphAdapter) Query(ctx context.Context, query string) ([]string, error) {
+	resp, err := a.graph.SearchKnowledge(ctx, &graphv1.SearchKnowledgeRequest{Query: query, K: searchHitLimit})
+	if err != nil {
+		return nil, fmt.Errorf("architecture query %q: %w", query, err)
+	}
+	out := make([]string, 0, len(resp.GetEntries()))
+	for _, e := range resp.GetEntries() {
+		out = append(out, e.GetTitle()+": "+e.GetBody())
+	}
+	return out, nil
+}
+
+// reviewsAdapter satisfies tools.ReviewsClient over the reviews gRPC
+// client. Per-gate proof lives on an Engineering Run, so gate.status is
+// answered from there rather than from the gates service directly.
+type reviewsAdapter struct {
+	reviews reviewsv1.ReviewsServiceClient
+}
+
+func newReviewsAdapter(reviews reviewsv1.ReviewsServiceClient) tools.ReviewsClient {
+	if reviews == nil {
+		return nil
+	}
+	return &reviewsAdapter{reviews: reviews}
+}
+
+func (a *reviewsAdapter) GateStatus(ctx context.Context, runID string) (map[string]string, error) {
+	resp, err := a.reviews.ListProof(ctx, &reviewsv1.ListProofRequest{RunId: runID})
+	if err != nil {
+		return nil, fmt.Errorf("gate status for run %s: %w", runID, err)
+	}
+	out := make(map[string]string, len(resp.GetProof()))
+	for _, p := range resp.GetProof() {
+		out[p.GetGate()] = p.GetStatus()
+	}
+	return out, nil
 }

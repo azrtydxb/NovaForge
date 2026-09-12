@@ -70,8 +70,21 @@ esac
 ok "run reached a terminal state: $STATE"
 
 echo "== 6. the run is on the record with its capability grant =="
-/tmp/nf agent get "$RUN" | grep -q "agents/$KEY/" || fail "the run does not carry the branch its grant scoped it to"
-ok "the run records the branch it was allowed to write"
+BRANCH="$(/tmp/nf agent get "$RUN" | awk '{print $3}')"
+case "$BRANCH" in
+agents/$KEY/*) ;;
+*) fail "the run's branch $BRANCH is not inside the grant prefix agents/$KEY/" ;;
+esac
+ok "the run records the branch it was allowed to write: $BRANCH"
+
+echo "== 7. the agent actually did the work =="
+# "succeeded" only means the model stopped asking for tools. The bar is
+# evidence: the agent's branch must exist, which it can only do if a commit
+# went through git.commit and the capability check let it.
+[ "$STATE" = "succeeded" ] || fail "the run ended $STATE, not succeeded"
+/tmp/nf repo branches "$REPO" 2>/dev/null | grep -q "$BRANCH" ||
+	fail "the agent's branch $BRANCH does not exist: nothing was committed"
+ok "the agent committed to $BRANCH"
 
 echo
 echo "PASS: an Agent Run executes end to end on the kw cluster (final state: $STATE)."

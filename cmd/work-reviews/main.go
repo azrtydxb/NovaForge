@@ -27,6 +27,7 @@ import (
 	"github.com/novaforge/novaforge/internal/database"
 	"github.com/novaforge/novaforge/internal/reviews"
 	"github.com/novaforge/novaforge/internal/service"
+	"github.com/novaforge/novaforge/internal/svcauth"
 	"github.com/novaforge/novaforge/internal/work"
 )
 
@@ -164,7 +165,14 @@ func main() {
 		log.Println("work-reviews: AGENTS_ADDR is unset; ready subtasks will not be started automatically")
 	}
 
-	srv := grpc.NewServer(grpc.UnaryInterceptor(authInterceptor(identityClient)))
+	// Callers are resolved the same way every service resolves them: a
+	// person's credential through identity, or a platform service token
+	// verified locally. Each service keeping its own copy of this is how two
+	// services end up disagreeing about who is allowed in — and they did:
+	// an agent run's service token was understood by git-platform and
+	// refused here, so every work.get an agent made was denied.
+	srv := grpc.NewServer(grpc.UnaryInterceptor(
+		svcauth.UnaryServerInterceptor(identityClient, cfg.HMACSecret)))
 	workv1.RegisterWorkServiceServer(srv, workServer)
 	reviewsv1.RegisterReviewsServiceServer(srv, reviewsServer)
 

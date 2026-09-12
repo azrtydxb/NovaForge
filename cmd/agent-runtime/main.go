@@ -142,7 +142,6 @@ func main() {
 		log.Println("agent-runtime: GRAPH_ADDR is unset; repo.search, repo.get_symbol and repo.get_dependencies will report themselves unavailable")
 	}
 	reviewsClient := reviewsv1.NewReviewsServiceClient(workConn)
-	_ = reviewsClient // reserved for the reviews-backed gate.status tool once ReviewsService grows a GateStatus RPC.
 
 	store := agents.NewStore(pool)
 	grants := capability.NewStore(pool)
@@ -164,7 +163,7 @@ func main() {
 		log.Printf("agent-runtime: no in-cluster Kubernetes config available (%v); workspace provisioning and the reaper are disabled", err)
 	}
 
-	execute := newExecuteFunc(store, grants, audit, provisioner, gitClient, graphClient, workClient, cfg)
+	execute := newExecuteFunc(store, grants, audit, provisioner, gitClient, graphClient, workClient, reviewsClient, cfg)
 	grpcServer := agents.NewGRPCServer(store, grants, rdb, workClient, execute)
 
 	// Callers are resolved the same way every other service resolves them:
@@ -222,7 +221,7 @@ func runReaper(ctx context.Context, provisioner *workspace.Provisioner) {
 // runs the model/tool loop, persists the resulting terminal state, and
 // tears the workspace down. When provisioner is nil (no Kubernetes API
 // reachable), it returns nil so StartRun's degrade path applies instead.
-func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents.AuditLog, provisioner *workspace.Provisioner, gitClient gitv1.GitServiceClient, graphClient graphv1.GraphServiceClient, workClient workv1.WorkServiceClient, cfg service.Config) agents.ExecuteFunc {
+func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents.AuditLog, provisioner *workspace.Provisioner, gitClient gitv1.GitServiceClient, graphClient graphv1.GraphServiceClient, workClient workv1.WorkServiceClient, reviewsClient reviewsv1.ReviewsServiceClient, cfg service.Config) agents.ExecuteFunc {
 	if provisioner == nil {
 		return nil
 	}
@@ -302,6 +301,8 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 			WorkspaceRoot: stage,
 			Git:           newGitAdapter(gitClient, graphClient),
 			Work:          newWorkAdapter(workClient),
+			Graph:         newGraphAdapter(graphClient),
+			Reviews:       newReviewsAdapter(reviewsClient),
 		}, audit)
 
 		loop := agentrun.NewLoop(model, budget, audit)

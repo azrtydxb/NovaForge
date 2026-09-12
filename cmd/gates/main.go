@@ -31,6 +31,7 @@ import (
 	"github.com/novaforge/novaforge/internal/gates"
 	"github.com/novaforge/novaforge/internal/secrets"
 	"github.com/novaforge/novaforge/internal/service"
+	"github.com/novaforge/novaforge/internal/svcauth"
 )
 
 // defaultGRPCPort is used when GRPC_PORT is not set in the environment.
@@ -117,7 +118,14 @@ func main() {
 
 	grpcServer := gates.NewGRPCServer(controller, approvalsStore, secretsBroker, grants)
 
-	srv := grpc.NewServer(grpc.UnaryInterceptor(authInterceptor(identityClient)))
+	// Callers are resolved the same way every service resolves them: a
+	// person's credential through identity, or a platform service token
+	// verified locally. Each service keeping its own copy of this is how two
+	// services end up disagreeing about who is allowed in — and they did:
+	// an agent run's service token was understood by git-platform and
+	// refused here, so every work.get an agent made was denied.
+	srv := grpc.NewServer(grpc.UnaryInterceptor(
+		svcauth.UnaryServerInterceptor(identityClient, cfg.HMACSecret)))
 	gatesv1.RegisterGatesServiceServer(srv, grpcServer)
 
 	check := func(ctx context.Context) error {
