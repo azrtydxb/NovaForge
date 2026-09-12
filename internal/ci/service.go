@@ -53,6 +53,10 @@ func NewService(pool *pgxpool.Pool, rdb *redis.Client, blobs *blobstore.Client, 
 	server.SetArtifactStore(artifacts)
 
 	scheduler := NewScheduler(rdb, store, git, SchedulerConfig{HMACSecret: hmacSecret})
+	// The query server schedules on demand through the same scheduler the
+	// push consumer uses, so a triggered run and a pushed run are built
+	// identically.
+	query.SetScheduler(scheduler, git)
 	pump := NewPump(store, dispatcher, cloneBase, hmacSecret)
 	sweeper := retention.NewSweeper(pool, blobs)
 

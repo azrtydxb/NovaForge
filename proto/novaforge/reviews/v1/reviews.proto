@@ -50,8 +50,13 @@ message CreateRunResponse {
   Run run = 1;
 }
 
+// GetRunRequest addresses a run either by its id or by the (repo_id,
+// number) pair people and tools use — "run #7 on this repository" is how a
+// run is referred to everywhere but the database.
 message GetRunRequest {
   string id = 1;
+  string repo_id = 2;
+  int32 number = 3;
 }
 
 message GetRunResponse {

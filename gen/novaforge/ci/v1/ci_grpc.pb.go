@@ -23,6 +23,7 @@ const (
 	CIService_GetRun_FullMethodName        = "/novaforge.ci.v1.CIService/GetRun"
 	CIService_GetJobLogs_FullMethodName    = "/novaforge.ci.v1.CIService/GetJobLogs"
 	CIService_ListArtifacts_FullMethodName = "/novaforge.ci.v1.CIService/ListArtifacts"
+	CIService_TriggerRun_FullMethodName    = "/novaforge.ci.v1.CIService/TriggerRun"
 )
 
 // CIServiceClient is the client API for CIService service.
@@ -41,6 +42,7 @@ type CIServiceClient interface {
 	GetRun(ctx context.Context, in *GetRunRequest, opts ...grpc.CallOption) (*GetRunResponse, error)
 	GetJobLogs(ctx context.Context, in *GetJobLogsRequest, opts ...grpc.CallOption) (*GetJobLogsResponse, error)
 	ListArtifacts(ctx context.Context, in *ListArtifactsRequest, opts ...grpc.CallOption) (*ListArtifactsResponse, error)
+	TriggerRun(ctx context.Context, in *TriggerRunRequest, opts ...grpc.CallOption) (*TriggerRunResponse, error)
 }
 
 type cIServiceClient struct {
@@ -91,6 +93,16 @@ func (c *cIServiceClient) ListArtifacts(ctx context.Context, in *ListArtifactsRe
 	return out, nil
 }
 
+func (c *cIServiceClient) TriggerRun(ctx context.Context, in *TriggerRunRequest, opts ...grpc.CallOption) (*TriggerRunResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TriggerRunResponse)
+	err := c.cc.Invoke(ctx, CIService_TriggerRun_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CIServiceServer is the server API for CIService service.
 // All implementations should embed UnimplementedCIServiceServer
 // for forward compatibility.
@@ -107,6 +119,7 @@ type CIServiceServer interface {
 	GetRun(context.Context, *GetRunRequest) (*GetRunResponse, error)
 	GetJobLogs(context.Context, *GetJobLogsRequest) (*GetJobLogsResponse, error)
 	ListArtifacts(context.Context, *ListArtifactsRequest) (*ListArtifactsResponse, error)
+	TriggerRun(context.Context, *TriggerRunRequest) (*TriggerRunResponse, error)
 }
 
 // UnimplementedCIServiceServer should be embedded to have
@@ -127,6 +140,9 @@ func (UnimplementedCIServiceServer) GetJobLogs(context.Context, *GetJobLogsReque
 }
 func (UnimplementedCIServiceServer) ListArtifacts(context.Context, *ListArtifactsRequest) (*ListArtifactsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListArtifacts not implemented")
+}
+func (UnimplementedCIServiceServer) TriggerRun(context.Context, *TriggerRunRequest) (*TriggerRunResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TriggerRun not implemented")
 }
 func (UnimplementedCIServiceServer) testEmbeddedByValue() {}
 
@@ -220,6 +236,24 @@ func _CIService_ListArtifacts_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CIService_TriggerRun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TriggerRunRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CIServiceServer).TriggerRun(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CIService_TriggerRun_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CIServiceServer).TriggerRun(ctx, req.(*TriggerRunRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // CIService_ServiceDesc is the grpc.ServiceDesc for CIService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -242,6 +276,10 @@ var CIService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListArtifacts",
 			Handler:    _CIService_ListArtifacts_Handler,
+		},
+		{
+			MethodName: "TriggerRun",
+			Handler:    _CIService_TriggerRun_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

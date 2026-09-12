@@ -128,6 +128,31 @@ func (s *Store) GetRun(ctx context.Context, id uuid.UUID) (Run, error) {
 	return run, nil
 }
 
+// GetRunForCommit returns the run already recorded for (repoID, commitSHA,
+// ref) — the uniqueness CreateRun's ON CONFLICT is keyed on. A caller that
+// asked for a run and found one already scheduled needs the run itself, not
+// the knowledge that one exists.
+func (s *Store) GetRunForCommit(ctx context.Context, repoID uuid.UUID, commitSHA, ref string) (Run, error) {
+	scope, err := authz.FromContext(ctx)
+	if err != nil {
+		return Run{}, err
+	}
+	var run Run
+	err = s.pool.QueryRow(ctx, `
+		SELECT id, org_id, repo_id, commit_sha, ref, status, created_at
+		FROM ci.workflow_runs
+		WHERE org_id = $1 AND repo_id = $2 AND commit_sha = $3 AND ref = $4`,
+		scope.OrgID, repoID, commitSHA, ref,
+	).Scan(&run.ID, &run.OrgID, &run.RepoID, &run.CommitSHA, &run.Ref, &run.Status, &run.CreatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Run{}, fmt.Errorf("no run for %s at %s: %w", ref, commitSHA, err)
+		}
+		return Run{}, fmt.Errorf("get run for commit: %w", err)
+	}
+	return run, nil
+}
+
 // ListRuns returns runs for orgID and repoID, most recent first.
 func (s *Store) ListRuns(ctx context.Context, orgID, repoID uuid.UUID) ([]Run, error) {
 	if err := authz.RequireOrg(ctx, orgID); err != nil {

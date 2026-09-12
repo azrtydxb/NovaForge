@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	civ1 "github.com/novaforge/novaforge/gen/novaforge/ci/v1"
+	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	"github.com/novaforge/novaforge/internal/authz"
 	"github.com/novaforge/novaforge/internal/blobstore"
 )
@@ -22,6 +23,11 @@ type QueryServer struct {
 	logs      *LogSink
 	artifacts *ArtifactStore
 	blobs     *blobstore.Client
+
+	// scheduler and git back TriggerRun; both are nil until SetScheduler is
+	// called, and TriggerRun says so rather than panicking.
+	scheduler *Scheduler
+	git       gitv1.GitServiceClient
 }
 
 // NewQueryServer wires the read side of CI.

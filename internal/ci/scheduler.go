@@ -208,17 +208,48 @@ func (s *Scheduler) handlePush(ctx context.Context, evt events.PushEvent) error 
 	if err != nil {
 		return err
 	}
+	if _, err := s.ScheduleRun(ctx, evt.OrgID, evt.RepoID, evt.RepoName, evt.Ref, evt.NewSHA); err != nil {
+		// A push to a repository with no workflow is the ordinary case, not
+		// a failure worth retrying the message for.
+		if errors.Is(err, ErrNoWorkflow) || errors.Is(err, ErrInvalidWorkflow) {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
 
+// ErrNoWorkflow reports that the commit being scheduled declares no
+// workflow, or declares one with no jobs. A push finding no workflow is
+// ordinary and silent; a person asking for a run on that same commit needs
+// to be told why nothing happened, which is why this is a value rather than
+// a nil return.
+var ErrNoWorkflow = errors.New("the commit declares no CI workflow")
+
+// ErrInvalidWorkflow reports a workflow file that does not parse. Like
+// ErrNoWorkflow it is terminal for the commit — redelivering the push would
+// re-read the same broken file — so the push consumer acks rather than
+// retrying, while a person who asked for the run is told what is wrong.
+var ErrInvalidWorkflow = errors.New("the commit's CI workflow is invalid")
+
+// ScheduleRun reads the workflow at commitSHA and creates the Run and its
+// Jobs. It is the single path a run is created by — a push event and an
+// on-demand request must schedule identically, or CI would behave
+// differently depending on how it was asked. ctx must already carry an
+// identity able to read the repository. The returned bool is false when the
+// run already existed, which is how an at-least-once redelivery of the same
+// push stays idempotent.
+func (s *Scheduler) ScheduleRun(ctx context.Context, orgID, repoID uuid.UUID, repoName, ref, commitSHA string) (Run, error) {
 	blob, err := s.git.GetBlob(ctx, &gitv1.GetBlobRequest{
-		Repo: evt.RepoID.String(),
-		Ref:  evt.NewSHA,
+		Repo: repoID.String(),
+		Ref:  commitSHA,
 		Path: workflowPath,
 	})
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
-			return nil
+			return Run{}, ErrNoWorkflow
 		}
-		return fmt.Errorf("fetch workflow: %w", err)
+		return Run{}, fmt.Errorf("fetch workflow: %w", err)
 	}
 
 	wf, err := ParseWorkflow(blob.Content)
@@ -226,27 +257,30 @@ func (s *Scheduler) handlePush(ctx context.Context, evt events.PushEvent) error 
 		// A workflow file that fails to parse cannot ever succeed on
 		// redelivery, so it is reported (for operator visibility) but not
 		// retried forever.
-		s.log.Error("ci scheduler: invalid workflow", "repo", evt.RepoID, "commit", evt.NewSHA, "error", err)
-		return nil
+		s.log.Error("ci scheduler: invalid workflow", "repo", repoID, "commit", commitSHA, "error", err)
+		return Run{}, fmt.Errorf("%w: %s: %v", ErrInvalidWorkflow, workflowPath, err)
 	}
 	if len(wf.Jobs) == 0 {
-		return nil
+		return Run{}, ErrNoWorkflow
 	}
 
 	run, created, err := s.store.CreateRun(ctx, Run{
-		OrgID:     evt.OrgID,
-		RepoID:    evt.RepoID,
-		RepoName:  evt.RepoName,
-		CommitSHA: evt.NewSHA,
-		Ref:       evt.Ref,
+		OrgID:     orgID,
+		RepoID:    repoID,
+		RepoName:  repoName,
+		CommitSHA: commitSHA,
+		Ref:       ref,
 	})
 	if err != nil {
-		return fmt.Errorf("create run: %w", err)
+		return Run{}, fmt.Errorf("create run: %w", err)
 	}
 	if !created {
 		// Already scheduled by an earlier, at-least-once delivery of the
-		// same event: nothing left to do.
-		return nil
+		// same event, or by an earlier request for the same commit. The
+		// existing run is read back rather than returning the zero value:
+		// a caller that asked for a run wants the run, and a redelivered
+		// push simply ignores it.
+		return s.store.GetRunForCommit(ctx, repoID, commitSHA, ref)
 	}
 
 	for name, job := range wf.Jobs {
@@ -261,10 +295,10 @@ func (s *Scheduler) handlePush(ctx context.Context, evt events.PushEvent) error 
 			// would ship its whole working tree, credentials included.
 			ArtifactPaths: job.Artifacts,
 		}); err != nil {
-			return fmt.Errorf("create job %q: %w", name, err)
+			return Run{}, fmt.Errorf("create job %q: %w", name, err)
 		}
 	}
-	return nil
+	return run, nil
 }
 
 // withServiceIdentity attaches this service's token for orgID to outgoing

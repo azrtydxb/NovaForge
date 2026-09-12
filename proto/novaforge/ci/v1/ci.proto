@@ -14,6 +14,7 @@ service CIService {
   rpc GetRun(GetRunRequest) returns (GetRunResponse);
   rpc GetJobLogs(GetJobLogsRequest) returns (GetJobLogsResponse);
   rpc ListArtifacts(ListArtifactsRequest) returns (ListArtifactsResponse);
+  rpc TriggerRun(TriggerRunRequest) returns (TriggerRunResponse);
 }
 
 service RunnerService {
@@ -145,4 +146,15 @@ message UploadArtifactRequest {
 }
 message UploadArtifactResponse {
   string artifact_id = 1;
+}
+
+// TriggerRunRequest asks for a run of the workflow at ref, on demand rather
+// than in response to a push. ref is a branch, tag, or commit; empty means
+// the repository's default branch.
+message TriggerRunRequest {
+  string repo_id = 1;
+  string ref = 2;
+}
+message TriggerRunResponse {
+  WorkflowRunSummary run = 1;
 }

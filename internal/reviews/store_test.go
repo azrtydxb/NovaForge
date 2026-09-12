@@ -164,3 +164,33 @@ func TestSecondReviewerApproves(t *testing.T) {
 		t.Fatalf("SubmitReview: %v", err)
 	}
 }
+
+// TestGetRunByNumber pins the addressing people and tools actually use —
+// "run #2 on this repository" — and that it stays inside the caller's
+// organization.
+func TestGetRunByNumber(t *testing.T) {
+	store := newStore(t)
+	orgA, orgB := uuid.New(), uuid.New()
+	repoID := uuid.New()
+	ctx := scopedCtx(orgA)
+
+	created, err := store.CreateRun(ctx, reviews.Run{
+		OrgID: orgA, RepoID: repoID, Title: "by number", SourceRef: "a", TargetRef: "main",
+		AuthorID: uuid.New(), AuthorKind: "user",
+	})
+	if err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+
+	got, err := store.GetRunByNumber(ctx, repoID, created.Number)
+	if err != nil {
+		t.Fatalf("GetRunByNumber: %v", err)
+	}
+	if got.ID != created.ID {
+		t.Fatalf("want run %s, got %s", created.ID, got.ID)
+	}
+
+	if _, err := store.GetRunByNumber(scopedCtx(orgB), repoID, created.Number); err == nil {
+		t.Fatal("another organization resolved this repository's run by number")
+	}
+}

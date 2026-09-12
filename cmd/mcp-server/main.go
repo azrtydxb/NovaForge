@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	civ1 "github.com/novaforge/novaforge/gen/novaforge/ci/v1"
 	gatesv1 "github.com/novaforge/novaforge/gen/novaforge/gates/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	graphv1 "github.com/novaforge/novaforge/gen/novaforge/graph/v1"
@@ -44,6 +45,9 @@ func main() {
 	if cfg.GraphAddr == "" {
 		log.Fatal("mcp-server: GRAPH_ADDR is required")
 	}
+	if cfg.CIAddr == "" {
+		log.Fatal("mcp-server: CI_ADDR is required")
+	}
 	if cfg.HTTPPort == 0 {
 		cfg.HTTPPort = defaultHTTPPort
 	}
@@ -66,6 +70,8 @@ func main() {
 	defer gatesConn.Close()
 	graphConn := dial("engineering-graph", cfg.GraphAddr)
 	defer graphConn.Close()
+	ciConn := dial("ci-runner", cfg.CIAddr)
+	defer ciConn.Close()
 
 	be := newBackend(
 		identityv1.NewIdentityServiceClient(identityConn),
@@ -74,6 +80,7 @@ func main() {
 		reviewsv1.NewReviewsServiceClient(workConn),
 		graphv1.NewGraphServiceClient(graphConn),
 		gatesv1.NewGatesServiceClient(gatesConn),
+		civ1.NewCIServiceClient(ciConn),
 	)
 	mcpServer := mcp.NewServer(be)
 	if token := os.Getenv("MCP_TOKEN"); token != "" {

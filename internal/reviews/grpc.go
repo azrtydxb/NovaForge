@@ -114,18 +114,30 @@ func (g *GRPCServer) CreateRun(ctx context.Context, req *reviewsv1.CreateRunRequ
 	return &reviewsv1.CreateRunResponse{Run: toProtoRun(run)}, nil
 }
 
-// GetRun looks up a run by id, refusing one that does not belong to the
-// caller's organization.
+// GetRun looks up a run by id, or by the (repo_id, number) pair people and
+// tools use, refusing one that does not belong to the caller's organization.
 func (g *GRPCServer) GetRun(ctx context.Context, req *reviewsv1.GetRunRequest) (*reviewsv1.GetRunResponse, error) {
 	orgID, err := callerOrg(ctx)
 	if err != nil {
 		return nil, err
 	}
-	id, err := parseUUID("id", req.GetId())
-	if err != nil {
-		return nil, err
+	var run Run
+	switch {
+	case req.GetId() != "":
+		id, perr := parseUUID("id", req.GetId())
+		if perr != nil {
+			return nil, perr
+		}
+		run, err = g.Store.GetRun(ctx, id)
+	case req.GetRepoId() != "" && req.GetNumber() > 0:
+		repoID, perr := parseUUID("repo_id", req.GetRepoId())
+		if perr != nil {
+			return nil, perr
+		}
+		run, err = g.Store.GetRunByNumber(ctx, repoID, int(req.GetNumber()))
+	default:
+		return nil, status.Error(codes.InvalidArgument, "one of id, or repo_id with a positive number, is required")
 	}
-	run, err := g.Store.GetRun(ctx, id)
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "get run: %v", err)
 	}

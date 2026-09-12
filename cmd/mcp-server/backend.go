@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/encoding/protojson"
 
+	civ1 "github.com/novaforge/novaforge/gen/novaforge/ci/v1"
 	gatesv1 "github.com/novaforge/novaforge/gen/novaforge/gates/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	graphv1 "github.com/novaforge/novaforge/gen/novaforge/graph/v1"
@@ -47,6 +48,7 @@ type backend struct {
 	reviews  reviewsv1.ReviewsServiceClient
 	graph    graphv1.GraphServiceClient
 	gates    gatesv1.GatesServiceClient
+	ci       civ1.CIServiceClient
 
 	mu     sync.Mutex
 	tokens map[string]cachedToken // key: caller.UserID + "|" + caller.OrgID
@@ -58,9 +60,9 @@ type cachedToken struct {
 	at         time.Time
 }
 
-func newBackend(identity identityv1.IdentityServiceClient, git gitv1.GitServiceClient, work workv1.WorkServiceClient, reviews reviewsv1.ReviewsServiceClient, graph graphv1.GraphServiceClient, gates gatesv1.GatesServiceClient) *backend {
+func newBackend(identity identityv1.IdentityServiceClient, git gitv1.GitServiceClient, work workv1.WorkServiceClient, reviews reviewsv1.ReviewsServiceClient, graph graphv1.GraphServiceClient, gates gatesv1.GatesServiceClient, ci civ1.CIServiceClient) *backend {
 	return &backend{
-		identity: identity, git: git, work: work, reviews: reviews, graph: graph, gates: gates,
+		identity: identity, git: git, work: work, reviews: reviews, graph: graph, gates: gates, ci: ci,
 		tokens: make(map[string]cachedToken),
 	}
 }
@@ -203,46 +205,93 @@ func (b *backend) GetSymbol(ctx context.Context, c mcp.Caller, org, repo, name s
 	return marshalOpts.Format(resp.GetSymbol()), nil
 }
 
-// CreateBranch has no backing RPC yet: git-platform's GitService (see
-// proto/novaforge/git/v1/git.proto, which this task does not touch) exposes
-// no branch-creation call. Reporting that honestly here is what the
-// tools.GitClient adapter in cmd/agent-runtime does for the same gap,
-// rather than fabricating a branch that was never created.
+// CreateBranch points a new branch at from, or at the repository's default
+// branch when from is empty.
 func (b *backend) CreateBranch(ctx context.Context, c mcp.Caller, org, repo, branch, from string) (string, error) {
 	if err := requireSameOrg(c, org); err != nil {
 		return "", err
 	}
-	return "", fmt.Errorf("git-platform has no branch-creation RPC yet")
+	authed, err := b.authedContext(ctx, c)
+	if err != nil {
+		return "", err
+	}
+	resp, err := b.git.CreateBranch(authed, &gitv1.CreateBranchRequest{Repo: repo, Name: branch, FromRef: from})
+	if err != nil {
+		return "", fmt.Errorf("create branch %q: %w", branch, err)
+	}
+	return marshalOpts.Format(resp.GetRef()), nil
 }
 
-// GetReview has no backing RPC yet: ReviewsService.GetRun (see
-// proto/novaforge/reviews/v1/reviews.proto) looks a run up by its id, and
-// nothing exposes a lookup by (repo, run number) — the shape this tool's
-// schema calls for.
+// GetReview looks a review run up as people address it — "run #7 on this
+// repository".
 func (b *backend) GetReview(ctx context.Context, c mcp.Caller, org, repo string, number int) (string, error) {
 	if err := requireSameOrg(c, org); err != nil {
 		return "", err
 	}
-	return "", fmt.Errorf("reviews service has no lookup-by-number RPC yet (run #%d)", number)
+	authed, err := b.authedContext(ctx, c)
+	if err != nil {
+		return "", err
+	}
+	run, err := b.reviewRunByNumber(authed, repo, number)
+	if err != nil {
+		return "", err
+	}
+	return marshalOpts.Format(run), nil
 }
 
-// RunCI has no backing RPC yet: ci-runner's only gRPC surface is
-// RunnerService (register/connect/report-status, see
-// proto/novaforge/ci/v1/ci.proto); CI runs are currently scheduled only in
-// response to a push event, not dispatched on demand.
+// reviewRunByNumber resolves (repo, number) to a run, which both GetReview
+// and GetGateStatus need — a gate evaluation is addressed by run id, but a
+// person names the run by its number.
+func (b *backend) reviewRunByNumber(authed context.Context, repo string, number int) (*reviewsv1.Run, error) {
+	repoID, err := b.resolveRepoID(authed, repo)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := b.reviews.GetRun(authed, &reviewsv1.GetRunRequest{RepoId: repoID, Number: int32(number)})
+	if err != nil {
+		return nil, fmt.Errorf("get review run #%d: %w", number, err)
+	}
+	return resp.GetRun(), nil
+}
+
+// RunCI schedules a run of the repository's workflow at ref, on demand.
 func (b *backend) RunCI(ctx context.Context, c mcp.Caller, org, repo, ref string) (string, error) {
 	if err := requireSameOrg(c, org); err != nil {
 		return "", err
 	}
-	return "", fmt.Errorf("ci-runner has no run-dispatch RPC yet; CI runs are scheduled automatically on push")
+	authed, err := b.authedContext(ctx, c)
+	if err != nil {
+		return "", err
+	}
+	repoID, err := b.resolveRepoID(authed, repo)
+	if err != nil {
+		return "", err
+	}
+	resp, err := b.ci.TriggerRun(authed, &civ1.TriggerRunRequest{RepoId: repoID, Ref: ref})
+	if err != nil {
+		return "", fmt.Errorf("trigger a CI run on %s: %w", repo, err)
+	}
+	return marshalOpts.Format(resp.GetRun()), nil
 }
 
-// GetGateStatus has no backing RPC that resolves by (repo, run number):
-// GatesService.ListEvaluations (see proto/novaforge/gates/v1/gates.proto)
-// takes a run id.
+// GetGateStatus reports the gate evaluations of a review run, addressed by
+// its number. The run is resolved first because gates are recorded against
+// a run id.
 func (b *backend) GetGateStatus(ctx context.Context, c mcp.Caller, org, repo string, number int) (string, error) {
 	if err := requireSameOrg(c, org); err != nil {
 		return "", err
 	}
-	return "", fmt.Errorf("gates service has no lookup-by-number RPC yet (run #%d)", number)
+	authed, err := b.authedContext(ctx, c)
+	if err != nil {
+		return "", err
+	}
+	run, err := b.reviewRunByNumber(authed, repo, number)
+	if err != nil {
+		return "", err
+	}
+	resp, err := b.gates.ListEvaluations(authed, &gatesv1.ListEvaluationsRequest{RunId: run.GetId()})
+	if err != nil {
+		return "", fmt.Errorf("list gate evaluations for run #%d: %w", number, err)
+	}
+	return marshalOpts.Format(resp), nil
 }

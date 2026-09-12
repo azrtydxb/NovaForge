@@ -156,6 +156,30 @@ func (s *Store) GetRun(ctx context.Context, id uuid.UUID) (Run, error) {
 	return run, nil
 }
 
+// GetRunByNumber looks a run up the way people and tools address it — "run
+// #7 on this repository" — rather than by its id. (repo_id, number) is
+// unique, and the organization predicate comes from the caller's scope, so
+// naming another organization's repository finds nothing rather than
+// leaking that the run exists.
+func (s *Store) GetRunByNumber(ctx context.Context, repoID uuid.UUID, number int) (Run, error) {
+	scope, err := authz.FromContext(ctx)
+	if err != nil {
+		return Run{}, err
+	}
+	var id uuid.UUID
+	err = s.pool.QueryRow(ctx, `
+		SELECT id FROM reviews.runs WHERE org_id = $1 AND repo_id = $2 AND number = $3`,
+		scope.OrgID, repoID, number,
+	).Scan(&id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Run{}, fmt.Errorf("run #%d not found in this repository: %w", number, err)
+		}
+		return Run{}, fmt.Errorf("get run by number: %w", err)
+	}
+	return s.GetRun(ctx, id)
+}
+
 // ListRuns returns runs for orgID and repoID, optionally filtered by state.
 func (s *Store) ListRuns(ctx context.Context, orgID, repoID uuid.UUID, state string) ([]Run, error) {
 	if err := authz.RequireOrg(ctx, orgID); err != nil {

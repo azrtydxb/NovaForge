@@ -322,9 +322,14 @@ func (x *CreateRunResponse) GetRun() *Run {
 	return nil
 }
 
+// GetRunRequest addresses a run either by its id or by the (repo_id,
+// number) pair people and tools use — "run #7 on this repository" is how a
+// run is referred to everywhere but the database.
 type GetRunRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	RepoId        string                 `protobuf:"bytes,2,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	Number        int32                  `protobuf:"varint,3,opt,name=number,proto3" json:"number,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -364,6 +369,20 @@ func (x *GetRunRequest) GetId() string {
 		return x.Id
 	}
 	return ""
+}
+
+func (x *GetRunRequest) GetRepoId() string {
+	if x != nil {
+		return x.RepoId
+	}
+	return ""
+}
+
+func (x *GetRunRequest) GetNumber() int32 {
+	if x != nil {
+		return x.Number
+	}
+	return 0
 }
 
 type GetRunResponse struct {
@@ -1249,9 +1268,11 @@ const file_novaforge_reviews_v1_reviews_proto_rawDesc = "" +
 	"\n" +
 	"model_name\x18\t \x01(\tR\tmodelName\"@\n" +
 	"\x11CreateRunResponse\x12+\n" +
-	"\x03run\x18\x01 \x01(\v2\x19.novaforge.reviews.v1.RunR\x03run\"\x1f\n" +
+	"\x03run\x18\x01 \x01(\v2\x19.novaforge.reviews.v1.RunR\x03run\"P\n" +
 	"\rGetRunRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"=\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
+	"\arepo_id\x18\x02 \x01(\tR\x06repoId\x12\x16\n" +
+	"\x06number\x18\x03 \x01(\x05R\x06number\"=\n" +
 	"\x0eGetRunResponse\x12+\n" +
 	"\x03run\x18\x01 \x01(\v2\x19.novaforge.reviews.v1.RunR\x03run\"@\n" +
 	"\x0fListRunsRequest\x12\x17\n" +
