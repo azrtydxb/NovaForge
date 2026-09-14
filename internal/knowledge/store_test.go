@@ -68,7 +68,7 @@ func TestRecordAndSearch(t *testing.T) {
 		Title:  "Never validate JWT tokens directly in route handlers",
 		Body:   "Route handlers must call the auth middleware, which owns token validation, instead of parsing JWTs themselves.",
 	}
-	saved, err := store.Record(ctx, entry, unitVector(768, 7))
+	saved, err := store.Record(ctx, entry, unitVector(knowledge.EmbeddingDim, 7))
 	if err != nil {
 		t.Fatalf("Record: %v", err)
 	}
@@ -76,7 +76,7 @@ func TestRecordAndSearch(t *testing.T) {
 		t.Fatal("Record did not assign an id")
 	}
 
-	got, err := store.Search(ctx, orgID, repoID, unitVector(768, 7), 5)
+	got, err := store.Search(ctx, orgID, repoID, unitVector(knowledge.EmbeddingDim, 7), 5)
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -100,14 +100,14 @@ func TestSupersededEntryExcludedFromSearch(t *testing.T) {
 	old, err := store.Record(ctx, knowledge.Entry{
 		OrgID: orgID, RepoID: repoID, Key: uniqueKey("old-pattern"),
 		Kind: "pattern", Title: "Old pattern", Body: "superseded body",
-	}, unitVector(768, 9))
+	}, unitVector(knowledge.EmbeddingDim, 9))
 	if err != nil {
 		t.Fatalf("Record old: %v", err)
 	}
 	newer, err := store.Record(ctx, knowledge.Entry{
 		OrgID: orgID, RepoID: repoID, Key: uniqueKey("new-pattern"),
 		Kind: "pattern", Title: "New pattern", Body: "replacement body",
-	}, unitVector(768, 9))
+	}, unitVector(knowledge.EmbeddingDim, 9))
 	if err != nil {
 		t.Fatalf("Record new: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestSupersededEntryExcludedFromSearch(t *testing.T) {
 		t.Fatalf("Supersede: %v", err)
 	}
 
-	results, err := store.Search(ctx, orgID, repoID, unitVector(768, 9), 10)
+	results, err := store.Search(ctx, orgID, repoID, unitVector(knowledge.EmbeddingDim, 9), 10)
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -142,7 +142,7 @@ func TestKnowledgeIsRepoScoped(t *testing.T) {
 	repoB := uuid.New()
 	ctx := scopedCtx(orgID, uuid.New())
 
-	v := unitVector(768, 11)
+	v := unitVector(knowledge.EmbeddingDim, 11)
 	_, err := store.Record(ctx, knowledge.Entry{
 		OrgID: orgID, RepoID: repoB, Key: uniqueKey("repoB-entry"),
 		Kind: "operational", Title: "Repo B only", Body: "belongs to repo B",
@@ -171,7 +171,7 @@ func TestCorrectionRecordsSourceRun(t *testing.T) {
 		OrgID: orgID, RepoID: repoID, Key: uniqueKey("correction"),
 		Kind: "correction", Title: "Fixed flaky retry loop", Body: "Root cause was...",
 		SourceRunID: &runID,
-	}, unitVector(768, 13))
+	}, unitVector(knowledge.EmbeddingDim, 13))
 	if err != nil {
 		t.Fatalf("Record: %v", err)
 	}

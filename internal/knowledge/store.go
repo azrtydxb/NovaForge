@@ -19,9 +19,13 @@ import (
 	"github.com/novaforge/novaforge/internal/authz"
 )
 
-// embeddingDim is the fixed vector width knowledge_entries stores, matching
-// the migration's vector(768) column.
-const embeddingDim = 768
+// EmbeddingDim is the fixed vector width knowledge_entries (and the graph's
+// code_chunks) store, matching the vector(1024) columns of their migrations:
+// the width of bge-m3, the embedding model the platform's gateway serves. It
+// was 768, which no served model produces.
+const EmbeddingDim = 1024
+
+const embeddingDim = EmbeddingDim
 
 // Entry is a row in knowledge_entries. Kind is one of decision, pattern,
 // incident, correction, or operational.

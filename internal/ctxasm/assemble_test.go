@@ -63,11 +63,11 @@ func scopedCtx(orgID uuid.UUID) context.Context {
 	return authz.WithScope(context.Background(), authz.Scope{OrgID: orgID, ActorKind: "user"})
 }
 
-// unitVector returns a deterministic 768-dim embedding stand-in — a
+// unitVector returns a deterministic EmbeddingDim-wide embedding stand-in — a
 // legitimate in-process double for an external embedding model.
 func unitVector(hot int) []float32 {
-	v := make([]float32, 768)
-	v[hot%768] = 1
+	v := make([]float32, graph.EmbeddingDim)
+	v[hot%graph.EmbeddingDim] = 1
 	return v
 }
 

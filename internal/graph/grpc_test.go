@@ -187,7 +187,7 @@ func TestSearchCodeFallsBackToLexicalWithoutEmbedder(t *testing.T) {
 	// server's own store pool for the vector store to keep data visible to
 	// the RPC under test.
 	vs = graph.NewVectorStore(srv.Store.Pool())
-	placeholderEmbedding := make([]float32, 768)
+	placeholderEmbedding := make([]float32, graph.EmbeddingDim)
 	if err := vs.Upsert(ctx, orgID, repoID, "pkg/search.go", []graph.Chunk{
 		{ID: uuid.New(), Path: "pkg/search.go", StartLine: 1, EndLine: 3, Text: "func FindWidget locates a widget by id", Embedding: placeholderEmbedding},
 	}); err != nil {

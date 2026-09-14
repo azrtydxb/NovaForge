@@ -2,6 +2,7 @@ package graph
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -12,14 +13,28 @@ import (
 
 	aisdk "github.com/azrtydxb/go-ai-sdk/ai"
 	"github.com/azrtydxb/go-ai-sdk/provider"
-	"github.com/azrtydxb/go-ai-sdk/providers/openai"
+	"github.com/azrtydxb/go-ai-sdk/providers/gateway"
 
 	"github.com/novaforge/novaforge/internal/authz"
+	"github.com/novaforge/novaforge/internal/knowledge"
 )
 
-// embeddingDim is the fixed vector width code_chunks stores, matching the
-// migration's vector(768) column.
-const embeddingDim = 768
+// EmbeddingDim is the fixed vector width code_chunks and knowledge_entries
+// store, matching the vector(1024) columns of their migrations.
+//
+// It was 768, a width chosen with no model in mind. The embedding model this
+// platform's gateway serves is bge-m3, which answers with 1024 dimensions, so
+// Upsert refused every chunk the indexer produced and semantic search had
+// nothing to search — one log line per file, indistinguishable from an idle
+// index. A model of another width is a schema change; VerifyEmbedder reports
+// a mismatch when the service starts.
+//
+// It is knowledge's constant, not a second copy: one embedder writes both
+// tables, so two widths that could drift apart would be a way for one of them
+// to go dark without the other.
+const EmbeddingDim = knowledge.EmbeddingDim
+
+const embeddingDim = EmbeddingDim
 
 // Embedder turns source text into embedding vectors. NovaForge contains no
 // provider-specific AI logic: every implementation goes through go-ai-sdk,
@@ -29,11 +44,11 @@ type Embedder interface {
 	Embed(ctx context.Context, chunks []string) ([][]float32, error)
 }
 
-// EndpointEmbedder calls an OpenAI-compatible embedding endpoint through
-// go-ai-sdk's openai-compatible provider, configured by EMBED_ENDPOINT (the
-// server's base URL) and EMBED_MODEL (the model name it exposes). An
-// air-gapped deployment points EMBED_ENDPOINT at its own local model server
-// and nothing in NovaForge names a hosted provider.
+// EndpointEmbedder calls an embedding model through go-ai-sdk's gateway
+// provider — the one provider every model call in NovaForge goes through —
+// configured by EMBED_ENDPOINT (the gateway's base URL) and EMBED_MODEL (the
+// model name it routes). An air-gapped deployment points EMBED_ENDPOINT at
+// its own local gateway and nothing in NovaForge names a hosted provider.
 type EndpointEmbedder struct {
 	model provider.EmbeddingModel
 }
@@ -41,7 +56,12 @@ type EndpointEmbedder struct {
 // NewEndpointEmbedder builds an EndpointEmbedder from EMBED_ENDPOINT and
 // EMBED_MODEL, returning an error if either is unset so a misconfigured
 // deployment fails fast rather than silently calling a hosted default.
-// EMBED_API_KEY is optional — most local, air-gapped endpoints require none.
+//
+// The credential is EMBED_API_KEY, or AI_API_KEY when that is unset. The
+// fallback is the fix for a real defect: embeddings are served by the same
+// gateway as chat, behind the same credential, and the chart only ever sets
+// AI_API_KEY — so the embedder called an authenticating gateway with no
+// credential, every embed was refused, and nothing was ever indexed.
 func NewEndpointEmbedder() (*EndpointEmbedder, error) {
 	endpoint := os.Getenv("EMBED_ENDPOINT")
 	model := os.Getenv("EMBED_MODEL")
@@ -51,9 +71,38 @@ func NewEndpointEmbedder() (*EndpointEmbedder, error) {
 	if model == "" {
 		return nil, fmt.Errorf("EMBED_MODEL is not set")
 	}
-	p := openai.New(openai.WithBaseURL(endpoint), openai.WithAPIKey(os.Getenv("EMBED_API_KEY")))
+	key := os.Getenv("EMBED_API_KEY")
+	if key == "" {
+		key = os.Getenv("AI_API_KEY")
+	}
+	p := gateway.New(gateway.WithBaseURL(endpoint), gateway.WithAPIKey(key))
 	return &EndpointEmbedder{model: p.EmbeddingModel(model)}, nil
 }
+
+// VerifyEmbedder embeds one probe string and checks the model answers with
+// EmbeddingDim dimensions. A model of the wrong width cannot store a single
+// chunk, and finding that out per file, one log line per push, is how it went
+// unnoticed; a service that checks at startup can say so once, loudly.
+func VerifyEmbedder(ctx context.Context, e Embedder) error {
+	vecs, err := e.Embed(ctx, []string{"dimension probe"})
+	if err != nil {
+		return fmt.Errorf("probe embedding model: %w", err)
+	}
+	if len(vecs) != 1 {
+		return fmt.Errorf("probe embedding model: got %d vectors for one input", len(vecs))
+	}
+	if len(vecs[0]) != EmbeddingDim {
+		return fmt.Errorf("%w: the model answers with %d dimensions but the schema stores %d; "+
+			"point EMBED_MODEL at a %d-dimension model or migrate the vector columns",
+			ErrEmbeddingWidth, len(vecs[0]), EmbeddingDim, EmbeddingDim)
+	}
+	return nil
+}
+
+// ErrEmbeddingWidth is VerifyEmbedder's error for a model whose vectors the
+// schema cannot store. Unlike an unreachable gateway, it does not get better by
+// waiting.
+var ErrEmbeddingWidth = errors.New("embedding width mismatch")
 
 // Embed satisfies Embedder by calling go-ai-sdk's EmbedMany against the
 // configured OpenAI-compatible model, converting its []float64 embeddings
