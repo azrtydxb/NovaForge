@@ -70,7 +70,7 @@ type stubEmbedder struct{}
 func (stubEmbedder) Embed(_ context.Context, chunks []string) ([][]float32, error) {
 	out := make([][]float32, len(chunks))
 	for i := range chunks {
-		out[i] = make([]float32, 768)
+		out[i] = make([]float32, graph.EmbeddingDim)
 	}
 	return out, nil
 }
@@ -327,6 +327,7 @@ func TestRunConsumesPushEventsAndAcks(t *testing.T) {
 
 	idx := newIndexer(t, git)
 	idx.RDB = rdb
+	idx.HMACSecret = testHMACSecret
 	idx.Consumer = "test-consumer-" + uuid.NewString()
 
 	// Run consumes events.StreamGitPush by its fixed name, so this test

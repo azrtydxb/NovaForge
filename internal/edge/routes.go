@@ -85,6 +85,7 @@ func Routes() []Route {
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/ci/jobs/{id}/artifacts", "listJobArtifacts", "One job's artifacts"},
 
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/knowledge", "searchKnowledge", "Project knowledge for a repository"},
+		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/search", "searchCode", "Search a repository's indexed code by meaning"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/graph/symbol", "getSymbolRelations", "A symbol and what it relates to"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/maintenance", "listMaintenanceProposals", "What the maintenance scanners proposed"},
 

@@ -27,7 +27,7 @@ func (e *stubEmbedder) Embed(ctx context.Context, chunks []string) ([][]float32,
 		}
 		v, ok := e.vectors[c]
 		if !ok {
-			v = make([]float32, 768)
+			v = make([]float32, graph.EmbeddingDim)
 		}
 		out[i] = v
 	}
@@ -51,10 +51,10 @@ func TestSearchRanksNearestFirst(t *testing.T) {
 	repoID := uuid.New()
 	ctx := scopedCtx(orgID, uuid.New())
 
-	near := unitVector(768, 0)
-	mid := unitVector(768, 0)
+	near := unitVector(graph.EmbeddingDim, 0)
+	mid := unitVector(graph.EmbeddingDim, 0)
 	mid[1] = 1 // 45 degrees off axis 0
-	far := unitVector(768, 1)
+	far := unitVector(graph.EmbeddingDim, 1)
 
 	chunks := []graph.Chunk{
 		{ID: uuid.New(), Path: "far.go", StartLine: 1, EndLine: 2, Text: "far", Embedding: far},
@@ -65,7 +65,7 @@ func TestSearchRanksNearestFirst(t *testing.T) {
 		t.Fatalf("Upsert: %v", err)
 	}
 
-	got, err := vs.Search(ctx, orgID, repoID, unitVector(768, 0), 3)
+	got, err := vs.Search(ctx, orgID, repoID, unitVector(graph.EmbeddingDim, 0), 3)
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestSearchIsOrgScoped(t *testing.T) {
 	ctxA := scopedCtx(orgA, uuid.New())
 	ctxB := scopedCtx(orgB, uuid.New())
 
-	v := unitVector(768, 5)
+	v := unitVector(graph.EmbeddingDim, 5)
 	chunk := graph.Chunk{ID: uuid.New(), Path: "shared.go", StartLine: 1, EndLine: 1, Text: "same text", Embedding: v}
 
 	if err := vs.Upsert(ctxA, orgA, repoID, "shared.go", []graph.Chunk{chunk}); err != nil {
@@ -120,21 +120,21 @@ func TestUpsertReplacesChunksForPath(t *testing.T) {
 	path := "internal/foo/replace.go"
 
 	first := []graph.Chunk{
-		{ID: uuid.New(), Path: path, StartLine: 1, EndLine: 10, Text: "one", Embedding: unitVector(768, 2)},
-		{ID: uuid.New(), Path: path, StartLine: 11, EndLine: 20, Text: "two", Embedding: unitVector(768, 3)},
+		{ID: uuid.New(), Path: path, StartLine: 1, EndLine: 10, Text: "one", Embedding: unitVector(graph.EmbeddingDim, 2)},
+		{ID: uuid.New(), Path: path, StartLine: 11, EndLine: 20, Text: "two", Embedding: unitVector(graph.EmbeddingDim, 3)},
 	}
 	if err := vs.Upsert(ctx, orgID, repoID, path, first); err != nil {
 		t.Fatalf("Upsert 1: %v", err)
 	}
 
 	second := []graph.Chunk{
-		{ID: uuid.New(), Path: path, StartLine: 1, EndLine: 30, Text: "only", Embedding: unitVector(768, 4)},
+		{ID: uuid.New(), Path: path, StartLine: 1, EndLine: 30, Text: "only", Embedding: unitVector(graph.EmbeddingDim, 4)},
 	}
 	if err := vs.Upsert(ctx, orgID, repoID, path, second); err != nil {
 		t.Fatalf("Upsert 2: %v", err)
 	}
 
-	got, err := vs.Search(ctx, orgID, repoID, unitVector(768, 4), 10)
+	got, err := vs.Search(ctx, orgID, repoID, unitVector(graph.EmbeddingDim, 4), 10)
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestEmbedderFailureIsNotFatal(t *testing.T) {
 	path := "internal/foo/bad.go"
 
 	pre := []graph.Chunk{
-		{ID: uuid.New(), Path: path, StartLine: 1, EndLine: 5, Text: "kept", Embedding: unitVector(768, 6)},
+		{ID: uuid.New(), Path: path, StartLine: 1, EndLine: 5, Text: "kept", Embedding: unitVector(graph.EmbeddingDim, 6)},
 	}
 	if err := vs.Upsert(ctx, orgID, repoID, path, pre); err != nil {
 		t.Fatalf("Upsert pre: %v", err)
@@ -169,7 +169,7 @@ func TestEmbedderFailureIsNotFatal(t *testing.T) {
 	// The relational index (this path's existing chunks) must be untouched
 	// by an embedder failure: no partial write occurred because Upsert was
 	// never called with the failed embedding.
-	got, serr := vs.Search(ctx, orgID, repoID, unitVector(768, 6), 10)
+	got, serr := vs.Search(ctx, orgID, repoID, unitVector(graph.EmbeddingDim, 6), 10)
 	if serr != nil {
 		t.Fatalf("Search: %v", serr)
 	}

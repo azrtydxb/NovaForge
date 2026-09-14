@@ -187,7 +187,7 @@ func TestSearchCodeFallsBackToLexicalWithoutEmbedder(t *testing.T) {
 	// server's own store pool for the vector store to keep data visible to
 	// the RPC under test.
 	vs = graph.NewVectorStore(srv.Store.Pool())
-	placeholderEmbedding := make([]float32, 768)
+	placeholderEmbedding := make([]float32, graph.EmbeddingDim)
 	if err := vs.Upsert(ctx, orgID, repoID, "pkg/search.go", []graph.Chunk{
 		{ID: uuid.New(), Path: "pkg/search.go", StartLine: 1, EndLine: 3, Text: "func FindWidget locates a widget by id", Embedding: placeholderEmbedding},
 	}); err != nil {
@@ -200,6 +200,46 @@ func TestSearchCodeFallsBackToLexicalWithoutEmbedder(t *testing.T) {
 	}
 	if len(resp.GetChunks()) != 1 || resp.GetChunks()[0].GetPath() != "pkg/search.go" {
 		t.Fatalf("SearchCode = %+v, want the seeded chunk", resp.GetChunks())
+	}
+	if resp.GetMode() != "lexical" {
+		t.Fatalf("mode = %q, want lexical: a substring match must not present itself as semantic", resp.GetMode())
+	}
+}
+
+// TestSearchCodeSaysWhenItIsSemantic checks the other half: with an embedding
+// model answering, results come from vector distance and say so. A query that
+// shares no word with the chunk it should find proves the lexical path did not
+// answer it.
+func TestSearchCodeSaysWhenItIsSemantic(t *testing.T) {
+	pool := storePool(t)
+	orgID, repoID := uuid.New(), uuid.New()
+	ctx := scopedCtx(orgID, uuid.New())
+
+	query := "tax calculation on a bill"
+	embedder := &stubEmbedder{vectors: map[string][]float32{query: unitVector(graph.EmbeddingDim, 3)}}
+	srv := graph.NewGRPCServer(graph.NewStore(pool), graph.NewVectorStore(pool), nil, nil, embedder, nil)
+
+	vs := graph.NewVectorStore(pool)
+	if err := vs.Upsert(ctx, orgID, repoID, "billing/vat.go", []graph.Chunk{
+		{Path: "billing/vat.go", StartLine: 1, EndLine: 3, Text: "func VATTotal(net float64) float64", Embedding: unitVector(graph.EmbeddingDim, 3)},
+	}); err != nil {
+		t.Fatalf("seed vat chunk: %v", err)
+	}
+	if err := vs.Upsert(ctx, orgID, repoID, "config/toml.go", []graph.Chunk{
+		{Path: "config/toml.go", StartLine: 1, EndLine: 3, Text: "func ParseTOML(b []byte)", Embedding: unitVector(graph.EmbeddingDim, 9)},
+	}); err != nil {
+		t.Fatalf("seed toml chunk: %v", err)
+	}
+
+	resp, err := srv.SearchCode(ctx, &graphv1.SearchCodeRequest{RepoId: repoID.String(), Query: query, K: 5})
+	if err != nil {
+		t.Fatalf("SearchCode: %v", err)
+	}
+	if resp.GetMode() != "semantic" {
+		t.Fatalf("mode = %q, want semantic", resp.GetMode())
+	}
+	if len(resp.GetChunks()) == 0 || resp.GetChunks()[0].GetPath() != "billing/vat.go" {
+		t.Fatalf("SearchCode = %+v, want billing/vat.go first", resp.GetChunks())
 	}
 }
 

@@ -20,12 +20,14 @@ import (
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	"github.com/novaforge/novaforge/internal/authz"
 	"github.com/novaforge/novaforge/internal/events"
 	"github.com/novaforge/novaforge/internal/graph"
+	"github.com/novaforge/novaforge/internal/svcauth"
 )
 
 // consumerGroup is the Redis Streams consumer group the indexer reads
@@ -57,6 +59,10 @@ type Indexer struct {
 	Graph    *graph.Store
 	Vectors  *graph.VectorStore
 	Embedder graph.Embedder
+
+	// HMACSecret signs the service token the indexer presents to the git
+	// service for the organization whose push it is indexing.
+	HMACSecret string
 
 	// Consumer names this indexer's Redis Streams consumer identity. A
 	// process that leaves it empty gets a random one, which is fine for a
@@ -172,6 +178,32 @@ func (idx *Indexer) handleMessage(ctx context.Context, msg redis.XMessage) error
 	if err := json.Unmarshal([]byte(raw), &evt); err != nil {
 		return fmt.Errorf("unmarshal push event: %w", err)
 	}
+	return idx.HandlePush(ctx, evt)
+}
+
+// HandlePush indexes the paths one push changed. Run calls it for every
+// message on the push stream; it is exported so the whole path from a push to
+// a stored chunk can be driven against a real git service.
+func (idx *Indexer) HandlePush(ctx context.Context, evt events.PushEvent) error {
+	// A deleted ref has no commit to index. Returning an error would leave
+	// the event unacknowledged and redelivered forever.
+	if isZeroSHA(evt.NewSHA) {
+		return nil
+	}
+
+	// The indexer reads the repository through the git service, which refuses
+	// an anonymous caller — and must, or anyone could read any organization's
+	// code. It called anonymously, so on the cluster every push failed here
+	// and nothing was ever indexed; the in-process fake it was tested against
+	// checked no credential at all. It acts for exactly the pushed-to org.
+	tok, err := svcauth.Mint(idx.HMACSecret, "indexer", evt.OrgID, svcauth.DefaultTTL)
+	if err != nil {
+		return fmt.Errorf("mint service token for org %s: %w", evt.OrgID, err)
+	}
+	ctx = metadata.AppendToOutgoingContext(ctx,
+		"authorization", "Bearer "+tok,
+		"x-novaforge-org", evt.OrgID.String(),
+	)
 
 	paths, err := idx.changedPaths(ctx, evt)
 	if err != nil {
@@ -181,14 +213,31 @@ func (idx *Indexer) handleMessage(ctx context.Context, msg redis.XMessage) error
 	return err
 }
 
+// emptyTreeSHA is git's well-known id for the empty tree, which every
+// repository can resolve whether or not it stores the object.
+const emptyTreeSHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
+// isZeroSHA reports whether sha is git's "no commit" value (or absent).
+func isZeroSHA(sha string) bool {
+	return strings.Trim(sha, "0") == ""
+}
+
 var diffGitLineRe = regexp.MustCompile(`(?m)^diff --git a/(\S+) b/(\S+)$`)
 
 // changedPaths asks the git service for the unified diff between evt's old
 // and new SHA and extracts the set of paths it touches.
 func (idx *Indexer) changedPaths(ctx context.Context, evt events.PushEvent) ([]string, error) {
+	// A ref that did not exist before the push reports an all-zero old SHA,
+	// which git cannot diff from: every repository's first push failed here,
+	// unacknowledged, and was retried forever. Everything in such a commit is
+	// new, which is exactly its diff against the empty tree.
+	from := evt.OldSHA
+	if isZeroSHA(from) {
+		from = emptyTreeSHA
+	}
 	resp, err := idx.Git.GetDiff(ctx, &gitv1.GetDiffRequest{
 		Repo: evt.RepoID.String(),
-		From: evt.OldSHA,
+		From: from,
 		To:   evt.NewSHA,
 	})
 	if err != nil {

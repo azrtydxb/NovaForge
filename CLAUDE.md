@@ -57,6 +57,7 @@ bash tests/e2e/factory_test.sh    # epic decomposition by the real model, depend
 bash tests/e2e/agent_test.sh      # an Agent Run executes and commits its work
 bash tests/e2e/agent_ci_test.sh   # a CI job with an agent role runs as an Agent Run
 bash tests/e2e/gui_test.sh        # the app is served and every screen's endpoint answers
+bash tests/e2e/search_test.sh     # a push is indexed and found by meaning, not by keyword
 ```
 
 `hack/env.local.sh` is untracked and holds `REGISTRY_PASSWORD` and `AI_API_KEY`. A fresh

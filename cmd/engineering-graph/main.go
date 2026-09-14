@@ -6,9 +6,11 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
@@ -97,11 +99,27 @@ func main() {
 	// SearchCode then falls back to a lexical match, SearchKnowledge
 	// returns no results, and the indexer stores chunks without vectors —
 	// a degrade, not a failure to start (see graph.GRPCServer's own doc).
+	//
+	// The indexer, however, cannot store anything without vectors (the
+	// column is NOT NULL), so an unconfigured embedder means an empty code
+	// index — which is why a configured one is probed here.
 	var embedder graph.Embedder
 	if endpointEmbedder, embedErr := graph.NewEndpointEmbedder(); embedErr != nil {
-		log.Printf("engineering-graph: embedder not configured: %v", embedErr)
+		log.Printf("engineering-graph: embedder not configured, code search is lexical over an index that stays empty: %v", embedErr)
 	} else {
 		embedder = endpointEmbedder
+		// A model of the wrong width cannot store one chunk, and waiting does
+		// not fix it: refuse to start rather than run a code index that
+		// silently never fills. An unreachable gateway may come back, so that
+		// is only reported.
+		probeCtx, cancelProbe := context.WithTimeout(ctx, 30*time.Second)
+		if err := graph.VerifyEmbedder(probeCtx, embedder); err != nil {
+			if errors.Is(err, graph.ErrEmbeddingWidth) {
+				log.Fatalf("engineering-graph: %v", err)
+			}
+			log.Printf("engineering-graph: embedding model did not answer the startup probe (indexing retries per push): %v", err)
+		}
+		cancelProbe()
 	}
 
 	assemble := newAssembleFunc(gitClient, graphStore, vectors, knowledgeStore, workStore)
@@ -124,6 +142,9 @@ func main() {
 		Graph:    graphStore,
 		Vectors:  vectors,
 		Embedder: embedder,
+		// Without it the indexer reads repositories anonymously, and the git
+		// service refuses every read: nothing was indexed until this was set.
+		HMACSecret: cfg.HMACSecret,
 	}
 	indexerCtx, cancelIndexer := context.WithCancel(ctx)
 	defer cancelIndexer()

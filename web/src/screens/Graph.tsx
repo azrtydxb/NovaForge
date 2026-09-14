@@ -21,13 +21,51 @@ interface Relations {
   last_changed_by: string;
 }
 
-/** Graph answers the questions a file tree cannot: what depends on this, what
- * tests cover it, which Work Item last changed it. */
+interface CodeHit {
+  path: string;
+  start_line: number;
+  end_line: number;
+  score: number;
+  text: string;
+}
+
+interface CodeSearch {
+  /** "semantic" when results are nearest by meaning, "lexical" when no
+   * embedding model answered and the index was searched for the literal text. */
+  mode: string;
+  results: CodeHit[];
+}
+
+const inputStyle = {
+  padding: "7px 11px",
+  background: "var(--panel)",
+  border: "1px solid var(--line-2)",
+  borderRadius: 8,
+  color: "var(--fg)",
+  font: "12px var(--mono)",
+  outline: "none",
+  width: 260,
+} as const;
+
+/** Graph answers the questions a file tree cannot: where the code that does
+ * something lives, what depends on a symbol, what tests cover it, which Work
+ * Item last changed it. */
 export function Graph() {
   const w = useWorkspace();
   const repo = w.repo ?? w.repos[0]?.name ?? null;
   const [name, setName] = useState("");
   const [submitted, setSubmitted] = useState("");
+  const [query, setQuery] = useState("");
+  const [searched, setSearched] = useState("");
+
+  const search = useQuery({
+    queryKey: ["code-search", w.org, repo, searched],
+    queryFn: () =>
+      api.get<CodeSearch>(
+        `/api/v1/orgs/${enc(w.org!)}/repos/${enc(repo!)}/search?q=${enc(searched)}`,
+      ),
+    enabled: w.org !== null && repo !== null && searched !== "",
+  });
 
   const rel = useQuery({
     queryKey: ["graph", w.org, repo, submitted],
@@ -47,30 +85,45 @@ export function Graph() {
           : ""
       }
       actions={
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            setSubmitted(name.trim());
-          }}
-        >
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Symbol name…"
-            style={{
-              padding: "7px 11px",
-              background: "var(--panel)",
-              border: "1px solid var(--line-2)",
-              borderRadius: 8,
-              color: "var(--fg)",
-              font: "12px var(--mono)",
-              outline: "none",
-              width: 260,
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              setSearched(query.trim());
             }}
-          />
-        </form>
+          >
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search code by meaning…"
+              aria-label="Search code by meaning"
+              style={inputStyle}
+            />
+          </form>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              setSubmitted(name.trim());
+            }}
+          >
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Symbol name…"
+              aria-label="Symbol name"
+              style={inputStyle}
+            />
+          </form>
+        </div>
       }
     >
+      {searched !== "" && repo !== null ? (
+        <div style={{ marginBottom: 14 }}>
+          <Async query={search}>
+            {(d) => <CodeResults query={searched} data={d} />}
+          </Async>
+        </div>
+      ) : null}
       {submitted === "" ? (
         <Panel>
           <Empty>
@@ -149,6 +202,74 @@ export function Graph() {
         </Async>
       )}
     </Page>
+  );
+}
+
+function CodeResults({ query, data }: { query: string; data: CodeSearch }) {
+  const semantic = data.mode === "semantic";
+  return (
+    <Panel>
+      <PanelHead>
+        CODE MATCHING “{query}”
+        <span style={{ color: "var(--fg-faint)" }}>
+          {data.results.length} · {semantic ? "by meaning" : "literal text"}
+        </span>
+      </PanelHead>
+      {semantic ? null : (
+        // The platform answered, but not the question asked: say so rather
+        // than let a substring match pass for a semantic one.
+        <div
+          style={{
+            padding: "8px 14px",
+            borderBottom: "1px solid var(--line)",
+            font: "12px var(--sans)",
+            color: "var(--warn)",
+          }}
+        >
+          No embedding model answered, so this is a literal text match, not a
+          search by meaning.
+        </div>
+      )}
+      {data.results.length === 0 ? (
+        <Empty>
+          Nothing indexed matches.
+          <br />
+          Code is indexed as it is pushed.
+        </Empty>
+      ) : (
+        data.results.map((r) => (
+          <div
+            key={`${r.path}:${r.start_line}`}
+            style={{
+              padding: "8px 14px",
+              borderBottom: "1px solid var(--line)",
+              display: "flex",
+              gap: 12,
+              alignItems: "baseline",
+            }}
+          >
+            <span
+              style={{
+                font: "12px var(--mono)",
+                color: "var(--link)",
+                flex: 1,
+                wordBreak: "break-all",
+              }}
+            >
+              {r.path}:{r.start_line}–{r.end_line}
+            </span>
+            {semantic ? (
+              <span
+                title="Cosine similarity between the query and this code"
+                style={{ font: "11px var(--mono)", color: "var(--fg-muted)" }}
+              >
+                {r.score.toFixed(3)}
+              </span>
+            ) : null}
+          </div>
+        ))
+      )}
+    </Panel>
   );
 }
 

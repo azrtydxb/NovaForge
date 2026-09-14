@@ -3,6 +3,7 @@ package edge_test
 import (
 	"testing"
 
+	graphv1 "github.com/novaforge/novaforge/gen/novaforge/graph/v1"
 	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
 	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
 	"github.com/novaforge/novaforge/internal/edge"
@@ -25,6 +26,39 @@ func TestWorkItemJSONCarriesIdentity(t *testing.T) {
 		if _, ok := body[k]; !ok {
 			t.Errorf("workItemJSON omits %q", k)
 		}
+	}
+}
+
+// TestSearchCodeJSONSaysHowItWasFound pins the code-search body the GUI and
+// tests/e2e/search_test.sh read: every result's location and score, and the
+// mode, because an empty lexical answer and an empty semantic one mean
+// different things and a reader must be able to tell them apart.
+func TestSearchCodeJSONSaysHowItWasFound(t *testing.T) {
+	body := edge.SearchCodeJSON(&graphv1.SearchCodeResponse{
+		Mode: "semantic",
+		Chunks: []*graphv1.CodeChunk{
+			{Path: "billing/vat.go", StartLine: 3, EndLine: 9, Text: "func VATTotal()", Score: 0.82},
+		},
+	})
+	if body["mode"] != "semantic" {
+		t.Errorf("mode = %v, want semantic", body["mode"])
+	}
+	results, ok := body["results"].([]map[string]any)
+	if !ok || len(results) != 1 {
+		t.Fatalf("results = %#v, want one result", body["results"])
+	}
+	for _, k := range []string{"path", "start_line", "end_line", "score", "text"} {
+		if _, ok := results[0][k]; !ok {
+			t.Errorf("search result omits %q", k)
+		}
+	}
+	if results[0]["path"] != "billing/vat.go" {
+		t.Errorf("path = %v", results[0]["path"])
+	}
+
+	empty := edge.SearchCodeJSON(&graphv1.SearchCodeResponse{Mode: "lexical"})
+	if r, ok := empty["results"].([]map[string]any); !ok || r == nil {
+		t.Errorf("an empty search must render results as [], not null: %#v", empty["results"])
 	}
 }
 
