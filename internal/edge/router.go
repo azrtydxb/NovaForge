@@ -131,7 +131,7 @@ func authenticate(cfg Config, next http.Handler) http.Handler {
 			return
 		}
 
-		scope := authz.Scope{ActorKind: subj.GetActorKind()}
+		scope := authz.Scope{ActorKind: subj.GetActorKind(), Role: subj.GetRole()}
 		if id, err := uuid.Parse(subj.GetUserId()); err == nil {
 			scope.ActorID = id
 		}

@@ -151,6 +151,23 @@ func (s *Store) IsOrgMember(ctx context.Context, orgID, userID uuid.UUID) (bool,
 	return exists, nil
 }
 
+// MemberRole returns userID's role in orgID, or an error when userID is not
+// a member of it.
+func (s *Store) MemberRole(ctx context.Context, orgID, userID uuid.UUID) (string, error) {
+	var role string
+	err := s.pool.QueryRow(ctx,
+		`SELECT role FROM identity.org_members WHERE org_id = $1 AND user_id = $2`,
+		orgID, userID,
+	).Scan(&role)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", fmt.Errorf("user %s is not a member of org %s", userID, orgID)
+		}
+		return "", fmt.Errorf("member role: %w", err)
+	}
+	return role, nil
+}
+
 // SetTOTPSecret stores the TOTP secret for userID.
 func (s *Store) SetTOTPSecret(ctx context.Context, userID uuid.UUID, secret string) error {
 	tag, err := s.pool.Exec(ctx,

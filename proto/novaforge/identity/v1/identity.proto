@@ -136,11 +136,16 @@ message Verify2FAResponse {
 
 // Subject is the authenticated caller. org_id is empty when no organization
 // has been selected; an empty org_id never means "every organization".
+// role is the caller's membership role in that organization ("owner",
+// "admin" or "member"), set only alongside org_id: identity has just verified
+// the membership, so a service deciding an owner-only action reads it here
+// rather than reaching into the identity schema.
 message Subject {
   string user_id = 1;
   string org_id = 2;
   string actor_kind = 3;
   repeated string scopes = 4;
+  string role = 5;
 }
 
 message Grant {

@@ -142,6 +142,14 @@ func (s *Server) attachOrg(ctx context.Context, subj *identityv1.Subject, userID
 		return status.Error(codes.PermissionDenied, err.Error())
 	}
 	subj.OrgId = org.ID.String()
+	// The role rides with the verified membership so a service deciding an
+	// owner-only action — deleting a repository — can read it from the
+	// caller's scope instead of reaching into this service's schema.
+	role, err := s.store.MemberRole(ctx, org.ID, userID)
+	if err != nil {
+		return status.Error(codes.PermissionDenied, err.Error())
+	}
+	subj.Role = role
 	return nil
 }
 

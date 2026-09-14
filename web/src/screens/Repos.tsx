@@ -3,8 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, enc } from "../lib/api";
 import { useWorkspace } from "../lib/workspace";
 import { Async, Empty, Page, Panel, PanelHead } from "../components/ui";
-import { Dialog } from "../components/Dialog";
-import type { Commit, Ref, TreeEntry } from "../lib/types";
+import { Confirm, Dialog } from "../components/Dialog";
+import type { Commit, OrgMember, Ref, TreeEntry, User } from "../lib/types";
 
 /** Repos is the design's browser: a repository, its tree, and a file. The
  * tree is read one directory at a time, which is how git-platform serves it. */
@@ -12,12 +12,78 @@ export function Repos() {
   const w = useWorkspace();
   const [repo, setRepo] = useState<string | null>(w.repo);
   const active = repo ?? w.repo ?? w.repos[0]?.name ?? null;
+  const [deleting, setDeleting] = useState(false);
+  const qc = useQueryClient();
+
+  // Whether to offer deletion is decided from the platform's own record of
+  // this person's role, the same role git-platform enforces. Offering the
+  // button to a member would only lead them to a refusal.
+  const me = useQuery({
+    queryKey: ["user"],
+    queryFn: () => api.get<User>("/api/v1/user"),
+  });
+  const members = useQuery({
+    queryKey: ["members", w.org],
+    queryFn: () =>
+      api.get<{ members: OrgMember[] }>(`/api/v1/orgs/${enc(w.org!)}/members`),
+    enabled: w.org !== null,
+  });
+  const myRole = members.data?.members.find(
+    (m) => m.user_id === me.data?.id,
+  )?.role;
+  const canDelete = myRole === "owner" || myRole === "admin";
+
+  const remove = useMutation({
+    mutationFn: (name: string) =>
+      api.del(`/api/v1/orgs/${enc(w.org!)}/repos/${enc(name)}`),
+    onSuccess: (_d, name) => {
+      setDeleting(false);
+      setRepo(null);
+      // A workspace still scoped to the deleted repository would make every
+      // screen ask for something that no longer exists.
+      if (w.repo === name) w.setRepo(null);
+      qc.invalidateQueries({ queryKey: ["repos"] });
+    },
+  });
 
   return (
     <Page
       title="Repositories"
       subtitle="Standard Git, browsed through the platform"
+      actions={
+        active !== null && canDelete ? (
+          <button
+            onClick={() => {
+              remove.reset();
+              setDeleting(true);
+            }}
+            style={dangerButton}
+          >
+            Delete repository
+          </button>
+        ) : null
+      }
     >
+      {deleting && active !== null ? (
+        <Confirm
+          title={`Delete ${active}`}
+          body={
+            <>
+              This permanently deletes the repository <strong>{active}</strong>{" "}
+              and its entire history from this organization. Clones elsewhere
+              are unaffected; nothing on the platform can be recovered.
+            </>
+          }
+          confirmLabel="Delete repository"
+          typeToConfirm={active}
+          danger
+          busy={remove.isPending}
+          error={remove.error}
+          onConfirm={() => remove.mutate(active)}
+          onClose={() => setDeleting(false)}
+        />
+      ) : null}
+
       <div
         style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}
       >
@@ -340,6 +406,16 @@ function Browser({
     </div>
   );
 }
+
+const dangerButton: React.CSSProperties = {
+  padding: "7px 14px",
+  background: "transparent",
+  border: "1px solid #e5534b66",
+  borderRadius: 8,
+  color: "var(--bad)",
+  font: "600 12px var(--sans)",
+  cursor: "pointer",
+};
 
 const crumb: React.CSSProperties = {
   background: "transparent",
