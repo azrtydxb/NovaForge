@@ -23,6 +23,11 @@ GIT_IP="$($KC get svc "$REL-git-platform" -o jsonpath='{.status.loadBalancer.ing
 export XDG_CONFIG_HOME="$(mktemp -d)"
 USER="ci$RANDOM$$"
 ORG="ciorg$RANDOM$$"
+# Every run creates its own organization so runs cannot see each other's
+# data; remove it on exit, pass or fail, or the cluster fills with them.
+# NF_KEEP_TEST_DATA=1 keeps it for debugging a failure.
+cleanup_org() { [ -n "${NF_KEEP_TEST_DATA:-}" ] || ./hack/purge-orgs.sh "^$ORG\$" --yes >/dev/null 2>&1 || true; }
+trap cleanup_org EXIT
 REPO="pipeline$RANDOM"
 go build -o /tmp/nf ./cmd/nf
 
@@ -83,7 +88,7 @@ spec:
             - {name: RUNNER_NAME, value: "e2e-runner"}
             - {name: CI_DEFAULT_JOB_IMAGE, value: "192.168.10.131/novaforge/runner:$IMG_TAG"}
 YAML
-trap 'kubectl --context "$KUBE_CONTEXT" -n "$NS" delete deploy e2e-runner --ignore-not-found >/dev/null 2>&1' EXIT
+trap 'kubectl --context "$KUBE_CONTEXT" -n "$NS" delete deploy e2e-runner --ignore-not-found >/dev/null 2>&1; cleanup_org' EXIT
 kubectl --context "$KUBE_CONTEXT" -n "$NS" rollout status deploy/e2e-runner --timeout=180s >/dev/null || fail "the runner did not become ready"
 ok "runner registered into $ORG_ID"
 
