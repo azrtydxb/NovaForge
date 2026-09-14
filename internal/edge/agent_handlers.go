@@ -11,6 +11,7 @@ import (
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
 	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
+	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
 )
 
 // addAgentHandlers mounts the agent surface. Without these an agent could
@@ -144,6 +145,35 @@ func addAgentHandlers(h map[string]http.HandlerFunc, g gitv1.GitServiceClient, a
 			return
 		}
 		WriteJSON(wr, http.StatusOK, map[string]any{"cancelled": chi.URLParam(r, "id")})
+	}
+}
+
+// addWorkItemRunHandlers mounts the Agent Runs started against one Work Item.
+// It needs both services — the key resolves through work, the runs live in
+// agent-runtime — and without it nothing outside the cluster could see a run
+// still going, so nothing could offer to cancel one.
+func addWorkItemRunHandlers(h map[string]http.HandlerFunc, w workv1.WorkServiceClient, a agentsv1.AgentServiceClient) {
+	if w == nil || a == nil {
+		return
+	}
+
+	h["listWorkItemAgentRuns"] = func(wr http.ResponseWriter, r *http.Request) {
+		item, err := w.GetItem(r.Context(), &workv1.GetItemRequest{Key: chi.URLParam(r, "key")})
+		if err != nil {
+			WriteError(wr, StatusFromGRPC(err), err)
+			return
+		}
+		resp, err := a.ListRunsForWorkItem(r.Context(),
+			&agentsv1.ListRunsForWorkItemRequest{WorkItemId: item.GetItem().GetId()})
+		if err != nil {
+			WriteError(wr, StatusFromGRPC(err), err)
+			return
+		}
+		out := make([]map[string]any, 0, len(resp.GetRuns()))
+		for _, run := range resp.GetRuns() {
+			out = append(out, agentRunJSON(run))
+		}
+		WriteJSON(wr, http.StatusOK, map[string]any{"runs": out})
 	}
 }
 

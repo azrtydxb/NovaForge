@@ -156,4 +156,7 @@ message ListRunsForWorkItemRequest {
 }
 message ListRunsForWorkItemResponse {
   repeated string run_ids = 1;
+  // runs carries the same runs, newest first, so a caller showing them does
+  // not make one GetRun per id.
+  repeated Run runs = 2;
 }

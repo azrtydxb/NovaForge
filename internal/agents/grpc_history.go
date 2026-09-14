@@ -74,10 +74,19 @@ func (g *GRPCServer) ListRunsForWorkItem(ctx context.Context, req *agentsv1.List
 		return nil, status.Errorf(codes.Internal, "list runs for work item: %v", err)
 	}
 	out := make([]string, 0, len(ids))
+	runs := make([]*agentsv1.Run, 0, len(ids))
 	for _, r := range ids {
 		out = append(out, r.String())
+		// One read per run: a Work Item has a handful of runs, and GetRun is
+		// the one place a run row is decoded, so the list cannot drift from
+		// what GetRun reports for the same run.
+		run, err := g.Store.GetRun(ctx, r)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "read run %s: %v", r, err)
+		}
+		runs = append(runs, toProtoRun(run))
 	}
-	return &agentsv1.ListRunsForWorkItemResponse{RunIds: out}, nil
+	return &agentsv1.ListRunsForWorkItemResponse{RunIds: out, Runs: runs}, nil
 }
 
 // compactArgs renders a tool call's arguments as one line. The audit log

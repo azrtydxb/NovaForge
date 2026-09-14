@@ -27,6 +27,7 @@ func Handlers(cfg Config) map[string]http.HandlerFunc {
 		addAgentHandlers(h, cfg.Git, cfg.Agents, cfg.Identity)
 		addPlatformHandlers(h, cfg.Git, cfg.Graph, cfg.Gates)
 		addRunToolHandlers(h, cfg.Git, cfg.Reviews, cfg.Agents)
+		addWorkItemRunHandlers(h, cfg.Work, cfg.Agents)
 		addWriteHandlers(h, cfg.Git, cfg.Work, cfg.CI)
 	}
 	h["healthz"] = func(w http.ResponseWriter, r *http.Request) {

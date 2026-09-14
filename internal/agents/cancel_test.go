@@ -70,3 +70,50 @@ func TestCancelRunStopsExecution(t *testing.T) {
 		t.Fatalf("run state = %q, want cancelled", got.State)
 	}
 }
+
+// TestListRunsForWorkItemCarriesRuns pins what a screen offering Cancel needs:
+// the runs against a Work Item with their states. The RPC returned only ids,
+// so nothing could show which of them was still running without one GetRun
+// per id.
+func TestListRunsForWorkItemCarriesRuns(t *testing.T) {
+	orgID := uuid.New()
+	repoID := uuid.New()
+	workItemID := uuid.New()
+	work := &stubWorkClient{item: &workv1.WorkItem{
+		Id: workItemID.String(), Key: "NF-10", RepoId: repoID.String(), State: "open",
+	}}
+	srv, store := newGRPCServer(t, work)
+	ctx := scopedCtx(orgID)
+	agent := mustCreateAgent(t, store, ctx, orgID)
+
+	started, err := srv.StartRun(ctx, &agentsv1.StartRunRequest{
+		AgentId:     agent.ID.String(),
+		RepoId:      repoID.String(),
+		WorkItemKey: "NF-10",
+		SponsorId:   uuid.New().String(),
+	})
+	if err != nil {
+		t.Fatalf("StartRun: %v", err)
+	}
+
+	resp, err := srv.ListRunsForWorkItem(ctx, &agentsv1.ListRunsForWorkItemRequest{WorkItemId: workItemID.String()})
+	if err != nil {
+		t.Fatalf("ListRunsForWorkItem: %v", err)
+	}
+	if len(resp.GetRuns()) != 1 {
+		t.Fatalf("runs = %d, want 1", len(resp.GetRuns()))
+	}
+	run := resp.GetRuns()[0]
+	if run.GetId() != started.GetRun().GetId() || run.GetState() == "" || run.GetAgentId() != agent.ID.String() {
+		t.Fatalf("run = %+v, want the started run with its state and agent", run)
+	}
+
+	// Another organization asking about the same Work Item id sees nothing.
+	other, err := srv.ListRunsForWorkItem(scopedCtx(uuid.New()), &agentsv1.ListRunsForWorkItemRequest{WorkItemId: workItemID.String()})
+	if err != nil {
+		t.Fatalf("ListRunsForWorkItem from another org: %v", err)
+	}
+	if len(other.GetRuns()) != 0 || len(other.GetRunIds()) != 0 {
+		t.Fatalf("another organization saw %d runs", len(other.GetRuns()))
+	}
+}

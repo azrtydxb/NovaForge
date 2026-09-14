@@ -66,6 +66,7 @@ func Routes() []Route {
 		{http.MethodGet, "/api/v1/orgs/{org}/agents/stats", "agentStats", "Per-agent run history"},
 		{http.MethodGet, "/api/v1/orgs/{org}/agent-runs/{id}", "getAgentRun", "One Agent Run"},
 		{http.MethodDelete, "/api/v1/orgs/{org}/agent-runs/{id}", "cancelAgentRun", "Cancel an Agent Run"},
+		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/work/{key}/agent-runs", "listWorkItemAgentRuns", "The Agent Runs started against a Work Item"},
 
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/runs", "listRuns", "Engineering Runs"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/runs", "createRun", "Open an Engineering Run"},

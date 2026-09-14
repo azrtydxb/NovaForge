@@ -19,6 +19,7 @@ import {
   StatePill,
 } from "../components/ui";
 import { Dialog, NewButton } from "../components/Dialog";
+import { CancelAgentRun } from "../components/CancelAgentRun";
 import type { Artifact, CIJob, CIRun } from "../lib/types";
 
 /** CI is the design's run list plus a live log. The log polls rather than
@@ -299,6 +300,13 @@ function RunDetail({
                     >
                       {j.detail}
                     </span>
+                    {/* An agent job executes as an Agent Run; while the job
+                        is running, that run is the thing to stop. The CI
+                        worker settles the job as cancelled once it sees the
+                        run's state. */}
+                    {j.agent_run_id && j.status === "running" ? (
+                      <CancelAgentRun org={org} runId={j.agent_run_id} />
+                    ) : null}
                     <StatePill state={j.status} />
                   </div>
                 ))}
