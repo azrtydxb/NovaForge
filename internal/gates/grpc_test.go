@@ -135,9 +135,9 @@ func approvalsStoreForGates(t *testing.T) *approvals.Store {
 }
 
 // TestResolveApprovalRequiresOrgScope asserts a caller cannot resolve an
-// approval request that belongs to another organization: ResolveApproval
-// first confirms the request is pending within the caller's own org (via
-// Pending, which is itself org-scoped), refusing with NotFound otherwise.
+// approval request that belongs to another organization: the decision is
+// recorded only on a request pending in the caller's own organization, so an
+// admin of another organization is told it does not exist.
 func TestResolveApprovalRequiresOrgScope(t *testing.T) {
 	approvalsStore := approvalsStoreForGates(t)
 	store := newStore(t)
@@ -155,23 +155,27 @@ func TestResolveApprovalRequiresOrgScope(t *testing.T) {
 	}
 
 	foreignOrg := uuid.New()
-	_, err = srv.ResolveApproval(scopedCtx(foreignOrg), &gatesv1.ResolveApprovalRequest{
-		Id:        created.GetRequest().GetId(),
-		DecidedBy: uuid.New().String(),
-		Decision:  "approved",
+	_, err = srv.ResolveApproval(adminCtx(foreignOrg), &gatesv1.ResolveApprovalRequest{
+		Id:       created.GetRequest().GetId(),
+		Decision: "approved",
 	})
 	if status.Code(err) != codes.NotFound {
 		t.Fatalf("ResolveApproval for foreign org: code = %v, want NotFound", status.Code(err))
 	}
 
-	_, err = srv.ResolveApproval(scopedCtx(orgID), &gatesv1.ResolveApprovalRequest{
-		Id:        created.GetRequest().GetId(),
-		DecidedBy: uuid.New().String(),
-		Decision:  "approved",
+	_, err = srv.ResolveApproval(adminCtx(orgID), &gatesv1.ResolveApprovalRequest{
+		Id:       created.GetRequest().GetId(),
+		Decision: "approved",
 	})
 	if err != nil {
 		t.Fatalf("ResolveApproval for the request's own org: %v", err)
 	}
+}
+
+func adminCtx(orgID uuid.UUID) context.Context {
+	return authz.WithScope(context.Background(), authz.Scope{
+		OrgID: orgID, ActorID: uuid.New(), ActorKind: "user", Role: "admin",
+	})
 }
 
 // TestEvaluateRecordsProof pins that an evaluation reaches the run's proof,

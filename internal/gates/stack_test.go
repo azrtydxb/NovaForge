@@ -176,6 +176,7 @@ func newPlatformStack(t *testing.T) *platformStack {
 		},
 	}
 	gatesSrv := gates.NewGRPCServer(controller, approvals.NewStore(pool), nil, capability.NewStore(pool))
+	gatesSrv.Proposals = &gates.Proposer{Git: s.git, Reviews: s.reviews}
 	gatesConn := serve(t, func(g *grpc.Server) { gatesv1.RegisterGatesServiceServer(g, gatesSrv) }, auth)
 	s.gates = gatesv1.NewGatesServiceClient(gatesConn)
 

@@ -80,7 +80,7 @@ func TestRequestResolvePending(t *testing.T) {
 	}
 
 	decider := uuid.New()
-	if err := store.Resolve(ctx, req.ID, decider, "approved"); err != nil {
+	if _, err := store.Resolve(ctx, req.ID, decider, "approved", ""); err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
 

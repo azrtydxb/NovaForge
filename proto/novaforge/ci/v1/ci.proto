@@ -69,6 +69,10 @@ message ConnectResponse {
   string image = 7;
   map<string, string> env = 8;
   repeated string artifact_paths = 9;
+  // secret_env carries the credentials brokered for this job, keyed by the
+  // variable name the job reads them from. They are kept apart from env so
+  // the runner can keep them out of the pod spec and redact them from logs.
+  map<string, string> secret_env = 10;
 }
 
 message ReportStatusRequest {

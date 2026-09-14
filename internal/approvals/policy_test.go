@@ -143,6 +143,7 @@ func TestRulesCoverEveryAction(t *testing.T) {
 		approvals.ActionAccessSecret,
 		approvals.ActionDeployStaging,
 		approvals.ActionDeployProduction,
+		approvals.ActionChangeGateConfig,
 	} {
 		if !shown[a] {
 			t.Errorf("action %q is enforced but never shown by Rules()", a)

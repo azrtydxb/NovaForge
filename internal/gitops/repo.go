@@ -222,7 +222,25 @@ func (r Repo) Blob(ref, path string) ([]byte, error) {
 
 // Diff returns the unified diff between from and to.
 func (r Repo) Diff(from, to string) (string, error) {
-	out, err := run("", "--git-dir="+r.path, "diff", from+".."+to)
+	return r.diff(from, "..", to)
+}
+
+// DiffMergeBase returns what `to` changed since it branched from `from`
+// (git's three-dot form). A two-dot diff between a branch and a target that
+// has moved on also shows the target's new work, reversed, as if the branch
+// had removed it — which would make a change look like it deleted a migration
+// it never touched.
+func (r Repo) DiffMergeBase(from, to string) (string, error) {
+	return r.diff(from, "...", to)
+}
+
+func (r Repo) diff(from, sep, to string) (string, error) {
+	// The refs come from a request. One starting with a dash would be read by
+	// git as an option — "--output=<path>" writes a file — so it is refused.
+	if strings.HasPrefix(from, "-") || strings.HasPrefix(to, "-") {
+		return "", fmt.Errorf("invalid ref %q..%q", from, to)
+	}
+	out, err := run("", "--git-dir="+r.path, "diff", from+sep+to, "--")
 	if err != nil {
 		return "", err
 	}

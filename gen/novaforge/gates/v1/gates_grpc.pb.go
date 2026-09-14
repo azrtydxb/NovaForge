@@ -28,6 +28,9 @@ const (
 	GatesService_RedeemLease_FullMethodName       = "/novaforge.gates.v1.GatesService/RedeemLease"
 	GatesService_ListSecrets_FullMethodName       = "/novaforge.gates.v1.GatesService/ListSecrets"
 	GatesService_ListLeases_FullMethodName        = "/novaforge.gates.v1.GatesService/ListLeases"
+	GatesService_ListApprovals_FullMethodName     = "/novaforge.gates.v1.GatesService/ListApprovals"
+	GatesService_PutSecret_FullMethodName         = "/novaforge.gates.v1.GatesService/PutSecret"
+	GatesService_IssueJobLease_FullMethodName     = "/novaforge.gates.v1.GatesService/IssueJobLease"
 	GatesService_RevokeLease_FullMethodName       = "/novaforge.gates.v1.GatesService/RevokeLease"
 	GatesService_ListGateConfig_FullMethodName    = "/novaforge.gates.v1.GatesService/ListGateConfig"
 	GatesService_ProposeGateChange_FullMethodName = "/novaforge.gates.v1.GatesService/ProposeGateChange"
@@ -51,6 +54,9 @@ type GatesServiceClient interface {
 	RedeemLease(ctx context.Context, in *RedeemLeaseRequest, opts ...grpc.CallOption) (*RedeemLeaseResponse, error)
 	ListSecrets(ctx context.Context, in *ListSecretsRequest, opts ...grpc.CallOption) (*ListSecretsResponse, error)
 	ListLeases(ctx context.Context, in *ListLeasesRequest, opts ...grpc.CallOption) (*ListLeasesResponse, error)
+	ListApprovals(ctx context.Context, in *ListApprovalsRequest, opts ...grpc.CallOption) (*ListApprovalsResponse, error)
+	PutSecret(ctx context.Context, in *PutSecretRequest, opts ...grpc.CallOption) (*PutSecretResponse, error)
+	IssueJobLease(ctx context.Context, in *IssueJobLeaseRequest, opts ...grpc.CallOption) (*IssueJobLeaseResponse, error)
 	RevokeLease(ctx context.Context, in *RevokeLeaseRequest, opts ...grpc.CallOption) (*RevokeLeaseResponse, error)
 	ListGateConfig(ctx context.Context, in *ListGateConfigRequest, opts ...grpc.CallOption) (*ListGateConfigResponse, error)
 	ProposeGateChange(ctx context.Context, in *ProposeGateChangeRequest, opts ...grpc.CallOption) (*ProposeGateChangeResponse, error)
@@ -154,6 +160,36 @@ func (c *gatesServiceClient) ListLeases(ctx context.Context, in *ListLeasesReque
 	return out, nil
 }
 
+func (c *gatesServiceClient) ListApprovals(ctx context.Context, in *ListApprovalsRequest, opts ...grpc.CallOption) (*ListApprovalsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListApprovalsResponse)
+	err := c.cc.Invoke(ctx, GatesService_ListApprovals_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gatesServiceClient) PutSecret(ctx context.Context, in *PutSecretRequest, opts ...grpc.CallOption) (*PutSecretResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PutSecretResponse)
+	err := c.cc.Invoke(ctx, GatesService_PutSecret_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gatesServiceClient) IssueJobLease(ctx context.Context, in *IssueJobLeaseRequest, opts ...grpc.CallOption) (*IssueJobLeaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IssueJobLeaseResponse)
+	err := c.cc.Invoke(ctx, GatesService_IssueJobLease_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *gatesServiceClient) RevokeLease(ctx context.Context, in *RevokeLeaseRequest, opts ...grpc.CallOption) (*RevokeLeaseResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RevokeLeaseResponse)
@@ -202,6 +238,9 @@ type GatesServiceServer interface {
 	RedeemLease(context.Context, *RedeemLeaseRequest) (*RedeemLeaseResponse, error)
 	ListSecrets(context.Context, *ListSecretsRequest) (*ListSecretsResponse, error)
 	ListLeases(context.Context, *ListLeasesRequest) (*ListLeasesResponse, error)
+	ListApprovals(context.Context, *ListApprovalsRequest) (*ListApprovalsResponse, error)
+	PutSecret(context.Context, *PutSecretRequest) (*PutSecretResponse, error)
+	IssueJobLease(context.Context, *IssueJobLeaseRequest) (*IssueJobLeaseResponse, error)
 	RevokeLease(context.Context, *RevokeLeaseRequest) (*RevokeLeaseResponse, error)
 	ListGateConfig(context.Context, *ListGateConfigRequest) (*ListGateConfigResponse, error)
 	ProposeGateChange(context.Context, *ProposeGateChangeRequest) (*ProposeGateChangeResponse, error)
@@ -240,6 +279,15 @@ func (UnimplementedGatesServiceServer) ListSecrets(context.Context, *ListSecrets
 }
 func (UnimplementedGatesServiceServer) ListLeases(context.Context, *ListLeasesRequest) (*ListLeasesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListLeases not implemented")
+}
+func (UnimplementedGatesServiceServer) ListApprovals(context.Context, *ListApprovalsRequest) (*ListApprovalsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListApprovals not implemented")
+}
+func (UnimplementedGatesServiceServer) PutSecret(context.Context, *PutSecretRequest) (*PutSecretResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PutSecret not implemented")
+}
+func (UnimplementedGatesServiceServer) IssueJobLease(context.Context, *IssueJobLeaseRequest) (*IssueJobLeaseResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method IssueJobLease not implemented")
 }
 func (UnimplementedGatesServiceServer) RevokeLease(context.Context, *RevokeLeaseRequest) (*RevokeLeaseResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RevokeLease not implemented")
@@ -432,6 +480,60 @@ func _GatesService_ListLeases_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GatesService_ListApprovals_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListApprovalsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GatesServiceServer).ListApprovals(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GatesService_ListApprovals_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GatesServiceServer).ListApprovals(ctx, req.(*ListApprovalsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GatesService_PutSecret_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PutSecretRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GatesServiceServer).PutSecret(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GatesService_PutSecret_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GatesServiceServer).PutSecret(ctx, req.(*PutSecretRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GatesService_IssueJobLease_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IssueJobLeaseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GatesServiceServer).IssueJobLease(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GatesService_IssueJobLease_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GatesServiceServer).IssueJobLease(ctx, req.(*IssueJobLeaseRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _GatesService_RevokeLease_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RevokeLeaseRequest)
 	if err := dec(in); err != nil {
@@ -528,6 +630,18 @@ var GatesService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListLeases",
 			Handler:    _GatesService_ListLeases_Handler,
+		},
+		{
+			MethodName: "ListApprovals",
+			Handler:    _GatesService_ListApprovals_Handler,
+		},
+		{
+			MethodName: "PutSecret",
+			Handler:    _GatesService_PutSecret_Handler,
+		},
+		{
+			MethodName: "IssueJobLease",
+			Handler:    _GatesService_IssueJobLease_Handler,
 		},
 		{
 			MethodName: "RevokeLease",

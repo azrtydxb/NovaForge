@@ -284,6 +284,8 @@ func humanAction(a approvals.Action) string {
 		return "Deploy to staging"
 	case approvals.ActionDeployProduction:
 		return "Deploy to production"
+	case approvals.ActionChangeGateConfig:
+		return "Change a gate definition"
 	}
 	return string(a)
 }
