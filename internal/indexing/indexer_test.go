@@ -327,6 +327,7 @@ func TestRunConsumesPushEventsAndAcks(t *testing.T) {
 
 	idx := newIndexer(t, git)
 	idx.RDB = rdb
+	idx.HMACSecret = testHMACSecret
 	idx.Consumer = "test-consumer-" + uuid.NewString()
 
 	// Run consumes events.StreamGitPush by its fixed name, so this test

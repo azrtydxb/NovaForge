@@ -142,6 +142,9 @@ func main() {
 		Graph:    graphStore,
 		Vectors:  vectors,
 		Embedder: embedder,
+		// Without it the indexer reads repositories anonymously, and the git
+		// service refuses every read: nothing was indexed until this was set.
+		HMACSecret: cfg.HMACSecret,
 	}
 	indexerCtx, cancelIndexer := context.WithCancel(ctx)
 	defer cancelIndexer()
