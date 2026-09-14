@@ -462,7 +462,11 @@ function Tools({ base }: { base: string }) {
                       wordBreak: "break-word",
                     }}
                   >
-                    {c.error || c.args}
+                    {c.tool === "run.verification" && !c.error ? (
+                      <Verdicts args={c.args} />
+                    ) : (
+                      c.error || c.args
+                    )}
                   </span>
                   <span style={{ width: 90 }}>
                     <StatePill state={c.outcome} />
@@ -474,5 +478,41 @@ function Tools({ base }: { base: string }) {
         }
       </Async>
     </Panel>
+  );
+}
+
+interface Verdict {
+  criterion: string;
+  met: boolean;
+  evidence: string;
+}
+
+/** Verdicts renders the run's verification: each acceptance criterion, whether
+ * the evidence showed it met, and what that judgement rests on. A run is only
+ * "succeeded" when every one is met, so this is the reason for its state. */
+function Verdicts({ args }: { args: string }) {
+  let parsed: { verdicts?: Verdict[]; note?: string };
+  try {
+    parsed = JSON.parse(args) as { verdicts?: Verdict[]; note?: string };
+  } catch {
+    return <>{args}</>;
+  }
+  if (!parsed.verdicts || parsed.verdicts.length === 0) {
+    return <>{parsed.note ?? "No acceptance criteria were judged."}</>;
+  }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      {parsed.verdicts.map((v, i) => (
+        <div key={i}>
+          <span style={{ color: v.met ? "var(--ok)" : "var(--bad)" }}>
+            {v.met ? "met" : "not met"}
+          </span>{" "}
+          <span style={{ color: "var(--fg)" }}>{v.criterion}</span>
+          {v.evidence ? (
+            <span style={{ color: "var(--fg-faint)" }}> — {v.evidence}</span>
+          ) : null}
+        </div>
+      ))}
+    </div>
   );
 }

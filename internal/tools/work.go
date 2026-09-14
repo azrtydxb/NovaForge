@@ -11,8 +11,14 @@ import (
 type WorkItemSummary struct {
 	ID    string `json:"id"`
 	Key   string `json:"key"`
+	Type  string `json:"type"`
 	Goal  string `json:"goal"`
 	State string `json:"state"`
+	// Acceptance and Constraints are what the run is judged against. work.get
+	// used to omit them, so the agent was told to satisfy criteria it was
+	// never shown.
+	Acceptance  []string `json:"acceptance_criteria"`
+	Constraints []string `json:"constraints"`
 }
 
 type workGetArgs struct {

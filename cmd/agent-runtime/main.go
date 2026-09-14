@@ -324,6 +324,13 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 
 		loop := agentrun.NewLoop(model, budget, audit)
 		loop.Runs = store
+		loop.Criteria = func(ctx context.Context, workItemID uuid.UUID) (agentrun.Criteria, error) {
+			resp, err := workClient.GetItem(ctx, &workv1.GetItemRequest{Id: workItemID.String()})
+			if err != nil {
+				return agentrun.Criteria{}, err
+			}
+			return agentrun.Criteria{Goal: resp.GetItem().GetGoal(), Acceptance: resp.GetItem().GetAcceptance()}, nil
+		}
 		providerOptions, poErr := agentrun.ParseProviderOptions(cfg.AIProviderOptions)
 		if poErr != nil {
 			log.Printf("agent-runtime: %v", poErr)

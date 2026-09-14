@@ -288,3 +288,85 @@ func TestOpeningBriefNamesTheWork(t *testing.T) {
 		}
 	}
 }
+
+// verifiedRun runs the loop with one work.get call, a closing claim, and a
+// scripted verifier reply, against a work item with two acceptance criteria.
+func verifiedRun(t *testing.T, verdicts string) (agentrun.Result, []agents.Entry) {
+	t.Helper()
+	audit := testAuditPool(t)
+	store := newTestStore(t, audit)
+	orgID := uuid.New()
+	ctx := scopedTestCtx(orgID)
+	run := newAgentRun(t, ctx, store, orgID)
+
+	model := &stubModel{script: []stubResponse{
+		{toolCalls: []provider.ToolCallPart{{ID: "call-0", Name: "work.get", Args: []byte(`{}`)}}, totalTokens: 10},
+		{text: "All done: the README is written and committed.", totalTokens: 5},
+		{text: verdicts, totalTokens: 7},
+	}}
+	budget := agents.NewBudget(time.Hour, 1_000_000, 1_000_000)
+	reg := tools.NewRegistry(tools.Runtime{Budget: budget, Grant: capability.Grant{WriteBranch: "agents/NF-1/"}, Work: &fakeWorkClient{}}, audit)
+
+	loop := agentrun.NewLoop(model, budget, audit)
+	loop.Criteria = func(context.Context, uuid.UUID) (agentrun.Criteria, error) {
+		return agentrun.Criteria{Goal: "Add a README", Acceptance: []string{"README.md exists on the branch", "It describes the service"}}, nil
+	}
+	result, err := loop.Execute(ctx, run, reg)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	entries, err := audit.List(ctx, run.ID)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	return result, entries
+}
+
+// TestRunIsJudgedAgainstAcceptanceCriteria pins that a run which only claimed
+// to have done the work does not succeed: it used to end "succeeded" the
+// moment the model stopped calling tools, whatever it had or had not done.
+func TestRunIsJudgedAgainstAcceptanceCriteria(t *testing.T) {
+	result, entries := verifiedRun(t, `{"verdicts":[`+
+		`{"criterion":"README.md exists on the branch","met":false,"evidence":"no git.commit in the transcript"},`+
+		`{"criterion":"It describes the service","met":false,"evidence":"nothing was written"}]}`)
+	if result.State != "failed" {
+		t.Fatalf("State = %q, want failed: the agent claimed work the evidence does not show", result.State)
+	}
+	if !strings.Contains(result.Summary, "README.md exists on the branch") {
+		t.Fatalf("summary does not name the unmet criterion: %q", result.Summary)
+	}
+	verification := findEntry(t, entries, "run.verification")
+	if !strings.Contains(strings.ReplaceAll(string(verification.ArgsJSON), " ", ""), `"met":false`) {
+		t.Fatalf("verification entry does not record the verdicts: %s", verification.ArgsJSON)
+	}
+}
+
+func TestRunSucceedsWhenEveryCriterionIsMet(t *testing.T) {
+	result, entries := verifiedRun(t, `{"verdicts":[`+
+		`{"criterion":"README.md exists on the branch","met":true,"evidence":"step 1"},`+
+		`{"criterion":"It describes the service","met":true,"evidence":"step 1"}]}`)
+	if result.State != "succeeded" {
+		t.Fatalf("State = %q (%s), want succeeded", result.State, result.Summary)
+	}
+	findEntry(t, entries, "run.verification")
+}
+
+// TestVerifierMustJudgeEveryCriterion pins that a verdict list which skips a
+// criterion is not read as "the rest passed".
+func TestVerifierMustJudgeEveryCriterion(t *testing.T) {
+	result, _ := verifiedRun(t, `{"verdicts":[{"criterion":"README.md exists on the branch","met":true,"evidence":"step 1"}]}`)
+	if result.State != "failed" || !strings.Contains(result.Summary, "1 verdicts for 2") {
+		t.Fatalf("State = %q (%s), want failed for an incomplete verdict", result.State, result.Summary)
+	}
+}
+
+func findEntry(t *testing.T, entries []agents.Entry, tool string) agents.Entry {
+	t.Helper()
+	for _, e := range entries {
+		if e.Tool == tool {
+			return e
+		}
+	}
+	t.Fatalf("no %s entry recorded", tool)
+	return agents.Entry{}
+}

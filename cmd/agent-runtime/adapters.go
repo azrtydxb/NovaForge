@@ -163,10 +163,13 @@ func (a *workAdapter) Get(ctx context.Context, workItemID string) (tools.WorkIte
 	}
 	item := resp.GetItem()
 	return tools.WorkItemSummary{
-		ID:    item.GetId(),
-		Key:   item.GetKey(),
-		Goal:  item.GetGoal(),
-		State: item.GetState(),
+		ID:          item.GetId(),
+		Key:         item.GetKey(),
+		Type:        item.GetType(),
+		Goal:        item.GetGoal(),
+		State:       item.GetState(),
+		Acceptance:  item.GetAcceptance(),
+		Constraints: item.GetConstraints(),
 	}, nil
 }
 

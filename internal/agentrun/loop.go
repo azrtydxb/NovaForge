@@ -46,6 +46,11 @@ type Loop struct {
 
 	// Runs, when non-nil, receives the run's token spend when it finishes.
 	Runs *agents.Store
+
+	// Criteria, when non-nil, reads the run's Work Item so a run that stops
+	// calling tools is verified against its acceptance criteria before it
+	// may end "succeeded" (see verify.go). Production always sets it.
+	Criteria CriteriaSource
 }
 
 // NewLoop builds a Loop bound to model and budget, persisting its final
@@ -72,12 +77,15 @@ func (l *Loop) Execute(ctx context.Context, run agents.Run, reg *tools.Registry)
 		provider.SystemText("You are an autonomous NovaForge engineering agent. Use the " +
 			"provided tools to accomplish the assigned work item; call no tool that isn't offered. " +
 			"Start by reading the work item to learn what is being asked of you. " +
-			"You may write only to the branch named below."),
+			"You may write only to the branch named below. When you stop calling tools, the run is " +
+			"verified against the work item's acceptance criteria using only the tool calls you made: " +
+			"anything you claim but did not do through a tool counts as not done."),
 		provider.UserText(OpeningBrief(run)),
 	}
 
 	var steps int
 	var tokensUsed int64
+	var evidence []evidenceStep
 
 	for {
 		if err := l.Budget.Check(); err != nil {
@@ -103,7 +111,13 @@ func (l *Loop) Execute(ctx context.Context, run agents.Run, reg *tools.Registry)
 
 		calls := resp.ToolCalls()
 		if len(calls) == 0 {
-			return l.finish(ctx, run, "succeeded", steps, tokensUsed, resp.Text())
+			if l.Criteria == nil {
+				return l.finish(ctx, run, "succeeded", steps, tokensUsed, resp.Text())
+			}
+			state, summary, verifyTokens := l.verify(ctx, run, evidence, resp.Text())
+			tokensUsed += verifyTokens
+			l.Budget.AddTokens(verifyTokens)
+			return l.finish(ctx, run, state, steps, tokensUsed, summary)
 		}
 
 		messages = append(messages, assistantMessage(resp, calls))
@@ -115,6 +129,11 @@ func (l *Loop) Execute(ctx context.Context, run agents.Run, reg *tools.Registry)
 
 			result, callErr := reg.Call(ctx, run.ID, call.Name, call.Args)
 			messages = append(messages, toolResultMessage(call, result, callErr))
+			step := evidenceStep{Tool: call.Name, Args: string(call.Args), Result: string(result)}
+			if callErr != nil {
+				step.Err = callErr.Error()
+			}
+			evidence = append(evidence, step)
 		}
 	}
 }
