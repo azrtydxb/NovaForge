@@ -35,6 +35,7 @@ func Handlers(cfg Config) map[string]http.HandlerFunc {
 		addGateConfigHandlers(h, cfg.Gates)
 		if cfg.Git != nil && cfg.Reviews != nil {
 			addGateEvaluationHandlers(h, cfg.Git, cfg.Reviews, cfg.Gates)
+			addApprovalHandlers(h, cfg.Git, cfg.Reviews, cfg.Gates)
 		}
 	}
 	if cfg.MCP != nil {

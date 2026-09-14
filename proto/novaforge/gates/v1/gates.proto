@@ -92,6 +92,13 @@ message ListApprovalsRequest {
 
 message ListApprovalsResponse {
   repeated ApprovalRequestMsg requests = 1;
+  // can_decide reports whether the caller holds a role that may decide
+  // approvals, so a screen offers the buttons only to someone whose click
+  // would be allowed. The decision itself is checked again when made.
+  bool can_decide = 2;
+  // viewer_id is the caller, so a screen can say "you authored this" rather
+  // than offering a decision the service will refuse.
+  string viewer_id = 3;
 }
 
 message RequestApprovalRequest {

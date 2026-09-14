@@ -94,7 +94,14 @@ func (g *GRPCServer) ListApprovals(ctx context.Context, req *gatesv1.ListApprova
 	for _, r := range found {
 		out = append(out, toProtoApprovalRequest(r))
 	}
-	return &gatesv1.ListApprovalsResponse{Requests: out}, nil
+	resp := &gatesv1.ListApprovalsResponse{Requests: out}
+	if scope, err := authz.FromContext(ctx); err == nil {
+		resp.CanDecide = scope.IsOrgAdmin()
+		if scope.ActorID != uuid.Nil {
+			resp.ViewerId = scope.ActorID.String()
+		}
+	}
+	return resp, nil
 }
 
 // ResolveApproval records the caller's decision on a pending approval request.

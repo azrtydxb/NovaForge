@@ -76,6 +76,7 @@ func Routes() []Route {
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}/merge", "mergeRun", "Merge, if the gates allow it"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}/gates/evaluate", "evaluateRunGates", "Run the run's gates at its current head and record their proof"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}/plan", "getRunPlan", "A run's plan"},
+		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}/approvals", "listRunApprovals", "The approvals a run's change raised, in every state"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}/tools", "getRunToolCalls", "The tool calls the agent run behind this run made"},
 
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/ci/runs", "listCIRuns", "CI runs for a repository"},
@@ -97,6 +98,9 @@ func Routes() []Route {
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/maintenance/{fingerprint}/dismiss", "dismissMaintenanceProposal", "Dismiss a maintenance proposal, with a reason"},
 
 		{http.MethodGet, "/api/v1/orgs/{org}/secrets", "listSecrets", "Secrets registered for an organization, names only"},
+		{http.MethodPost, "/api/v1/orgs/{org}/secrets", "putSecret", "Register or replace a secret's value (owner or admin); the value is never returned"},
+		{http.MethodGet, "/api/v1/orgs/{org}/approvals", "listApprovals", "Approval requests awaiting a decision"},
+		{http.MethodPost, "/api/v1/orgs/{org}/approvals/{id}/decision", "decideApproval", "Approve or deny a request (owner or admin, never the change's author)"},
 		{http.MethodGet, "/api/v1/orgs/{org}/leases", "listLeases", "Credentials currently brokered to runs"},
 		{http.MethodDelete, "/api/v1/orgs/{org}/leases/{id}", "revokeLease", "End a live lease immediately"},
 

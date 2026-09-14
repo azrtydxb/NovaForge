@@ -50,6 +50,33 @@ func addPlatformHandlers(
 			WriteJSON(wr, http.StatusOK, map[string]any{"secrets": out})
 		}
 
+		// putSecret stores a value and answers with its name and environment
+		// only. No route anywhere returns a secret's value: the broker hands
+		// it to a job through a lease, and a person who needs to see it again
+		// has the place they got it from.
+		h["putSecret"] = func(wr http.ResponseWriter, r *http.Request) {
+			var body struct {
+				Name        string `json:"name"`
+				Environment string `json:"environment"`
+				Value       string `json:"value"`
+			}
+			if err := decode(r, &body); err != nil {
+				WriteError(wr, http.StatusBadRequest, err)
+				return
+			}
+			resp, err := gates.PutSecret(r.Context(), &gatesv1.PutSecretRequest{
+				Name: body.Name, Environment: body.Environment, Value: body.Value,
+			})
+			if err != nil {
+				WriteError(wr, StatusFromGRPC(err), err)
+				return
+			}
+			WriteJSON(wr, http.StatusCreated, map[string]any{
+				"name":        resp.GetSecret().GetName(),
+				"environment": resp.GetSecret().GetEnvironment(),
+			})
+		}
+
 		h["listLeases"] = func(wr http.ResponseWriter, r *http.Request) {
 			resp, err := gates.ListLeases(r.Context(), &gatesv1.ListLeasesRequest{})
 			if err != nil {
@@ -265,6 +292,9 @@ func nodesJSON(nodes []*graphv1.Node) []map[string]any {
 	}
 	return out
 }
+
+// humanActionName is humanAction for an action as it arrives over the wire.
+func humanActionName(a string) string { return humanAction(approvals.Action(a)) }
 
 // humanAction renders an Action for a reader. The enum's values are wire
 // identifiers; a settings screen shows people what they mean.

@@ -602,8 +602,15 @@ func (x *ListApprovalsRequest) GetRunId() string {
 }
 
 type ListApprovalsResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Requests      []*ApprovalRequestMsg  `protobuf:"bytes,1,rep,name=requests,proto3" json:"requests,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Requests []*ApprovalRequestMsg  `protobuf:"bytes,1,rep,name=requests,proto3" json:"requests,omitempty"`
+	// can_decide reports whether the caller holds a role that may decide
+	// approvals, so a screen offers the buttons only to someone whose click
+	// would be allowed. The decision itself is checked again when made.
+	CanDecide bool `protobuf:"varint,2,opt,name=can_decide,json=canDecide,proto3" json:"can_decide,omitempty"`
+	// viewer_id is the caller, so a screen can say "you authored this" rather
+	// than offering a decision the service will refuse.
+	ViewerId      string `protobuf:"bytes,3,opt,name=viewer_id,json=viewerId,proto3" json:"viewer_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -643,6 +650,20 @@ func (x *ListApprovalsResponse) GetRequests() []*ApprovalRequestMsg {
 		return x.Requests
 	}
 	return nil
+}
+
+func (x *ListApprovalsResponse) GetCanDecide() bool {
+	if x != nil {
+		return x.CanDecide
+	}
+	return false
+}
+
+func (x *ListApprovalsResponse) GetViewerId() string {
+	if x != nil {
+		return x.ViewerId
+	}
+	return ""
 }
 
 type RequestApprovalRequest struct {
@@ -2135,9 +2156,12 @@ const file_novaforge_gates_v1_gates_proto_rawDesc = "" +
 	"\vauthor_kind\x18\x0f \x01(\tR\n" +
 	"authorKind\"-\n" +
 	"\x14ListApprovalsRequest\x12\x15\n" +
-	"\x06run_id\x18\x01 \x01(\tR\x05runId\"[\n" +
+	"\x06run_id\x18\x01 \x01(\tR\x05runId\"\x97\x01\n" +
 	"\x15ListApprovalsResponse\x12B\n" +
-	"\brequests\x18\x01 \x03(\v2&.novaforge.gates.v1.ApprovalRequestMsgR\brequests\"h\n" +
+	"\brequests\x18\x01 \x03(\v2&.novaforge.gates.v1.ApprovalRequestMsgR\brequests\x12\x1d\n" +
+	"\n" +
+	"can_decide\x18\x02 \x01(\bR\tcanDecide\x12\x1b\n" +
+	"\tviewer_id\x18\x03 \x01(\tR\bviewerId\"h\n" +
 	"\x16RequestApprovalRequest\x12\x15\n" +
 	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x16\n" +
 	"\x06action\x18\x02 \x01(\tR\x06action\x12\x1f\n" +

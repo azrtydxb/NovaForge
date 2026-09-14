@@ -150,6 +150,43 @@ export interface ProofRecord {
   recorded_at: string;
 }
 
+/** Approval is one decision a change needs from a person, raised by the gate
+ * controller from what the change's diff does — never from what the run says
+ * about itself. It is bound to the head it saw: a later push supersedes it. */
+export interface Approval {
+  id: string;
+  run_id: string;
+  action: string;
+  action_name: string;
+  decision: "pending" | "approved" | "denied" | "superseded" | string;
+  reason: string;
+  paths: string[];
+  head_sha: string;
+  comment: string;
+  author_id: string;
+  author_kind: string;
+  decided_by: string;
+  decided_at: string;
+  created_at: string;
+  /** run is present in the organization inbox, where the request must say
+   * which change it is about. */
+  run?: {
+    number: number;
+    title: string;
+    repo: string;
+    state: string;
+    author_kind: string;
+    agent_name: string;
+    source_ref: string;
+  };
+}
+
+export interface ApprovalList {
+  approvals: Approval[];
+  can_decide: boolean;
+  viewer_id: string;
+}
+
 export interface CIRun {
   id: string;
   repo_id: string;
