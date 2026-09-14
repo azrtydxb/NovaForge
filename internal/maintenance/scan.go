@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
+	"github.com/novaforge/novaforge/internal/analysis"
 	"github.com/novaforge/novaforge/internal/graph"
 )
 
@@ -34,12 +35,6 @@ type Finding struct {
 	// turning this finding into a Work Item.
 	ProposedType string
 }
-
-// ProcRunner invokes the procoder binary rooted at workdir with args,
-// returning its stdout, exit code, and any failure to launch it at all.
-// Mirrors gates.ProcoderRunner's contract exactly, so the same production
-// implementation can back both without adapting anything.
-type ProcRunner func(ctx context.Context, workdir string, args ...string) (stdout []byte, exitCode int, err error)
 
 // JobResult is one historical CI job result for one test, at one commit —
 // the flaky-test scanner's raw material.
@@ -99,8 +94,9 @@ type ScanInput struct {
 	// "against the default branch".
 	TargetRef string
 
-	// Proc invokes procoder for the dependency and CVE scanners.
-	Proc ProcRunner
+	// Exec runs the analysis tools the dependency, CVE and architecture
+	// scanners use (see internal/analysis).
+	Exec analysis.Exec
 	// ArchParams carries the architecture gate's forbidden_dependencies
 	// parameter (and any other gates.Definition.Params the architecture
 	// runner understands), reused unchanged by the architectural-violation

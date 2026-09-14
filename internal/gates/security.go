@@ -2,41 +2,50 @@ package gates
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"strings"
+
+	"github.com/novaforge/novaforge/internal/analysis"
 )
 
-// securityReport is the structured JSON procoder's "security" command
-// prints to stdout: secret-scanner and static-analysis findings.
-type securityReport struct {
-	Secrets []string `json:"secrets"`
-	SAST    []string `json:"sast"`
+// runSecurity evaluates the security gate: a secret scan over every
+// repository, and static analysis over Go code. A secret fails the gate on its
+// own — the spec marks a leaked secret as unconditionally blocking — and a
+// finding's detail names the rule and location, never the secret, because a
+// gate's detail is displayed.
+func runSecurity(ctx context.Context, in Input) (Evaluation, error) {
+	secrets, err := analysis.Secrets(ctx, in.Exec, in.WorkDir)
+	if err != nil {
+		return toolError(in, "security", err)
+	}
+	if len(secrets) > 0 {
+		return newEvaluation(in, "security", "fail", "secrets found:\n"+list(secrets)), nil
+	}
+
+	if !analysis.IsGoModule(in.WorkDir) {
+		return newEvaluation(in, "security", "pass",
+			"no secrets found; static analysis not run (not a Go module)"), nil
+	}
+	sast, err := analysis.SAST(ctx, in.Exec, in.WorkDir, in.SASTRules)
+	if err != nil {
+		return toolError(in, "security", err)
+	}
+	if len(sast) > 0 {
+		return newEvaluation(in, "security", "fail", "static analysis findings:\n"+list(sast)), nil
+	}
+	return newEvaluation(in, "security", "pass", "no secrets, no static analysis findings"), nil
 }
 
-// runSecurity evaluates the security gate by invoking procoder's "security"
-// command. A secret finding fails the gate independent of the SAST result
-// and independent of the process exit code, since the spec marks secret
-// leaks as unconditionally blocking.
-func runSecurity(ctx context.Context, in Input) (Evaluation, error) {
-	stdout, exitCode, err := in.Proc(ctx, in.WorkDir, "security")
-	if err != nil {
-		return newEvaluation(in, "security", "error", fmt.Sprintf("procoder security: %v", err)), nil
+// list renders findings one per line, capped so a gate detail stays readable.
+func list(found []analysis.Finding) string {
+	const max = 20
+	var b strings.Builder
+	for i, f := range found {
+		if i == max {
+			fmt.Fprintf(&b, "… and %d more\n", len(found)-max)
+			break
+		}
+		fmt.Fprintf(&b, "%s\n", f)
 	}
-
-	var report securityReport
-	if jsonErr := json.Unmarshal(stdout, &report); jsonErr != nil {
-		return newEvaluation(in, "security", "error", fmt.Sprintf("parse procoder security output: %v", jsonErr)), nil
-	}
-
-	if len(report.Secrets) > 0 {
-		return newEvaluation(in, "security", "fail", fmt.Sprintf("secrets found: %v", report.Secrets)), nil
-	}
-	if exitCode != 0 {
-		return newEvaluation(in, "security", "fail",
-			fmt.Sprintf("procoder security exited %d: sast findings %v", exitCode, report.SAST)), nil
-	}
-	if len(report.SAST) > 0 {
-		return newEvaluation(in, "security", "fail", fmt.Sprintf("sast findings: %v", report.SAST)), nil
-	}
-	return newEvaluation(in, "security", "pass", "no secrets or sast findings"), nil
+	return strings.TrimRight(b.String(), "\n")
 }

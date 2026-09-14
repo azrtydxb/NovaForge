@@ -15,6 +15,9 @@ export NF_NAMESPACE=novaforge
 export NF_DEV_NAMESPACE=novaforge-dev
 # Dev datastore endpoints (LoadBalancer, reachable from the workstation)
 export TEST_DATABASE_URL="postgres://novaforge:novaforge@192.168.10.121:5432/novaforge?sslmode=disable"
+# The security gate's semgrep ruleset, vendored; the image puts it at
+# /opt/analysis/semgrep-gosec.yml.
+export NOVAFORGE_SEMGREP_RULES="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)/deploy/analysis/semgrep-gosec.yml"
 export TEST_REDIS_URL="redis://192.168.10.124:6379"
 export TEST_S3_ENDPOINT="192.168.10.130:9000"
 export TEST_S3_ACCESS_KEY=minioadmin

@@ -31,7 +31,7 @@ func scanArchitecture(ctx context.Context, in ScanInput) ([]Finding, error) {
 		WorkDir:   in.WorkDir,
 		TargetSHA: in.TargetRef,
 		Params:    in.ArchParams,
-		Proc:      gates.ProcoderRunner(in.Proc),
+		Exec:      in.Exec,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("maintenance: architecture scan: %w", err)

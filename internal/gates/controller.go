@@ -28,7 +28,7 @@ type RunLookup func(ctx context.Context, runID uuid.UUID) (RunHead, error)
 
 // InputBuilder builds the Input a gate runner needs to evaluate one named
 // gate for one run: its checked-out workspace, target/source SHAs, and the
-// ProcoderRunner to invoke inside it. Tests provide a stub; production
+// tool runner to invoke inside it. Tests provide their own; production
 // checks out the run's SHAs into a workspace first.
 type InputBuilder func(ctx context.Context, runID uuid.UUID, head RunHead, gate string, params map[string]any) (Input, error)
 

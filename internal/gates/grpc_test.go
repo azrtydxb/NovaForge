@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	gatesv1 "github.com/novaforge/novaforge/gen/novaforge/gates/v1"
+	"github.com/novaforge/novaforge/internal/analysis"
 	"github.com/novaforge/novaforge/internal/approvals"
 	"github.com/novaforge/novaforge/internal/authz"
 	"github.com/novaforge/novaforge/internal/database"
@@ -79,9 +80,9 @@ func TestEvaluateIsIdempotent(t *testing.T) {
 		return gates.Input{
 			OrgID: head.OrgID, RepoID: head.RepoID, RunID: runID,
 			TargetSHA: head.HeadSHA,
-			Proc: func(ctx context.Context, workdir string, args ...string) ([]byte, int, error) {
-				return []byte(`{"coverage": 100}`), 0, nil
-			},
+			// No workspace: the tests gate reports "skipped", which is enough
+			// to prove the evaluation is cached rather than re-run.
+			Exec: analysis.DefaultExec,
 		}, nil
 	}
 

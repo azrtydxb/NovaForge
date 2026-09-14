@@ -7,9 +7,10 @@ package gates
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/google/uuid"
+
+	"github.com/novaforge/novaforge/internal/analysis"
 )
 
 // Input is what a GateRunner needs to evaluate one gate for one run.
@@ -18,15 +19,15 @@ type Input struct {
 	WorkDir              string
 	TargetSHA, SourceSHA string
 	Params               map[string]any
-	Proc                 ProcoderRunner
-}
 
-// ProcoderRunner invokes the procoder binary inside the job image with args,
-// rooted at workdir, and returns its stdout, exit code, and any error
-// launching it. err is reserved for a failure to invoke the binary at all
-// (a transport or launch failure); a non-zero exit from a binary that did
-// run is reported through exitCode, not err.
-type ProcoderRunner func(ctx context.Context, workdir string, args ...string) (stdout []byte, exitCode int, err error)
+	// Exec runs the analysis tools the gates use. It is injected so a test
+	// can drive a gate without a toolchain, but the checks themselves live in
+	// internal/analysis and are tested against the real tools there.
+	Exec analysis.Exec
+	// SASTRules is the semgrep ruleset the security gate runs; empty means
+	// analysis.DefaultSASTRules, where the image puts it.
+	SASTRules string
+}
 
 // GateRunner evaluates one gate for one run and returns its result. A
 // GateRunner never returns a non-nil error paired with a status of "pass":
@@ -60,18 +61,21 @@ func newEvaluation(in Input, gate, status, detail string) Evaluation {
 	}
 }
 
-// runProcExitGate is the shared shape for gates that just invoke procoder
-// with args and turn a non-zero exit into "fail" and a launch error into
-// "error": dependencies, quality, and documentation.
-func runProcExitGate(ctx context.Context, in Input, gate string, args ...string) (Evaluation, error) {
-	stdout, exitCode, err := in.Proc(ctx, in.WorkDir, args...)
-	if err != nil {
-		return newEvaluation(in, gate, "error", fmt.Sprintf("procoder %s: %v", strings.Join(args, " "), err)), nil
-	}
-	if exitCode != 0 {
-		return newEvaluation(in, gate, "fail", fmt.Sprintf("procoder %s exited %d: %s", strings.Join(args, " "), exitCode, strings.TrimSpace(string(stdout)))), nil
-	}
-	return newEvaluation(in, gate, "pass", strings.TrimSpace(string(stdout))), nil
+// toolError turns a check that could not run into the gate's "error" status.
+// It is never a pass: a gate whose tool is missing has not established that
+// the change is fine.
+func toolError(in Input, gate string, err error) (Evaluation, error) {
+	return newEvaluation(in, gate, "error", fmt.Sprintf("%s check could not run: %v", gate, err)), nil
+}
+
+// notGo reports a Go-only gate evaluated on a repository that is not a Go
+// module. "skipped" says the gate did not apply, which is true; "pass" would
+// claim the change was checked. The controller still folds "skipped" into
+// not-allowed, deliberately: a repository that *requires* a gate which cannot
+// read it has a requirement that cannot be met, and the fix is to change the
+// requirement in .novaforge/gates, not to let the merge through unchecked.
+func notGo(in Input, gate string) (Evaluation, error) {
+	return newEvaluation(in, gate, "skipped", "not a Go module; this gate checks Go code only"), nil
 }
 
 // paramFloat reads a numeric parameter from a gate's Params, defaulting to

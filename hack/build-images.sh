@@ -18,6 +18,9 @@ SKIP="gen-openapi"
 
 # Services whose image needs the git binary at runtime, and those needing cgo.
 needs_git() { case "$1" in git-platform | runner | ci-runner | gates) return 0 ;; *) return 1 ;; esac }
+# Services that run analysis tools (go, gitleaks, osv-scanner, semgrep) on
+# repository contents: the merge gates and the maintenance scanners.
+needs_analysis() { case "$1" in gates | work-reviews) return 0 ;; *) return 1 ;; esac }
 needs_cgo() { case "$1" in engineering-graph) return 0 ;; *) return 1 ;; esac }
 
 services=("$@")
@@ -56,6 +59,8 @@ for svc in "${services[@]}"; do
 		# The edge serves the web application as well as the API, so its
 		# image is the only one that needs a Node toolchain to build.
 		df=deploy/docker/Dockerfile.edge
+	elif needs_analysis "$svc"; then
+		df=deploy/docker/Dockerfile.analysis
 	elif needs_cgo "$svc"; then
 		df=deploy/docker/Dockerfile.cgo
 	elif needs_git "$svc"; then

@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"time"
 
 	"github.com/google/uuid"
 
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
+	"github.com/novaforge/novaforge/internal/analysis"
 	"github.com/novaforge/novaforge/internal/authz"
 	"github.com/novaforge/novaforge/internal/maintenance"
 	"github.com/novaforge/novaforge/internal/work"
@@ -103,7 +103,7 @@ func scanRepository(ctx context.Context, git gitv1.GitServiceClient, orgID, repo
 		RepoID:    repoID,
 		WorkDir:   dir,
 		TargetRef: defaultBranch,
-		Proc:      procRunner,
+		Exec:      analysis.DefaultExec,
 		Git:       git,
 	}
 	return maintenance.RunAll(ctx, in, func(kind string, err error) {
@@ -157,29 +157,4 @@ func materialiseDir(ctx context.Context, git gitv1.GitServiceClient, repoID uuid
 		}
 	}
 	return nil
-}
-
-// procRunner invokes procoder for the scanners that need it. Where the
-// binary is not present in this image, the scanners that depend on it
-// report that plainly and the rest still run.
-func procRunner(ctx context.Context, workdir string, args ...string) ([]byte, int, error) {
-	cmd := exec.CommandContext(ctx, "procoder", args...)
-	cmd.Dir = workdir
-	out, err := cmd.Output()
-	if err != nil {
-		var exitErr *exec.ExitError
-		if ok := asExitError(err, &exitErr); ok {
-			return out, exitErr.ExitCode(), nil
-		}
-		return nil, 0, fmt.Errorf("run procoder %v: %w", args, err)
-	}
-	return out, 0, nil
-}
-
-func asExitError(err error, target **exec.ExitError) bool {
-	e, ok := err.(*exec.ExitError)
-	if ok {
-		*target = e
-	}
-	return ok
 }

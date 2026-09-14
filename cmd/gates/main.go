@@ -4,13 +4,10 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -24,6 +21,7 @@ import (
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
 	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
 	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
+	"github.com/novaforge/novaforge/internal/analysis"
 	"github.com/novaforge/novaforge/internal/approvals"
 	"github.com/novaforge/novaforge/internal/authz"
 	"github.com/novaforge/novaforge/internal/capability"
@@ -218,7 +216,7 @@ func resolveRepoName(ctx context.Context, gitClient gitv1.GitServiceClient, repo
 
 // newInputBuilder materializes the run's target commit into a fresh
 // temporary workspace by walking GetTree/GetBlob recursively, so a gate
-// runner shelling out to procoder sees a real checkout on disk. The
+// runner running analysis tools sees a real checkout on disk. The
 // workspace is removed once ctx (the RPC's own context, which stays live
 // for the whole Evaluate call) is done.
 func newInputBuilder(gitClient gitv1.GitServiceClient) gates.InputBuilder {
@@ -249,7 +247,8 @@ func newInputBuilder(gitClient gitv1.GitServiceClient) gates.InputBuilder {
 			TargetSHA: head.HeadSHA,
 			SourceSHA: head.HeadSHA,
 			Params:    params,
-			Proc:      runProcoder,
+			Exec:      analysis.DefaultExec,
+			SASTRules: os.Getenv("NOVAFORGE_SEMGREP_RULES"),
 		}, nil
 	}
 }
@@ -289,25 +288,6 @@ func materializeTree(ctx context.Context, gitClient gitv1.GitServiceClient, repo
 		}
 	}
 	return nil
-}
-
-// runProcoder invokes the procoder binary (installed into this service's
-// image; see Dockerfile.gates) inside workdir, satisfying gates.ProcoderRunner.
-func runProcoder(ctx context.Context, workdir string, args ...string) ([]byte, int, error) {
-	cmd := exec.CommandContext(ctx, "procoder", args...)
-	cmd.Dir = workdir
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &out
-	err := cmd.Run()
-	if err == nil {
-		return out.Bytes(), 0, nil
-	}
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
-		return out.Bytes(), exitErr.ExitCode(), nil
-	}
-	return nil, 0, fmt.Errorf("launch procoder %s: %w", strings.Join(args, " "), err)
 }
 
 // authInterceptor resolves the caller from the request's "authorization"

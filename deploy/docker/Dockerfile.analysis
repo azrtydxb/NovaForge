@@ -1,0 +1,50 @@
+# Runtime image for services that analyse repository contents: the gates
+# service (the seven merge gates) and work-reviews (the maintenance scanners).
+#
+# These services run real tools against a materialised tree, so the image
+# carries them: the Go toolchain (go test, go vet, go list, and go/packages in
+# the architecture gate), gitleaks, osv-scanner and semgrep with a vendored
+# ruleset. They once shelled out to a "procoder" binary that no image
+# contained and whose JSON output did not exist, which made three scanners and
+# most gates unable to run anywhere. Every download is pinned and checksummed.
+ARG GO_VERSION=1.27
+FROM golang:${GO_VERSION} AS build
+ARG SERVICE
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath \
+      -ldflags "-s -w" \
+      -o /out/app ./cmd/${SERVICE}
+
+FROM golang:${GO_VERSION} AS tools
+ARG GITLEAKS_VERSION=8.30.1
+ARG GITLEAKS_SHA256=e4a487ee7ccd7d3a7f7ec08657610aa3606637dab924210b3aee62570fb4b080
+ARG OSV_VERSION=2.5.1
+ARG OSV_SHA256=3d0f5aa5a6baa8eb32bcef247388e149ef6030a6634ccae6fa0d62681fb27a6d
+RUN curl -sSfL -o /tmp/gitleaks.tgz \
+      "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_arm64.tar.gz" \
+ && echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tgz" | sha256sum -c - \
+ && tar -xzf /tmp/gitleaks.tgz -C /usr/local/bin gitleaks \
+ && curl -sSfL -o /usr/local/bin/osv-scanner \
+      "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_arm64" \
+ && echo "${OSV_SHA256}  /usr/local/bin/osv-scanner" | sha256sum -c - \
+ && chmod 0755 /usr/local/bin/gitleaks /usr/local/bin/osv-scanner
+
+FROM golang:${GO_VERSION}
+ARG SEMGREP_VERSION=1.173.0
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git ca-certificates openssh-client python3 python3-venv \
+ && rm -rf /var/lib/apt/lists/* \
+ && python3 -m venv /opt/semgrep \
+ && /opt/semgrep/bin/pip install --no-cache-dir "semgrep==${SEMGREP_VERSION}" \
+ && ln -s /opt/semgrep/bin/semgrep /usr/local/bin/semgrep
+COPY --from=tools /usr/local/bin/gitleaks /usr/local/bin/osv-scanner /usr/local/bin/
+COPY deploy/analysis/semgrep-gosec.yml /opt/analysis/semgrep-gosec.yml
+# The services run as a non-root user with a read-only view of nothing but
+# their temp dirs; give the toolchain writable caches there.
+ENV GOCACHE=/tmp/go-cache GOMODCACHE=/tmp/go-mod GOTOOLCHAIN=local \
+    SEMGREP_SEND_METRICS=off XDG_CACHE_HOME=/tmp/cache
+COPY --from=build /out/app /app
+ENTRYPOINT ["/app"]
