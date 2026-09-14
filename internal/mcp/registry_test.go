@@ -207,6 +207,59 @@ func TestServerRegistryIsOrgScoped(t *testing.T) {
 	}
 }
 
+// TestListApprovedServersOffersOnlyApproved pins the one list an agent's host
+// reads: a pending, rejected or revoked server is never on it, another
+// organization's approved server is never on it, and an agent run's own
+// credential may read it (it is the agent's host asking).
+func TestListApprovedServersOffersOnlyApproved(t *testing.T) {
+	f := newRegistryFixture(t)
+	request := func(name string) string {
+		t.Helper()
+		resp, err := f.reg.RequestServer(f.member, &mcpv1.RequestServerRequest{
+			Name: name, Url: "https://" + name + ".example.com/mcp", Transport: "streamable_http",
+		})
+		if err != nil {
+			t.Fatalf("RequestServer %s: %v", name, err)
+		}
+		return resp.GetServer().GetId()
+	}
+	approved, pending, rejected, revoked := request("approved"), request("pending"), request("rejected"), request("revoked")
+	_ = pending
+	if _, err := f.reg.DecideServer(f.owner, &mcpv1.DecideServerRequest{Id: approved, Approve: true}); err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+	if _, err := f.reg.DecideServer(f.owner, &mcpv1.DecideServerRequest{Id: rejected, Approve: false, Reason: "no"}); err != nil {
+		t.Fatalf("reject: %v", err)
+	}
+	if _, err := f.reg.DecideServer(f.owner, &mcpv1.DecideServerRequest{Id: revoked, Approve: true}); err != nil {
+		t.Fatalf("approve before revoking: %v", err)
+	}
+	if _, err := f.reg.RevokeServer(f.owner, &mcpv1.RevokeServerRequest{Id: revoked, Reason: "leaked"}); err != nil {
+		t.Fatalf("revoke: %v", err)
+	}
+
+	list, err := f.reg.ListApprovedServers(f.agent, &mcpv1.ListApprovedServersRequest{})
+	if err != nil {
+		t.Fatalf("ListApprovedServers as the agent's host: %v", err)
+	}
+	if len(list.GetServers()) != 1 || list.GetServers()[0].GetId() != approved {
+		t.Fatalf("approved list = %+v, want only %s", list.GetServers(), approved)
+	}
+
+	other, err := f.reg.ListApprovedServers(f.outsider, &mcpv1.ListApprovedServersRequest{})
+	if err != nil {
+		t.Fatalf("ListApprovedServers as outsider: %v", err)
+	}
+	for _, s := range other.GetServers() {
+		if s.GetId() == approved {
+			t.Fatal("another organization is offered this organization's approved server")
+		}
+	}
+	if _, err := f.reg.ListApprovedServers(f.none, &mcpv1.ListApprovedServersRequest{}); code(err) != codes.PermissionDenied {
+		t.Fatalf("no scope: %v", err)
+	}
+}
+
 // TestRequestServerValidation pins what is refused at the door.
 func TestRequestServerValidation(t *testing.T) {
 	f := newRegistryFixture(t)

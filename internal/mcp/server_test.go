@@ -192,6 +192,89 @@ func TestStreamableHTTPRoundTrip(t *testing.T) {
 	}
 }
 
+// postMCP sends one JSON-RPC message the way a Streamable HTTP client does.
+func postMCP(t *testing.T, url string, msg any, headers map[string]string) *http.Response {
+	t.Helper()
+	body, _ := json.Marshal(msg)
+	req, _ := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	t.Cleanup(func() { resp.Body.Close() })
+	return resp
+}
+
+// TestStreamableHTTPTransportRules pins what the 2025-06-18 Streamable HTTP
+// transport requires of a server, beyond answering a POST: a browser origin
+// is refused (DNS rebinding), a protocol version header naming a revision
+// this server does not speak is a 400, a notification is a bodiless 202, a
+// GET that opens no stream is a 405, and a call that needs a credential and
+// has none is an HTTP 401 rather than a 200 carrying an error.
+func TestStreamableHTTPTransportRules(t *testing.T) {
+	s := mcp.NewServer(&backend{})
+	s.SetAllowedOrigins([]string{"https://agents.example.com"})
+	srv := httptest.NewServer(s)
+	defer srv.Close()
+	list := mcp.Request{JSONRPC: "2.0", ID: json.RawMessage(`1`), Method: "tools/list"}
+
+	if r := postMCP(t, srv.URL, list, map[string]string{"Origin": "https://evil.example.net"}); r.StatusCode != http.StatusForbidden {
+		t.Errorf("foreign Origin: status %d, want 403", r.StatusCode)
+	}
+	if r := postMCP(t, srv.URL, list, map[string]string{"Origin": "https://agents.example.com"}); r.StatusCode != http.StatusOK {
+		t.Errorf("allowed Origin: status %d, want 200", r.StatusCode)
+	}
+	if r := postMCP(t, srv.URL, list, map[string]string{"MCP-Protocol-Version": "2024-11-05"}); r.StatusCode != http.StatusBadRequest {
+		t.Errorf("unsupported MCP-Protocol-Version: status %d, want 400", r.StatusCode)
+	}
+	if r := postMCP(t, srv.URL, list, map[string]string{"MCP-Protocol-Version": mcp.ProtocolVersion}); r.StatusCode != http.StatusOK {
+		t.Errorf("current MCP-Protocol-Version: status %d, want 200", r.StatusCode)
+	}
+	note := mcp.Request{JSONRPC: "2.0", Method: "notifications/initialized"}
+	if r := postMCP(t, srv.URL, note, nil); r.StatusCode != http.StatusAccepted {
+		t.Errorf("notification: status %d, want 202", r.StatusCode)
+	}
+	get, err := http.Get(srv.URL)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	get.Body.Close()
+	if get.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("GET: status %d, want 405", get.StatusCode)
+	}
+	params, _ := json.Marshal(map[string]any{"name": "novaforge.get_work_item", "arguments": map[string]any{"org": "org-a", "repo": "r", "key": "NF-1"}})
+	call := mcp.Request{JSONRPC: "2.0", ID: json.RawMessage(`2`), Method: "tools/call", Params: params}
+	r := postMCP(t, srv.URL, call, nil)
+	if r.StatusCode != http.StatusUnauthorized {
+		t.Errorf("call with no credential: status %d, want 401", r.StatusCode)
+	}
+	if !strings.HasPrefix(r.Header.Get("WWW-Authenticate"), "Bearer") {
+		t.Errorf("401 without a Bearer challenge: %q", r.Header.Get("WWW-Authenticate"))
+	}
+}
+
+// TestInitializeNegotiatesOnlyTheCurrentRevision: a client asking for an older
+// revision is answered with the one revision this server speaks, which the
+// client then accepts or disconnects — there is no legacy mode to fall into.
+func TestInitializeNegotiatesOnlyTheCurrentRevision(t *testing.T) {
+	s := mcp.NewServer(&backend{})
+	params, _ := json.Marshal(map[string]any{"protocolVersion": "2024-11-05", "capabilities": map[string]any{}, "clientInfo": map[string]any{"name": "old", "version": "1"}})
+	resps := roundTripStdio(t, s, mcp.Request{JSONRPC: "2.0", ID: json.RawMessage(`1`), Method: "initialize", Params: params})
+	raw, _ := json.Marshal(resps[0].Result)
+	var res struct {
+		ProtocolVersion string `json:"protocolVersion"`
+	}
+	_ = json.Unmarshal(raw, &res)
+	if res.ProtocolVersion != mcp.ProtocolVersion {
+		t.Fatalf("negotiated %q, want %q", res.ProtocolVersion, mcp.ProtocolVersion)
+	}
+}
+
 func TestUnknownMethodIsMethodNotFound(t *testing.T) {
 	s := mcp.NewServer(&backend{})
 	resps := roundTripStdio(t, s, mcp.Request{

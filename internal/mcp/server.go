@@ -17,6 +17,13 @@ import (
 type Caller struct {
 	UserID string
 	OrgID  string
+
+	// orgRef is the organization as the token named it, and credential the
+	// credential it carried. They stay unexported so only this package's
+	// backend can present them onward, and only for the request that
+	// authenticated them.
+	orgRef     string
+	credential string
 }
 
 // Backend is the platform surface the MCP tools expose. It is an interface so
@@ -38,8 +45,9 @@ type Backend interface {
 type Server struct {
 	backend Backend
 
-	mu    sync.RWMutex
-	token string
+	mu      sync.RWMutex
+	token   string
+	origins []string
 }
 
 // NewServer returns a server backed by b.
@@ -51,6 +59,14 @@ func (s *Server) SetToken(t string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.token = t
+}
+
+// SetAllowedOrigins names the browser origins that may reach the Streamable
+// HTTP transport. A request carrying any other Origin is refused.
+func (s *Server) SetAllowedOrigins(origins []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.origins = append([]string(nil), origins...)
 }
 
 func (s *Server) currentToken() string {
@@ -95,17 +111,35 @@ func (s *Server) ServeStdio(ctx context.Context, in io.Reader, out io.Writer) er
 
 // ServeHTTP implements the Streamable HTTP transport: one JSON-RPC message per
 // POST, answered inline.
+//
+// The transport rules of the 2025-06-18 revision are enforced here rather than
+// assumed: a browser Origin not explicitly allowed is refused, because a page
+// reaching this port through DNS rebinding would otherwise drive the platform;
+// an MCP-Protocol-Version header naming another revision is a 400, since this
+// server speaks exactly one; and a call refused for want of a credential is an
+// HTTP 401 with a Bearer challenge, which is what an HTTP client acts on.
+// A GET opens no server-initiated stream here, so it is a 405, as the
+// transport permits.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if origin := r.Header.Get("Origin"); origin != "" && !s.originAllowed(origin) {
+		http.Error(w, "origin not allowed", http.StatusForbidden)
+		return
+	}
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodPost)
 		http.Error(w, "only POST is supported by the Streamable HTTP transport", http.StatusMethodNotAllowed)
 		return
 	}
+	if v := r.Header.Get("MCP-Protocol-Version"); v != "" && v != ProtocolVersion {
+		writeJSON(w, http.StatusBadRequest, newError(nil, CodeInvalidRequest,
+			fmt.Sprintf("unsupported MCP-Protocol-Version %q; this server speaks %s only", v, ProtocolVersion)))
+		return
+	}
 	defer r.Body.Close()
 
 	var req Request
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusOK, newError(nil, CodeParseError, err.Error()))
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxMessageBytes)).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, newError(nil, CodeParseError, err.Error()))
 		return
 	}
 	token := s.currentToken()
@@ -117,7 +151,26 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
 		return
 	}
+	if resp.Error != nil && resp.Error.Code == CodeUnauthorized {
+		w.Header().Set("WWW-Authenticate", `Bearer realm="novaforge", error="invalid_token"`)
+		writeJSON(w, http.StatusUnauthorized, resp)
+		return
+	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// maxMessageBytes bounds one JSON-RPC message, matching the stdio reader.
+const maxMessageBytes = 8 << 20
+
+func (s *Server) originAllowed(origin string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, o := range s.origins {
+		if o == origin {
+			return true
+		}
+	}
+	return false
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {

@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc"
@@ -91,16 +92,22 @@ func main() {
 	ciConn := dial("ci-runner", cfg.CIAddr)
 	defer ciConn.Close()
 
-	be := newBackend(
-		identityv1.NewIdentityServiceClient(identityConn),
-		gitv1.NewGitServiceClient(gitConn),
-		workv1.NewWorkServiceClient(workConn),
-		reviewsv1.NewReviewsServiceClient(workConn),
-		graphv1.NewGraphServiceClient(graphConn),
-		gatesv1.NewGatesServiceClient(gatesConn),
-		civ1.NewCIServiceClient(ciConn),
-	)
+	be := mcp.NewPlatformBackend(mcp.PlatformClients{
+		Identity: identityv1.NewIdentityServiceClient(identityConn),
+		Git:      gitv1.NewGitServiceClient(gitConn),
+		Work:     workv1.NewWorkServiceClient(workConn),
+		Reviews:  reviewsv1.NewReviewsServiceClient(workConn),
+		Graph:    graphv1.NewGraphServiceClient(graphConn),
+		Gates:    gatesv1.NewGatesServiceClient(gatesConn),
+		CI:       civ1.NewCIServiceClient(ciConn),
+	})
 	mcpServer := mcp.NewServer(be)
+	// Browsers are the one client that sends an Origin, and a page that
+	// reaches this port through DNS rebinding must not drive the platform
+	// with whatever credential it can find. MCP_ALLOWED_ORIGINS names the
+	// origins that may; unset, none may, and clients that send no Origin (an
+	// agent host, a CLI) are unaffected.
+	mcpServer.SetAllowedOrigins(splitList(os.Getenv("MCP_ALLOWED_ORIGINS")))
 	if token := os.Getenv("MCP_TOKEN"); token != "" {
 		// A stdio session has no per-request header to carry a credential;
 		// MCP_TOKEN lets an operator configure one static "<org>:<credential>"
@@ -191,13 +198,13 @@ func main() {
 	_ = httpSrv.Shutdown(shutCtx)
 }
 
-// stdinIsPipe reports whether stdin is not a TTY — the platform's own
-// signal that a parent process (an MCP client) has connected a pipe to
-// speak the stdio transport over, as opposed to a terminal or /dev/null.
-func stdinIsPipe() bool {
-	info, err := os.Stdin.Stat()
-	if err != nil {
-		return false
+// splitList splits a comma-separated list, dropping empty entries.
+func splitList(s string) []string {
+	var out []string
+	for _, part := range strings.Split(s, ",") {
+		if p := strings.TrimSpace(part); p != "" {
+			out = append(out, p)
+		}
 	}
-	return (info.Mode() & os.ModeCharDevice) == 0
+	return out
 }

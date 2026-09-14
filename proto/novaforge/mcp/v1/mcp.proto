@@ -11,6 +11,17 @@ service McpService {
   rpc ListServers(ListServersRequest) returns (ListServersResponse);
   rpc DecideServer(DecideServerRequest) returns (DecideServerResponse);
   rpc RevokeServer(RevokeServerRequest) returns (RevokeServerResponse);
+  // ListApprovedServers is what an agent's host reads at run start: only
+  // servers an owner or admin approved and nobody has since revoked. It is a
+  // separate RPC from ListServers so the one question that decides what an
+  // agent may be offered cannot be answered with a filter someone forgot.
+  rpc ListApprovedServers(ListApprovedServersRequest) returns (ListApprovedServersResponse);
+}
+
+message ListApprovedServersRequest {}
+
+message ListApprovedServersResponse {
+  repeated McpServer servers = 1;
 }
 
 // McpServer mirrors a row in the mcp.mcp_servers table.
