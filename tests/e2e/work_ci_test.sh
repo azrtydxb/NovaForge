@@ -103,6 +103,8 @@ jobs:
   build:
     run: |
       echo "hello from novaforge ci"
+      sleep 30
+      echo "build finished"
       mkdir -p out && echo "artifact body" > out/report.txt
     artifacts:
       - out/report.txt
@@ -116,7 +118,35 @@ PUSHED="$(git rev-parse HEAD)"
 cd - >/dev/null
 ok "pushed $PUSHED with a workflow"
 
-echo "== 5. the run reaches a terminal state =="
+API="http://$EDGE_IP:8080/api/v1/orgs/$ORG/repos/$REPO/ci"
+AUTH="Authorization: Bearer $TOKEN"
+
+echo "== 5. the job log is readable while the job runs =="
+# The job prints a line and then sleeps, so a read that finds that line while
+# the job still reports running is a read of a live log — not of a log sealed
+# after the fact, which is all this step could see before logs streamed.
+LIVE=""
+for _ in $(seq 1 60); do
+	RUN_ID="$(curl -fsS -H "$AUTH" "$API/runs" | python3 -c 'import json,sys;r=json.load(sys.stdin)["runs"];print(r[0]["id"] if r else "")')"
+	if [ -n "$RUN_ID" ]; then
+		JOB="$(curl -fsS -H "$AUTH" "$API/runs/$RUN_ID" | python3 -c 'import json,sys;j=json.load(sys.stdin)["jobs"];print(j[0]["id"]+" "+j[0]["status"] if j else "")')"
+		JOB_ID="${JOB%% *}"
+		JOB_STATE="${JOB##* }"
+		if [ "$JOB_STATE" = "running" ]; then
+			LINES="$(curl -fsS -H "$AUTH" "$API/jobs/$JOB_ID/logs")"
+			if echo "$LINES" | grep -q "hello from novaforge ci"; then
+				echo "$LINES" | grep -q "build finished" && fail "the log already has the job's last line; it was not read while running"
+				STILL="$(curl -fsS -H "$AUTH" "$API/runs/$RUN_ID" | python3 -c 'import json,sys;print(json.load(sys.stdin)["jobs"][0]["status"])')"
+				[ "$STILL" = "running" ] && LIVE=1 && break
+			fi
+		fi
+	fi
+	sleep 2
+done
+[ -n "$LIVE" ] || fail "the job's output was never readable while the job was running"
+ok "read the running job's log before it finished"
+
+echo "== 6. the run reaches a terminal state =="
 STATE=""
 for _ in $(seq 1 60); do
 	STATE="$(/tmp/nf ci runs "$REPO" 2>/dev/null | head -1 | awk '{print $2}' || true)"
@@ -129,10 +159,20 @@ done
 ok "run reached state: $STATE"
 [ "$STATE" = "success" ] || fail "the run did not succeed"
 
-echo "== 6. the job log and artifact are retrievable =="
+echo "== 7. the job log and artifact are retrievable =="
 /tmp/nf ci logs "$REPO" | grep -q "hello from novaforge ci" || fail "the job log does not contain the command's output"
+/tmp/nf ci logs "$REPO" | grep -q "build finished" || fail "the sealed job log is missing the job's last line"
 /tmp/nf ci artifacts "$REPO" | grep -q "report.txt" || fail "the artifact is not listed"
 ok "log and artifact retrievable"
+
+echo "== 8. the artifact's content downloads through the API =="
+ART_ID="$(curl -fsS -H "$AUTH" "$API/jobs/$JOB_ID/artifacts" | python3 -c 'import json,sys;a=[x for x in json.load(sys.stdin)["artifacts"] if x["name"]=="report.txt"];print(a[0]["id"] if a else "")')"
+[ -n "$ART_ID" ] || fail "the job's artifacts do not list report.txt"
+HEADERS="$(mktemp)"
+BODY="$(curl -fsS -D "$HEADERS" -H "$AUTH" "$API/artifacts/$ART_ID")" || fail "the artifact download failed"
+[ "$BODY" = "artifact body" ] || fail "downloaded artifact content is '$BODY', want 'artifact body'"
+grep -qi '^content-disposition: attachment' "$HEADERS" || fail "the artifact is not served as an attachment"
+ok "downloaded report.txt intact"
 
 echo
 echo "PASS: Work Items and CI work end to end on the kw cluster."

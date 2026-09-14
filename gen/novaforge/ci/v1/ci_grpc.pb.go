@@ -19,11 +19,12 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	CIService_ListRuns_FullMethodName      = "/novaforge.ci.v1.CIService/ListRuns"
-	CIService_GetRun_FullMethodName        = "/novaforge.ci.v1.CIService/GetRun"
-	CIService_GetJobLogs_FullMethodName    = "/novaforge.ci.v1.CIService/GetJobLogs"
-	CIService_ListArtifacts_FullMethodName = "/novaforge.ci.v1.CIService/ListArtifacts"
-	CIService_TriggerRun_FullMethodName    = "/novaforge.ci.v1.CIService/TriggerRun"
+	CIService_ListRuns_FullMethodName         = "/novaforge.ci.v1.CIService/ListRuns"
+	CIService_GetRun_FullMethodName           = "/novaforge.ci.v1.CIService/GetRun"
+	CIService_GetJobLogs_FullMethodName       = "/novaforge.ci.v1.CIService/GetJobLogs"
+	CIService_ListArtifacts_FullMethodName    = "/novaforge.ci.v1.CIService/ListArtifacts"
+	CIService_TriggerRun_FullMethodName       = "/novaforge.ci.v1.CIService/TriggerRun"
+	CIService_DownloadArtifact_FullMethodName = "/novaforge.ci.v1.CIService/DownloadArtifact"
 )
 
 // CIServiceClient is the client API for CIService service.
@@ -43,6 +44,11 @@ type CIServiceClient interface {
 	GetJobLogs(ctx context.Context, in *GetJobLogsRequest, opts ...grpc.CallOption) (*GetJobLogsResponse, error)
 	ListArtifacts(ctx context.Context, in *ListArtifactsRequest, opts ...grpc.CallOption) (*ListArtifactsResponse, error)
 	TriggerRun(ctx context.Context, in *TriggerRunRequest, opts ...grpc.CallOption) (*TriggerRunResponse, error)
+	// DownloadArtifact streams one artifact's content. The first message
+	// carries the artifact's name and size; every message carries data. It is
+	// a stream because an artifact may be tens of megabytes, far past a unary
+	// message's default limit.
+	DownloadArtifact(ctx context.Context, in *DownloadArtifactRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DownloadArtifactResponse], error)
 }
 
 type cIServiceClient struct {
@@ -103,6 +109,25 @@ func (c *cIServiceClient) TriggerRun(ctx context.Context, in *TriggerRunRequest,
 	return out, nil
 }
 
+func (c *cIServiceClient) DownloadArtifact(ctx context.Context, in *DownloadArtifactRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DownloadArtifactResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &CIService_ServiceDesc.Streams[0], CIService_DownloadArtifact_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[DownloadArtifactRequest, DownloadArtifactResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type CIService_DownloadArtifactClient = grpc.ServerStreamingClient[DownloadArtifactResponse]
+
 // CIServiceServer is the server API for CIService service.
 // All implementations should embed UnimplementedCIServiceServer
 // for forward compatibility.
@@ -120,6 +145,11 @@ type CIServiceServer interface {
 	GetJobLogs(context.Context, *GetJobLogsRequest) (*GetJobLogsResponse, error)
 	ListArtifacts(context.Context, *ListArtifactsRequest) (*ListArtifactsResponse, error)
 	TriggerRun(context.Context, *TriggerRunRequest) (*TriggerRunResponse, error)
+	// DownloadArtifact streams one artifact's content. The first message
+	// carries the artifact's name and size; every message carries data. It is
+	// a stream because an artifact may be tens of megabytes, far past a unary
+	// message's default limit.
+	DownloadArtifact(*DownloadArtifactRequest, grpc.ServerStreamingServer[DownloadArtifactResponse]) error
 }
 
 // UnimplementedCIServiceServer should be embedded to have
@@ -143,6 +173,9 @@ func (UnimplementedCIServiceServer) ListArtifacts(context.Context, *ListArtifact
 }
 func (UnimplementedCIServiceServer) TriggerRun(context.Context, *TriggerRunRequest) (*TriggerRunResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method TriggerRun not implemented")
+}
+func (UnimplementedCIServiceServer) DownloadArtifact(*DownloadArtifactRequest, grpc.ServerStreamingServer[DownloadArtifactResponse]) error {
+	return status.Error(codes.Unimplemented, "method DownloadArtifact not implemented")
 }
 func (UnimplementedCIServiceServer) testEmbeddedByValue() {}
 
@@ -254,6 +287,17 @@ func _CIService_TriggerRun_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CIService_DownloadArtifact_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(DownloadArtifactRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(CIServiceServer).DownloadArtifact(m, &grpc.GenericServerStream[DownloadArtifactRequest, DownloadArtifactResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type CIService_DownloadArtifactServer = grpc.ServerStreamingServer[DownloadArtifactResponse]
+
 // CIService_ServiceDesc is the grpc.ServiceDesc for CIService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -282,7 +326,13 @@ var CIService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _CIService_TriggerRun_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "DownloadArtifact",
+			Handler:       _CIService_DownloadArtifact_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "novaforge/ci/v1/ci.proto",
 }
 

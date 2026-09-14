@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   useMutation,
@@ -186,7 +186,12 @@ export function CI() {
         </Panel>
 
         {current ? (
-          <RunDetail org={w.org!} repo={current.repo} runId={current.id} />
+          <RunDetail
+            key={current.id}
+            org={w.org!}
+            repo={current.repo}
+            runId={current.id}
+          />
         ) : (
           <Panel>
             <Empty>Select a run.</Empty>
@@ -220,25 +225,54 @@ function RunDetail({
         : false,
   });
 
-  const firstJob = run.data?.jobs[0];
+  // The log shown is the job the person picked. Until they pick one it is the
+  // job most worth watching: the first still running, else the first. It used
+  // to be the first job, always — a failing second job's log could not be
+  // read from this screen at all.
+  const [pickedJob, setPickedJob] = useState<string | null>(null);
+  const jobs = run.data?.jobs ?? [];
+  const selectedJob =
+    jobs.find((j) => j.id === pickedJob) ??
+    jobs.find((j) => j.status === "running") ??
+    jobs[0];
+  const jobLive =
+    selectedJob?.status === "running" || selectedJob?.status === "pending";
 
   const logs = useQuery({
-    queryKey: ["ci-log", org, repo, firstJob?.id],
+    queryKey: ["ci-log", org, repo, selectedJob?.id],
     queryFn: () =>
-      api.get<{ lines: string[] }>(`${base}/jobs/${enc(firstJob!.id)}/logs`),
-    enabled: firstJob !== undefined,
+      api.get<{ lines: string[] }>(`${base}/jobs/${enc(selectedJob!.id)}/logs`),
+    enabled: selectedJob !== undefined,
     // A running job's log grows; a finished job's does not change.
-    refetchInterval: run.data?.run.status === "running" ? 3_000 : false,
+    refetchInterval: jobLive ? 2_000 : false,
   });
 
   const artifacts = useQuery({
-    queryKey: ["ci-artifacts", org, repo, firstJob?.id],
+    queryKey: ["ci-artifacts", org, repo, selectedJob?.id, selectedJob?.status],
     queryFn: () =>
       api.get<{ artifacts: Artifact[] }>(
-        `${base}/jobs/${enc(firstJob!.id)}/artifacts`,
+        `${base}/jobs/${enc(selectedJob!.id)}/artifacts`,
       ),
-    enabled: firstJob !== undefined,
+    enabled: selectedJob !== undefined,
   });
+
+  // Following a running job means staying at the end of its log as it grows,
+  // unless the person has scrolled up to read something.
+  const logBox = useRef<HTMLPreElement>(null);
+  const pinned = useRef(true);
+  const lineCount = logs.data?.lines.length ?? 0;
+  useEffect(() => {
+    const el = logBox.current;
+    if (el && pinned.current) el.scrollTop = el.scrollHeight;
+  }, [lineCount, selectedJob?.id]);
+
+  const [downloadError, setDownloadError] = useState<unknown>(null);
+  const download = (a: Artifact) => {
+    setDownloadError(null);
+    api
+      .download(`${base}/artifacts/${enc(a.id)}`, a.name)
+      .catch((e: unknown) => setDownloadError(e));
+  };
 
   return (
     <div
@@ -255,12 +289,28 @@ function RunDetail({
                 {d.jobs.map((j) => (
                   <div
                     key={j.id}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={selectedJob?.id === j.id}
+                    title="Show this job's log and artifacts"
+                    onClick={() => setPickedJob(j.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setPickedJob(j.id);
+                      }
+                    }}
                     style={{
                       display: "flex",
                       alignItems: "center",
                       gap: 11,
                       padding: "9px 14px",
                       borderBottom: "1px solid var(--line)",
+                      cursor: "pointer",
+                      background:
+                        selectedJob?.id === j.id
+                          ? "rgba(77,127,255,.1)"
+                          : "transparent",
                     }}
                   >
                     <span style={{ flex: 1, font: "13px var(--sans)" }}>
@@ -319,7 +369,12 @@ function RunDetail({
       <Panel style={{ minWidth: 0 }}>
         <PanelHead>
           LOG
-          {run.data?.run.status === "running" ? (
+          {selectedJob ? (
+            <span style={{ font: "11px var(--mono)", color: "var(--fg-dim)" }}>
+              {selectedJob.name}
+            </span>
+          ) : null}
+          {jobLive ? (
             <span
               style={{
                 font: "10px var(--mono)",
@@ -331,15 +386,25 @@ function RunDetail({
             </span>
           ) : null}
         </PanelHead>
-        {!firstJob ? (
+        {!selectedJob ? (
           <Empty>No job to read a log from.</Empty>
         ) : (
           <Async query={logs}>
             {(d) =>
               d.lines.length === 0 ? (
-                <Empty>This job has produced no output yet.</Empty>
+                <Empty>
+                  {jobLive
+                    ? "This job has produced no output yet."
+                    : "This job produced no output."}
+                </Empty>
               ) : (
                 <pre
+                  ref={logBox}
+                  onScroll={(e) => {
+                    const el = e.currentTarget;
+                    pinned.current =
+                      el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+                  }}
                   style={{
                     margin: 0,
                     padding: 14,
@@ -359,13 +424,22 @@ function RunDetail({
 
       <Panel>
         <PanelHead>ARTIFACTS</PanelHead>
-        {!firstJob ? (
+        {downloadError ? (
+          <div style={{ padding: "9px 14px" }}>
+            <Failed error={downloadError} />
+          </div>
+        ) : null}
+        {!selectedJob ? (
           <Empty>—</Empty>
         ) : (
           <Async query={artifacts}>
             {(d) =>
               d.artifacts.length === 0 ? (
-                <Empty>This job declared no artifacts.</Empty>
+                <Empty>
+                  {jobLive
+                    ? "Artifacts are collected when the job succeeds."
+                    : "This job kept no artifacts."}
+                </Empty>
               ) : (
                 <>
                   {d.artifacts.map((a) => (
@@ -373,6 +447,7 @@ function RunDetail({
                       key={a.id}
                       style={{
                         display: "flex",
+                        alignItems: "center",
                         gap: 11,
                         padding: "9px 14px",
                         borderBottom: "1px solid var(--line)",
@@ -389,6 +464,21 @@ function RunDetail({
                       >
                         {bytes(a.size_bytes)}
                       </span>
+                      <button
+                        type="button"
+                        onClick={() => download(a)}
+                        style={{
+                          font: "11px var(--mono)",
+                          color: "var(--accent)",
+                          background: "transparent",
+                          border: "1px solid var(--line)",
+                          borderRadius: 6,
+                          padding: "3px 8px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Download
+                      </button>
                     </div>
                   ))}
                 </>

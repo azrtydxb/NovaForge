@@ -174,5 +174,6 @@ func dial(addr string) (*grpc.ClientConn, error) {
 		// Carry the caller's credential onto every downstream call; the edge is
 		// a gateway, not a trusted principal of its own.
 		grpc.WithChainUnaryInterceptor(edge.ForwardCredential),
+		grpc.WithChainStreamInterceptor(edge.ForwardCredentialStream),
 	)
 }

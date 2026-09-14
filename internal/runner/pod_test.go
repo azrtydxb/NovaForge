@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"strings"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,7 +50,12 @@ func TestPodExecutorCreatesIsolatedPod(t *testing.T) {
 		}
 		if len(list.Items) > 0 {
 			pod = &list.Items[0]
+			break
 		}
+		// The pod is created on another goroutine; a hundred lists with no
+		// pause can all finish before it is scheduled, which failed this test
+		// intermittently under a loaded machine.
+		time.Sleep(20 * time.Millisecond)
 	}
 	if pod == nil {
 		t.Fatal("no job pod was created")
@@ -106,7 +112,9 @@ func TestDefaultJobImageIsConfigurable(t *testing.T) {
 		list, _ := cs.CoreV1().Pods("novaforge").List(context.Background(), metav1.ListOptions{})
 		if len(list.Items) > 0 {
 			pod = &list.Items[0]
+			break
 		}
+		time.Sleep(10 * time.Millisecond) // see TestPodExecutorCreatesIsolatedPod
 	}
 	if pod == nil {
 		t.Fatal("no job pod was created")

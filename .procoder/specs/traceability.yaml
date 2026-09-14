@@ -164,28 +164,35 @@ criteria:
       - ./internal/reviews TestSecondReviewerApproves
 
   S-6/TestRunnerJobStreamAndArtifact:
-    status: partial
+    status: covered
     note: >-
-      A real runner runs a job and its log and artifact listing are read after
-      the run ends. "Logs observable while the job runs" is asserted only on
-      the Redis log stream with no job running, artifact content round-trips
-      only at the store (the edge has no artifact download route), and the
-      dispatch tests use in-process channels, not the gRPC stream.
+      TestRunnerJobStreamAndArtifact runs the whole path over a real gRPC
+      server on a local listener: the runner's own Session receives the job
+      from the pump on its Connect stream, streams LogChunks, and GetJobLogs
+      returns the first line while the job is provably still running; the
+      finished log is sealed into MinIO and the artifact downloads byte for
+      byte, and not for another organization. The job runs through
+      LocalExecutor, which shares the pod executor's live output filter
+      (TestJobOutputReachesTheLogWhileTheJobRuns); a pod job itself is proven
+      only by work_ci_test.sh, whose live-log and download steps were written
+      in this change and have not yet been run against the cluster.
     go_tests:
+      - ./internal/ci TestRunnerJobStreamAndArtifact
+      - ./internal/runner TestJobOutputReachesTheLogWhileTheJobRuns
+      - ./internal/edge TestDownloadArtifactServesTheFile
+      - ./internal/edge TestDownloadArtifactReportsAbsence
       - ./internal/ci TestPumpHandsAPendingJobToAConnectedRunner
-      - ./internal/ci TestDispatchReachesMatchingRunner
-      - ./internal/ci TestTailReceivesAppendedLines
       - ./internal/ci TestSealMovesLogToObjectStorage
-      - ./internal/ci TestUploadThenOpen
-      - ./internal/runner TestExecuteStreamsLogLines
       - ./internal/runner TestArtifactsRoundTripThroughOutput
     e2e:
       - script: tests/e2e/work_ci_test.sh
         step: "4. pushing a workflow schedules a CI run"
       - script: tests/e2e/work_ci_test.sh
-        step: "5. the run reaches a terminal state"
+        step: "5. the job log is readable while the job runs"
       - script: tests/e2e/work_ci_test.sh
-        step: "6. the job log and artifact are retrievable"
+        step: "7. the job log and artifact are retrievable"
+      - script: tests/e2e/work_ci_test.sh
+        step: "8. the artifact's content downloads through the API"
 
   S-6/TestAgentCIJob:
     status: covered

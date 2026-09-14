@@ -218,6 +218,33 @@ Driving the new screens in a browser found four more defects, each fixed:
   interval from process start, and every deploy restarts the process. It now
   sweeps shortly after start, and a person can scan on demand.
 
+## Live CI logs and artifact downloads (2026-09-15)
+
+`TestRunnerJobStreamAndArtifact` now drives the runner protocol over a real
+gRPC listener — the runner's own `runner.Session`, the pump, LogChunks into
+Redis, `GetJobLogs` — and reads a job's log while the job is provably still
+running. Writing it found:
+
+- **A pod job's log was never live.** The pod executor collected the whole
+  output and forwarded it when the pod exited, to keep the artifact block out
+  of the log. Only that block is now held back.
+- **No log was ever sealed.** `LogSink.Seal` had no caller; every job's log
+  stayed in Redis and the retention sweep had nothing to delete. A runner's
+  terminal status report now seals it, and a read merges sealed and live
+  lines, since the last chunks can land after the report.
+- **Listing one job's artifacts always failed**: the job id was ignored and the
+  request resolved as an empty run id.
+- **The CI screen never knew a run was running**: it read `body.run`, which the
+  edge never sent, so the log was never refetched.
+- **Any runner could write into any job's log or report any job's status** by
+  naming its id.
+
+Artifacts download through a streaming `DownloadArtifact` RPC and
+`GET /api/v1/orgs/{org}/repos/{repo}/ci/artifacts/{id}`, always as an
+attachment and never with a renderable type. The work_ci e2e steps that read a
+running job's log and download the artifact are written but have not yet been
+run against the cluster.
+
 ## The GUI
 
 `web/` implements "NovaForge GUI.dc.html" from the claude.ai/design project
@@ -330,7 +357,7 @@ by reading test bodies, not by matching names.
 from the map, when the map names a criterion the spec lacks, when a cited Go
 test is renamed or deleted, or when a cited e2e script or step no longer exists.
 
-**7 covered, 21 partial, 5 uncovered.**
+**8 covered, 20 partial, 5 uncovered.**
 
 Uncovered: the component is tested, but nothing in production calls it, so the
 behaviour cannot be seen on the deployed platform:
@@ -358,8 +385,6 @@ Partial (the map's `note` says exactly what is missing):
   and assignment to a human are never asserted.
 - S-5 `TestEngineeringRunProof`: plan, change impact and the producing
   agent/model are never exposed by a run in any test.
-- S-6 `TestRunnerJobStreamAndArtifact`: logs are never read while a job runs,
-  and artifact content has no download route.
 - S-7 `TestAgentRunIsolationAndEvidence`: namespaces are only checked against
   the fake clientset, and evidence is never read after teardown.
 - S-7 `TestRunBudgetHardStop`: only the token limit stops a run; the stored

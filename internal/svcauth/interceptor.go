@@ -21,43 +21,67 @@ import (
 // allowed in.
 func UnaryServerInterceptor(identity identityv1.IdentityServiceClient, hmacSecret string) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		md, ok := metadata.FromIncomingContext(ctx)
-		if !ok {
-			return handler(ctx, req)
-		}
-		token := strings.TrimPrefix(first(md, "authorization"), "Bearer ")
-		if token == "" {
-			return handler(ctx, req)
-		}
-		org := first(md, "x-novaforge-org")
-
-		if strings.HasPrefix(token, Prefix) {
-			service, orgID, err := Verify(hmacSecret, token)
-			if err != nil {
-				return handler(ctx, req)
-			}
-			return handler(authz.WithScope(ctx, authz.Scope{
-				OrgID:     orgID,
-				ActorKind: actorKindFor(service),
-			}), req)
-		}
-
-		if identity == nil {
-			return handler(ctx, req)
-		}
-		subj, err := resolveUser(ctx, identity, token, org)
-		if err != nil {
-			return handler(ctx, req)
-		}
-		scope := authz.Scope{ActorKind: subj.GetActorKind(), Role: subj.GetRole()}
-		if id, err := uuid.Parse(subj.GetUserId()); err == nil {
-			scope.ActorID = id
-		}
-		if id, err := uuid.Parse(subj.GetOrgId()); err == nil {
-			scope.OrgID = id
-		}
-		return handler(authz.WithScope(ctx, scope), req)
+		return handler(withCallerScope(ctx, identity, hmacSecret), req)
 	}
+}
+
+// StreamServerInterceptor is UnaryServerInterceptor for streaming RPCs. A
+// streaming RPC served without it sees no caller at all and refuses every
+// request, which reads as a permissions problem rather than a missing
+// interceptor.
+func StreamServerInterceptor(identity identityv1.IdentityServiceClient, hmacSecret string) grpc.StreamServerInterceptor {
+	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		return handler(srv, &scopedStream{ServerStream: ss, ctx: withCallerScope(ss.Context(), identity, hmacSecret)})
+	}
+}
+
+type scopedStream struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+func (s *scopedStream) Context() context.Context { return s.ctx }
+
+// withCallerScope returns ctx carrying the caller's scope, or ctx unchanged
+// when the request carries no credential that resolves. An unresolved caller
+// has no scope, and every org-scoped handler refuses a context without one.
+func withCallerScope(ctx context.Context, identity identityv1.IdentityServiceClient, hmacSecret string) context.Context {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return ctx
+	}
+	token := strings.TrimPrefix(first(md, "authorization"), "Bearer ")
+	if token == "" {
+		return ctx
+	}
+	org := first(md, "x-novaforge-org")
+
+	if strings.HasPrefix(token, Prefix) {
+		service, orgID, err := Verify(hmacSecret, token)
+		if err != nil {
+			return ctx
+		}
+		return authz.WithScope(ctx, authz.Scope{
+			OrgID:     orgID,
+			ActorKind: actorKindFor(service),
+		})
+	}
+
+	if identity == nil {
+		return ctx
+	}
+	subj, err := resolveUser(ctx, identity, token, org)
+	if err != nil {
+		return ctx
+	}
+	scope := authz.Scope{ActorKind: subj.GetActorKind(), Role: subj.GetRole()}
+	if id, err := uuid.Parse(subj.GetUserId()); err == nil {
+		scope.ActorID = id
+	}
+	if id, err := uuid.Parse(subj.GetOrgId()); err == nil {
+		scope.OrgID = id
+	}
+	return authz.WithScope(ctx, scope)
 }
 
 // resolveUser tries the credential as a token then as a session, mirroring the

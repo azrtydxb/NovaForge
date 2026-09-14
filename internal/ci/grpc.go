@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
+	"log"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -22,6 +23,11 @@ type logAppender interface {
 	Append(ctx context.Context, jobID uuid.UUID, line string) error
 }
 
+// logSealer moves a finished job's live log into object storage.
+type logSealer interface {
+	Seal(ctx context.Context, jobID uuid.UUID) (string, error)
+}
+
 // Server implements novaforge.ci.v1.RunnerService: runners register once,
 // then hold a single persistent outbound Connect stream that jobs are
 // pushed down, so a runner never needs inbound network reachability.
@@ -31,6 +37,7 @@ type Server struct {
 	store      *Store
 	dispatcher *Dispatcher
 	logs       logAppender
+	sealer     logSealer
 	artifacts  *ArtifactStore
 }
 
@@ -43,8 +50,13 @@ func NewServer(store *Store, dispatcher *Dispatcher) *Server {
 }
 
 // SetLogSink wires a live-log destination for streamed log_chunk frames.
+// When the sink can also seal (LogSink can), a job's log is sealed as soon as
+// its runner reports it finished.
 func (s *Server) SetLogSink(logs logAppender) {
 	s.logs = logs
+	if sealer, ok := logs.(logSealer); ok {
+		s.sealer = sealer
+	}
 }
 
 // Register enrolls a new runner, returning the id and bearer token it must
@@ -95,6 +107,7 @@ func (s *Server) Connect(stream civ1.RunnerService_ConnectServer) error {
 	defer close(send)
 
 	var runnerID uuid.UUID
+	owned := map[uuid.UUID]bool{}
 	for {
 		req, err := stream.Recv()
 		if err != nil {
@@ -129,6 +142,16 @@ func (s *Server) Connect(stream civ1.RunnerService_ConnectServer) error {
 			if jerr != nil {
 				continue
 			}
+			// A runner may write only to the log of a job it was handed.
+			// Without this any connected runner could write lines into any
+			// job's log — another organization's included — by naming its id.
+			if !owned[jobID] {
+				job, gerr := s.store.GetJob(ctx, jobID)
+				if gerr != nil || job.RunnerID == nil || *job.RunnerID != runnerID {
+					continue
+				}
+				owned[jobID] = true
+			}
 			if s.logs != nil {
 				_ = s.logs.Append(ctx, jobID, chunk.GetLine())
 			}
@@ -152,10 +175,34 @@ func (s *Server) ReportStatus(ctx context.Context, req *civ1.ReportStatusRequest
 	if err != nil {
 		return nil, fmt.Errorf("invalid job_id: %w", err)
 	}
+	// As with artifacts: only the runner a job was handed may report on it.
+	job, err := s.store.GetJob(ctx, jobID)
+	if err != nil {
+		return nil, status.Error(codes.NotFound, "no such job")
+	}
+	runnerID, err := uuid.Parse(req.GetRunnerId())
+	if err != nil || job.RunnerID == nil || *job.RunnerID != runnerID {
+		return nil, status.Error(codes.PermissionDenied, "this job is not assigned to that runner")
+	}
+	// A finished job's log moves to object storage. Nothing used to call
+	// Seal, so every job's log stayed in Redis forever and the retention
+	// sweep, which deletes sealed logs, had nothing to delete. It is sealed
+	// before the status is written, so a job anyone sees as finished already
+	// has its log sealed. A failure to seal does not stop the job finishing:
+	// its lines stay readable live.
+	if terminalJobStatus(req.GetStatus()) && s.sealer != nil {
+		if _, err := s.sealer.Seal(ctx, jobID); err != nil {
+			log.Printf("ci: seal log of job %s: %v", jobID, err)
+		}
+	}
 	if err := s.store.SetJobStatus(ctx, jobID, req.GetStatus(), req.GetDetail()); err != nil {
 		return nil, err
 	}
 	return &civ1.ReportStatusResponse{Ok: true}, nil
+}
+
+func terminalJobStatus(s string) bool {
+	return s == "success" || s == "failure" || s == "cancelled"
 }
 
 // maxArtifactBytes bounds one uploaded artifact. CI artifacts are reports and

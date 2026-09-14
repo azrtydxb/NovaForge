@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 
 	civ1 "github.com/novaforge/novaforge/gen/novaforge/ci/v1"
@@ -25,6 +26,28 @@ const logScannerMaxLine = 1 << 20
 // pipe being held open cannot leak the call forever.
 const cancelWaitDelay = 5 * time.Second
 
+// LocalExecutor runs a job's command on the runner host, in a directory per
+// job under Workdir. It exists for development and for tests that drive the
+// real runner protocol without a cluster; a deployed runner uses PodExecutor.
+//
+// It captures declared artifacts exactly the way a pod does — the job emits
+// them on its own output and the same filter lifts them out — so the path a
+// test exercises is the path a pod job takes, not a parallel one.
+type LocalExecutor struct {
+	Workdir string
+	// OnArtifacts receives whatever the job declared, once, after it succeeds.
+	OnArtifacts func(ctx context.Context, jobID string, artifacts []Artifact) error
+}
+
+// Run executes job in Workdir/<job id>.
+func (e *LocalExecutor) Run(ctx context.Context, job *civ1.ConnectResponse, logs chan<- string) (int, error) {
+	dir := e.Workdir
+	if job.GetJobId() != "" {
+		dir = filepath.Join(e.Workdir, filepath.Base(job.GetJobId()))
+	}
+	return execute(ctx, job, dir, logs, e.OnArtifacts)
+}
+
 // Execute clones job's repository at job.CommitSha into workdir (skipped
 // when job carries no RepoCloneUrl, which test jobs with a bare command
 // don't), then runs job.RunCmd there, streaming every output line — stdout
@@ -34,16 +57,20 @@ const cancelWaitDelay = 5 * time.Second
 // kills the running command via CommandContext's Cancel hook rather than
 // leaking it, waiting at most WaitDelay for its output pipes to close.
 func Execute(ctx context.Context, job *civ1.ConnectResponse, workdir string, logs chan<- string) (int, error) {
-	if err := os.MkdirAll(workdir, 0o755); err != nil {
-		return 0, fmt.Errorf("create workdir: %w", err)
-	}
+	return execute(ctx, job, workdir, logs, nil)
+}
 
+func execute(ctx context.Context, job *civ1.ConnectResponse, workdir string, logs chan<- string,
+	onArtifacts func(context.Context, string, []Artifact) error) (int, error) {
 	// A CI job runs whatever the repository's workflow file says, so the command
 	// is attacker-controlled by construction. The defence is isolation, not
 	// input validation — see PodExecutor. Running it on the runner host is a
 	// development convenience and has to be opted into deliberately.
 	if !LocalExecutionAllowed() {
 		return 0, ErrLocalExecutionNotPermitted
+	}
+	if err := os.MkdirAll(workdir, 0o755); err != nil {
+		return 0, fmt.Errorf("create workdir: %w", err)
 	}
 
 	if job.GetRepoCloneUrl() != "" {
@@ -55,7 +82,11 @@ func Execute(ctx context.Context, job *civ1.ConnectResponse, workdir string, log
 	// Reached only when an operator has explicitly set NOVAFORGE_ALLOW_LOCAL_EXEC=1
 	// (checked above); the isolated path is PodExecutor.Run, which is the default
 	// in a cluster and the only path a deployed runner can take.
-	cmd := exec.CommandContext(ctx, "sh", "-c", job.GetRunCmd()) // nosemgrep: dangerous-exec-command
+	script := job.GetRunCmd()
+	if onArtifacts != nil {
+		script += artifactCaptureScript(job.GetArtifactPaths())
+	}
+	cmd := exec.CommandContext(ctx, "sh", "-c", script) // nosemgrep: dangerous-exec-command
 	cmd.Dir = workdir
 	cmd.Env = append(os.Environ(), envSlice(job.GetEnv())...)
 	cmd.Cancel = func() error {
@@ -67,28 +98,41 @@ func Execute(ctx context.Context, job *civ1.ConnectResponse, workdir string, log
 	cmd.Stdout = pw
 	cmd.Stderr = pw
 
+	raw := make(chan string, 256)
+	type filtered struct {
+		arts []Artifact
+		err  error
+	}
+	filterDone := make(chan filtered, 1)
+	go func() {
+		arts, err := filterOutput(ctx, raw, logs)
+		filterDone <- filtered{arts, err}
+	}()
+
 	scanDone := make(chan struct{})
 	go func() {
 		defer close(scanDone)
+		defer close(raw)
 		scanner := bufio.NewScanner(pr)
 		scanner.Buffer(make([]byte, 64*1024), logScannerMaxLine)
 		for scanner.Scan() {
-			select {
-			case logs <- scanner.Text():
-			case <-ctx.Done():
-			}
+			raw <- scanner.Text()
 		}
+		// Unblock the writer if scanning stopped early (an over-long line).
+		_, _ = io.Copy(io.Discard, pr)
 	}()
 
 	if err := cmd.Start(); err != nil {
 		pw.Close()
 		<-scanDone
+		<-filterDone
 		return 0, fmt.Errorf("start command: %w", err)
 	}
 
 	waitErr := cmd.Wait()
 	pw.Close()
 	<-scanDone
+	out := <-filterDone
 
 	if waitErr != nil {
 		var exitErr *exec.ExitError
@@ -100,7 +144,28 @@ func Execute(ctx context.Context, job *civ1.ConnectResponse, workdir string, log
 		}
 		return 0, fmt.Errorf("run command: %w", waitErr)
 	}
+
+	// As in a pod: artifacts are kept only from a job that succeeded.
+	if onArtifacts != nil {
+		switch {
+		case out.err != nil:
+			sendLine(ctx, logs, "novaforge: reading artifacts failed: "+out.err.Error())
+		case len(out.arts) > 0:
+			if uerr := onArtifacts(ctx, job.GetJobId(), out.arts); uerr != nil {
+				sendLine(ctx, logs, "novaforge: uploading artifacts failed: "+uerr.Error())
+			}
+		}
+	}
 	return 0, nil
+}
+
+// sendLine reports something the runner itself has to say into the job's log,
+// without blocking forever on a reader that has gone away.
+func sendLine(ctx context.Context, logs chan<- string, line string) {
+	select {
+	case logs <- line:
+	case <-ctx.Done():
+	}
 }
 
 // cloneAt clones url into dir and checks it out at sha (when sha is

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -107,6 +108,14 @@ func (s *LogSink) Tail(ctx context.Context, jobID uuid.UUID, from string) (<-cha
 // Seal reads jobID's entire live log, writes it to object storage as
 // logs/<jobID>.txt, and deletes the Redis stream. The returned key is the
 // object storage key the sealed log now lives at.
+//
+// Sealing is safe to repeat, and safe against lines that arrive while it runs.
+// A runner reports a job's status on a unary call while its last log chunks
+// may still be in flight on the Connect stream, so the two can land in either
+// order. Seal therefore appends to whatever was sealed before, and removes
+// from Redis only the entries it actually wrote — a line appended after the
+// read stays live, is still returned by a log read, and is folded in by the
+// next Seal.
 func (s *LogSink) Seal(ctx context.Context, jobID uuid.UUID) (string, error) {
 	key := logStreamKey(jobID)
 	res, err := s.rdb.XRange(ctx, key, "-", "+").Result()
@@ -114,22 +123,66 @@ func (s *LogSink) Seal(ctx context.Context, jobID uuid.UUID) (string, error) {
 		return "", fmt.Errorf("read log for job %s: %w", jobID, err)
 	}
 
+	objectKey := sealedObjectKey(jobID)
 	var b strings.Builder
+	if prior, err := s.blobs.Get(ctx, objectKey); err == nil {
+		_, cerr := io.Copy(&b, prior)
+		prior.Close()
+		if cerr != nil {
+			return "", fmt.Errorf("read previously sealed log for job %s: %w", jobID, cerr)
+		}
+	} else if !errors.Is(err, blobstore.ErrNotFound) {
+		return "", fmt.Errorf("read previously sealed log for job %s: %w", jobID, err)
+	}
+	ids := make([]string, 0, len(res))
 	for _, msg := range res {
 		line, _ := msg.Values["line"].(string)
 		b.WriteString(line)
 		b.WriteByte('\n')
+		ids = append(ids, msg.ID)
 	}
 	content := b.String()
 
-	objectKey := sealedObjectKey(jobID)
 	if err := s.blobs.Put(ctx, objectKey, strings.NewReader(content), int64(len(content)), "text/plain"); err != nil {
 		return "", fmt.Errorf("seal log for job %s: %w", jobID, err)
 	}
-	if err := s.rdb.Del(ctx, key).Err(); err != nil {
-		return "", fmt.Errorf("delete live log for job %s after sealing: %w", jobID, err)
+	if len(ids) > 0 {
+		if err := trimSealed.Run(ctx, s.rdb, []string{key}, toAny(ids)...).Err(); err != nil && !errors.Is(err, redis.Nil) {
+			return "", fmt.Errorf("remove sealed lines of job %s from the live log: %w", jobID, err)
+		}
 	}
 	return objectKey, nil
+}
+
+// trimSealed deletes exactly the stream entries that were sealed, and the
+// stream itself once nothing unsealed is left in it, atomically: a DEL after
+// the read would drop a line appended in between.
+var trimSealed = redis.NewScript(`
+redis.call('XDEL', KEYS[1], unpack(ARGV))
+if redis.call('XLEN', KEYS[1]) == 0 then
+  redis.call('DEL', KEYS[1])
+end
+return 1
+`)
+
+func toAny(ss []string) []any {
+	out := make([]any, len(ss))
+	for i, s := range ss {
+		out[i] = s
+	}
+	return out
+}
+
+// Delete removes a job's live log and its sealed copy. It is how a deleted
+// repository's or organization's CI logs are removed, not only its rows.
+func (s *LogSink) Delete(ctx context.Context, jobID uuid.UUID) error {
+	if err := s.rdb.Del(ctx, logStreamKey(jobID)).Err(); err != nil {
+		return fmt.Errorf("delete live log for job %s: %w", jobID, err)
+	}
+	if err := s.blobs.Delete(ctx, sealedObjectKey(jobID)); err != nil {
+		return fmt.Errorf("delete sealed log for job %s: %w", jobID, err)
+	}
+	return nil
 }
 
 // Snapshot returns the log lines buffered so far for a job that has not been

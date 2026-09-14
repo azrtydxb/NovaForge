@@ -142,13 +142,14 @@ func (p *PodExecutor) Run(ctx context.Context, job *civ1.ConnectResponse, logs c
 	// here rather than forwarded raw: a reader of the log should never see the
 	// encoded blob.
 	raw := make(chan string, 256)
-	var collected []string
-	done := make(chan struct{})
+	type filtered struct {
+		arts []Artifact
+		err  error
+	}
+	done := make(chan filtered, 1)
 	go func() {
-		defer close(done)
-		for line := range raw {
-			collected = append(collected, line)
-		}
+		arts, err := filterOutput(ctx, raw, logs)
+		done <- filtered{arts, err}
 	}()
 	if err := p.streamLogs(ctx, created.Name, raw); err != nil {
 		close(raw)
@@ -156,16 +157,11 @@ func (p *PodExecutor) Run(ctx context.Context, job *civ1.ConnectResponse, logs c
 		return 0, err
 	}
 	close(raw)
-	<-done
-
-	arts, clean, aerr := extractArtifacts(collected)
-	for _, l := range clean {
-		select {
-		case logs <- l:
-		case <-ctx.Done():
-			return 0, ctx.Err()
-		}
+	out := <-done
+	if ctx.Err() != nil {
+		return 0, ctx.Err()
 	}
+	arts, aerr := out.arts, out.err
 
 	code, err := p.waitForExit(ctx, created.Name)
 	if err != nil {

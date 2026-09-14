@@ -114,10 +114,17 @@ func main() {
 	}
 	defer identityConn.Close()
 
-	srv := grpc.NewServer(grpc.ChainUnaryInterceptor(
-		logInterceptor,
-		svcauth.UnaryServerInterceptor(identityv1.NewIdentityServiceClient(identityConn), cfg.HMACSecret),
-	))
+	identityClient := identityv1.NewIdentityServiceClient(identityConn)
+	srv := grpc.NewServer(
+		grpc.ChainUnaryInterceptor(
+			logInterceptor,
+			svcauth.UnaryServerInterceptor(identityClient, cfg.HMACSecret),
+		),
+		// Artifact downloads stream. Without the stream interceptor they reach
+		// the query server with no caller and every download is refused. The
+		// runner's Connect stream needs no scope and ignores the one this sets.
+		grpc.ChainStreamInterceptor(svcauth.StreamServerInterceptor(identityClient, cfg.HMACSecret)),
+	)
 	civ1.RegisterRunnerServiceServer(srv, svc.Server)
 	civ1.RegisterCIServiceServer(srv, svc.Query)
 

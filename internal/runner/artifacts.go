@@ -3,6 +3,7 @@ package runner
 import (
 	"archive/tar"
 	"bytes"
+	"context"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -35,7 +36,9 @@ const maxArtifactPayload = 48 << 20
 
 // artifactCaptureScript returns the shell appended to a job's command to emit
 // its declared artifacts. Missing paths are skipped rather than failing the
-// job, which has already succeeded by this point.
+// job, which has already succeeded by this point. COPYFILE_DISABLE stops a
+// BSD tar (a macOS runner host) adding an AppleDouble "._name" entry per file,
+// which arrived as a second, unreadable artifact beside each real one.
 func artifactCaptureScript(paths []string) string {
 	if len(paths) == 0 {
 		return ""
@@ -51,7 +54,7 @@ for __nf_p in %s; do
 done
 if [ -n "$__nf_existing" ]; then
   echo %q
-  tar cf - $__nf_existing | base64 | tr -d '\n'
+  COPYFILE_DISABLE=1 tar cf - $__nf_existing | base64 | tr -d '\n'
   echo
   echo %q
 fi
@@ -124,3 +127,64 @@ func ExtractArtifactsForTest(lines []string) ([]Artifact, []string, error) {
 
 // ArtifactCaptureScriptForTest returns the shell appended to a job's command.
 func ArtifactCaptureScriptForTest(paths []string) string { return artifactCaptureScript(paths) }
+
+// filterOutput reads a job's raw output from raw until it is closed, sends
+// every ordinary line to logs the moment it arrives, and returns the artifacts
+// carried between the capture markers.
+//
+// Only the marked block is held back. The first version collected the whole
+// output and forwarded it after the stream closed, which kept artifacts out of
+// the log but also kept every line out of it until the job had ended — a live
+// log that could only ever be read afterwards.
+func filterOutput(ctx context.Context, raw <-chan string, logs chan<- string) ([]Artifact, error) {
+	var (
+		payload  strings.Builder
+		inBlock  bool
+		overflow bool
+		stopped  bool
+	)
+	for line := range raw {
+		// Once ctx is done the rest is drained, never forwarded, so the
+		// producer is not left blocked on a send nobody receives.
+		if stopped {
+			continue
+		}
+		switch {
+		case line == artifactsBegin:
+			inBlock = true
+		case line == artifactsEnd:
+			inBlock = false
+		case inBlock:
+			if payload.Len()+len(line) > maxArtifactPayload {
+				overflow = true
+				continue
+			}
+			payload.WriteString(line)
+		default:
+			select {
+			case logs <- line:
+			case <-ctx.Done():
+				stopped = true
+			}
+		}
+	}
+	if stopped {
+		return nil, ctx.Err()
+	}
+	if overflow {
+		return nil, fmt.Errorf("artifact payload exceeds %d bytes", maxArtifactPayload)
+	}
+	if payload.Len() == 0 {
+		return nil, nil
+	}
+	decoded, err := base64.StdEncoding.DecodeString(payload.String())
+	if err != nil {
+		return nil, fmt.Errorf("decode artifact payload: %w", err)
+	}
+	return readTar(bytes.NewReader(decoded))
+}
+
+// FilterOutputForTest exposes filterOutput to the package's external tests.
+func FilterOutputForTest(ctx context.Context, raw <-chan string, logs chan<- string) ([]Artifact, error) {
+	return filterOutput(ctx, raw, logs)
+}
