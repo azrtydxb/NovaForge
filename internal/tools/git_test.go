@@ -20,6 +20,7 @@ import (
 // still reached the handler would be visible.
 type fakeGitClient struct {
 	committed bool
+	files     map[string]string
 }
 
 func (f *fakeGitClient) Search(ctx context.Context, repo, query string) ([]tools.SearchHit, error) {
@@ -39,6 +40,7 @@ func (f *fakeGitClient) Diff(ctx context.Context, repo, from, to string) (string
 }
 func (f *fakeGitClient) Commit(ctx context.Context, repo, branch, message string, files map[string]string) (string, error) {
 	f.committed = true
+	f.files = files
 	return "deadbeef", nil
 }
 
@@ -89,10 +91,10 @@ func TestWorkspaceWriteFileRejectsTraversal(t *testing.T) {
 	ctx := scopedCtx(orgID)
 	run := newTestRun(t, ctx, store, orgID)
 
-	root := t.TempDir()
+	ws := newMemWorkspace()
 	rt := tools.Runtime{
-		Budget:        agents.NewBudget(time.Hour, 1000, 1000),
-		WorkspaceRoot: root,
+		Budget:    agents.NewBudget(time.Hour, 1000, 1000),
+		Workspace: ws,
 	}
 	reg := tools.NewRegistry(rt, audit)
 
@@ -107,5 +109,71 @@ func TestWorkspaceWriteFileRejectsTraversal(t *testing.T) {
 	}
 	if !strings.Contains(callErr.Error(), "outside workspace") {
 		t.Fatalf("error = %q, want it to contain %q", callErr.Error(), "outside workspace")
+	}
+	if len(ws.files) != 0 {
+		t.Fatalf("a refused write still reached the workspace: %v", ws.files)
+	}
+}
+
+// memWorkspace stands in for the run's workspace pod, which
+// internal/workspace's TestExecInAProvisionedWorkspace exercises for real.
+type memWorkspace struct{ files map[string][]byte }
+
+func newMemWorkspace() *memWorkspace { return &memWorkspace{files: map[string][]byte{}} }
+
+func (m *memWorkspace) WriteFile(_ context.Context, p string, content []byte) error {
+	m.files[p] = content
+	return nil
+}
+
+func (m *memWorkspace) ReadFile(_ context.Context, p string) ([]byte, error) {
+	c, ok := m.files[p]
+	if !ok {
+		return nil, os.ErrNotExist
+	}
+	return c, nil
+}
+
+func (m *memWorkspace) Run(context.Context, string) (string, int, error) { return "", 0, nil }
+
+// TestGitCommitCommitsStagedWorkspaceFiles pins the seam that was missing:
+// files staged with workspace.write_file were written and then never read by
+// anything, because git.commit only took content from its own arguments.
+func TestGitCommitCommitsStagedWorkspaceFiles(t *testing.T) {
+	pool := auditPool(t)
+	audit := agents.NewAuditLog(pool)
+	store := agents.NewStore(pool)
+	orgID := uuid.New()
+	ctx := scopedCtx(orgID)
+	run := newTestRun(t, ctx, store, orgID)
+
+	git := &fakeGitClient{}
+	ws := newMemWorkspace()
+	reg := tools.NewRegistry(tools.Runtime{
+		Budget:    agents.NewBudget(time.Hour, 1000, 1000),
+		Grant:     capability.Grant{WriteBranch: "agents/NF-1/"},
+		Git:       git,
+		Workspace: ws,
+	}, audit)
+
+	write, _ := json.Marshal(map[string]string{"path": "docs/README.md", "content": "# Service\n"})
+	if _, err := reg.Call(ctx, run.ID, "workspace.write_file", write); err != nil {
+		t.Fatalf("write_file: %v", err)
+	}
+	// The agent's checks changed the file after staging; the commit carries
+	// what is in the workspace now, not what was first written.
+	ws.files["docs/README.md"] = []byte("# Service\n\nChecked.\n")
+
+	commit, _ := json.Marshal(map[string]string{"repo": "example", "branch": "agents/NF-1/readme", "message": "docs: add a README"})
+	if _, err := reg.Call(ctx, run.ID, "git.commit", commit); err != nil {
+		t.Fatalf("git.commit: %v", err)
+	}
+	if got := git.files["docs/README.md"]; got != "# Service\n\nChecked.\n" {
+		t.Fatalf("committed files = %v, want the staged README as it is in the workspace", git.files)
+	}
+
+	// Committed files are no longer staged: a second commit has nothing.
+	if _, err := reg.Call(ctx, run.ID, "git.commit", commit); err == nil || !strings.Contains(err.Error(), "nothing staged") {
+		t.Fatalf("second commit err = %v, want nothing staged", err)
 	}
 }

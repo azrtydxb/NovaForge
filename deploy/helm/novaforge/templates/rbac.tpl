@@ -21,6 +21,11 @@ rules:
   - apiGroups: [""]
     resources: [pods, pods/log, resourcequotas, secrets, configmaps]
     verbs: [create, get, list, watch, delete]
+  # The run's workspace pod is where its files are staged and its commands
+  # run, over exec (a GET for the WebSocket protocol, a POST for SPDY).
+  - apiGroups: [""]
+    resources: [pods/exec]
+    verbs: [create, get]
   - apiGroups: [networking.k8s.io]
     resources: [networkpolicies]
     verbs: [create, get, list, delete]

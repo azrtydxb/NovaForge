@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 // runIDLabel labels every namespace and pod this package creates with the
@@ -52,8 +53,18 @@ type Workspace struct {
 
 // Provisioner creates and tears down isolated per-run Kubernetes workspaces.
 type Provisioner struct {
-	client kubernetes.Interface
+	client     kubernetes.Interface
+	restConfig *rest.Config
 }
+
+// podName and containerName name the single pod and container of every
+// workspace; Exec addresses them.
+const (
+	podName       = "agent"
+	containerName = "agent"
+)
+
+var metav1GetOptions = metav1.GetOptions{}
 
 // NewProvisioner wraps client as a Provisioner. client is typically a real
 // cluster clientset in production and k8s.io/client-go/kubernetes/fake in
@@ -146,8 +157,6 @@ func (p *Provisioner) applyResourceQuota(ctx context.Context, ns string, spec Sp
 }
 
 func (p *Provisioner) createPod(ctx context.Context, ns string, runID uuid.UUID, spec Spec) (string, error) {
-	podName := "agent"
-
 	var env []corev1.EnvVar
 	for k, v := range spec.Env {
 		env = append(env, corev1.EnvVar{Name: k, Value: v})
@@ -170,7 +179,7 @@ func (p *Provisioner) createPod(ctx context.Context, ns string, runID uuid.UUID,
 	const (
 		repoVolume  = "repo"
 		scratchVol  = "workspace"
-		workspaceAt = "/workspace"
+		workspaceAt = Root
 	)
 
 	mounts := []corev1.VolumeMount{
@@ -211,8 +220,16 @@ func (p *Provisioner) createPod(ctx context.Context, ns string, runID uuid.UUID,
 			RestartPolicy: corev1.RestartPolicyNever,
 			Containers: []corev1.Container{
 				{
-					Name:         "agent",
-					Image:        spec.Image,
+					Name:  containerName,
+					Image: spec.Image,
+					// The pod is the run's workspace: the agent's files are
+					// written into it and its commands run in it, over exec.
+					// With the image's default command (a shell with no
+					// terminal) it exited at once, so nothing could ever act
+					// inside it and files were staged in agent-runtime's own
+					// filesystem instead.
+					Command:      []string{"sleep", "infinity"},
+					WorkingDir:   workspaceAt,
 					Env:          env,
 					Resources:    resources,
 					VolumeMounts: mounts,

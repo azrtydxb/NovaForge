@@ -66,11 +66,19 @@ var Specs = map[string]Spec{
 		Schema:      obj(`"query":{"type":"string"}`, `"query"`),
 	},
 	"workspace.write_file": {
-		Description: "Stage a file in this run's workspace. Staged files are what git.commit writes; writing here changes nothing in the repository by itself.",
+		Description: "Write a file into this run's workspace, which starts as a copy of the repository's default branch. Writing here changes nothing in the repository by itself: git.commit with no \"files\" commits every file you staged this way.",
 		Schema: obj(
-			`"path":{"type":"string","description":"path relative to the workspace root; it may not escape it"},`+
+			`"path":{"type":"string","description":"path relative to the repository root; it may not escape it"},`+
 				`"content":{"type":"string","description":"the file's complete new contents"}`,
 			`"path","content"`),
+	},
+	"workspace.read_file": {
+		Description: "Read a file from this run's workspace, including files you have written there.",
+		Schema:      obj(`"path":{"type":"string","description":"path relative to the repository root"}`, `"path"`),
+	},
+	"workspace.run": {
+		Description: "Run a shell command in this run's workspace (the repository root), e.g. \"go test ./...\". The workspace has no network access. Returns the exit code and the end of the combined output. Use it to check your changes before committing.",
+		Schema:      obj(`"command":{"type":"string","description":"the command, run with sh -c"}`, `"command"`),
 	},
 	"git.diff": {
 		Description: "Show the unified diff between two refs of a repository.",
@@ -81,13 +89,13 @@ var Specs = map[string]Spec{
 			`"repo","from","to"`),
 	},
 	"git.commit": {
-		Description: "Commit files to a branch. \"files\" is an object mapping each path to that file's complete new contents — not a list, not a string. You may write only to the branch your run was granted.",
+		Description: "Commit to a branch. Either give \"files\", an object mapping each path to that file's complete new contents (not a list, not a string), or omit it to commit every file you staged with workspace.write_file. You may write only to the branch your run was granted.",
 		Schema: obj(
 			`"repo":{"type":"string","description":"repository id or name"},`+
 				`"branch":{"type":"string","description":"the branch to commit to; must be the one this run was granted"},`+
 				`"message":{"type":"string","description":"the commit message"},`+
-				`"files":{"type":"object","description":"path -> complete file contents, e.g. {\"README.md\":\"# Title\\n\"}","additionalProperties":{"type":"string"}}`,
-			`"repo","branch","message","files"`),
+				`"files":{"type":"object","description":"path -> complete file contents, e.g. {\"README.md\":\"# Title\\n\"}; omit to commit the staged workspace files","additionalProperties":{"type":"string"}}`,
+			`"repo","branch","message"`),
 	},
 	"ci.run_test": {
 		Description: "Run a test suite in CI against a ref.",

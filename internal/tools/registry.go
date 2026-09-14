@@ -1,4 +1,4 @@
-// Package tools implements the thirteen typed agent tools: the audited
+// Package tools implements the fifteen typed agent tools: the audited
 // surface agents call instead of shell access. Every call is bounded by the
 // run's budget, recorded in the append-only audit log before it executes,
 // and authorized against the run's capability grant.
@@ -73,13 +73,17 @@ type GraphClient interface {
 }
 
 // Runtime carries everything a Handler needs to act on behalf of one agent
-// run: its capability grant, its budget, its workspace root on disk, and
-// the clients for the services the tools translate onto.
+// run: its capability grant, its budget, its workspace, and the clients for
+// the services the tools translate onto.
 type Runtime struct {
-	RunID         uuid.UUID
-	Grant         capability.Grant
-	Budget        *agents.Budget
-	WorkspaceRoot string
+	RunID     uuid.UUID
+	Grant     capability.Grant
+	Budget    *agents.Budget
+	Workspace Workspace
+
+	// staged is shared by every copy of the Runtime a Registry hands its
+	// handlers, so git.commit sees what workspace.write_file staged.
+	staged *stagedFiles
 
 	Git     GitClient
 	Work    WorkClient
@@ -103,8 +107,9 @@ type Registry struct {
 }
 
 // NewRegistry builds a Registry bound to rt and audit, and registers the
-// thirteen built-in tools.
+// fifteen built-in tools.
 func NewRegistry(rt Runtime, audit *agents.AuditLog) *Registry {
+	rt.staged = &stagedFiles{paths: make(map[string]struct{})}
 	r := &Registry{rt: rt, audit: audit, tools: make(map[string]toolEntry)}
 	registerRepoTools(r)
 	registerWorkspaceTools(r)
@@ -129,7 +134,7 @@ func (r *Registry) registerWithCap(name string, capCheck CapCheck, h Handler) {
 	r.tools[name] = toolEntry{handler: h, capCheck: capCheck}
 }
 
-// KnownToolNames returns the thirteen registered tool names, sorted,
+// KnownToolNames returns the fifteen registered tool names, sorted,
 // without requiring a live Runtime or audit log. It exists for validating
 // configuration — see internal/repoconfig, which checks a repository's
 // .novaforge/agents/*.yaml tool lists against it — against the tools the

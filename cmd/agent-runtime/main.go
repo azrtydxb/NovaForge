@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"strings"
 	"time"
 
@@ -48,10 +47,6 @@ const reapInterval = 5 * time.Minute
 // it — a safety net for a run whose own completion path failed to clean up
 // after itself, not the primary cleanup path.
 const reapOlderThan = time.Hour
-
-// defaultWorkspaceImage is the container image an agent run's workspace pod
-// runs when the repository declares none of its own.
-const defaultWorkspaceImage = "golang:1.26"
 
 func main() {
 	cfg := service.LoadConfig()
@@ -168,7 +163,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("agent-runtime: build kubernetes client: %v", err)
 		}
-		provisioner = workspace.NewProvisioner(clientset)
+		provisioner = workspace.NewProvisioner(clientset).WithRESTConfig(k8sConfig)
 	} else {
 		// Not running in a cluster: workspace provisioning and the reaper
 		// are unavailable, exactly like graph.Assemble degrades when its
@@ -209,6 +204,10 @@ func main() {
 		log.Fatalf("agent-runtime: serve: %v", err)
 	}
 }
+
+// workspaceReadyTimeout bounds how long a run waits for its workspace pod,
+// including a first pull of the workspace image onto a node.
+const workspaceReadyTimeout = 5 * time.Minute
 
 // runReaper destroys any workspace older than reapOlderThan every
 // reapInterval, until ctx is cancelled.
@@ -259,33 +258,30 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 
 		// The per-run namespace carries the run's isolation — its own
 		// network policy and resource quota — and is torn down with the run.
-		if _, err := provisioner.Create(ctx, run.ID, workspace.Spec{Image: defaultWorkspaceImage}); err != nil {
+		if _, err := provisioner.Create(ctx, run.ID, workspace.Spec{Image: workspace.DefaultImage, CPULimit: "2", MemLimit: "4Gi"}); err != nil {
 			log.Printf("agent-runtime: provision workspace for run %s: %v", run.ID, err)
 			finishRun(ctx, store, run, "failed")
 			return
 		}
-
-		// The staging directory the workspace.* tools write into. It is a
-		// directory this process can actually create: the tools used to be
-		// pointed at /workspace/<pod>, which this container cannot write —
-		// every write_file failed with "mkdir /workspace: permission
-		// denied", and the agent then had nothing to commit.
-		//
-		// Files staged here are not executed; they are the content of the
-		// commit the run makes through git-platform. Running a repository's
-		// own code is CI's job, and CI does it in a per-job pod.
-		stage, err := os.MkdirTemp("", "nf-run-"+run.ID.String()+"-*")
-		if err != nil {
-			log.Printf("agent-runtime: create staging directory for run %s: %v", run.ID, err)
-			finishRun(ctx, store, run, "failed")
-			return
-		}
-		defer os.RemoveAll(stage)
 		defer func() {
 			if err := provisioner.Destroy(context.Background(), run.ID); err != nil {
 				log.Printf("agent-runtime: destroy workspace for run %s: %v", run.ID, err)
 			}
 		}()
+		// The workspace pod is where the run's files are staged and its
+		// commands run, so the run cannot start until the pod has.
+		if err := provisioner.WaitReady(ctx, run.ID, workspaceReadyTimeout); err != nil {
+			log.Printf("agent-runtime: workspace for run %s: %v", run.ID, err)
+			finishRun(ctx, store, run, "failed")
+			return
+		}
+		ref, err := seedWorkspace(ctx, gitClient, provisioner, run.ID, run.RepoID)
+		if err != nil {
+			log.Printf("agent-runtime: seed workspace for run %s: %v", run.ID, err)
+			finishRun(ctx, store, run, "failed")
+			return
+		}
+		log.Printf("agent-runtime: run %s workspace holds %s", run.ID, ref)
 
 		model, err := agentrun.NewModelClient(agentrun.ModelConfig{Endpoint: cfg.AIEndpoint, Model: cfg.AIModel, APIKey: cfg.AIAPIKey})
 		if err != nil {
@@ -311,15 +307,15 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 		}
 
 		reg := tools.NewRegistry(tools.Runtime{
-			RunID:         run.ID,
-			Grant:         grant,
-			Budget:        budget,
-			WorkspaceRoot: stage,
-			Git:           newGitAdapter(gitClient, graphClient),
-			Work:          newWorkAdapter(workClient),
-			Graph:         newGraphAdapter(graphClient, run.RepoID.String()),
-			Reviews:       newReviewsAdapter(reviewsClient),
-			CI:            newCIAdapter(ciClient),
+			RunID:     run.ID,
+			Grant:     grant,
+			Budget:    budget,
+			Workspace: &podWorkspace{provisioner: provisioner, runID: run.ID},
+			Git:       newGitAdapter(gitClient, graphClient),
+			Work:      newWorkAdapter(workClient),
+			Graph:     newGraphAdapter(graphClient, run.RepoID.String()),
+			Reviews:   newReviewsAdapter(reviewsClient),
+			CI:        newCIAdapter(ciClient),
 		}, audit)
 
 		loop := agentrun.NewLoop(model, budget, audit)

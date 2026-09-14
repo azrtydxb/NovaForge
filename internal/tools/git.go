@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	"github.com/novaforge/novaforge/internal/capability"
 )
@@ -26,7 +27,8 @@ type gitCommitArgs struct {
 }
 
 type gitCommitResult struct {
-	SHA string `json:"sha"`
+	SHA   string   `json:"sha"`
+	Files []string `json:"files"`
 }
 
 const refHeadsPrefix = "refs/heads/"
@@ -70,9 +72,37 @@ func gitCommitHandler(ctx context.Context, rt Runtime, argsJSON []byte) ([]byte,
 	if rt.Git == nil {
 		return nil, fmt.Errorf("git.commit: no git client configured")
 	}
-	sha, err := rt.Git.Commit(ctx, args.Repo, args.Branch, args.Message, args.Files)
+	files := args.Files
+	var fromWorkspace []string
+	if len(files) == 0 {
+		// No files given: commit what this run staged in its workspace, read
+		// back from the workspace so the commit is exactly what was there when
+		// the agent ran its checks.
+		fromWorkspace = rt.staged.list()
+		if len(fromWorkspace) == 0 {
+			return nil, fmt.Errorf("git.commit: no files given and nothing staged with workspace.write_file")
+		}
+		if rt.Workspace == nil {
+			return nil, fmt.Errorf("git.commit: files are staged but this run has no workspace to read them from")
+		}
+		files = make(map[string]string, len(fromWorkspace))
+		for _, p := range fromWorkspace {
+			content, err := rt.Workspace.ReadFile(ctx, p)
+			if err != nil {
+				return nil, fmt.Errorf("git.commit: read staged %s: %w", p, err)
+			}
+			files[p] = string(content)
+		}
+	}
+	sha, err := rt.Git.Commit(ctx, args.Repo, args.Branch, args.Message, files)
 	if err != nil {
 		return nil, fmt.Errorf("git.commit: %w", err)
 	}
-	return json.Marshal(gitCommitResult{SHA: sha})
+	rt.staged.clear(fromWorkspace)
+	paths := make([]string, 0, len(files))
+	for p := range files {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+	return json.Marshal(gitCommitResult{SHA: sha, Files: paths})
 }

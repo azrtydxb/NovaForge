@@ -108,6 +108,8 @@ func TestRegistryHasExactlyThirteenTools(t *testing.T) {
 		"repo.search",
 		"work.comment",
 		"work.get",
+		"workspace.read_file",
+		"workspace.run",
 		"workspace.write_file",
 	}
 	got := reg.Names()
