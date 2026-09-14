@@ -168,3 +168,23 @@ export interface SSHKey {
   title: string;
   fingerprint: string;
 }
+
+/** One gate the platform understands, as a repository's default branch
+ * configures it. `enabled` is the file's `required` flag: an enabled gate
+ * blocks a merge until it passes. */
+export interface GateConfig {
+  name: string;
+  declared: boolean;
+  enabled: boolean;
+  path: string;
+  params: Record<string, unknown>;
+}
+
+/** The Engineering Run a gate change became. */
+export interface GateProposal {
+  run_id: string;
+  run_number: number;
+  branch: string;
+  commit_sha: string;
+  title: string;
+}
