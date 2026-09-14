@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -54,6 +55,15 @@ type GRPCServer struct {
 	// nil in a deployment that records none, and ListToolCalls says so rather
 	// than answering with an empty list, which would read as "it did nothing".
 	Audit *AuditLog
+
+	// executing holds the cancel function of every run this process is
+	// executing, so CancelRun can abort an in-flight model or tool call
+	// rather than only writing a state the loop would not see until its next
+	// step. A run executing on another replica is not in this map; that loop
+	// observes cancellation by reading its run's state at each step boundary
+	// (agentrun.Loop), which is why the state write stays authoritative.
+	executingMu sync.Mutex
+	executing   map[uuid.UUID]context.CancelFunc
 }
 
 // NewGRPCServer wraps the given dependencies as an agentsv1.AgentServiceServer.
@@ -249,7 +259,36 @@ func (g *GRPCServer) driveToRunning(run Run) {
 	run.State = "running"
 
 	if g.Execute != nil {
-		g.Execute(ctx, run)
+		runCtx, cancel := context.WithCancel(ctx)
+		g.track(run.ID, cancel)
+		defer g.untrack(run.ID)
+		defer cancel()
+		g.Execute(runCtx, run)
+	}
+}
+
+func (g *GRPCServer) track(id uuid.UUID, cancel context.CancelFunc) {
+	g.executingMu.Lock()
+	defer g.executingMu.Unlock()
+	if g.executing == nil {
+		g.executing = make(map[uuid.UUID]context.CancelFunc)
+	}
+	g.executing[id] = cancel
+}
+
+func (g *GRPCServer) untrack(id uuid.UUID) {
+	g.executingMu.Lock()
+	defer g.executingMu.Unlock()
+	delete(g.executing, id)
+}
+
+// abort cancels run id's execution context if this process is executing it.
+func (g *GRPCServer) abort(id uuid.UUID) {
+	g.executingMu.Lock()
+	cancel, ok := g.executing[id]
+	g.executingMu.Unlock()
+	if ok {
+		cancel()
 	}
 }
 
@@ -278,7 +317,11 @@ func (g *GRPCServer) GetRun(ctx context.Context, req *agentsv1.GetRunRequest) (*
 	return &agentsv1.GetRunResponse{Run: toProtoRun(run)}, nil
 }
 
-// CancelRun transitions a run to cancelled, within the caller's organization.
+// CancelRun transitions a run to cancelled, within the caller's organization,
+// and stops it. The state is written first: it is what a loop on any replica
+// checks, and the store's state machine refuses to move a cancelled run to
+// any other state, so a loop finishing concurrently cannot overwrite it with
+// "succeeded". Only then is the local execution context cancelled.
 func (g *GRPCServer) CancelRun(ctx context.Context, req *agentsv1.CancelRunRequest) (*agentsv1.CancelRunResponse, error) {
 	if _, err := callerOrg(ctx); err != nil {
 		return nil, err
@@ -294,6 +337,7 @@ func (g *GRPCServer) CancelRun(ctx context.Context, req *agentsv1.CancelRunReque
 	if err := g.Store.SetRunState(ctx, id, "cancelled"); err != nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "cancel run: %v", err)
 	}
+	g.abort(id)
 	g.publishStateChange(id, run.State, "cancelled")
 	return &agentsv1.CancelRunResponse{Ok: true}, nil
 }

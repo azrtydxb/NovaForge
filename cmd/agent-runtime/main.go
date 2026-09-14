@@ -347,7 +347,15 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 // outcome (already computed) must not be lost even if the state write or
 // the event publish fails.
 func finishRun(ctx context.Context, store *agents.Store, run agents.Run, state string) {
-	scoped := authz.WithScope(ctx, authz.Scope{OrgID: run.OrgID, ActorID: run.AgentID, ActorKind: "agent"})
+	// CancelRun already wrote "cancelled" before the loop saw it, and the
+	// state machine refuses cancelled -> cancelled; writing it again would
+	// only log a spurious failure for every cancelled run.
+	if state == "cancelled" {
+		return
+	}
+	// The run's context is cancelled when the run is, and a state write
+	// under it would fail — so the terminal write detaches from it.
+	scoped := authz.WithScope(context.WithoutCancel(ctx), authz.Scope{OrgID: run.OrgID, ActorID: run.AgentID, ActorKind: "agent"})
 	if err := store.SetRunState(scoped, run.ID, state); err != nil {
 		log.Printf("agent-runtime: set run %s state to %s: %v", run.ID, state, err)
 	}

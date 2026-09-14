@@ -80,6 +80,9 @@ func (l *Loop) Execute(ctx context.Context, run agents.Run, reg *tools.Registry)
 	var tokensUsed int64
 
 	for {
+		if l.cancelled(ctx, run) {
+			return l.finish(ctx, run, "cancelled", steps, tokensUsed, "run cancelled before model call")
+		}
 		if err := l.Budget.Check(); err != nil {
 			return l.finish(ctx, run, "over_budget", steps, tokensUsed, "budget exceeded before model call")
 		}
@@ -93,6 +96,11 @@ func (l *Loop) Execute(ctx context.Context, run agents.Run, reg *tools.Registry)
 			ProviderOptions: l.ProviderOptions,
 		})
 		if err != nil {
+			// CancelRun aborts an in-flight call by cancelling ctx; that is a
+			// cancellation, not a model failure, and must be recorded as one.
+			if l.cancelled(ctx, run) {
+				return l.finish(ctx, run, "cancelled", steps, tokensUsed, "run cancelled during model call")
+			}
 			return l.finish(ctx, run, "failed", steps, tokensUsed, fmt.Sprintf("model call failed: %v", err))
 		}
 		steps++
@@ -103,12 +111,20 @@ func (l *Loop) Execute(ctx context.Context, run agents.Run, reg *tools.Registry)
 
 		calls := resp.ToolCalls()
 		if len(calls) == 0 {
+			// A run cancelled while its final answer was being generated was
+			// still cancelled; reporting it succeeded would contradict the row.
+			if l.cancelled(ctx, run) {
+				return l.finish(ctx, run, "cancelled", steps, tokensUsed, "run cancelled during model call")
+			}
 			return l.finish(ctx, run, "succeeded", steps, tokensUsed, resp.Text())
 		}
 
 		messages = append(messages, assistantMessage(resp, calls))
 
 		for _, call := range calls {
+			if l.cancelled(ctx, run) {
+				return l.finish(ctx, run, "cancelled", steps, tokensUsed, "run cancelled before tool call")
+			}
 			if err := l.Budget.Check(); err != nil {
 				return l.finish(ctx, run, "over_budget", steps, tokensUsed, "budget exceeded before tool call")
 			}
@@ -117,6 +133,26 @@ func (l *Loop) Execute(ctx context.Context, run agents.Run, reg *tools.Registry)
 			messages = append(messages, toolResultMessage(call, result, callErr))
 		}
 	}
+}
+
+// cancelled reports whether run has been cancelled, checked at every step
+// boundary. CancelRun used to write "cancelled" to the row and nothing read
+// it: the loop carried on calling tools — committing to the run's branch —
+// until the model stopped on its own. The row is the signal because
+// agent-runtime runs more than one replica and CancelRun may land on one
+// that is not executing this loop; a cancelled ctx is the faster local
+// signal for the replica that is.
+func (l *Loop) cancelled(ctx context.Context, run agents.Run) bool {
+	if l.Runs != nil {
+		current, err := l.Runs.GetRun(context.WithoutCancel(ctx), run.ID)
+		if err == nil {
+			return current.State == "cancelled"
+		}
+		// A transient read failure must not end a healthy run; the context
+		// is still consulted and the next step boundary checks again.
+		log.Printf("agentrun: check cancellation of run %s: %v", run.ID, err)
+	}
+	return ctx.Err() != nil
 }
 
 // buildToolDefs offers every tool the registry knows about to the model,
@@ -171,6 +207,10 @@ func toolResultMessage(call provider.ToolCallPart, result []byte, callErr error)
 // to model reasoning, only the state string and summary text the caller
 // (or the model's own final text, on natural completion) supplied.
 func (l *Loop) finish(ctx context.Context, run agents.Run, state string, steps int, tokensUsed int64, summary string) (Result, error) {
+	// A cancelled run's context is already done, and its evidence must still
+	// be written — otherwise the spend and summary of exactly the runs someone
+	// chose to stop are the ones lost.
+	ctx = context.WithoutCancel(ctx)
 	// What the run spent is recorded before anything else: the budget was
 	// enforced in memory, and without this the number is gone the moment the
 	// process moves on.
