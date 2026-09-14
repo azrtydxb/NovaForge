@@ -194,6 +194,14 @@ func StatusFromGRPC(err error) int {
 		return http.StatusConflict
 	case codes.InvalidArgument:
 		return http.StatusBadRequest
+	case codes.FailedPrecondition:
+		// A merge the gates refuse, or a gate proposal that changes nothing:
+		// a legitimate question whose answer is no, not a server fault.
+		return http.StatusConflict
+	case codes.Unimplemented:
+		// Services say "this deployment has no X" with Unimplemented; 501 is
+		// what the GUI reads as not available rather than as broken.
+		return http.StatusNotImplemented
 	default:
 		return http.StatusInternalServerError
 	}
