@@ -46,6 +46,37 @@ type Server struct {
 
 	pool *pgxpool.Pool
 	root string
+
+	// Grants, when set, is consulted for every write an agent asks for over
+	// this API, exactly as the transports consult it for a push. Without it
+	// the git.commit tool's own check in agent-runtime was the only thing
+	// between an agent's credential and the default branch: the transport
+	// and the API disagreed about what the same credential could write.
+	Grants GrantLister
+}
+
+// authorizeAgentWrite applies an agent's capability grant to refs. People and
+// the platform's own workers are not constrained here; the transports refuse
+// a platform worker's push because no worker pushes, but platform workers do
+// write through this API (gate proposals, merges) on a person's behalf.
+func (s *Server) authorizeAgentWrite(ctx context.Context, scope authz.Scope, refs ...string) error {
+	if scope.ActorKind != "agent" {
+		return nil
+	}
+	if s.Grants == nil {
+		return status.Error(codes.PermissionDenied, "this deployment cannot check an agent's capability grant, so agent writes are refused")
+	}
+	full := make([]string, 0, len(refs))
+	for _, r := range refs {
+		if !strings.HasPrefix(r, "refs/") {
+			r = refHeadsPrefix + r
+		}
+		full = append(full, r)
+	}
+	if err := requireGrants(ctx, s.Grants, scope, scope.OrgID, full); err != nil {
+		return status.Error(codes.PermissionDenied, err.Error())
+	}
+	return nil
 }
 
 // NewGRPCServer returns a Server storing repository metadata in pool and
@@ -340,6 +371,9 @@ func (s *Server) Merge(ctx context.Context, req *gitv1.MergeRequest) (*gitv1.Mer
 	}
 	if req.GetSourceRef() == "" || req.GetTargetRef() == "" {
 		return nil, status.Error(codes.InvalidArgument, "source_ref and target_ref are required")
+	}
+	if err := s.authorizeAgentWrite(ctx, scope, req.GetTargetRef()); err != nil {
+		return nil, err
 	}
 
 	sha, err := mergeRefs(repo.Path(), req.GetSourceRef(), req.GetTargetRef(), req.GetMethod(), req.GetMessage())

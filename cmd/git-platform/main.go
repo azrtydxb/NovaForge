@@ -7,12 +7,10 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"fmt"
-	"github.com/novaforge/novaforge/internal/svcauth"
 	"log"
 	"net"
 	"net/http"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -21,15 +19,14 @@ import (
 	"golang.org/x/crypto/ssh"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/metadata"
 
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
-	"github.com/novaforge/novaforge/internal/authz"
 	"github.com/novaforge/novaforge/internal/capability"
 	"github.com/novaforge/novaforge/internal/database"
 	"github.com/novaforge/novaforge/internal/gitops"
 	"github.com/novaforge/novaforge/internal/service"
+	"github.com/novaforge/novaforge/internal/svcauth"
 	"github.com/novaforge/novaforge/internal/version"
 )
 
@@ -45,7 +42,6 @@ func main() {
 	}
 
 	cfg := service.LoadConfig()
-	hmacSecret = cfg.HMACSecret
 	if cfg.DatabaseURL == "" {
 		log.Fatal("git-platform: DATABASE_URL is required")
 	}
@@ -116,15 +112,24 @@ func main() {
 		log.Fatalf("git-platform: create git data dir: %v", err)
 	}
 
+	// Every surface — gRPC, smart-HTTP, SSH — resolves a credential through
+	// internal/gitops's adapter and the shared svcauth classification, so an
+	// agent run's credential is the same agent, held to the same grant, on
+	// all three. This service used to carry its own copy that called an agent
+	// run a "service": the transports refused its pushes inside its grant and
+	// the API let it write anywhere.
+
 	// --- gRPC ---
 	grpcServer := gitops.NewGRPCServer(pool, cfg.GitDataDir)
-	srv := grpc.NewServer(grpc.UnaryInterceptor(gitopsAuthInterceptor(identityClient)))
+	grpcServer.Grants = grants
+	srv := grpc.NewServer(grpc.UnaryInterceptor(
+		svcauth.UnaryServerInterceptor(identityClient, cfg.HMACSecret)))
 	gitv1.RegisterGitServiceServer(srv, grpcServer)
 
 	// --- smart-HTTP ---
-	authFunc := newAuthFunc(identityClient)
-	capFunc := newCapFunc(grants)
-	httpHandler := gitops.NewHTTPHandler(cfg.GitDataDir, authFunc, capFunc)
+	capFunc := gitops.NewGrantCapFunc(grants)
+	httpHandler := gitops.NewHTTPHandler(cfg.GitDataDir,
+		gitops.NewCredentialAuthFunc(identityClient, cfg.HMACSecret), capFunc)
 
 	// --- SSH ---
 	hostKey, ephemeral, err := loadOrGenerateHostKey()
@@ -134,8 +139,8 @@ func main() {
 	if ephemeral {
 		log.Printf("git-platform: SSH_HOST_KEY not set; generated an ephemeral ed25519 host key for this process")
 	}
-	fingerprintFunc := newFingerprintFunc(identityClient)
-	sshServer := gitops.NewSSHServer(cfg.GitDataDir, hostKey, fingerprintFunc, capFunc)
+	sshServer := gitops.NewSSHServer(cfg.GitDataDir, hostKey, gitops.NewFingerprintFunc(identityClient), capFunc).
+		WithPasswords(gitops.NewAgentPasswordFunc(cfg.HMACSecret))
 
 	check := func(ctx context.Context) error {
 		if err := pool.Ping(ctx); err != nil {
@@ -192,191 +197,6 @@ func main() {
 	_ = httpListener.Close()
 	_ = sshListener.Close()
 	wg.Wait()
-}
-
-// gitopsAuthInterceptor resolves the caller from the request's
-// "authorization" metadata via the identity service (a session or personal
-// access token) and attaches the resulting authz.Scope to the request
-// context, so gitv1.GitServiceServer's RPCs derive their organization from
-// context rather than from the request message.
-func gitopsAuthInterceptor(identityClient identityv1.IdentityServiceClient) grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		if scope, ok := resolveScopeFromMetadata(ctx, identityClient); ok {
-			ctx = authz.WithScope(ctx, scope)
-		}
-		return handler(ctx, req)
-	}
-}
-
-// hmacSecret is the shared secret platform service tokens are signed with. It
-// is set once at startup from the environment.
-var hmacSecret string
-
-func resolveScopeFromMetadata(ctx context.Context, identityClient identityv1.IdentityServiceClient) (authz.Scope, bool) {
-	token := bearerTokenFromContext(ctx)
-	if token == "" {
-		return authz.Scope{}, false
-	}
-	// The organization travels in its own header. A credential says who the
-	// caller is, not which organization they are acting in, and identity
-	// verifies membership before granting an org scope — taking it from the
-	// request message would let a caller name any organization.
-	org := metadataValue(ctx, "x-novaforge-org")
-
-	// A platform worker has no human behind it and presents a signed service
-	// token naming the single organization it is acting for. It is verified
-	// here rather than being let through unauthenticated, which would open the
-	// same door to anyone.
-	if strings.HasPrefix(token, svcauth.Prefix) {
-		name, orgID, err := svcauth.Verify(hmacSecret, token)
-		if err != nil {
-			return authz.Scope{}, false
-		}
-		log.Printf("git-platform: accepted service token from %s for org %s", name, orgID)
-		return authz.Scope{OrgID: orgID, ActorKind: "service", ActorID: uuid.Nil}, true
-	}
-
-	subject, err := resolveSubject(ctx, identityClient, token, org)
-	if err != nil {
-		return authz.Scope{}, false
-	}
-	return subjectToScope(subject), true
-}
-
-func resolveSubject(ctx context.Context, identityClient identityv1.IdentityServiceClient, token, org string) (*identityv1.Subject, error) {
-	if resp, err := identityClient.ResolveToken(ctx, &identityv1.ResolveTokenRequest{Token: token, Org: org}); err == nil {
-		return resp.GetSubject(), nil
-	}
-	resp, err := identityClient.ResolveSession(ctx, &identityv1.ResolveSessionRequest{Token: token, Org: org})
-	if err != nil {
-		return nil, err
-	}
-	return resp.GetSubject(), nil
-}
-
-// metadataValue returns the first value of an incoming metadata key.
-func metadataValue(ctx context.Context, key string) string {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return ""
-	}
-	if v := md.Get(key); len(v) > 0 {
-		return v[0]
-	}
-	return ""
-}
-
-// subjectToScope converts an identityv1.Subject into an authz.Scope.
-//
-// Subject.OrgId is empty whenever the credential that resolved to this
-// subject has no organization selected (personal access tokens and login
-// sessions are not yet org-scoped as of this service's current RPC
-// surface); the resulting Scope's OrgID is then uuid.Nil, and
-// authz.RequireOrg correctly denies every organization-scoped request for
-// it rather than silently granting access to none in particular.
-func subjectToScope(subject *identityv1.Subject) authz.Scope {
-	var scope authz.Scope
-	scope.ActorID, _ = uuid.Parse(subject.GetUserId())
-	scope.OrgID, _ = uuid.Parse(subject.GetOrgId())
-	scope.ActorKind = subject.GetActorKind()
-	scope.Role = subject.GetRole()
-	if scope.ActorKind == "" {
-		scope.ActorKind = "user"
-	}
-	return scope
-}
-
-// newAuthFunc adapts the identity service into a gitops.AuthFunc for the
-// smart-HTTP transport. The HTTP Basic password carries the credential (a
-// personal access token or session token); the username is conventionally
-// ignored by git hosts using token auth and is not otherwise trusted.
-func newAuthFunc(identityClient identityv1.IdentityServiceClient) gitops.AuthFunc {
-	return func(ctx context.Context, user, pass, orgRef string) (authz.Scope, error) {
-		// A CI job clones with a service token, not a person's credential. The
-		// same token type is accepted on both surfaces so a job does not need a
-		// second, weaker way in.
-		if strings.HasPrefix(pass, svcauth.Prefix) {
-			name, orgID, err := svcauth.Verify(hmacSecret, pass)
-			if err != nil {
-				return authz.Scope{}, fmt.Errorf("service token: %w", err)
-			}
-			log.Printf("git-platform: accepted service token from %s for org %s over http", name, orgID)
-			return authz.Scope{OrgID: orgID, ActorKind: "service"}, nil
-		}
-		subject, err := resolveSubject(ctx, identityClient, pass, orgRef)
-		if err != nil {
-			return authz.Scope{}, fmt.Errorf("resolve credential: %w", err)
-		}
-		return subjectToScope(subject), nil
-	}
-}
-
-// newFingerprintFunc adapts the identity service into a
-// gitops.FingerprintFunc for the SSH transport.
-func newFingerprintFunc(identityClient identityv1.IdentityServiceClient) gitops.FingerprintFunc {
-	return func(ctx context.Context, fingerprint, orgRef string) (authz.Scope, error) {
-		resp, err := identityClient.ResolveFingerprint(ctx,
-			&identityv1.ResolveFingerprintRequest{Fingerprint: fingerprint, Org: orgRef})
-		if err != nil {
-			return authz.Scope{}, fmt.Errorf("resolve fingerprint: %w", err)
-		}
-		return subjectToScope(resp.GetSubject()), nil
-	}
-}
-
-// newCapFunc adapts the capability store into a gitops.CapFunc: every
-// requested ref update must be covered by an active grant issued to the
-// caller within orgID.
-// newCapFunc adapts the capability store into a gitops.CapFunc.
-//
-// Capability grants exist to constrain AGENTS: section 7 of the design is about
-// never handing an agent a broad token. A human member of the organization has
-// ordinary write access to its repositories — requiring them to mint a grant to
-// push their own work would be a different product. The caller's kind, which
-// identity established, decides which rule applies.
-func newCapFunc(grants *capability.Store) gitops.CapFunc {
-	return func(ctx context.Context, s authz.Scope, orgID uuid.UUID, repo string, refs []string) error {
-		if len(refs) == 0 {
-			return nil
-		}
-		if s.ActorKind == "user" {
-			// Org membership was verified during authentication; reaching here
-			// with a user scope means the caller is a member of orgID.
-			return nil
-		}
-		active, err := grants.ListActive(ctx, orgID, s.ActorID)
-		if err != nil {
-			return fmt.Errorf("resolve capability grants: %w", err)
-		}
-		for _, ref := range refs {
-			permitted := false
-			for _, g := range active {
-				if capability.CanWriteRef(g, ref) == nil {
-					permitted = true
-					break
-				}
-			}
-			if !permitted {
-				return fmt.Errorf("write to %s not permitted by any active grant for %s %s",
-					ref, s.ActorKind, s.ActorID)
-			}
-		}
-		return nil
-	}
-}
-
-// bearerTokenFromContext extracts the token from a gRPC request's
-// "authorization: Bearer <token>" metadata, if present.
-func bearerTokenFromContext(ctx context.Context) string {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return ""
-	}
-	values := md.Get("authorization")
-	if len(values) == 0 {
-		return ""
-	}
-	return strings.TrimPrefix(values[0], "Bearer ")
 }
 
 // loadOrGenerateHostKey reads an ed25519 PEM private key from SSH_HOST_KEY,

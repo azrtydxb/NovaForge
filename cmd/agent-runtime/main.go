@@ -250,7 +250,7 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 		// every tool call reaches its service anonymously and is refused —
 		// an agent that can call nothing looks exactly like an agent that
 		// chose to do nothing.
-		ctx, err := withRunIdentity(ctx, cfg.HMACSecret, run.OrgID)
+		ctx, err := withRunIdentity(ctx, cfg.HMACSecret, run.OrgID, run.AgentID)
 		if err != nil {
 			log.Printf("agent-runtime: run %s: %v", run.ID, err)
 			finishRun(ctx, store, run, "failed")
@@ -451,8 +451,12 @@ func bearerTokenFromContext(ctx context.Context) string {
 // withRunIdentity attaches a service token for orgID to every outbound call
 // an agent run makes. The token names one organization, so a run cannot
 // reach outside the organization it belongs to even if a tool were asked to.
-func withRunIdentity(ctx context.Context, hmacSecret string, orgID uuid.UUID) (context.Context, error) {
-	tok, err := svcauth.Mint(hmacSecret, svcauth.AgentRunService, orgID, svcauth.DefaultTTL)
+//
+// The token names the run's agent too: git-platform applies that agent's
+// capability grant to every write it asks for, and a token naming no agent
+// holds no grant and may write nothing.
+func withRunIdentity(ctx context.Context, hmacSecret string, orgID, agentID uuid.UUID) (context.Context, error) {
+	tok, err := svcauth.MintAgentRun(hmacSecret, orgID, agentID, svcauth.DefaultTTL)
 	if err != nil {
 		return ctx, fmt.Errorf("mint service token: %w", err)
 	}

@@ -26,6 +26,9 @@ func (s *Server) CreateBranch(ctx context.Context, req *gitv1.CreateBranchReques
 	if name == "" {
 		return nil, status.Error(codes.InvalidArgument, "name is required")
 	}
+	if err := s.authorizeAgentWrite(ctx, scope, name); err != nil {
+		return nil, err
+	}
 	row, err := s.repoByName(ctx, scope.OrgID, req.GetRepo())
 	if err != nil {
 		return nil, err
@@ -96,6 +99,9 @@ func (s *Server) CreateCommit(ctx context.Context, req *gitv1.CreateCommitReques
 	branch := strings.TrimPrefix(req.GetBranch(), refHeadsPrefix)
 	if branch == "" {
 		branch = row.DefaultBranch
+	}
+	if err := s.authorizeAgentWrite(ctx, scope, branch); err != nil {
+		return nil, err
 	}
 
 	sha, err := commitFiles(repo.Path(), branch, req)

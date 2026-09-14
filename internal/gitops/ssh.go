@@ -25,6 +25,11 @@ import (
 // organization.
 type FingerprintFunc func(ctx context.Context, fingerprint, orgRef string) (authz.Scope, error)
 
+// PasswordFunc resolves an SSH password to a scope, or refuses it. The scope
+// carries its own organization: the only password the platform accepts is a
+// credential that already names one (see NewAgentPasswordFunc).
+type PasswordFunc func(ctx context.Context, password string) (authz.Scope, error)
+
 // gitCommandRe matches the exec payload git sends for smart-SSH transport:
 // git-upload-pack '<org>/<repo>.git' or git-receive-pack '<org>/<repo>.git'.
 // It is anchored on both ends so nothing outside these two commands, quoted
@@ -39,6 +44,7 @@ type SSHServer struct {
 	root      string
 	hostKey   ssh.Signer
 	lookup    FingerprintFunc
+	passwords PasswordFunc
 	caps      CapFunc
 	sshConfig *ssh.ServerConfig
 
@@ -69,6 +75,27 @@ func NewSSHServer(root string, hostKey ssh.Signer, lookup FingerprintFunc, caps 
 	s.sshConfig = config
 	return s
 }
+
+// WithPasswords lets a client authenticate with a password that passwords
+// accepts, alongside public keys. The password is re-verified when the git
+// command arrives, so a credential that expires between handshake and command
+// is refused rather than honoured for the life of the connection.
+func (s *SSHServer) WithPasswords(passwords PasswordFunc) *SSHServer {
+	s.passwords = passwords
+	s.sshConfig.PasswordCallback = func(conn ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
+		if _, err := passwords(context.Background(), string(password)); err != nil {
+			return nil, fmt.Errorf("permission denied")
+		}
+		return &ssh.Permissions{
+			Extensions: map[string]string{passwordExtension: string(password)},
+		}, nil
+	}
+	return s
+}
+
+// passwordExtension carries an accepted password from the handshake to the
+// command, in the connection's own in-memory permissions.
+const passwordExtension = "novaforge-password"
 
 // Addr returns the address the server is listening on, once Serve has been
 // called. It returns the empty string before that.
@@ -171,7 +198,13 @@ func (s *SSHServer) runGitCommand(sconn *ssh.ServerConn, channel ssh.Channel, co
 	// known now, from the command's path — so the scope is resolved here, with
 	// membership checked by identity.
 	ext := sconn.Permissions.Extensions
-	scope, err := s.lookup(context.Background(), ext["fingerprint"], orgRef)
+	var scope authz.Scope
+	var err error
+	if pw, ok := ext[passwordExtension]; ok && s.passwords != nil {
+		scope, err = s.passwords(context.Background(), pw)
+	} else {
+		scope, err = s.lookup(context.Background(), ext["fingerprint"], orgRef)
+	}
 	if err != nil || scope.OrgID == uuid.Nil {
 		fmt.Fprintf(channel.Stderr(), "no access to organization %q\n", orgRef)
 		writeExitStatus(channel, 1)
