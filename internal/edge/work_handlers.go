@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	agentsv1 "github.com/novaforge/novaforge/gen/novaforge/agents/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
 	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
@@ -85,7 +86,12 @@ func addWorkHandlers(h map[string]http.HandlerFunc, g gitv1.GitServiceClient, w 
 				WriteError(wr, StatusFromGRPC(err), err)
 				return
 			}
-			WriteJSON(wr, http.StatusOK, WorkItemJSON(resp.GetItem()))
+			body := WorkItemJSON(resp.GetItem())
+			// Only the single-item read knows whether a proposal awaits
+			// approval; a list would have to report false for every proposal,
+			// which is a claim the platform has not checked.
+			body["awaiting_approval"] = resp.GetItem().GetAwaitingApproval()
+			WriteJSON(wr, http.StatusOK, body)
 		}
 	}
 
@@ -119,14 +125,7 @@ func addWorkHandlers(h map[string]http.HandlerFunc, g gitv1.GitServiceClient, w 
 			}
 			out := make([]map[string]any, 0, len(resp.GetProposals()))
 			for _, p := range resp.GetProposals() {
-				out = append(out, map[string]any{
-					"fingerprint":    p.GetFingerprint(),
-					"work_item_key":  p.GetWorkItemKey(),
-					"work_item_goal": p.GetWorkItemGoal(),
-					"work_item_type": p.GetWorkItemType(),
-					"state":          p.GetState(),
-					"resolved":       p.GetResolved(),
-				})
+				out = append(out, ProposalJSON(p))
 			}
 			WriteJSON(wr, http.StatusOK, map[string]any{"proposals": out})
 		}
@@ -414,6 +413,123 @@ func addWorkHandlers(h map[string]http.HandlerFunc, g gitv1.GitServiceClient, w 
 			}
 			WriteJSON(wr, http.StatusCreated, map[string]string{"status": "recorded"})
 		}
+	}
+}
+
+// addMaintenanceDecisionHandlers mounts a person's decision on a maintenance
+// proposal. It needs the agents service as well as work: approving a proposal
+// for an agent names that agent, and the work service — which may not read
+// the agents schema — cannot tell whether the id belongs to this
+// organization's agent or to anything at all.
+func addMaintenanceDecisionHandlers(h map[string]http.HandlerFunc, g gitv1.GitServiceClient, w workv1.WorkServiceClient, a agentsv1.AgentServiceClient) {
+	if w == nil {
+		return
+	}
+	repoID := func(r *http.Request) (string, error) {
+		resp, err := g.GetRepo(r.Context(), &gitv1.GetRepoRequest{Name: chi.URLParam(r, "repo")})
+		if err != nil {
+			return "", err
+		}
+		return resp.GetRepo().GetId(), nil
+	}
+
+	h["approveMaintenanceProposal"] = func(wr http.ResponseWriter, r *http.Request) {
+		var req struct {
+			// AgentID assigns the approved Work Item to this agent. Empty,
+			// the approving person takes it.
+			AgentID string `json:"agent_id"`
+		}
+		// An approval with no body is an approval for oneself.
+		if r.ContentLength != 0 {
+			if err := decode(r, &req); err != nil {
+				WriteError(wr, http.StatusBadRequest, err)
+				return
+			}
+		}
+		rid, err := repoID(r)
+		if err != nil {
+			WriteError(wr, StatusFromGRPC(err), err)
+			return
+		}
+		approve := &workv1.ApproveMaintenanceProposalRequest{
+			RepoId: rid, Fingerprint: chi.URLParam(r, "fingerprint"),
+		}
+		if req.AgentID != "" {
+			if a == nil {
+				WriteError(wr, http.StatusNotImplemented, errors.New("this deployment has no agent runtime to assign an agent from"))
+				return
+			}
+			// ListAgents is scoped to the caller's organization, so finding
+			// the id there is what proves it is this organization's agent.
+			agents, err := a.ListAgents(r.Context(), &agentsv1.ListAgentsRequest{})
+			if err != nil {
+				WriteError(wr, StatusFromGRPC(err), err)
+				return
+			}
+			if !hasAgent(agents.GetAgents(), req.AgentID) {
+				WriteError(wr, http.StatusBadRequest, fmt.Errorf("agent %q is not an agent of this organization", req.AgentID))
+				return
+			}
+			approve.AssigneeId, approve.AssigneeKind = req.AgentID, "agent"
+		}
+		resp, err := w.ApproveMaintenanceProposal(r.Context(), approve)
+		if err != nil {
+			WriteError(wr, StatusFromGRPC(err), err)
+			return
+		}
+		WriteJSON(wr, http.StatusOK, ProposalJSON(resp.GetProposal()))
+	}
+
+	h["dismissMaintenanceProposal"] = func(wr http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Reason string `json:"reason"`
+		}
+		if err := decode(r, &req); err != nil {
+			WriteError(wr, http.StatusBadRequest, err)
+			return
+		}
+		rid, err := repoID(r)
+		if err != nil {
+			WriteError(wr, StatusFromGRPC(err), err)
+			return
+		}
+		resp, err := w.DismissMaintenanceProposal(r.Context(), &workv1.DismissMaintenanceProposalRequest{
+			RepoId: rid, Fingerprint: chi.URLParam(r, "fingerprint"), Reason: req.Reason,
+		})
+		if err != nil {
+			WriteError(wr, StatusFromGRPC(err), err)
+			return
+		}
+		WriteJSON(wr, http.StatusOK, ProposalJSON(resp.GetProposal()))
+	}
+}
+
+// hasAgent reports whether agents includes id.
+func hasAgent(agents []*agentsv1.Agent, id string) bool {
+	for _, ag := range agents {
+		if ag.GetId() == id {
+			return true
+		}
+	}
+	return false
+}
+
+// ProposalJSON renders a maintenance proposal, including the decision a
+// person made on it and who holds its Work Item.
+func ProposalJSON(p *workv1.MaintenanceProposal) map[string]any {
+	return map[string]any{
+		"fingerprint":    p.GetFingerprint(),
+		"work_item_key":  p.GetWorkItemKey(),
+		"work_item_goal": p.GetWorkItemGoal(),
+		"work_item_type": p.GetWorkItemType(),
+		"state":          p.GetState(),
+		"resolved":       p.GetResolved(),
+		"decision":       p.GetDecision(),
+		"decided_by":     p.GetDecidedBy(),
+		"decided_at":     p.GetDecidedAt(),
+		"dismiss_reason": p.GetDismissReason(),
+		"assignee_id":    p.GetAssigneeId(),
+		"assignee_kind":  p.GetAssigneeKind(),
 	}
 }
 

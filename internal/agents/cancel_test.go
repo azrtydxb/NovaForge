@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	agentsv1 "github.com/novaforge/novaforge/gen/novaforge/agents/v1"
 	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
@@ -68,6 +70,36 @@ func TestCancelRunStopsExecution(t *testing.T) {
 	}
 	if got.State != "cancelled" {
 		t.Fatalf("run state = %q, want cancelled", got.State)
+	}
+}
+
+// TestStartRunRefusesUnapprovedProposal pins the enforcement half of
+// maintenance approval. A proposal awaiting approval is an ordinary open Work
+// Item to anything that does not ask, so an agent could be started against it
+// — by a person clicking Start, or by any automation — and the fix executed
+// with nobody having approved it.
+func TestStartRunRefusesUnapprovedProposal(t *testing.T) {
+	orgID := uuid.New()
+	repoID := uuid.New()
+	work := &stubWorkClient{item: &workv1.WorkItem{
+		Id: uuid.New().String(), Key: "NF-11", RepoId: repoID.String(), State: "open",
+		AwaitingApproval: true,
+	}}
+	srv, store := newGRPCServer(t, work)
+	ctx := scopedCtx(orgID)
+	agent := mustCreateAgent(t, store, ctx, orgID)
+
+	_, err := srv.StartRun(ctx, &agentsv1.StartRunRequest{
+		AgentId:     agent.ID.String(),
+		RepoId:      repoID.String(),
+		WorkItemKey: "NF-11",
+		SponsorId:   uuid.New().String(),
+	})
+	if status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("StartRun on an unapproved proposal: code = %v, want FailedPrecondition", status.Code(err))
+	}
+	if stats, _ := store.ListStats(ctx); len(stats) != 0 {
+		t.Fatalf("a run was created for an unapproved proposal: %+v", stats)
 	}
 }
 

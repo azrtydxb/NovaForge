@@ -206,6 +206,13 @@ func (g *GRPCServer) StartRun(ctx context.Context, req *agentsv1.StartRunRequest
 	if itemResp.GetItem().GetRepoId() != req.GetRepoId() {
 		return nil, status.Errorf(codes.InvalidArgument, "work item %q belongs to a different repository than repo_id %q", req.GetWorkItemKey(), req.GetRepoId())
 	}
+	// A maintenance proposal is executed only once a person has approved it.
+	// This is the one place every run starts — a person's click, the swarm,
+	// a CI agent job — so refusing here holds for all of them, before any
+	// grant is issued.
+	if itemResp.GetItem().GetAwaitingApproval() {
+		return nil, status.Errorf(codes.FailedPrecondition, "work item %q is a maintenance proposal awaiting approval; approve it before starting an agent on it", req.GetWorkItemKey())
+	}
 
 	grant := capability.Grant{
 		OrgID:         orgID,

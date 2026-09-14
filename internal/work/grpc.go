@@ -118,7 +118,16 @@ func (g *GRPCServer) GetItem(ctx context.Context, req *workv1.GetItemRequest) (*
 	if item.OrgID != orgID {
 		return nil, status.Error(codes.PermissionDenied, "work item does not belong to this organization")
 	}
-	return &workv1.GetItemResponse{Item: toProtoItem(item)}, nil
+	out := toProtoItem(item)
+	// Whether the item awaits approval travels with it, because the service
+	// that must refuse to execute it — agent-runtime — reads the item through
+	// this RPC and cannot read the proposal ledger itself.
+	awaiting, err := g.Store.AwaitingApproval(ctx, item.ID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "get work item: %v", err)
+	}
+	out.AwaitingApproval = awaiting
+	return &workv1.GetItemResponse{Item: out}, nil
 }
 
 // ListItems lists Work Items for a repository within the caller's

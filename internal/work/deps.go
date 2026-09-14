@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -309,13 +310,46 @@ func (s *Store) OrganizationsWithWork(ctx context.Context) ([]uuid.UUID, error) 
 
 // Proposal is one maintenance finding that became a Work Item, together with
 // the item it created. resolved marks a finding that has stopped reproducing.
+// Decision is empty while the proposal awaits a person's approval.
 type Proposal struct {
-	Fingerprint  string
-	WorkItemKey  string
-	WorkItemGoal string
-	WorkItemType string
-	State        string
-	Resolved     bool
+	Fingerprint   string
+	WorkItemID    uuid.UUID
+	WorkItemKey   string
+	WorkItemGoal  string
+	WorkItemType  string
+	State         string
+	Resolved      bool
+	Decision      string
+	DecidedBy     uuid.UUID
+	DecidedAt     *time.Time
+	DismissReason string
+	AssigneeID    uuid.UUID
+	AssigneeKind  string
+}
+
+// proposalColumns and scanProposal are the one decoding of a proposal row, so
+// the list and the single-proposal read cannot disagree about what one is.
+const proposalColumns = `
+		p.fingerprint, w.id, w.key, w.goal, w.type, w.state, p.resolved_at IS NOT NULL,
+		coalesce(p.decision, ''), p.decided_by, p.decided_at, coalesce(p.dismiss_reason, ''),
+		w.assignee_id, coalesce(w.assignee_kind, '')`
+
+func scanProposal(row pgx.Row) (Proposal, error) {
+	var p Proposal
+	var decidedBy, assigneeID *uuid.UUID
+	if err := row.Scan(&p.Fingerprint, &p.WorkItemID, &p.WorkItemKey, &p.WorkItemGoal,
+		&p.WorkItemType, &p.State, &p.Resolved,
+		&p.Decision, &decidedBy, &p.DecidedAt, &p.DismissReason,
+		&assigneeID, &p.AssigneeKind); err != nil {
+		return Proposal{}, err
+	}
+	if decidedBy != nil {
+		p.DecidedBy = *decidedBy
+	}
+	if assigneeID != nil {
+		p.AssigneeID = *assigneeID
+	}
+	return p, nil
 }
 
 // ListProposals returns what the maintenance scanners have proposed for one
@@ -328,7 +362,7 @@ func (s *Store) ListProposals(ctx context.Context, repoID uuid.UUID) ([]Proposal
 		return nil, err
 	}
 	rows, err := s.pool.Query(ctx, `
-		SELECT p.fingerprint, w.key, w.goal, w.type, w.state, p.resolved_at IS NOT NULL
+		SELECT `+proposalColumns+`
 		FROM work.maintenance_proposals p
 		JOIN work.work_items w ON w.id = p.work_item_id
 		WHERE p.org_id = $1 AND p.repo_id = $2
@@ -341,9 +375,8 @@ func (s *Store) ListProposals(ctx context.Context, repoID uuid.UUID) ([]Proposal
 
 	var out []Proposal
 	for rows.Next() {
-		var p Proposal
-		if err := rows.Scan(&p.Fingerprint, &p.WorkItemKey, &p.WorkItemGoal,
-			&p.WorkItemType, &p.State, &p.Resolved); err != nil {
+		p, err := scanProposal(rows)
+		if err != nil {
 			return nil, fmt.Errorf("scan proposal: %w", err)
 		}
 		out = append(out, p)

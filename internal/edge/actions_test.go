@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	agentsv1 "github.com/novaforge/novaforge/gen/novaforge/agents/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
 	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
@@ -147,5 +148,72 @@ func TestCreateRunRefusesWhatCannotBeMerged(t *testing.T) {
 		if rv.created != nil {
 			t.Errorf("%s: a run was created anyway", name)
 		}
+	}
+}
+
+type agentsDouble struct {
+	agentsv1.AgentServiceClient
+	agents []*agentsv1.Agent
+}
+
+func (a *agentsDouble) ListAgents(_ context.Context, _ *agentsv1.ListAgentsRequest, _ ...grpc.CallOption) (*agentsv1.ListAgentsResponse, error) {
+	return &agentsv1.ListAgentsResponse{Agents: a.agents}, nil
+}
+
+type proposalsDouble struct {
+	*workDouble
+	approved  *workv1.ApproveMaintenanceProposalRequest
+	dismissed *workv1.DismissMaintenanceProposalRequest
+}
+
+func (p *proposalsDouble) ApproveMaintenanceProposal(_ context.Context, in *workv1.ApproveMaintenanceProposalRequest, _ ...grpc.CallOption) (*workv1.ApproveMaintenanceProposalResponse, error) {
+	p.approved = in
+	return &workv1.ApproveMaintenanceProposalResponse{Proposal: &workv1.MaintenanceProposal{
+		Fingerprint: in.GetFingerprint(), Decision: "approved", AssigneeId: in.GetAssigneeId(), AssigneeKind: in.GetAssigneeKind(),
+	}}, nil
+}
+
+func (p *proposalsDouble) DismissMaintenanceProposal(_ context.Context, in *workv1.DismissMaintenanceProposalRequest, _ ...grpc.CallOption) (*workv1.DismissMaintenanceProposalResponse, error) {
+	p.dismissed = in
+	return &workv1.DismissMaintenanceProposalResponse{Proposal: &workv1.MaintenanceProposal{
+		Fingerprint: in.GetFingerprint(), Decision: "dismissed", DismissReason: in.GetReason(),
+	}}, nil
+}
+
+// TestApproveProposalAssignsOnlyThisOrganizationsAgent pins the one check the
+// edge owns when a proposal is approved for an agent: the work service cannot
+// read the agents schema, so without this an approval could assign the Work
+// Item to any uuid at all — another organization's agent, or nothing.
+func TestApproveProposalAssignsOnlyThisOrganizationsAgent(t *testing.T) {
+	g, w, _ := runDoubles()
+	work := &proposalsDouble{workDouble: w}
+	agents := &agentsDouble{agents: []*agentsv1.Agent{{Id: "agent-1", Name: "fixer", Enabled: true}}}
+	h := edge.Handlers(edge.Config{Git: g, Work: work, Agents: agents})
+	params := map[string]string{"org": "acme", "repo": "platform", "fingerprint": "fp-1"}
+
+	rec := call(t, h, "approveMaintenanceProposal", http.MethodPost, `{"agent_id":"someone-elses-agent"}`, params)
+	if rec.Code != http.StatusBadRequest || work.approved != nil {
+		t.Fatalf("unknown agent: status %d, approved %v — want 400 and no approval", rec.Code, work.approved)
+	}
+
+	rec = call(t, h, "approveMaintenanceProposal", http.MethodPost, `{"agent_id":"agent-1"}`, params)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("approve for an agent: status %d (%s)", rec.Code, rec.Body.String())
+	}
+	if a := work.approved; a.GetRepoId() != "repo-1" || a.GetFingerprint() != "fp-1" || a.GetAssigneeId() != "agent-1" || a.GetAssigneeKind() != "agent" {
+		t.Fatalf("approval sent as %+v", a)
+	}
+
+	// With no agent, the approver takes it: the edge names no assignee and
+	// the work service assigns the person in the caller's scope.
+	work.approved = nil
+	rec = call(t, h, "approveMaintenanceProposal", http.MethodPost, ``, params)
+	if rec.Code != http.StatusOK || work.approved.GetAssigneeId() != "" {
+		t.Fatalf("approve for oneself: status %d, request %+v", rec.Code, work.approved)
+	}
+
+	rec = call(t, h, "dismissMaintenanceProposal", http.MethodPost, `{"reason":"not worth it"}`, params)
+	if rec.Code != http.StatusOK || work.dismissed.GetReason() != "not worth it" || work.dismissed.GetRepoId() != "repo-1" {
+		t.Fatalf("dismiss: status %d, request %+v", rec.Code, work.dismissed)
 	}
 }

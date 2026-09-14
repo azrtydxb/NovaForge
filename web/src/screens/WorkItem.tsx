@@ -127,7 +127,13 @@ export function WorkItemDetail() {
               {decompose.isPending ? "Decomposing…" : "Decompose"}
             </button>
           ) : null}
-          {enabledAgents.length > 0 ? (
+          {item.data?.awaiting_approval ? (
+            // Agent-runtime refuses a run on an unapproved proposal; the way
+            // forward is the approval, not a Start button that would fail.
+            <Link to="/maintenance" style={secondary}>
+              Awaiting approval · Maintenance
+            </Link>
+          ) : enabledAgents.length > 0 ? (
             <button onClick={() => setStarting(true)} style={primary}>
               Start an Agent Run
             </button>

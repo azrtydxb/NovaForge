@@ -190,7 +190,7 @@ func StatusFromGRPC(err error) int {
 		return http.StatusForbidden
 	case codes.NotFound:
 		return http.StatusNotFound
-	case codes.AlreadyExists:
+	case codes.AlreadyExists, codes.FailedPrecondition:
 		return http.StatusConflict
 	case codes.InvalidArgument:
 		return http.StatusBadRequest

@@ -144,8 +144,12 @@ func TestGRPCStatusMapping(t *testing.T) {
 		codes.NotFound:         http.StatusNotFound,
 		codes.Unauthenticated:  http.StatusUnauthorized,
 		codes.AlreadyExists:    http.StatusConflict,
-		codes.InvalidArgument:  http.StatusBadRequest,
-		codes.Internal:         http.StatusInternalServerError,
+		// A state that forbids the action — cancelling a finished run,
+		// deciding a proposal twice — is a conflict the caller can see and
+		// resolve, not a server fault.
+		codes.FailedPrecondition: http.StatusConflict,
+		codes.InvalidArgument:    http.StatusBadRequest,
+		codes.Internal:           http.StatusInternalServerError,
 	}
 	for code, want := range cases {
 		if got := edge.StatusFromGRPC(status.Error(code, "x")); got != want {
