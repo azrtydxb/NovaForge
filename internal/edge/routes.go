@@ -66,6 +66,7 @@ func Routes() []Route {
 		{http.MethodGet, "/api/v1/orgs/{org}/agents/stats", "agentStats", "Per-agent run history"},
 		{http.MethodGet, "/api/v1/orgs/{org}/agent-runs/{id}", "getAgentRun", "One Agent Run"},
 		{http.MethodDelete, "/api/v1/orgs/{org}/agent-runs/{id}", "cancelAgentRun", "Cancel an Agent Run"},
+		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/work/{key}/agent-runs", "listWorkItemAgentRuns", "The Agent Runs started against a Work Item"},
 
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/runs", "listRuns", "Engineering Runs"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/runs", "createRun", "Open an Engineering Run"},
@@ -90,6 +91,8 @@ func Routes() []Route {
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/maintenance", "listMaintenanceProposals", "What the maintenance scanners proposed"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/gates", "listGateConfig", "Every gate, as the default branch configures it"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/gates/{gate}/proposals", "proposeGateChange", "Propose a gate change as an Engineering Run; never writes the default branch"},
+		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/maintenance/{fingerprint}/approve", "approveMaintenanceProposal", "Approve a maintenance proposal and assign its Work Item"},
+		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/maintenance/{fingerprint}/dismiss", "dismissMaintenanceProposal", "Dismiss a maintenance proposal, with a reason"},
 
 		{http.MethodGet, "/api/v1/orgs/{org}/secrets", "listSecrets", "Secrets registered for an organization, names only"},
 		{http.MethodGet, "/api/v1/orgs/{org}/leases", "listLeases", "Credentials currently brokered to runs"},

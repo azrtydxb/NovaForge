@@ -1335,12 +1335,17 @@ func (x *Verify2FAResponse) GetEnabled() bool {
 
 // Subject is the authenticated caller. org_id is empty when no organization
 // has been selected; an empty org_id never means "every organization".
+// role is the caller's membership role in that organization ("owner",
+// "admin" or "member"), set only alongside org_id: identity has just verified
+// the membership, so a service deciding an owner-only action reads it here
+// rather than reaching into the identity schema.
 type Subject struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	OrgId         string                 `protobuf:"bytes,2,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
 	ActorKind     string                 `protobuf:"bytes,3,opt,name=actor_kind,json=actorKind,proto3" json:"actor_kind,omitempty"`
 	Scopes        []string               `protobuf:"bytes,4,rep,name=scopes,proto3" json:"scopes,omitempty"`
+	Role          string                 `protobuf:"bytes,5,opt,name=role,proto3" json:"role,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1401,6 +1406,13 @@ func (x *Subject) GetScopes() []string {
 		return x.Scopes
 	}
 	return nil
+}
+
+func (x *Subject) GetRole() string {
+	if x != nil {
+		return x.Role
+	}
+	return ""
 }
 
 type Grant struct {
@@ -2594,13 +2606,14 @@ const file_novaforge_identity_v1_identity_proto_rawDesc = "" +
 	"\x10Verify2FARequest\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\tR\x04code\"-\n" +
 	"\x11Verify2FAResponse\x12\x18\n" +
-	"\aenabled\x18\x01 \x01(\bR\aenabled\"p\n" +
+	"\aenabled\x18\x01 \x01(\bR\aenabled\"\x84\x01\n" +
 	"\aSubject\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x15\n" +
 	"\x06org_id\x18\x02 \x01(\tR\x05orgId\x12\x1d\n" +
 	"\n" +
 	"actor_kind\x18\x03 \x01(\tR\tactorKind\x12\x16\n" +
-	"\x06scopes\x18\x04 \x03(\tR\x06scopes\"\xba\x02\n" +
+	"\x06scopes\x18\x04 \x03(\tR\x06scopes\x12\x12\n" +
+	"\x04role\x18\x05 \x01(\tR\x04role\"\xba\x02\n" +
 	"\x05Grant\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x15\n" +
 	"\x06org_id\x18\x02 \x01(\tR\x05orgId\x12\x1d\n" +

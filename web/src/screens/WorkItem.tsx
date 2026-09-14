@@ -13,7 +13,11 @@ import {
   StatePill,
 } from "../components/ui";
 import { Dialog } from "../components/Dialog";
-import type { Agent, Subtask, WorkItem as Item } from "../lib/types";
+import {
+  ACTIVE_RUN_STATES,
+  CancelAgentRun,
+} from "../components/CancelAgentRun";
+import type { Agent, AgentRun, Subtask, WorkItem as Item } from "../lib/types";
 
 interface Comment {
   id: string;
@@ -64,6 +68,19 @@ export function WorkItemDetail() {
   });
   const enabledAgents = (agents.data?.agents ?? []).filter((a) => a.enabled);
 
+  const runs = useQuery({
+    queryKey: ["agent-runs", w.org, repo, key],
+    queryFn: () => api.get<{ runs: AgentRun[] }>(`${base}/agent-runs`),
+    enabled: w.org !== null,
+    // A live run moves on its own; follow it while any is still going.
+    refetchInterval: (q) =>
+      q.state.data?.runs.some((r) => ACTIVE_RUN_STATES.has(r.state))
+        ? 5_000
+        : false,
+  });
+  const agentName = (id: string) =>
+    agents.data?.agents.find((a) => a.id === id)?.name ?? id.slice(0, 8);
+
   const comment = useMutation({
     mutationFn: () => api.post(`${base}/comments`, { body }),
     onSuccess: () => {
@@ -110,7 +127,13 @@ export function WorkItemDetail() {
               {decompose.isPending ? "Decomposing…" : "Decompose"}
             </button>
           ) : null}
-          {enabledAgents.length > 0 ? (
+          {item.data?.awaiting_approval ? (
+            // Agent-runtime refuses a run on an unapproved proposal; the way
+            // forward is the approval, not a Start button that would fail.
+            <Link to="/maintenance" style={secondary}>
+              Awaiting approval · Maintenance
+            </Link>
+          ) : enabledAgents.length > 0 ? (
             <button onClick={() => setStarting(true)} style={primary}>
               Start an Agent Run
             </button>
@@ -164,6 +187,62 @@ export function WorkItemDetail() {
                   <List title="Required gates" items={d.required_gates} />
                 </div>
               )}
+            </Async>
+          </Panel>
+
+          <Panel>
+            <PanelHead>
+              AGENT RUNS
+              <span style={{ color: "var(--fg-faint)" }}>
+                {runs.data?.runs.length ?? ""}
+              </span>
+            </PanelHead>
+            <Async query={runs}>
+              {(d) =>
+                d.runs.length === 0 ? (
+                  <Empty>No Agent Run has been started against {key}.</Empty>
+                ) : (
+                  <>
+                    {d.runs.map((r) => (
+                      <div
+                        key={r.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          padding: "9px 14px",
+                          borderBottom: "1px solid var(--line)",
+                        }}
+                      >
+                        <span style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ font: "500 12px var(--sans)" }}>
+                            {agentName(r.agent_id)}
+                          </div>
+                          <div
+                            style={{
+                              font: "11px var(--mono)",
+                              color: "var(--fg-faint)",
+                              marginTop: 2,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {r.branch}
+                            {r.started_at
+                              ? ` · ${r.started_at.replace("T", " ").slice(0, 19)}`
+                              : ""}
+                          </div>
+                        </span>
+                        {ACTIVE_RUN_STATES.has(r.state) && w.org ? (
+                          <CancelAgentRun org={w.org} runId={r.id} />
+                        ) : null}
+                        <StatePill state={r.state} />
+                      </div>
+                    ))}
+                  </>
+                )
+              }
             </Async>
           </Panel>
 

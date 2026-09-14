@@ -62,6 +62,26 @@ export interface WorkItem {
   assignee_kind: string;
   repo_id: string;
   created_at: string;
+  /** Sent only when one Work Item is read: a maintenance proposal no person
+   * has approved. Agent-runtime refuses to start a run against it. */
+  awaiting_approval?: boolean;
+}
+
+/** MaintenanceProposal is a scanner finding that became a Work Item. decision
+ * is "" while it awaits a person's approval, then "approved" or "dismissed". */
+export interface MaintenanceProposal {
+  fingerprint: string;
+  work_item_key: string;
+  work_item_goal: string;
+  work_item_type: string;
+  state: string;
+  resolved: boolean;
+  decision: "" | "approved" | "dismissed";
+  decided_by: string;
+  decided_at: string;
+  dismiss_reason: string;
+  assignee_id: string;
+  assignee_kind: string;
 }
 
 export interface Subtask extends WorkItem {

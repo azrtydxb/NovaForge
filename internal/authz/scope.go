@@ -16,6 +16,18 @@ type Scope struct {
 	OrgID     uuid.UUID
 	ActorID   uuid.UUID
 	ActorKind string // "user" or "agent"
+
+	// Role is a person's membership role in OrgID ("owner", "admin" or
+	// "member"), as identity reported it when it verified the membership.
+	// It is empty for an agent or a platform service, which hold no
+	// membership role — so an owner-only action refuses them by default.
+	Role string
+}
+
+// IsOrgAdmin reports whether the scope is a person holding the owner or admin
+// role in its organization.
+func (s Scope) IsOrgAdmin() bool {
+	return s.ActorKind == "user" && (s.Role == "owner" || s.Role == "admin")
 }
 
 // ctxKey is unexported so no other package can install or forge a Scope by

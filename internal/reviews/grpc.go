@@ -3,6 +3,7 @@ package reviews
 import (
 	"context"
 	"log"
+	"strings"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
@@ -91,10 +92,17 @@ func toProtoRun(r Run) *reviewsv1.Run {
 }
 
 // CreateRun creates an Engineering Run within the caller's organization.
+//
+// A run opened by a person is attributed to that person from the caller's
+// scope, never from the request: the author fields used to be taken as sent,
+// so the edge — which sent none — opened every run with no author, and any
+// caller could have named someone else, or claimed to be an agent. Only a
+// non-person caller (a platform service acting for an agent) states the
+// author, because its scope names no person to attribute the run to.
 func (g *GRPCServer) CreateRun(ctx context.Context, req *reviewsv1.CreateRunRequest) (*reviewsv1.CreateRunResponse, error) {
-	orgID, err := callerOrg(ctx)
+	scope, err := authz.FromContext(ctx)
 	if err != nil {
-		return nil, err
+		return nil, status.Error(codes.PermissionDenied, "no authorization scope for this call")
 	}
 	repoID, err := parseUUID("repo_id", req.GetRepoId())
 	if err != nil {
@@ -104,26 +112,54 @@ func (g *GRPCServer) CreateRun(ctx context.Context, req *reviewsv1.CreateRunRequ
 	if err != nil {
 		return nil, err
 	}
-	authorID, err := optionalUUID("author_id", req.GetAuthorId())
-	if err != nil {
+	if err := validateRunRefs(req.GetTitle(), req.GetSourceRef(), req.GetTargetRef()); err != nil {
 		return nil, err
 	}
-	run, err := g.Store.CreateRun(ctx, Run{
-		OrgID:      orgID,
+
+	run := Run{
+		OrgID:      scope.OrgID,
 		RepoID:     repoID,
 		WorkItemID: workItemID,
-		Title:      req.GetTitle(),
+		Title:      strings.TrimSpace(req.GetTitle()),
 		SourceRef:  req.GetSourceRef(),
 		TargetRef:  req.GetTargetRef(),
-		AuthorID:   authorID,
-		AuthorKind: req.GetAuthorKind(),
-		AgentName:  req.GetAgentName(),
-		ModelName:  req.GetModelName(),
-	})
+	}
+	if scope.ActorKind == "user" {
+		run.AuthorID = scope.ActorID
+		run.AuthorKind = "user"
+	} else {
+		authorID, err := optionalUUID("author_id", req.GetAuthorId())
+		if err != nil {
+			return nil, err
+		}
+		run.AuthorID = authorID
+		run.AuthorKind = req.GetAuthorKind()
+		run.AgentName = req.GetAgentName()
+		run.ModelName = req.GetModelName()
+	}
+
+	created, err := g.Store.CreateRun(ctx, run)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "create run: %v", err)
 	}
-	return &reviewsv1.CreateRunResponse{Run: toProtoRun(run)}, nil
+	return &reviewsv1.CreateRunResponse{Run: toProtoRun(created)}, nil
+}
+
+// validateRunRefs refuses a run that could never be reviewed or merged: one
+// with no title, a missing branch, or a branch that would merge into itself.
+// "main" and "refs/heads/main" name the same branch — the merge strips the
+// prefix — so they are compared without it.
+func validateRunRefs(title, source, target string) error {
+	if strings.TrimSpace(title) == "" {
+		return status.Error(codes.InvalidArgument, "title is required")
+	}
+	if strings.TrimSpace(source) == "" || strings.TrimSpace(target) == "" {
+		return status.Error(codes.InvalidArgument, "source_ref and target_ref are both required")
+	}
+	if strings.TrimPrefix(source, "refs/heads/") == strings.TrimPrefix(target, "refs/heads/") {
+		return status.Errorf(codes.InvalidArgument, "source_ref and target_ref are the same branch %q", strings.TrimPrefix(source, "refs/heads/"))
+	}
+	return nil
 }
 
 // GetRun looks up a run by id, or by the (repo_id, number) pair people and

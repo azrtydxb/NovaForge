@@ -37,8 +37,12 @@ type WorkItem struct {
 	AssigneeKind  string                 `protobuf:"bytes,11,opt,name=assignee_kind,json=assigneeKind,proto3" json:"assignee_kind,omitempty"`
 	State         string                 `protobuf:"bytes,12,opt,name=state,proto3" json:"state,omitempty"`
 	CreatedAt     string                 `protobuf:"bytes,13,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// awaiting_approval marks a maintenance proposal no person has approved.
+	// Such an item must not be executed: agent-runtime refuses to start a run
+	// against it.
+	AwaitingApproval bool `protobuf:"varint,14,opt,name=awaiting_approval,json=awaitingApproval,proto3" json:"awaiting_approval,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *WorkItem) Reset() {
@@ -160,6 +164,13 @@ func (x *WorkItem) GetCreatedAt() string {
 		return x.CreatedAt
 	}
 	return ""
+}
+
+func (x *WorkItem) GetAwaitingApproval() bool {
+	if x != nil {
+		return x.AwaitingApproval
+	}
+	return false
 }
 
 type CreateItemRequest struct {
@@ -1090,7 +1101,8 @@ func (x *ListCommentsResponse) GetComments() []*Comment {
 }
 
 // MaintenanceProposal is a scanner finding that became a Work Item. resolved
-// marks a finding that has stopped reproducing.
+// marks a finding that has stopped reproducing. decision is empty until a
+// person approves or dismisses it.
 type MaintenanceProposal struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Fingerprint   string                 `protobuf:"bytes,1,opt,name=fingerprint,proto3" json:"fingerprint,omitempty"`
@@ -1099,6 +1111,12 @@ type MaintenanceProposal struct {
 	WorkItemType  string                 `protobuf:"bytes,4,opt,name=work_item_type,json=workItemType,proto3" json:"work_item_type,omitempty"`
 	State         string                 `protobuf:"bytes,5,opt,name=state,proto3" json:"state,omitempty"`
 	Resolved      bool                   `protobuf:"varint,6,opt,name=resolved,proto3" json:"resolved,omitempty"`
+	Decision      string                 `protobuf:"bytes,7,opt,name=decision,proto3" json:"decision,omitempty"`
+	DecidedBy     string                 `protobuf:"bytes,8,opt,name=decided_by,json=decidedBy,proto3" json:"decided_by,omitempty"`
+	DecidedAt     string                 `protobuf:"bytes,9,opt,name=decided_at,json=decidedAt,proto3" json:"decided_at,omitempty"`
+	DismissReason string                 `protobuf:"bytes,10,opt,name=dismiss_reason,json=dismissReason,proto3" json:"dismiss_reason,omitempty"`
+	AssigneeId    string                 `protobuf:"bytes,11,opt,name=assignee_id,json=assigneeId,proto3" json:"assignee_id,omitempty"`
+	AssigneeKind  string                 `protobuf:"bytes,12,opt,name=assignee_kind,json=assigneeKind,proto3" json:"assignee_kind,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1175,6 +1193,270 @@ func (x *MaintenanceProposal) GetResolved() bool {
 	return false
 }
 
+func (x *MaintenanceProposal) GetDecision() string {
+	if x != nil {
+		return x.Decision
+	}
+	return ""
+}
+
+func (x *MaintenanceProposal) GetDecidedBy() string {
+	if x != nil {
+		return x.DecidedBy
+	}
+	return ""
+}
+
+func (x *MaintenanceProposal) GetDecidedAt() string {
+	if x != nil {
+		return x.DecidedAt
+	}
+	return ""
+}
+
+func (x *MaintenanceProposal) GetDismissReason() string {
+	if x != nil {
+		return x.DismissReason
+	}
+	return ""
+}
+
+func (x *MaintenanceProposal) GetAssigneeId() string {
+	if x != nil {
+		return x.AssigneeId
+	}
+	return ""
+}
+
+func (x *MaintenanceProposal) GetAssigneeKind() string {
+	if x != nil {
+		return x.AssigneeKind
+	}
+	return ""
+}
+
+// ApproveMaintenanceProposalRequest approves a proposal and assigns its Work
+// Item. With no assignee the approver takes it; otherwise assignee_kind is
+// "user" or "agent".
+type ApproveMaintenanceProposalRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RepoId        string                 `protobuf:"bytes,1,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	Fingerprint   string                 `protobuf:"bytes,2,opt,name=fingerprint,proto3" json:"fingerprint,omitempty"`
+	AssigneeId    string                 `protobuf:"bytes,3,opt,name=assignee_id,json=assigneeId,proto3" json:"assignee_id,omitempty"`
+	AssigneeKind  string                 `protobuf:"bytes,4,opt,name=assignee_kind,json=assigneeKind,proto3" json:"assignee_kind,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ApproveMaintenanceProposalRequest) Reset() {
+	*x = ApproveMaintenanceProposalRequest{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ApproveMaintenanceProposalRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ApproveMaintenanceProposalRequest) ProtoMessage() {}
+
+func (x *ApproveMaintenanceProposalRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ApproveMaintenanceProposalRequest.ProtoReflect.Descriptor instead.
+func (*ApproveMaintenanceProposalRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *ApproveMaintenanceProposalRequest) GetRepoId() string {
+	if x != nil {
+		return x.RepoId
+	}
+	return ""
+}
+
+func (x *ApproveMaintenanceProposalRequest) GetFingerprint() string {
+	if x != nil {
+		return x.Fingerprint
+	}
+	return ""
+}
+
+func (x *ApproveMaintenanceProposalRequest) GetAssigneeId() string {
+	if x != nil {
+		return x.AssigneeId
+	}
+	return ""
+}
+
+func (x *ApproveMaintenanceProposalRequest) GetAssigneeKind() string {
+	if x != nil {
+		return x.AssigneeKind
+	}
+	return ""
+}
+
+type ApproveMaintenanceProposalResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Proposal      *MaintenanceProposal   `protobuf:"bytes,1,opt,name=proposal,proto3" json:"proposal,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ApproveMaintenanceProposalResponse) Reset() {
+	*x = ApproveMaintenanceProposalResponse{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ApproveMaintenanceProposalResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ApproveMaintenanceProposalResponse) ProtoMessage() {}
+
+func (x *ApproveMaintenanceProposalResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ApproveMaintenanceProposalResponse.ProtoReflect.Descriptor instead.
+func (*ApproveMaintenanceProposalResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *ApproveMaintenanceProposalResponse) GetProposal() *MaintenanceProposal {
+	if x != nil {
+		return x.Proposal
+	}
+	return nil
+}
+
+// DismissMaintenanceProposalRequest declines a proposal, closing its Work
+// Item. reason is required: a dismissal nobody can later understand is
+// indistinguishable from one made by mistake.
+type DismissMaintenanceProposalRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RepoId        string                 `protobuf:"bytes,1,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	Fingerprint   string                 `protobuf:"bytes,2,opt,name=fingerprint,proto3" json:"fingerprint,omitempty"`
+	Reason        string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DismissMaintenanceProposalRequest) Reset() {
+	*x = DismissMaintenanceProposalRequest{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DismissMaintenanceProposalRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DismissMaintenanceProposalRequest) ProtoMessage() {}
+
+func (x *DismissMaintenanceProposalRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DismissMaintenanceProposalRequest.ProtoReflect.Descriptor instead.
+func (*DismissMaintenanceProposalRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *DismissMaintenanceProposalRequest) GetRepoId() string {
+	if x != nil {
+		return x.RepoId
+	}
+	return ""
+}
+
+func (x *DismissMaintenanceProposalRequest) GetFingerprint() string {
+	if x != nil {
+		return x.Fingerprint
+	}
+	return ""
+}
+
+func (x *DismissMaintenanceProposalRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+type DismissMaintenanceProposalResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Proposal      *MaintenanceProposal   `protobuf:"bytes,1,opt,name=proposal,proto3" json:"proposal,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DismissMaintenanceProposalResponse) Reset() {
+	*x = DismissMaintenanceProposalResponse{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DismissMaintenanceProposalResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DismissMaintenanceProposalResponse) ProtoMessage() {}
+
+func (x *DismissMaintenanceProposalResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DismissMaintenanceProposalResponse.ProtoReflect.Descriptor instead.
+func (*DismissMaintenanceProposalResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *DismissMaintenanceProposalResponse) GetProposal() *MaintenanceProposal {
+	if x != nil {
+		return x.Proposal
+	}
+	return nil
+}
+
 type ListMaintenanceProposalsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	RepoId        string                 `protobuf:"bytes,1,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
@@ -1184,7 +1466,7 @@ type ListMaintenanceProposalsRequest struct {
 
 func (x *ListMaintenanceProposalsRequest) Reset() {
 	*x = ListMaintenanceProposalsRequest{}
-	mi := &file_novaforge_work_v1_work_proto_msgTypes[20]
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1196,7 +1478,7 @@ func (x *ListMaintenanceProposalsRequest) String() string {
 func (*ListMaintenanceProposalsRequest) ProtoMessage() {}
 
 func (x *ListMaintenanceProposalsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_work_v1_work_proto_msgTypes[20]
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1209,7 +1491,7 @@ func (x *ListMaintenanceProposalsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMaintenanceProposalsRequest.ProtoReflect.Descriptor instead.
 func (*ListMaintenanceProposalsRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{20}
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *ListMaintenanceProposalsRequest) GetRepoId() string {
@@ -1228,7 +1510,7 @@ type ListMaintenanceProposalsResponse struct {
 
 func (x *ListMaintenanceProposalsResponse) Reset() {
 	*x = ListMaintenanceProposalsResponse{}
-	mi := &file_novaforge_work_v1_work_proto_msgTypes[21]
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1240,7 +1522,7 @@ func (x *ListMaintenanceProposalsResponse) String() string {
 func (*ListMaintenanceProposalsResponse) ProtoMessage() {}
 
 func (x *ListMaintenanceProposalsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_work_v1_work_proto_msgTypes[21]
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1253,7 +1535,7 @@ func (x *ListMaintenanceProposalsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMaintenanceProposalsResponse.ProtoReflect.Descriptor instead.
 func (*ListMaintenanceProposalsResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{21}
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *ListMaintenanceProposalsResponse) GetProposals() []*MaintenanceProposal {
@@ -1267,7 +1549,7 @@ var File_novaforge_work_v1_work_proto protoreflect.FileDescriptor
 
 const file_novaforge_work_v1_work_proto_rawDesc = "" +
 	"\n" +
-	"\x1cnovaforge/work/v1/work.proto\x12\x11novaforge.work.v1\"\xe8\x02\n" +
+	"\x1cnovaforge/work/v1/work.proto\x12\x11novaforge.work.v1\"\x95\x03\n" +
 	"\bWorkItem\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x15\n" +
 	"\x06org_id\x18\x02 \x01(\tR\x05orgId\x12\x17\n" +
@@ -1286,7 +1568,8 @@ const file_novaforge_work_v1_work_proto_rawDesc = "" +
 	"\rassignee_kind\x18\v \x01(\tR\fassigneeKind\x12\x14\n" +
 	"\x05state\x18\f \x01(\tR\x05state\x12\x1d\n" +
 	"\n" +
-	"created_at\x18\r \x01(\tR\tcreatedAt\"\xbd\x01\n" +
+	"created_at\x18\r \x01(\tR\tcreatedAt\x12+\n" +
+	"\x11awaiting_approval\x18\x0e \x01(\bR\x10awaitingApproval\"\xbd\x01\n" +
 	"\x11CreateItemRequest\x12\x17\n" +
 	"\arepo_id\x18\x01 \x01(\tR\x06repoId\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x12\n" +
@@ -1346,18 +1629,42 @@ const file_novaforge_work_v1_work_proto_rawDesc = "" +
 	"\fwork_item_id\x18\x01 \x01(\tR\n" +
 	"workItemId\"N\n" +
 	"\x14ListCommentsResponse\x126\n" +
-	"\bcomments\x18\x01 \x03(\v2\x1a.novaforge.work.v1.CommentR\bcomments\"\xd9\x01\n" +
+	"\bcomments\x18\x01 \x03(\v2\x1a.novaforge.work.v1.CommentR\bcomments\"\xa0\x03\n" +
 	"\x13MaintenanceProposal\x12 \n" +
 	"\vfingerprint\x18\x01 \x01(\tR\vfingerprint\x12\"\n" +
 	"\rwork_item_key\x18\x02 \x01(\tR\vworkItemKey\x12$\n" +
 	"\x0ework_item_goal\x18\x03 \x01(\tR\fworkItemGoal\x12$\n" +
 	"\x0ework_item_type\x18\x04 \x01(\tR\fworkItemType\x12\x14\n" +
 	"\x05state\x18\x05 \x01(\tR\x05state\x12\x1a\n" +
-	"\bresolved\x18\x06 \x01(\bR\bresolved\":\n" +
+	"\bresolved\x18\x06 \x01(\bR\bresolved\x12\x1a\n" +
+	"\bdecision\x18\a \x01(\tR\bdecision\x12\x1d\n" +
+	"\n" +
+	"decided_by\x18\b \x01(\tR\tdecidedBy\x12\x1d\n" +
+	"\n" +
+	"decided_at\x18\t \x01(\tR\tdecidedAt\x12%\n" +
+	"\x0edismiss_reason\x18\n" +
+	" \x01(\tR\rdismissReason\x12\x1f\n" +
+	"\vassignee_id\x18\v \x01(\tR\n" +
+	"assigneeId\x12#\n" +
+	"\rassignee_kind\x18\f \x01(\tR\fassigneeKind\"\xa4\x01\n" +
+	"!ApproveMaintenanceProposalRequest\x12\x17\n" +
+	"\arepo_id\x18\x01 \x01(\tR\x06repoId\x12 \n" +
+	"\vfingerprint\x18\x02 \x01(\tR\vfingerprint\x12\x1f\n" +
+	"\vassignee_id\x18\x03 \x01(\tR\n" +
+	"assigneeId\x12#\n" +
+	"\rassignee_kind\x18\x04 \x01(\tR\fassigneeKind\"h\n" +
+	"\"ApproveMaintenanceProposalResponse\x12B\n" +
+	"\bproposal\x18\x01 \x01(\v2&.novaforge.work.v1.MaintenanceProposalR\bproposal\"v\n" +
+	"!DismissMaintenanceProposalRequest\x12\x17\n" +
+	"\arepo_id\x18\x01 \x01(\tR\x06repoId\x12 \n" +
+	"\vfingerprint\x18\x02 \x01(\tR\vfingerprint\x12\x16\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\"h\n" +
+	"\"DismissMaintenanceProposalResponse\x12B\n" +
+	"\bproposal\x18\x01 \x01(\v2&.novaforge.work.v1.MaintenanceProposalR\bproposal\":\n" +
 	"\x1fListMaintenanceProposalsRequest\x12\x17\n" +
 	"\arepo_id\x18\x01 \x01(\tR\x06repoId\"h\n" +
 	" ListMaintenanceProposalsResponse\x12D\n" +
-	"\tproposals\x18\x01 \x03(\v2&.novaforge.work.v1.MaintenanceProposalR\tproposals2\xf4\x06\n" +
+	"\tproposals\x18\x01 \x03(\v2&.novaforge.work.v1.MaintenanceProposalR\tproposals2\x8c\t\n" +
 	"\vWorkService\x12Y\n" +
 	"\n" +
 	"CreateItem\x12$.novaforge.work.v1.CreateItemRequest\x1a%.novaforge.work.v1.CreateItemResponse\x12P\n" +
@@ -1370,7 +1677,9 @@ const file_novaforge_work_v1_work_proto_rawDesc = "" +
 	"\n" +
 	"AddComment\x12$.novaforge.work.v1.AddCommentRequest\x1a%.novaforge.work.v1.AddCommentResponse\x12_\n" +
 	"\fListComments\x12&.novaforge.work.v1.ListCommentsRequest\x1a'.novaforge.work.v1.ListCommentsResponse\x12\x83\x01\n" +
-	"\x18ListMaintenanceProposals\x122.novaforge.work.v1.ListMaintenanceProposalsRequest\x1a3.novaforge.work.v1.ListMaintenanceProposalsResponseB\xc5\x01\n" +
+	"\x18ListMaintenanceProposals\x122.novaforge.work.v1.ListMaintenanceProposalsRequest\x1a3.novaforge.work.v1.ListMaintenanceProposalsResponse\x12\x89\x01\n" +
+	"\x1aApproveMaintenanceProposal\x124.novaforge.work.v1.ApproveMaintenanceProposalRequest\x1a5.novaforge.work.v1.ApproveMaintenanceProposalResponse\x12\x89\x01\n" +
+	"\x1aDismissMaintenanceProposal\x124.novaforge.work.v1.DismissMaintenanceProposalRequest\x1a5.novaforge.work.v1.DismissMaintenanceProposalResponseB\xc5\x01\n" +
 	"\x15com.novaforge.work.v1B\tWorkProtoP\x01Z;github.com/novaforge/novaforge/gen/novaforge/work/v1;workv1\xa2\x02\x03NWX\xaa\x02\x11Novaforge.Work.V1\xca\x02\x11Novaforge\\Work\\V1\xe2\x02\x1dNovaforge\\Work\\V1\\GPBMetadata\xea\x02\x13Novaforge::Work::V1b\x06proto3"
 
 var (
@@ -1385,30 +1694,34 @@ func file_novaforge_work_v1_work_proto_rawDescGZIP() []byte {
 	return file_novaforge_work_v1_work_proto_rawDescData
 }
 
-var file_novaforge_work_v1_work_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
+var file_novaforge_work_v1_work_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
 var file_novaforge_work_v1_work_proto_goTypes = []any{
-	(*WorkItem)(nil),                         // 0: novaforge.work.v1.WorkItem
-	(*CreateItemRequest)(nil),                // 1: novaforge.work.v1.CreateItemRequest
-	(*CreateItemResponse)(nil),               // 2: novaforge.work.v1.CreateItemResponse
-	(*GetItemRequest)(nil),                   // 3: novaforge.work.v1.GetItemRequest
-	(*GetItemResponse)(nil),                  // 4: novaforge.work.v1.GetItemResponse
-	(*ListItemsRequest)(nil),                 // 5: novaforge.work.v1.ListItemsRequest
-	(*ListItemsResponse)(nil),                // 6: novaforge.work.v1.ListItemsResponse
-	(*AssignItemRequest)(nil),                // 7: novaforge.work.v1.AssignItemRequest
-	(*AssignItemResponse)(nil),               // 8: novaforge.work.v1.AssignItemResponse
-	(*Subtask)(nil),                          // 9: novaforge.work.v1.Subtask
-	(*ListSubtasksRequest)(nil),              // 10: novaforge.work.v1.ListSubtasksRequest
-	(*ListSubtasksResponse)(nil),             // 11: novaforge.work.v1.ListSubtasksResponse
-	(*DecomposeEpicRequest)(nil),             // 12: novaforge.work.v1.DecomposeEpicRequest
-	(*DecomposeEpicResponse)(nil),            // 13: novaforge.work.v1.DecomposeEpicResponse
-	(*Comment)(nil),                          // 14: novaforge.work.v1.Comment
-	(*AddCommentRequest)(nil),                // 15: novaforge.work.v1.AddCommentRequest
-	(*AddCommentResponse)(nil),               // 16: novaforge.work.v1.AddCommentResponse
-	(*ListCommentsRequest)(nil),              // 17: novaforge.work.v1.ListCommentsRequest
-	(*ListCommentsResponse)(nil),             // 18: novaforge.work.v1.ListCommentsResponse
-	(*MaintenanceProposal)(nil),              // 19: novaforge.work.v1.MaintenanceProposal
-	(*ListMaintenanceProposalsRequest)(nil),  // 20: novaforge.work.v1.ListMaintenanceProposalsRequest
-	(*ListMaintenanceProposalsResponse)(nil), // 21: novaforge.work.v1.ListMaintenanceProposalsResponse
+	(*WorkItem)(nil),                           // 0: novaforge.work.v1.WorkItem
+	(*CreateItemRequest)(nil),                  // 1: novaforge.work.v1.CreateItemRequest
+	(*CreateItemResponse)(nil),                 // 2: novaforge.work.v1.CreateItemResponse
+	(*GetItemRequest)(nil),                     // 3: novaforge.work.v1.GetItemRequest
+	(*GetItemResponse)(nil),                    // 4: novaforge.work.v1.GetItemResponse
+	(*ListItemsRequest)(nil),                   // 5: novaforge.work.v1.ListItemsRequest
+	(*ListItemsResponse)(nil),                  // 6: novaforge.work.v1.ListItemsResponse
+	(*AssignItemRequest)(nil),                  // 7: novaforge.work.v1.AssignItemRequest
+	(*AssignItemResponse)(nil),                 // 8: novaforge.work.v1.AssignItemResponse
+	(*Subtask)(nil),                            // 9: novaforge.work.v1.Subtask
+	(*ListSubtasksRequest)(nil),                // 10: novaforge.work.v1.ListSubtasksRequest
+	(*ListSubtasksResponse)(nil),               // 11: novaforge.work.v1.ListSubtasksResponse
+	(*DecomposeEpicRequest)(nil),               // 12: novaforge.work.v1.DecomposeEpicRequest
+	(*DecomposeEpicResponse)(nil),              // 13: novaforge.work.v1.DecomposeEpicResponse
+	(*Comment)(nil),                            // 14: novaforge.work.v1.Comment
+	(*AddCommentRequest)(nil),                  // 15: novaforge.work.v1.AddCommentRequest
+	(*AddCommentResponse)(nil),                 // 16: novaforge.work.v1.AddCommentResponse
+	(*ListCommentsRequest)(nil),                // 17: novaforge.work.v1.ListCommentsRequest
+	(*ListCommentsResponse)(nil),               // 18: novaforge.work.v1.ListCommentsResponse
+	(*MaintenanceProposal)(nil),                // 19: novaforge.work.v1.MaintenanceProposal
+	(*ApproveMaintenanceProposalRequest)(nil),  // 20: novaforge.work.v1.ApproveMaintenanceProposalRequest
+	(*ApproveMaintenanceProposalResponse)(nil), // 21: novaforge.work.v1.ApproveMaintenanceProposalResponse
+	(*DismissMaintenanceProposalRequest)(nil),  // 22: novaforge.work.v1.DismissMaintenanceProposalRequest
+	(*DismissMaintenanceProposalResponse)(nil), // 23: novaforge.work.v1.DismissMaintenanceProposalResponse
+	(*ListMaintenanceProposalsRequest)(nil),    // 24: novaforge.work.v1.ListMaintenanceProposalsRequest
+	(*ListMaintenanceProposalsResponse)(nil),   // 25: novaforge.work.v1.ListMaintenanceProposalsResponse
 }
 var file_novaforge_work_v1_work_proto_depIdxs = []int32{
 	0,  // 0: novaforge.work.v1.CreateItemResponse.item:type_name -> novaforge.work.v1.WorkItem
@@ -1420,30 +1733,36 @@ var file_novaforge_work_v1_work_proto_depIdxs = []int32{
 	0,  // 6: novaforge.work.v1.DecomposeEpicResponse.subtasks:type_name -> novaforge.work.v1.WorkItem
 	14, // 7: novaforge.work.v1.AddCommentResponse.comment:type_name -> novaforge.work.v1.Comment
 	14, // 8: novaforge.work.v1.ListCommentsResponse.comments:type_name -> novaforge.work.v1.Comment
-	19, // 9: novaforge.work.v1.ListMaintenanceProposalsResponse.proposals:type_name -> novaforge.work.v1.MaintenanceProposal
-	1,  // 10: novaforge.work.v1.WorkService.CreateItem:input_type -> novaforge.work.v1.CreateItemRequest
-	3,  // 11: novaforge.work.v1.WorkService.GetItem:input_type -> novaforge.work.v1.GetItemRequest
-	5,  // 12: novaforge.work.v1.WorkService.ListItems:input_type -> novaforge.work.v1.ListItemsRequest
-	7,  // 13: novaforge.work.v1.WorkService.AssignItem:input_type -> novaforge.work.v1.AssignItemRequest
-	10, // 14: novaforge.work.v1.WorkService.ListSubtasks:input_type -> novaforge.work.v1.ListSubtasksRequest
-	12, // 15: novaforge.work.v1.WorkService.DecomposeEpic:input_type -> novaforge.work.v1.DecomposeEpicRequest
-	15, // 16: novaforge.work.v1.WorkService.AddComment:input_type -> novaforge.work.v1.AddCommentRequest
-	17, // 17: novaforge.work.v1.WorkService.ListComments:input_type -> novaforge.work.v1.ListCommentsRequest
-	20, // 18: novaforge.work.v1.WorkService.ListMaintenanceProposals:input_type -> novaforge.work.v1.ListMaintenanceProposalsRequest
-	2,  // 19: novaforge.work.v1.WorkService.CreateItem:output_type -> novaforge.work.v1.CreateItemResponse
-	4,  // 20: novaforge.work.v1.WorkService.GetItem:output_type -> novaforge.work.v1.GetItemResponse
-	6,  // 21: novaforge.work.v1.WorkService.ListItems:output_type -> novaforge.work.v1.ListItemsResponse
-	8,  // 22: novaforge.work.v1.WorkService.AssignItem:output_type -> novaforge.work.v1.AssignItemResponse
-	11, // 23: novaforge.work.v1.WorkService.ListSubtasks:output_type -> novaforge.work.v1.ListSubtasksResponse
-	13, // 24: novaforge.work.v1.WorkService.DecomposeEpic:output_type -> novaforge.work.v1.DecomposeEpicResponse
-	16, // 25: novaforge.work.v1.WorkService.AddComment:output_type -> novaforge.work.v1.AddCommentResponse
-	18, // 26: novaforge.work.v1.WorkService.ListComments:output_type -> novaforge.work.v1.ListCommentsResponse
-	21, // 27: novaforge.work.v1.WorkService.ListMaintenanceProposals:output_type -> novaforge.work.v1.ListMaintenanceProposalsResponse
-	19, // [19:28] is the sub-list for method output_type
-	10, // [10:19] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	19, // 9: novaforge.work.v1.ApproveMaintenanceProposalResponse.proposal:type_name -> novaforge.work.v1.MaintenanceProposal
+	19, // 10: novaforge.work.v1.DismissMaintenanceProposalResponse.proposal:type_name -> novaforge.work.v1.MaintenanceProposal
+	19, // 11: novaforge.work.v1.ListMaintenanceProposalsResponse.proposals:type_name -> novaforge.work.v1.MaintenanceProposal
+	1,  // 12: novaforge.work.v1.WorkService.CreateItem:input_type -> novaforge.work.v1.CreateItemRequest
+	3,  // 13: novaforge.work.v1.WorkService.GetItem:input_type -> novaforge.work.v1.GetItemRequest
+	5,  // 14: novaforge.work.v1.WorkService.ListItems:input_type -> novaforge.work.v1.ListItemsRequest
+	7,  // 15: novaforge.work.v1.WorkService.AssignItem:input_type -> novaforge.work.v1.AssignItemRequest
+	10, // 16: novaforge.work.v1.WorkService.ListSubtasks:input_type -> novaforge.work.v1.ListSubtasksRequest
+	12, // 17: novaforge.work.v1.WorkService.DecomposeEpic:input_type -> novaforge.work.v1.DecomposeEpicRequest
+	15, // 18: novaforge.work.v1.WorkService.AddComment:input_type -> novaforge.work.v1.AddCommentRequest
+	17, // 19: novaforge.work.v1.WorkService.ListComments:input_type -> novaforge.work.v1.ListCommentsRequest
+	24, // 20: novaforge.work.v1.WorkService.ListMaintenanceProposals:input_type -> novaforge.work.v1.ListMaintenanceProposalsRequest
+	20, // 21: novaforge.work.v1.WorkService.ApproveMaintenanceProposal:input_type -> novaforge.work.v1.ApproveMaintenanceProposalRequest
+	22, // 22: novaforge.work.v1.WorkService.DismissMaintenanceProposal:input_type -> novaforge.work.v1.DismissMaintenanceProposalRequest
+	2,  // 23: novaforge.work.v1.WorkService.CreateItem:output_type -> novaforge.work.v1.CreateItemResponse
+	4,  // 24: novaforge.work.v1.WorkService.GetItem:output_type -> novaforge.work.v1.GetItemResponse
+	6,  // 25: novaforge.work.v1.WorkService.ListItems:output_type -> novaforge.work.v1.ListItemsResponse
+	8,  // 26: novaforge.work.v1.WorkService.AssignItem:output_type -> novaforge.work.v1.AssignItemResponse
+	11, // 27: novaforge.work.v1.WorkService.ListSubtasks:output_type -> novaforge.work.v1.ListSubtasksResponse
+	13, // 28: novaforge.work.v1.WorkService.DecomposeEpic:output_type -> novaforge.work.v1.DecomposeEpicResponse
+	16, // 29: novaforge.work.v1.WorkService.AddComment:output_type -> novaforge.work.v1.AddCommentResponse
+	18, // 30: novaforge.work.v1.WorkService.ListComments:output_type -> novaforge.work.v1.ListCommentsResponse
+	25, // 31: novaforge.work.v1.WorkService.ListMaintenanceProposals:output_type -> novaforge.work.v1.ListMaintenanceProposalsResponse
+	21, // 32: novaforge.work.v1.WorkService.ApproveMaintenanceProposal:output_type -> novaforge.work.v1.ApproveMaintenanceProposalResponse
+	23, // 33: novaforge.work.v1.WorkService.DismissMaintenanceProposal:output_type -> novaforge.work.v1.DismissMaintenanceProposalResponse
+	23, // [23:34] is the sub-list for method output_type
+	12, // [12:23] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_novaforge_work_v1_work_proto_init() }
@@ -1457,7 +1776,7 @@ func file_novaforge_work_v1_work_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_novaforge_work_v1_work_proto_rawDesc), len(file_novaforge_work_v1_work_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   22,
+			NumMessages:   26,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -133,7 +133,7 @@ func authenticate(cfg Config, next http.Handler) http.Handler {
 			return
 		}
 
-		scope := authz.Scope{ActorKind: subj.GetActorKind()}
+		scope := authz.Scope{ActorKind: subj.GetActorKind(), Role: subj.GetRole()}
 		if id, err := uuid.Parse(subj.GetUserId()); err == nil {
 			scope.ActorID = id
 		}
@@ -197,8 +197,9 @@ func StatusFromGRPC(err error) int {
 	case codes.InvalidArgument:
 		return http.StatusBadRequest
 	case codes.FailedPrecondition:
-		// A merge the gates refuse, or a gate proposal that changes nothing:
-		// a legitimate question whose answer is no, not a server fault.
+		// A merge the gates refuse, a gate proposal that changes nothing,
+		// cancelling a finished run, deciding a proposal twice: a legitimate
+		// question whose answer is no, not a server fault.
 		return http.StatusConflict
 	case codes.Unimplemented:
 		// Services say "this deployment has no X" with Unimplemented; 501 is

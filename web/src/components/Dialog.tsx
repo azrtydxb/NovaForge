@@ -173,6 +173,125 @@ export function Dialog({
   );
 }
 
+/** Confirm asks before an action that cannot be taken back. With
+ * `typeToConfirm` the user must type that exact text first — reserved for the
+ * actions whose loss is total, like deleting a repository, where a reflexive
+ * click on a button is exactly the mistake being guarded against. */
+export function Confirm({
+  title,
+  body,
+  confirmLabel,
+  typeToConfirm,
+  danger,
+  busy,
+  error,
+  onConfirm,
+  onClose,
+}: {
+  title: string;
+  body: ReactNode;
+  confirmLabel: string;
+  typeToConfirm?: string;
+  danger?: boolean;
+  busy: boolean;
+  error: unknown;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  const [typed, setTyped] = useState("");
+  const ready = typeToConfirm === undefined || typed === typeToConfirm;
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,.55)",
+        display: "grid",
+        placeItems: "center",
+        zIndex: 100,
+      }}
+    >
+      <form
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (ready && !busy) onConfirm();
+        }}
+        style={{
+          width: 420,
+          maxWidth: "calc(100vw - 32px)",
+          background: "var(--panel)",
+          border: `1px solid ${danger ? "#e5534b66" : "var(--line-3)"}`,
+          borderRadius: 12,
+          padding: 22,
+        }}
+      >
+        <h2 style={{ font: "600 15px var(--sans)", margin: "0 0 12px" }}>
+          {title}
+        </h2>
+        <div
+          style={{
+            font: "13px/1.6 var(--sans)",
+            color: "var(--fg-dim)",
+            marginBottom: 14,
+          }}
+        >
+          {body}
+        </div>
+
+        {typeToConfirm !== undefined ? (
+          <label style={{ display: "block", marginBottom: 13 }}>
+            <span
+              style={{
+                display: "block",
+                font: "12px var(--sans)",
+                color: "var(--fg-muted)",
+                marginBottom: 5,
+              }}
+            >
+              Type{" "}
+              <code style={{ font: "600 12px var(--mono)" }}>
+                {typeToConfirm}
+              </code>{" "}
+              to confirm
+            </span>
+            <input
+              autoFocus
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              style={inputStyle}
+            />
+          </label>
+        ) : null}
+
+        {error ? (
+          <div style={{ marginBottom: 13 }}>
+            <Failed error={error} />
+          </div>
+        ) : null}
+
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button type="button" onClick={onClose} style={secondaryButton}>
+            Keep it
+          </button>
+          <button
+            type="submit"
+            disabled={busy || !ready}
+            style={{
+              ...primaryButton(busy || !ready),
+              background: danger ? "var(--bad)" : "var(--accent)",
+            }}
+          >
+            {busy ? "Working…" : confirmLabel}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 /** NewButton is the consistent affordance for "create one of these". */
 export function NewButton({
   label,

@@ -49,7 +49,7 @@ func UnaryServerInterceptor(identity identityv1.IdentityServiceClient, hmacSecre
 		if err != nil {
 			return handler(ctx, req)
 		}
-		scope := authz.Scope{ActorKind: subj.GetActorKind()}
+		scope := authz.Scope{ActorKind: subj.GetActorKind(), Role: subj.GetRole()}
 		if id, err := uuid.Parse(subj.GetUserId()); err == nil {
 			scope.ActorID = id
 		}

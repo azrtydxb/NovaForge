@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"time"
@@ -144,25 +145,71 @@ func (s *Server) ListRepos(ctx context.Context, req *gitv1.ListReposRequest) (*g
 }
 
 // DeleteRepo removes a repository's metadata and its on-disk bare
-// repository.
+// repository. Only an owner or admin of the organization may do it: it
+// destroys the repository's whole history, and it used to be allowed to any
+// caller in the organization — any member, and any agent or platform service
+// holding an org-scoped token.
+//
+// The bare repository is first renamed aside, then the row is deleted, then
+// the renamed directory is removed. A failure before the row is gone renames
+// the directory back, so the repository is either fully present or fully
+// gone — never a record pointing at a missing directory, or a leftover
+// directory that makes re-creating the name fail. Nothing is published: no
+// consumer subscribes to a repository's deletion, and the rows other
+// services key on this repository's id are unreachable once its name no
+// longer resolves.
 func (s *Server) DeleteRepo(ctx context.Context, req *gitv1.DeleteRepoRequest) (*gitv1.DeleteRepoResponse, error) {
 	scope, err := scopeFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
+	if !scope.IsOrgAdmin() {
+		return nil, status.Error(codes.PermissionDenied, "only an organization owner or admin may delete a repository")
+	}
 	row, err := s.repoByName(ctx, scope.OrgID, req.GetName())
 	if err != nil {
 		return nil, err
-	}
-	if _, err := s.pool.Exec(ctx, `DELETE FROM gitplatform.repositories WHERE id = $1`, row.ID); err != nil {
-		return nil, status.Errorf(codes.Internal, "delete repository record: %v", err)
 	}
 	repo, err := Open(s.root, scope.OrgID, row.Name)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "resolve repository path: %v", err)
 	}
-	if err := os.RemoveAll(repo.Path()); err != nil {
-		return nil, status.Errorf(codes.Internal, "remove repository directory: %v", err)
+
+	tombstone := repo.Path() + ".deleting-" + uuid.NewString()
+	moved := true
+	if err := os.Rename(repo.Path(), tombstone); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, status.Errorf(codes.Internal, "move repository aside: %v", err)
+		}
+		// A record whose directory is already gone is still deletable: that
+		// is exactly the broken state this operation should be able to clear.
+		moved = false
+	}
+	restore := func() {
+		if moved {
+			_ = os.Rename(tombstone, repo.Path())
+		}
+	}
+
+	tag, err := s.pool.Exec(ctx,
+		`DELETE FROM gitplatform.repositories WHERE id = $1 AND org_id = $2`, row.ID, scope.OrgID)
+	if err != nil {
+		restore()
+		return nil, status.Errorf(codes.Internal, "delete repository record: %v", err)
+	}
+	if tag.RowsAffected() == 0 {
+		restore()
+		return nil, status.Errorf(codes.NotFound, "repository %q not found", req.GetName())
+	}
+
+	if moved {
+		if err := os.RemoveAll(tombstone); err != nil {
+			// The repository is deleted — its record is gone and the name is
+			// free, because the directory no longer sits at the repository's
+			// path. Only disk space is left behind, so this is not a failure
+			// the caller can act on.
+			log.Printf("gitops: repository %s deleted, but removing %s failed: %v", row.ID, tombstone, err)
+		}
 	}
 	return &gitv1.DeleteRepoResponse{Ok: true}, nil
 }

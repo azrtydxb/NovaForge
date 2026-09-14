@@ -1344,8 +1344,11 @@ func (x *ListRunsForWorkItemRequest) GetWorkItemId() string {
 }
 
 type ListRunsForWorkItemResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RunIds        []string               `protobuf:"bytes,1,rep,name=run_ids,json=runIds,proto3" json:"run_ids,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	RunIds []string               `protobuf:"bytes,1,rep,name=run_ids,json=runIds,proto3" json:"run_ids,omitempty"`
+	// runs carries the same runs, newest first, so a caller showing them does
+	// not make one GetRun per id.
+	Runs          []*Run `protobuf:"bytes,2,rep,name=runs,proto3" json:"runs,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1383,6 +1386,13 @@ func (*ListRunsForWorkItemResponse) Descriptor() ([]byte, []int) {
 func (x *ListRunsForWorkItemResponse) GetRunIds() []string {
 	if x != nil {
 		return x.RunIds
+	}
+	return nil
+}
+
+func (x *ListRunsForWorkItemResponse) GetRuns() []*Run {
+	if x != nil {
+		return x.Runs
 	}
 	return nil
 }
@@ -1489,9 +1499,10 @@ const file_novaforge_agents_v1_agents_proto_rawDesc = "" +
 	"\x05calls\x18\x01 \x03(\v2\x1d.novaforge.agents.v1.ToolCallR\x05calls\">\n" +
 	"\x1aListRunsForWorkItemRequest\x12 \n" +
 	"\fwork_item_id\x18\x01 \x01(\tR\n" +
-	"workItemId\"6\n" +
+	"workItemId\"d\n" +
 	"\x1bListRunsForWorkItemResponse\x12\x17\n" +
-	"\arun_ids\x18\x01 \x03(\tR\x06runIds2\x85\a\n" +
+	"\arun_ids\x18\x01 \x03(\tR\x06runIds\x12,\n" +
+	"\x04runs\x18\x02 \x03(\v2\x18.novaforge.agents.v1.RunR\x04runs2\x85\a\n" +
 	"\fAgentService\x12`\n" +
 	"\vCreateAgent\x12'.novaforge.agents.v1.CreateAgentRequest\x1a(.novaforge.agents.v1.CreateAgentResponse\x12]\n" +
 	"\n" +
@@ -1552,29 +1563,30 @@ var file_novaforge_agents_v1_agents_proto_depIdxs = []int32{
 	15, // 5: novaforge.agents.v1.StreamRunEventsResponse.tool_call:type_name -> novaforge.agents.v1.ToolCall
 	16, // 6: novaforge.agents.v1.ListStatsResponse.stats:type_name -> novaforge.agents.v1.AgentStats
 	15, // 7: novaforge.agents.v1.ListToolCallsResponse.calls:type_name -> novaforge.agents.v1.ToolCall
-	1,  // 8: novaforge.agents.v1.AgentService.CreateAgent:input_type -> novaforge.agents.v1.CreateAgentRequest
-	3,  // 9: novaforge.agents.v1.AgentService.ListAgents:input_type -> novaforge.agents.v1.ListAgentsRequest
-	6,  // 10: novaforge.agents.v1.AgentService.StartRun:input_type -> novaforge.agents.v1.StartRunRequest
-	8,  // 11: novaforge.agents.v1.AgentService.GetRun:input_type -> novaforge.agents.v1.GetRunRequest
-	10, // 12: novaforge.agents.v1.AgentService.CancelRun:input_type -> novaforge.agents.v1.CancelRunRequest
-	12, // 13: novaforge.agents.v1.AgentService.StreamRunEvents:input_type -> novaforge.agents.v1.StreamRunEventsRequest
-	17, // 14: novaforge.agents.v1.AgentService.ListStats:input_type -> novaforge.agents.v1.ListStatsRequest
-	19, // 15: novaforge.agents.v1.AgentService.ListToolCalls:input_type -> novaforge.agents.v1.ListToolCallsRequest
-	21, // 16: novaforge.agents.v1.AgentService.ListRunsForWorkItem:input_type -> novaforge.agents.v1.ListRunsForWorkItemRequest
-	2,  // 17: novaforge.agents.v1.AgentService.CreateAgent:output_type -> novaforge.agents.v1.CreateAgentResponse
-	4,  // 18: novaforge.agents.v1.AgentService.ListAgents:output_type -> novaforge.agents.v1.ListAgentsResponse
-	7,  // 19: novaforge.agents.v1.AgentService.StartRun:output_type -> novaforge.agents.v1.StartRunResponse
-	9,  // 20: novaforge.agents.v1.AgentService.GetRun:output_type -> novaforge.agents.v1.GetRunResponse
-	11, // 21: novaforge.agents.v1.AgentService.CancelRun:output_type -> novaforge.agents.v1.CancelRunResponse
-	13, // 22: novaforge.agents.v1.AgentService.StreamRunEvents:output_type -> novaforge.agents.v1.StreamRunEventsResponse
-	18, // 23: novaforge.agents.v1.AgentService.ListStats:output_type -> novaforge.agents.v1.ListStatsResponse
-	20, // 24: novaforge.agents.v1.AgentService.ListToolCalls:output_type -> novaforge.agents.v1.ListToolCallsResponse
-	22, // 25: novaforge.agents.v1.AgentService.ListRunsForWorkItem:output_type -> novaforge.agents.v1.ListRunsForWorkItemResponse
-	17, // [17:26] is the sub-list for method output_type
-	8,  // [8:17] is the sub-list for method input_type
-	8,  // [8:8] is the sub-list for extension type_name
-	8,  // [8:8] is the sub-list for extension extendee
-	0,  // [0:8] is the sub-list for field type_name
+	5,  // 8: novaforge.agents.v1.ListRunsForWorkItemResponse.runs:type_name -> novaforge.agents.v1.Run
+	1,  // 9: novaforge.agents.v1.AgentService.CreateAgent:input_type -> novaforge.agents.v1.CreateAgentRequest
+	3,  // 10: novaforge.agents.v1.AgentService.ListAgents:input_type -> novaforge.agents.v1.ListAgentsRequest
+	6,  // 11: novaforge.agents.v1.AgentService.StartRun:input_type -> novaforge.agents.v1.StartRunRequest
+	8,  // 12: novaforge.agents.v1.AgentService.GetRun:input_type -> novaforge.agents.v1.GetRunRequest
+	10, // 13: novaforge.agents.v1.AgentService.CancelRun:input_type -> novaforge.agents.v1.CancelRunRequest
+	12, // 14: novaforge.agents.v1.AgentService.StreamRunEvents:input_type -> novaforge.agents.v1.StreamRunEventsRequest
+	17, // 15: novaforge.agents.v1.AgentService.ListStats:input_type -> novaforge.agents.v1.ListStatsRequest
+	19, // 16: novaforge.agents.v1.AgentService.ListToolCalls:input_type -> novaforge.agents.v1.ListToolCallsRequest
+	21, // 17: novaforge.agents.v1.AgentService.ListRunsForWorkItem:input_type -> novaforge.agents.v1.ListRunsForWorkItemRequest
+	2,  // 18: novaforge.agents.v1.AgentService.CreateAgent:output_type -> novaforge.agents.v1.CreateAgentResponse
+	4,  // 19: novaforge.agents.v1.AgentService.ListAgents:output_type -> novaforge.agents.v1.ListAgentsResponse
+	7,  // 20: novaforge.agents.v1.AgentService.StartRun:output_type -> novaforge.agents.v1.StartRunResponse
+	9,  // 21: novaforge.agents.v1.AgentService.GetRun:output_type -> novaforge.agents.v1.GetRunResponse
+	11, // 22: novaforge.agents.v1.AgentService.CancelRun:output_type -> novaforge.agents.v1.CancelRunResponse
+	13, // 23: novaforge.agents.v1.AgentService.StreamRunEvents:output_type -> novaforge.agents.v1.StreamRunEventsResponse
+	18, // 24: novaforge.agents.v1.AgentService.ListStats:output_type -> novaforge.agents.v1.ListStatsResponse
+	20, // 25: novaforge.agents.v1.AgentService.ListToolCalls:output_type -> novaforge.agents.v1.ListToolCallsResponse
+	22, // 26: novaforge.agents.v1.AgentService.ListRunsForWorkItem:output_type -> novaforge.agents.v1.ListRunsForWorkItemResponse
+	18, // [18:27] is the sub-list for method output_type
+	9,  // [9:18] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_novaforge_agents_v1_agents_proto_init() }

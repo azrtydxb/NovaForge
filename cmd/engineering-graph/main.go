@@ -259,6 +259,7 @@ func subjectToScope(subject *identityv1.Subject) authz.Scope {
 	scope.ActorID = parseUUIDOrNil(subject.GetUserId())
 	scope.OrgID = parseUUIDOrNil(subject.GetOrgId())
 	scope.ActorKind = subject.GetActorKind()
+	scope.Role = subject.GetRole()
 	if scope.ActorKind == "" {
 		scope.ActorKind = "user"
 	}
