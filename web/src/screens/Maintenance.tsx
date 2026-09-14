@@ -18,7 +18,12 @@ import {
   Pill,
 } from "../components/ui";
 import { Dialog } from "../components/Dialog";
-import type { Agent, MaintenanceProposal, OrgMember } from "../lib/types";
+import type {
+  Agent,
+  MaintenanceProposal,
+  OrgMember,
+  ScanResult,
+} from "../lib/types";
 
 const TYPE_TONE: Record<string, string> = {
   security: "var(--bad)",
@@ -137,6 +142,24 @@ export function Maintenance() {
     },
   });
 
+  const [scanned, setScanned] = useState<{
+    repo: string;
+    result: ScanResult;
+  } | null>(null);
+  const scan = useMutation({
+    mutationFn: async (repo: string) => ({
+      repo,
+      result: await api.post<ScanResult>(
+        `/api/v1/orgs/${enc(w.org!)}/repos/${enc(repo)}/maintenance/scan`,
+        {},
+      ),
+    }),
+    onSuccess: (r) => {
+      setScanned(r);
+      invalidate();
+    },
+  });
+
   const loading = queries.some((q) => q.isLoading);
   const firstError = queries.find((q) => q.error)?.error;
   const rows = queries.flatMap((q, i) =>
@@ -148,7 +171,69 @@ export function Maintenance() {
     <Page
       title="Maintenance"
       subtitle="Outdated dependencies, CVEs, flaky tests, dead code, coverage, docs drift, performance and architecture — each proposed as work, executed only once approved"
+      actions={repos.map((r) => (
+        <button
+          key={r.name}
+          type="button"
+          disabled={scan.isPending}
+          onClick={() => scan.mutate(r.name)}
+          style={{
+            padding: "6px 11px",
+            background: "var(--accent-soft)",
+            color: "var(--link)",
+            border: "1px solid var(--accent)",
+            borderRadius: 6,
+            font: "12px var(--sans)",
+            cursor: scan.isPending ? "wait" : "pointer",
+          }}
+        >
+          {scan.isPending && scan.variables === r.name
+            ? `Scanning ${r.name}…`
+            : repos.length > 1
+              ? `Scan ${r.name} now`
+              : "Scan now"}
+        </button>
+      ))}
     >
+      {scan.error ? (
+        <div style={{ marginBottom: 12 }}>
+          <Failed error={scan.error} />
+        </div>
+      ) : null}
+      {scanned ? (
+        <Panel style={{ marginBottom: 14 }}>
+          <PanelHead>
+            LAST SCAN · {scanned.repo}
+            <span style={{ color: "var(--fg-faint)" }}>
+              {scanned.result.findings} finding
+              {scanned.result.findings === 1 ? "" : "s"}
+            </span>
+          </PanelHead>
+          <div
+            style={{
+              padding: "10px 14px",
+              font: "12px var(--sans)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+            }}
+          >
+            <div>
+              {scanned.result.proposed_work_item_keys.length === 0
+                ? "No new Work Item was proposed."
+                : `Proposed ${scanned.result.proposed_work_item_keys.join(", ")}.`}
+            </div>
+            {scanned.result.scanner_errors.map((e) => (
+              <div
+                key={e}
+                style={{ color: "var(--warn)", font: "11px var(--mono)" }}
+              >
+                could not run: {e}
+              </div>
+            ))}
+          </div>
+        </Panel>
+      ) : null}
       {deciding?.kind === "approve" ? (
         <Dialog
           title={`Approve ${deciding.proposal.work_item_key}`}
@@ -213,7 +298,7 @@ export function Maintenance() {
           <Empty>
             The scanners have proposed nothing in this scope.
             <br />
-            They sweep on the interval the chart sets (
+            Scan now, or wait for the sweep on the interval the chart sets (
             <code style={{ font: "11px var(--mono)" }}>
               factory.maintenance.intervalHours
             </code>

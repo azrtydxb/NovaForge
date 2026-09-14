@@ -224,3 +224,11 @@ export interface GateProposal {
   commit_sha: string;
   title: string;
 }
+
+/** What an on-demand maintenance scan found. A scanner that could not run is
+ * named, so a scan that skipped one is not read as a clean result. */
+export interface ScanResult {
+  findings: number;
+  proposed_work_item_keys: string[];
+  scanner_errors: string[];
+}

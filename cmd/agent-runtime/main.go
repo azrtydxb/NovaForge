@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -353,7 +354,11 @@ func finishRun(ctx context.Context, store *agents.Store, run agents.Run, state s
 	// CancelRun already wrote "cancelled" before the loop saw it, and the
 	// state machine refuses cancelled -> cancelled; writing it again would
 	// only log a spurious failure for every cancelled run.
-	if state == "cancelled" {
+	//
+	// A run cancelled while its workspace was still being provisioned fails
+	// that step with "context canceled" and arrives here as "failed"; it was
+	// cancelled, and the row already says so.
+	if state == "cancelled" || (state == "failed" && errors.Is(ctx.Err(), context.Canceled)) {
 		return
 	}
 	// The run's context is cancelled when the run is, and a state write

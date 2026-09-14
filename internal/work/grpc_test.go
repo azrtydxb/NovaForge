@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
+	"github.com/novaforge/novaforge/internal/authz"
 	"github.com/novaforge/novaforge/internal/work"
 )
 
@@ -74,5 +75,41 @@ func TestListItemsRequiresScope(t *testing.T) {
 	_, err := srv.ListItems(context.Background(), &workv1.ListItemsRequest{RepoId: uuid.New().String()})
 	if status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("ListItems with no scope: code = %v, want PermissionDenied", status.Code(err))
+	}
+}
+
+// TestScanRepository pins the on-demand scan: unwired it says so rather than
+// reporting a clean repository, only a person may ask, the scan runs in the
+// caller's organization, and a scanner that could not run is reported.
+func TestScanRepository(t *testing.T) {
+	srv := newGRPCServer(t)
+	orgID, repoID := uuid.New(), uuid.New()
+	ctx := scopedCtx(orgID)
+	req := &workv1.ScanRepositoryRequest{RepoId: repoID.String()}
+
+	if _, err := srv.ScanRepository(ctx, req); status.Code(err) != codes.Unimplemented {
+		t.Fatalf("unwired scan: code = %v, want Unimplemented", status.Code(err))
+	}
+
+	var gotOrg, gotRepo uuid.UUID
+	srv.SetScanner(func(_ context.Context, o, r uuid.UUID) (work.ScanResult, error) {
+		gotOrg, gotRepo = o, r
+		return work.ScanResult{Findings: 2, ProposedKeys: []string{"NF-9"}, ScannerErrors: []string{"cve: osv-scanner is not installed"}}, nil
+	})
+
+	service := authz.WithScope(context.Background(), authz.Scope{OrgID: orgID, ActorKind: "service"})
+	if _, err := srv.ScanRepository(service, req); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("service caller: code = %v, want PermissionDenied", status.Code(err))
+	}
+
+	resp, err := srv.ScanRepository(ctx, req)
+	if err != nil {
+		t.Fatalf("ScanRepository: %v", err)
+	}
+	if gotOrg != orgID || gotRepo != repoID {
+		t.Fatalf("scanned org %s repo %s, want %s %s", gotOrg, gotRepo, orgID, repoID)
+	}
+	if resp.GetFindings() != 2 || len(resp.GetProposedWorkItemKeys()) != 1 || len(resp.GetScannerErrors()) != 1 {
+		t.Fatalf("response = %+v", resp)
 	}
 }

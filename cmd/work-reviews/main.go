@@ -133,6 +133,8 @@ func main() {
 			log.Println("work-reviews: MAINTENANCE_INTERVAL_HOURS is unset; no maintenance sweep runs")
 		}
 
+		workServer.SetScanner(newRepositoryScanner(workStore, gitClient))
+
 		// The same Merger backs the MergeRun RPC and auto-merge, so a person
 		// merging and the platform merging pass the identical gate check.
 		reviewsServer.Merger = &reviews.Merger{

@@ -56,6 +56,7 @@ bash tests/e2e/work_ci_test.sh    # Work Item, push, CI run in a pod, log and ar
 bash tests/e2e/factory_test.sh    # epic decomposition by the real model, dependency ordering
 bash tests/e2e/agent_test.sh      # an Agent Run executes and commits its work
 bash tests/e2e/agent_ci_test.sh   # a CI job with an agent role runs as an Agent Run
+bash tests/e2e/merge_test.sh      # independent review, then a merge that lands on main
 bash tests/e2e/gui_test.sh        # the app is served and every screen's endpoint answers
 bash tests/e2e/search_test.sh     # a push is indexed and found by meaning, not by keyword
 ```

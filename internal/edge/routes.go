@@ -91,6 +91,7 @@ func Routes() []Route {
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/maintenance", "listMaintenanceProposals", "What the maintenance scanners proposed"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/gates", "listGateConfig", "Every gate, as the default branch configures it"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/gates/{gate}/proposals", "proposeGateChange", "Propose a gate change as an Engineering Run; never writes the default branch"},
+		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/maintenance/scan", "scanRepository", "Run the maintenance scanners against a repository now"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/maintenance/{fingerprint}/approve", "approveMaintenanceProposal", "Approve a maintenance proposal and assign its Work Item"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/maintenance/{fingerprint}/dismiss", "dismissMaintenanceProposal", "Dismiss a maintenance proposal, with a reason"},
 

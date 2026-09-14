@@ -17,6 +17,7 @@ service WorkService {
   rpc ListMaintenanceProposals(ListMaintenanceProposalsRequest) returns (ListMaintenanceProposalsResponse);
   rpc ApproveMaintenanceProposal(ApproveMaintenanceProposalRequest) returns (ApproveMaintenanceProposalResponse);
   rpc DismissMaintenanceProposal(DismissMaintenanceProposalRequest) returns (DismissMaintenanceProposalResponse);
+  rpc ScanRepository(ScanRepositoryRequest) returns (ScanRepositoryResponse);
 }
 
 // WorkItem mirrors a row in the work.work_items table.
@@ -172,6 +173,20 @@ message DismissMaintenanceProposalRequest {
 }
 message DismissMaintenanceProposalResponse {
   MaintenanceProposal proposal = 1;
+}
+
+// ScanRepositoryRequest runs every maintenance scanner against a repository's
+// default branch now, instead of waiting for the next sweep.
+message ScanRepositoryRequest {
+  string repo_id = 1;
+}
+// ScanRepositoryResponse reports what the scan found. scanner_errors names
+// each scanner that could not run and why: a scan that silently skipped the
+// CVE scanner is not a clean bill of health.
+message ScanRepositoryResponse {
+  int32 findings = 1;
+  repeated string proposed_work_item_keys = 2;
+  repeated string scanner_errors = 3;
 }
 
 message ListMaintenanceProposalsRequest {

@@ -480,6 +480,30 @@ func addMaintenanceDecisionHandlers(h map[string]http.HandlerFunc, g gitv1.GitSe
 		WriteJSON(wr, http.StatusOK, ProposalJSON(resp.GetProposal()))
 	}
 
+	h["scanRepository"] = func(wr http.ResponseWriter, r *http.Request) {
+		rid, err := repoID(r)
+		if err != nil {
+			WriteError(wr, StatusFromGRPC(err), err)
+			return
+		}
+		resp, err := w.ScanRepository(r.Context(), &workv1.ScanRepositoryRequest{RepoId: rid})
+		if err != nil {
+			WriteError(wr, StatusFromGRPC(err), err)
+			return
+		}
+		keys := resp.GetProposedWorkItemKeys()
+		if keys == nil {
+			keys = []string{}
+		}
+		errs := resp.GetScannerErrors()
+		if errs == nil {
+			errs = []string{}
+		}
+		WriteJSON(wr, http.StatusOK, map[string]any{
+			"findings": resp.GetFindings(), "proposed_work_item_keys": keys, "scanner_errors": errs,
+		})
+	}
+
 	h["dismissMaintenanceProposal"] = func(wr http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Reason string `json:"reason"`

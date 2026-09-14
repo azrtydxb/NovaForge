@@ -156,6 +156,10 @@ function Browser({
     queryFn: () => api.get<{ refs: Ref[] }>(`${base}/branches`),
   });
   const refs = branches.data?.refs ?? [];
+  // A repository with no branch has no commit to read a tree or a log from.
+  // Asking anyway answered 404, which the panels showed as "not available in
+  // this deployment" — wrong on both counts for an empty repository.
+  const empty = branches.data !== undefined && refs.length === 0;
 
   // The branch shown is the one chosen, else the repository's default, else
   // whatever exists. A repository whose default branch has no commit yet —
@@ -171,7 +175,7 @@ function Browser({
     queryKey: ["tree", org, repo, head, path],
     queryFn: () =>
       api.get<{ entries: TreeEntry[] }>(`${base}/tree/${enc(head)}/${path}`),
-    enabled: branches.data !== undefined,
+    enabled: branches.data !== undefined && !empty,
   });
 
   // A blob is served as raw bytes, not JSON: a file is bytes, and wrapping it
@@ -186,7 +190,7 @@ function Browser({
     queryKey: ["commits", org, repo, head],
     queryFn: () =>
       api.get<{ commits: Commit[] }>(`${base}/commits/${enc(head)}?limit=8`),
-    enabled: branches.data !== undefined,
+    enabled: branches.data !== undefined && !empty,
   });
 
   const segments = path ? path.split("/").filter(Boolean) : [];
@@ -298,83 +302,93 @@ function Browser({
               </button>
             ))}
           </div>
-          <Async query={tree}>
-            {(d) =>
-              d.entries.length === 0 ? (
-                <Empty>This repository has no commits yet.</Empty>
-              ) : (
-                <>
-                  {path ? (
-                    <button
-                      onClick={() => {
-                        setPath(segments.slice(0, -1).join("/"));
-                        setFile(null);
-                      }}
-                      style={entryStyle("var(--fg-muted)")}
-                    >
-                      ../
-                    </button>
-                  ) : null}
-                  {d.entries.map((e) => (
-                    <button
-                      key={e.name}
-                      onClick={() => {
-                        const next = path ? `${path}/${e.name}` : e.name;
-                        if (e.kind === "tree") {
-                          setPath(next);
+          {empty ? (
+            <Empty>
+              This repository is empty. Push a first commit to {defaultBranch}.
+            </Empty>
+          ) : (
+            <Async query={tree}>
+              {(d) =>
+                d.entries.length === 0 ? (
+                  <Empty>This repository has no commits yet.</Empty>
+                ) : (
+                  <>
+                    {path ? (
+                      <button
+                        onClick={() => {
+                          setPath(segments.slice(0, -1).join("/"));
                           setFile(null);
-                        } else {
-                          setFile(next);
-                        }
-                      }}
-                      style={entryStyle(
-                        e.kind === "tree" ? "var(--fg-dim)" : "var(--link)",
-                      )}
-                    >
-                      {e.kind === "tree" ? "▸ " : "  "}
-                      {e.name}
-                    </button>
-                  ))}
-                </>
-              )
-            }
-          </Async>
+                        }}
+                        style={entryStyle("var(--fg-muted)")}
+                      >
+                        ../
+                      </button>
+                    ) : null}
+                    {d.entries.map((e) => (
+                      <button
+                        key={e.name}
+                        onClick={() => {
+                          const next = path ? `${path}/${e.name}` : e.name;
+                          if (e.kind === "tree") {
+                            setPath(next);
+                            setFile(null);
+                          } else {
+                            setFile(next);
+                          }
+                        }}
+                        style={entryStyle(
+                          e.kind === "tree" ? "var(--fg-dim)" : "var(--link)",
+                        )}
+                      >
+                        {e.kind === "tree" ? "▸ " : "  "}
+                        {e.name}
+                      </button>
+                    ))}
+                  </>
+                )
+              }
+            </Async>
+          )}
         </Panel>
 
         <Panel>
           <PanelHead>RECENT COMMITS</PanelHead>
-          <Async query={commits}>
-            {(d) =>
-              d.commits.length === 0 ? (
-                <Empty>No commits.</Empty>
-              ) : (
-                <>
-                  {d.commits.map((c) => (
-                    <div
-                      key={c.sha}
-                      style={{
-                        padding: "9px 14px",
-                        borderBottom: "1px solid var(--line)",
-                      }}
-                    >
-                      <div style={{ font: "12px var(--sans)" }}>
-                        {c.message.split("\n")[0]}
-                      </div>
+          {empty ? (
+            <Empty>No commits yet.</Empty>
+          ) : (
+            <Async query={commits}>
+              {(d) =>
+                d.commits.length === 0 ? (
+                  <Empty>No commits.</Empty>
+                ) : (
+                  <>
+                    {d.commits.map((c) => (
                       <div
+                        key={c.sha}
                         style={{
-                          font: "11px var(--mono)",
-                          color: "var(--fg-faint)",
-                          marginTop: 3,
+                          padding: "9px 14px",
+                          borderBottom: "1px solid var(--line)",
                         }}
                       >
-                        {c.sha.slice(0, 8)} · {c.author_name}
+                        <div style={{ font: "12px var(--sans)" }}>
+                          {c.message.split("\n")[0]}
+                        </div>
+                        <div
+                          style={{
+                            font: "11px var(--mono)",
+                            color: "var(--fg-faint)",
+                            marginTop: 3,
+                          }}
+                        >
+                          {c.sha.slice(0, 8)} · {c.author_name}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </>
-              )
-            }
-          </Async>
+                    ))}
+                  </>
+                )
+              }
+            </Async>
+          )}
         </Panel>
       </div>
 

@@ -21,6 +21,7 @@ type GRPCServer struct {
 	Store *Store
 
 	decomposer Decomposer
+	scanner    Scanner
 }
 
 // NewGRPCServer wraps store as a workv1.WorkServiceServer.
