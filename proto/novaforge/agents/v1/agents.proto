@@ -16,6 +16,7 @@ service AgentService {
   rpc ListStats(ListStatsRequest) returns (ListStatsResponse);
   rpc ListToolCalls(ListToolCallsRequest) returns (ListToolCallsResponse);
   rpc ListRunsForWorkItem(ListRunsForWorkItemRequest) returns (ListRunsForWorkItemResponse);
+  rpc CheckBranchLock(CheckBranchLockRequest) returns (CheckBranchLockResponse);
 }
 
 message Agent {
@@ -58,6 +59,12 @@ message Run {
   int64 wallclock_limit_seconds = 11;
   int64 token_limit = 12;
   int64 cost_limit_micros = 13;
+  // What the run spent, recorded when it ends.
+  int64 tokens_used = 14;
+  int64 cost_used_micros = 15;
+  // Why a run that did not succeed ended: which budget limit stopped it, or
+  // what failed. Empty for a run still going or one that succeeded.
+  string end_reason = 16;
 }
 
 // StartRunRequest starts a new agent run against a Work Item, identified by
@@ -159,4 +166,23 @@ message ListRunsForWorkItemResponse {
   // runs carries the same runs, newest first, so a caller showing them does
   // not make one GetRun per id.
   repeated Run runs = 2;
+}
+
+// CheckBranchLockRequest asks whether a ref in a repository of the caller's
+// organization is held by a running Agent Run. The git transports ask before
+// accepting a push: the lock is the run being "running", and that state lives
+// in this service's schema, which no other service may read.
+message CheckBranchLockRequest {
+  string repo_id = 1;
+  // ref is a branch name, with or without "refs/heads/".
+  string ref = 2;
+}
+
+message CheckBranchLockResponse {
+  bool locked = 1;
+  // The holding run, its agent, and the branch prefix the lock covers (the
+  // run's capability grant prefix, e.g. "agents/NF-1/"). Empty when unlocked.
+  string run_id = 2;
+  string agent_id = 3;
+  string prefix = 4;
 }

@@ -126,6 +126,14 @@ export interface AgentRun {
   state: string;
   started_at: string;
   ended_at: string;
+  wallclock_limit_seconds: number;
+  token_limit: number;
+  /** Zero means the run has no cost limit. */
+  cost_limit_micros: number;
+  tokens_used: number;
+  cost_used_micros: number;
+  /** Why a run that did not succeed ended; empty otherwise. */
+  end_reason: string;
 }
 
 export interface EngineeringRun {

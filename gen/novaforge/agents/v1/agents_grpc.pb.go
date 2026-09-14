@@ -28,6 +28,7 @@ const (
 	AgentService_ListStats_FullMethodName           = "/novaforge.agents.v1.AgentService/ListStats"
 	AgentService_ListToolCalls_FullMethodName       = "/novaforge.agents.v1.AgentService/ListToolCalls"
 	AgentService_ListRunsForWorkItem_FullMethodName = "/novaforge.agents.v1.AgentService/ListRunsForWorkItem"
+	AgentService_CheckBranchLock_FullMethodName     = "/novaforge.agents.v1.AgentService/CheckBranchLock"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -48,6 +49,7 @@ type AgentServiceClient interface {
 	ListStats(ctx context.Context, in *ListStatsRequest, opts ...grpc.CallOption) (*ListStatsResponse, error)
 	ListToolCalls(ctx context.Context, in *ListToolCallsRequest, opts ...grpc.CallOption) (*ListToolCallsResponse, error)
 	ListRunsForWorkItem(ctx context.Context, in *ListRunsForWorkItemRequest, opts ...grpc.CallOption) (*ListRunsForWorkItemResponse, error)
+	CheckBranchLock(ctx context.Context, in *CheckBranchLockRequest, opts ...grpc.CallOption) (*CheckBranchLockResponse, error)
 }
 
 type agentServiceClient struct {
@@ -157,6 +159,16 @@ func (c *agentServiceClient) ListRunsForWorkItem(ctx context.Context, in *ListRu
 	return out, nil
 }
 
+func (c *agentServiceClient) CheckBranchLock(ctx context.Context, in *CheckBranchLockRequest, opts ...grpc.CallOption) (*CheckBranchLockResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckBranchLockResponse)
+	err := c.cc.Invoke(ctx, AgentService_CheckBranchLock_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AgentServiceServer is the server API for AgentService service.
 // All implementations should embed UnimplementedAgentServiceServer
 // for forward compatibility.
@@ -175,6 +187,7 @@ type AgentServiceServer interface {
 	ListStats(context.Context, *ListStatsRequest) (*ListStatsResponse, error)
 	ListToolCalls(context.Context, *ListToolCallsRequest) (*ListToolCallsResponse, error)
 	ListRunsForWorkItem(context.Context, *ListRunsForWorkItemRequest) (*ListRunsForWorkItemResponse, error)
+	CheckBranchLock(context.Context, *CheckBranchLockRequest) (*CheckBranchLockResponse, error)
 }
 
 // UnimplementedAgentServiceServer should be embedded to have
@@ -210,6 +223,9 @@ func (UnimplementedAgentServiceServer) ListToolCalls(context.Context, *ListToolC
 }
 func (UnimplementedAgentServiceServer) ListRunsForWorkItem(context.Context, *ListRunsForWorkItemRequest) (*ListRunsForWorkItemResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListRunsForWorkItem not implemented")
+}
+func (UnimplementedAgentServiceServer) CheckBranchLock(context.Context, *CheckBranchLockRequest) (*CheckBranchLockResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckBranchLock not implemented")
 }
 func (UnimplementedAgentServiceServer) testEmbeddedByValue() {}
 
@@ -386,6 +402,24 @@ func _AgentService_ListRunsForWorkItem_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_CheckBranchLock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckBranchLockRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).CheckBranchLock(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_CheckBranchLock_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).CheckBranchLock(ctx, req.(*CheckBranchLockRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AgentService_ServiceDesc is the grpc.ServiceDesc for AgentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -424,6 +458,10 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListRunsForWorkItem",
 			Handler:    _AgentService_ListRunsForWorkItem_Handler,
+		},
+		{
+			MethodName: "CheckBranchLock",
+			Handler:    _AgentService_CheckBranchLock_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

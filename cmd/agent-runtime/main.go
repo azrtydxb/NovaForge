@@ -174,9 +174,25 @@ func main() {
 		log.Printf("agent-runtime: no in-cluster Kubernetes config available (%v); workspace provisioning and the reaper are disabled", err)
 	}
 
-	execute := newExecuteFunc(store, grants, audit, provisioner, gitClient, graphClient, workClient, reviewsClient, ciClient, cfg)
+	// A run's cost limit is enforced against the price of the model it runs
+	// on. A malformed price list stops the service: read as "no prices" it
+	// would silently refuse every cost limit, and a typo in one model's entry
+	// must not look like a deployment that chose not to bound cost.
+	prices, err := agents.ParseModelPrices(cfg.AIModelPrices)
+	if err != nil {
+		log.Fatalf("agent-runtime: %v", err)
+	}
+	var price *agents.TokenPrice
+	if p, ok := prices[cfg.AIModel]; ok {
+		price = &p
+	} else {
+		log.Printf("agent-runtime: AI_MODEL_PRICES has no price for %q; runs are bounded by wall clock and tokens, and a cost limit is refused", cfg.AIModel)
+	}
+
+	execute := newExecuteFunc(store, grants, audit, rdb, price, provisioner, gitClient, graphClient, workClient, reviewsClient, ciClient, cfg)
 	grpcServer := agents.NewGRPCServer(store, grants, rdb, workClient, execute)
 	grpcServer.Audit = audit
+	grpcServer.Price = price
 
 	// Callers are resolved the same way every other service resolves them:
 	// a person's credential through identity, or a platform service token
@@ -237,7 +253,7 @@ func runReaper(ctx context.Context, provisioner *workspace.Provisioner) {
 // runs the model/tool loop, persists the resulting terminal state, and
 // tears the workspace down. When provisioner is nil (no Kubernetes API
 // reachable), it returns nil so StartRun's degrade path applies instead.
-func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents.AuditLog, provisioner *workspace.Provisioner, gitClient gitv1.GitServiceClient, graphClient graphv1.GraphServiceClient, workClient workv1.WorkServiceClient, reviewsClient reviewsv1.ReviewsServiceClient, ciClient civ1.CIServiceClient, cfg service.Config) agents.ExecuteFunc {
+func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents.AuditLog, rdb *redis.Client, price *agents.TokenPrice, provisioner *workspace.Provisioner, gitClient gitv1.GitServiceClient, graphClient graphv1.GraphServiceClient, workClient workv1.WorkServiceClient, reviewsClient reviewsv1.ReviewsServiceClient, ciClient civ1.CIServiceClient, cfg service.Config) agents.ExecuteFunc {
 	if provisioner == nil {
 		return nil
 	}
@@ -253,7 +269,7 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 		ctx, err := withRunIdentity(ctx, cfg.HMACSecret, run.OrgID)
 		if err != nil {
 			log.Printf("agent-runtime: run %s: %v", run.ID, err)
-			finishRun(ctx, store, run, "failed")
+			finishRun(ctx, store, rdb, run, "failed", fmt.Sprintf("could not give the run an identity: %v", err))
 			return
 		}
 
@@ -261,7 +277,7 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 		// network policy and resource quota — and is torn down with the run.
 		if _, err := provisioner.Create(ctx, run.ID, workspace.Spec{Image: workspace.DefaultImage, CPULimit: "2", MemLimit: "4Gi"}); err != nil {
 			log.Printf("agent-runtime: provision workspace for run %s: %v", run.ID, err)
-			finishRun(ctx, store, run, "failed")
+			finishRun(ctx, store, rdb, run, "failed", fmt.Sprintf("could not provision the run workspace: %v", err))
 			return
 		}
 		defer func() {
@@ -273,13 +289,13 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 		// commands run, so the run cannot start until the pod has.
 		if err := provisioner.WaitReady(ctx, run.ID, workspaceReadyTimeout); err != nil {
 			log.Printf("agent-runtime: workspace for run %s: %v", run.ID, err)
-			finishRun(ctx, store, run, "failed")
+			finishRun(ctx, store, rdb, run, "failed", fmt.Sprintf("the run workspace never became ready: %v", err))
 			return
 		}
 		ref, err := seedWorkspace(ctx, gitClient, provisioner, run.ID, run.RepoID)
 		if err != nil {
 			log.Printf("agent-runtime: seed workspace for run %s: %v", run.ID, err)
-			finishRun(ctx, store, run, "failed")
+			finishRun(ctx, store, rdb, run, "failed", fmt.Sprintf("could not copy the repository into the workspace: %v", err))
 			return
 		}
 		log.Printf("agent-runtime: run %s workspace holds %s", run.ID, ref)
@@ -287,7 +303,7 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 		model, err := agentrun.NewModelClient(agentrun.ModelConfig{Endpoint: cfg.AIEndpoint, Model: cfg.AIModel, APIKey: cfg.AIAPIKey})
 		if err != nil {
 			log.Printf("agent-runtime: build model client for run %s: %v", run.ID, err)
-			finishRun(ctx, store, run, "failed")
+			finishRun(ctx, store, rdb, run, "failed", fmt.Sprintf("could not reach a model: %v", err))
 			return
 		}
 
@@ -302,7 +318,7 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 			grant, err = grants.Resolve(ctx, run.GrantID)
 			if err != nil {
 				log.Printf("agent-runtime: resolve grant %s for run %s: %v", run.GrantID, run.ID, err)
-				finishRun(ctx, store, run, "failed")
+				finishRun(ctx, store, rdb, run, "failed", fmt.Sprintf("could not resolve the run capability grant: %v", err))
 				return
 			}
 		}
@@ -321,6 +337,7 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 
 		loop := agentrun.NewLoop(model, budget, audit)
 		loop.Runs = store
+		loop.Price = price
 		loop.Criteria = func(ctx context.Context, workItemID uuid.UUID) (agentrun.Criteria, error) {
 			resp, err := workClient.GetItem(ctx, &workv1.GetItemRequest{Id: workItemID.String()})
 			if err != nil {
@@ -331,7 +348,7 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 		providerOptions, poErr := agentrun.ParseProviderOptions(cfg.AIProviderOptions)
 		if poErr != nil {
 			log.Printf("agent-runtime: %v", poErr)
-			finishRun(ctx, store, run, "failed")
+			finishRun(ctx, store, rdb, run, "failed", poErr.Error())
 			return
 		}
 		loop.ProviderOptions = providerOptions
@@ -342,30 +359,38 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 		} else {
 			log.Printf("agent-runtime: run %s loop failed: %v", run.ID, err)
 		}
-		finishRun(ctx, store, run, state)
+		// The loop recorded its own spend and reason; only a loop that errored
+		// outright has one to add here.
+		reason := ""
+		if err != nil {
+			reason = fmt.Sprintf("the run loop failed: %v", err)
+		}
+		finishRun(ctx, store, rdb, run, state, reason)
 	}
 }
 
-// finishRun transitions run to its terminal state and publishes that
-// change, best-effort: a failure here is logged, since the run's own
-// outcome (already computed) must not be lost even if the state write or
-// the event publish fails.
-func finishRun(ctx context.Context, store *agents.Store, run agents.Run, state string) {
-	// CancelRun already wrote "cancelled" before the loop saw it, and the
-	// state machine refuses cancelled -> cancelled; writing it again would
-	// only log a spurious failure for every cancelled run.
-	//
+// finishRun settles run in its terminal state, best-effort: a failure is
+// logged, since the run's own outcome (already computed) must not be lost to
+// a failed state write or event publish.
+//
+// reason, when given, is recorded as why the run ended: a run that failed
+// before its loop started has no audit summary, and "failed" alone tells the
+// person reading it nothing.
+func finishRun(ctx context.Context, store *agents.Store, rdb *redis.Client, run agents.Run, state, reason string) {
 	// A run cancelled while its workspace was still being provisioned fails
 	// that step with "context canceled" and arrives here as "failed"; it was
 	// cancelled, and the row already says so.
-	if state == "cancelled" || (state == "failed" && errors.Is(ctx.Err(), context.Canceled)) {
+	if state == "failed" && errors.Is(ctx.Err(), context.Canceled) {
 		return
 	}
-	// The run's context is cancelled when the run is, and a state write
-	// under it would fail — so the terminal write detaches from it.
-	scoped := authz.WithScope(context.WithoutCancel(ctx), authz.Scope{OrgID: run.OrgID, ActorID: run.AgentID, ActorKind: "agent"})
-	if err := store.SetRunState(scoped, run.ID, state); err != nil {
-		log.Printf("agent-runtime: set run %s state to %s: %v", run.ID, state, err)
+	if reason != "" {
+		scoped := authz.WithScope(context.WithoutCancel(ctx), authz.Scope{OrgID: run.OrgID, ActorID: run.AgentID, ActorKind: "agent"})
+		if err := store.RecordSpend(scoped, run.ID, agents.Spend{Reason: reason}); err != nil {
+			log.Printf("agent-runtime: record why run %s ended: %v", run.ID, err)
+		}
+	}
+	if err := agents.SettleRun(ctx, store, rdb, run, state); err != nil {
+		log.Printf("agent-runtime: %v", err)
 	}
 }
 

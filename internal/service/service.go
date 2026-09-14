@@ -55,8 +55,12 @@ type Config struct {
 	// model server, parsed by agentrun.ParseProviderOptions.
 	AIProviderOptions string
 	AIModel           string
-	EmbedEndpoint     string
-	EmbedModel        string
+	// AIModelPrices is a JSON object of model name to token price, parsed by
+	// agents.ParseModelPrices. A run's cost limit is enforced only for a
+	// priced model; none is priced unless the operator says so.
+	AIModelPrices string
+	EmbedEndpoint string
+	EmbedModel    string
 
 	// AutoMergeEnabled and AutoMergeMaxFiles configure reviews.AutoMergePolicy.
 	// Auto-merge is off unless a deployment turns it on: a fresh installation
@@ -99,6 +103,7 @@ func LoadConfig() Config {
 		AIAPIKey:                 env("AI_API_KEY", ""),
 		AIProviderOptions:        env("AI_PROVIDER_OPTIONS", ""),
 		AIModel:                  env("AI_MODEL", ""),
+		AIModelPrices:            env("AI_MODEL_PRICES", ""),
 		EmbedEndpoint:            env("EMBED_ENDPOINT", ""),
 		EmbedModel:               env("EMBED_MODEL", ""),
 		AutoMergeEnabled:         env("AUTO_MERGE_ENABLED", "") == "true",

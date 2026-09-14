@@ -56,6 +56,11 @@ type GRPCServer struct {
 	// than answering with an empty list, which would read as "it did nothing".
 	Audit *AuditLog
 
+	// Price is the token price of the model runs execute on, from
+	// AI_MODEL_PRICES; nil when the deployment prices none, in which case
+	// StartRun refuses a cost limit it could never enforce.
+	Price *TokenPrice
+
 	// executing holds the cancel function of every run this process is
 	// executing, so CancelRun can abort an in-flight model or tool call
 	// rather than only writing a state the loop would not see until its next
@@ -108,6 +113,9 @@ func toProtoRun(r Run) *agentsv1.Run {
 		WallclockLimitSeconds: int64(r.WallclockLimit / time.Second),
 		TokenLimit:            r.TokenLimit,
 		CostLimitMicros:       r.CostLimitMicros,
+		TokensUsed:            r.TokensUsed,
+		CostUsedMicros:        r.CostUsedMicros,
+		EndReason:             r.EndReason,
 	}
 	if r.WorkItemID != uuid.Nil {
 		out.WorkItemId = r.WorkItemID.String()
@@ -210,6 +218,16 @@ func (g *GRPCServer) StartRun(ctx context.Context, req *agentsv1.StartRunRequest
 	// This is the one place every run starts — a person's click, the swarm,
 	// a CI agent job — so refusing here holds for all of them, before any
 	// grant is issued.
+	if req.GetCostLimitMicros() < 0 || req.GetTokenLimit() < 0 || req.GetWallclockLimitSeconds() < 0 {
+		return nil, status.Error(codes.InvalidArgument, "a run's limits may not be negative")
+	}
+	// A cost limit is enforced only against a token price. With none
+	// configured no cost ever accrues, so accepting the limit would record a
+	// bound that can never be reached; refusing says so to the person asking.
+	if req.GetCostLimitMicros() > 0 && g.Price == nil {
+		return nil, status.Error(codes.InvalidArgument, "this deployment prices no model tokens, so a cost limit could never be reached; "+
+			"start the run without cost_limit_micros, or have the operator set the model's price in AI_MODEL_PRICES")
+	}
 	if itemResp.GetItem().GetAwaitingApproval() {
 		return nil, status.Errorf(codes.FailedPrecondition, "work item %q is a maintenance proposal awaiting approval; approve it before starting an agent on it", req.GetWorkItemKey())
 	}
@@ -300,12 +318,7 @@ func (g *GRPCServer) abort(id uuid.UUID) {
 }
 
 func (g *GRPCServer) publishStateChange(runID uuid.UUID, from, to string) {
-	if g.RDB == nil {
-		return
-	}
-	_ = events.Publish(context.Background(), g.RDB, events.StreamAgentEvents, events.AgentEvent{
-		RunID: runID, At: time.Now(), Type: "state_change", FromState: from, ToState: to,
-	})
+	publishStateChange(g.RDB, runID, from, to)
 }
 
 // GetRun looks up a run by id within the caller's organization.

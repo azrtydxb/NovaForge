@@ -3,9 +3,11 @@ package agentrun
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -25,6 +27,7 @@ type Result struct {
 	State      string
 	Steps      int
 	TokensUsed int64
+	CostMicros int64
 	Summary    string
 }
 
@@ -51,6 +54,11 @@ type Loop struct {
 	// calling tools is verified against its acceptance criteria before it
 	// may end "succeeded" (see verify.go). Production always sets it.
 	Criteria CriteriaSource
+
+	// Price is the token price of the model this loop calls, when the
+	// deployment configures one. Without it no cost accrues, and StartRun has
+	// already refused any run that asked for a cost limit.
+	Price *agents.TokenPrice
 }
 
 // NewLoop builds a Loop bound to model and budget, persisting its final
@@ -83,19 +91,26 @@ func (l *Loop) Execute(ctx context.Context, run agents.Run, reg *tools.Registry)
 		provider.UserText(OpeningBrief(run)),
 	}
 
+	// The wall-clock limit is a deadline on every model and tool call, not
+	// only a comparison between steps: a model call that never returned used
+	// to hold the run past its limit for as long as the call took, which for a
+	// hung gateway is forever.
+	ctx, stopClock := context.WithDeadline(ctx, l.Budget.Deadline())
+	defer stopClock()
+
 	var steps int
-	var tokensUsed int64
+	var spent spend
 	var evidence []evidenceStep
 
 	for {
 		if l.cancelled(ctx, run) {
-			return l.finish(ctx, run, "cancelled", steps, tokensUsed, "run cancelled before model call")
+			return l.finish(ctx, run, "cancelled", steps, spent, "run cancelled before model call")
 		}
-		if err := l.Budget.Check(); err != nil {
-			return l.finish(ctx, run, "over_budget", steps, tokensUsed, "budget exceeded before model call")
+		if err := l.overBudget(ctx); err != nil {
+			return l.finish(ctx, run, "over_budget", steps, spent, "budget exceeded before model call: "+err.Error())
 		}
 		if steps >= hardStepCap {
-			return l.finish(ctx, run, "failed", steps, tokensUsed, "step cap exceeded without completion")
+			return l.finish(ctx, run, "failed", steps, spent, "step cap exceeded without completion")
 		}
 
 		resp, err := l.Model.Generate(ctx, provider.Call{
@@ -107,40 +122,44 @@ func (l *Loop) Execute(ctx context.Context, run agents.Run, reg *tools.Registry)
 			// CancelRun aborts an in-flight call by cancelling ctx; that is a
 			// cancellation, not a model failure, and must be recorded as one.
 			if l.cancelled(ctx, run) {
-				return l.finish(ctx, run, "cancelled", steps, tokensUsed, "run cancelled during model call")
+				return l.finish(ctx, run, "cancelled", steps, spent, "run cancelled during model call")
 			}
-			return l.finish(ctx, run, "failed", steps, tokensUsed, fmt.Sprintf("model call failed: %v", err))
+			// Likewise a call cut off by the wall-clock deadline was stopped
+			// by the budget, not failed by the model.
+			if budgetErr := l.overBudget(ctx); budgetErr != nil {
+				return l.finish(ctx, run, "over_budget", steps, spent, "budget exceeded during model call: "+budgetErr.Error())
+			}
+			return l.finish(ctx, run, "failed", steps, spent, fmt.Sprintf("model call failed: %v", err))
 		}
 		steps++
-
-		used := int64(resp.Usage.TotalTokens)
-		tokensUsed += used
-		l.Budget.AddTokens(used)
+		spent = l.account(spent, resp.Usage)
 
 		calls := resp.ToolCalls()
 		if len(calls) == 0 {
 			// A run cancelled while its final answer was being generated was
 			// still cancelled; reporting it succeeded would contradict the row.
 			if l.cancelled(ctx, run) {
-				return l.finish(ctx, run, "cancelled", steps, tokensUsed, "run cancelled during model call")
+				return l.finish(ctx, run, "cancelled", steps, spent, "run cancelled during model call")
 			}
 			if l.Criteria == nil {
-				return l.finish(ctx, run, "succeeded", steps, tokensUsed, resp.Text())
+				return l.finish(ctx, run, "succeeded", steps, spent, resp.Text())
 			}
-			state, summary, verifyTokens := l.verify(ctx, run, evidence, resp.Text())
-			tokensUsed += verifyTokens
-			l.Budget.AddTokens(verifyTokens)
-			return l.finish(ctx, run, state, steps, tokensUsed, summary)
+			state, summary, verifyUsage := l.verify(ctx, run, evidence, resp.Text())
+			spent = l.account(spent, verifyUsage)
+			if budgetErr := l.overBudget(ctx); budgetErr != nil && state != "succeeded" {
+				return l.finish(ctx, run, "over_budget", steps, spent, "budget exceeded during verification: "+budgetErr.Error())
+			}
+			return l.finish(ctx, run, state, steps, spent, summary)
 		}
 
 		messages = append(messages, assistantMessage(resp, calls))
 
 		for _, call := range calls {
 			if l.cancelled(ctx, run) {
-				return l.finish(ctx, run, "cancelled", steps, tokensUsed, "run cancelled before tool call")
+				return l.finish(ctx, run, "cancelled", steps, spent, "run cancelled before tool call")
 			}
-			if err := l.Budget.Check(); err != nil {
-				return l.finish(ctx, run, "over_budget", steps, tokensUsed, "budget exceeded before tool call")
+			if err := l.overBudget(ctx); err != nil {
+				return l.finish(ctx, run, "over_budget", steps, spent, "budget exceeded before tool call: "+err.Error())
 			}
 
 			result, callErr := reg.Call(ctx, run.ID, call.Name, call.Args)
@@ -152,6 +171,41 @@ func (l *Loop) Execute(ctx context.Context, run agents.Run, reg *tools.Registry)
 			evidence = append(evidence, step)
 		}
 	}
+}
+
+// spend is what the loop has consumed so far.
+type spend struct {
+	tokens     int64
+	costMicros int64
+}
+
+// account adds one model response's usage to the run's spend and its budget.
+// Cost accrues only when the deployment prices the model's tokens; a run in
+// an unpriced deployment has no cost limit to reach (StartRun refuses one).
+func (l *Loop) account(s spend, usage provider.Usage) spend {
+	tokens := int64(usage.TotalTokens)
+	s.tokens += tokens
+	l.Budget.AddTokens(tokens)
+	if l.Price != nil {
+		cost := l.Price.CostMicros(usage.InputTokens, usage.OutputTokens)
+		s.costMicros += cost
+		l.Budget.AddCostMicros(cost)
+	}
+	return s
+}
+
+// overBudget reports which budget limit the run has exceeded, if any. The
+// deadline check stands beside Budget.Check so a call cut off at the deadline
+// is attributed to the wall clock even if Check's own clock reading is a
+// hair short of it.
+func (l *Loop) overBudget(ctx context.Context) error {
+	if err := l.Budget.Check(); err != nil {
+		return err
+	}
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return fmt.Errorf("%w: wallclock limit exceeded (deadline %s passed)", agents.ErrOverBudget, l.Budget.Deadline().UTC().Format(time.RFC3339))
+	}
+	return nil
 }
 
 // cancelled reports whether run has been cancelled, checked at every step
@@ -171,7 +225,8 @@ func (l *Loop) cancelled(ctx context.Context, run agents.Run) bool {
 		// is still consulted and the next step boundary checks again.
 		log.Printf("agentrun: check cancellation of run %s: %v", run.ID, err)
 	}
-	return ctx.Err() != nil
+	// A deadline is the wall-clock limit, not a cancellation (see overBudget).
+	return errors.Is(ctx.Err(), context.Canceled)
 }
 
 // buildToolDefs offers every tool the registry knows about to the model,
@@ -225,7 +280,7 @@ func toolResultMessage(call provider.ToolCallPart, result []byte, callErr error)
 // matching Result. It is the loop's only write path: it never has access
 // to model reasoning, only the state string and summary text the caller
 // (or the model's own final text, on natural completion) supplied.
-func (l *Loop) finish(ctx context.Context, run agents.Run, state string, steps int, tokensUsed int64, summary string) (Result, error) {
+func (l *Loop) finish(ctx context.Context, run agents.Run, state string, steps int, spent spend, summary string) (Result, error) {
 	// A cancelled run's context is already done, and its evidence must still
 	// be written — otherwise the spend and summary of exactly the runs someone
 	// chose to stop are the ones lost.
@@ -234,7 +289,7 @@ func (l *Loop) finish(ctx context.Context, run agents.Run, state string, steps i
 	// enforced in memory, and without this the number is gone the moment the
 	// process moves on.
 	if l.Runs != nil {
-		if err := l.Runs.RecordSpend(ctx, run.ID, tokensUsed); err != nil {
+		if err := l.Runs.RecordSpend(ctx, run.ID, agents.Spend{Tokens: spent.tokens, CostMicros: spent.costMicros, Reason: endReason(state, summary)}); err != nil {
 			log.Printf("agentrun: record spend for run %s: %v", run.ID, err)
 		}
 	}
@@ -247,7 +302,24 @@ func (l *Loop) finish(ctx context.Context, run agents.Run, state string, steps i
 			}
 		}
 	}
-	return Result{State: state, Steps: steps, TokensUsed: tokensUsed, Summary: summary}, nil
+	return Result{State: state, Steps: steps, TokensUsed: spent.tokens, CostMicros: spent.costMicros, Summary: summary}, nil
+}
+
+// maxEndReason bounds the reason stored on the run row; the full summary is
+// in the run's audit log.
+const maxEndReason = 1000
+
+// endReason is what the run row records about why it ended. A run that
+// succeeded needs no reason — its summary is the model's closing text, which
+// is a claim, and belongs only in the audit log beside the evidence.
+func endReason(state, summary string) string {
+	if state == "succeeded" {
+		return ""
+	}
+	if len(summary) > maxEndReason {
+		return summary[:maxEndReason] + "…"
+	}
+	return summary
 }
 
 // OpeningBrief renders what an agent needs to begin: which work item, which

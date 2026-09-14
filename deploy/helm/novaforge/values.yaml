@@ -53,6 +53,15 @@ ai:
   providerOptions:
     chat_template_kwargs:
       enable_thinking: false
+  # Token prices, per model name, in micro-units per million tokens:
+  #   qwen3-6-35b-a3b:
+  #     input_micros_per_million_tokens: 150000
+  #     output_micros_per_million_tokens: 600000
+  # A model served on this cluster's own hardware has no list price, so none is
+  # set here and none is invented. Without a price for AI_MODEL an Agent Run is
+  # bounded by wall clock and tokens, and a request for a cost limit is refused
+  # rather than accepted and never reached.
+  modelPrices: {}
 
 # The software-factory layer: what the platform does on its own.
 factory:

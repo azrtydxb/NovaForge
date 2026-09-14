@@ -46,17 +46,32 @@ func (b *Budget) AddCostMicros(n int64) {
 	b.costUsed.Add(n)
 }
 
+// Deadline is the instant the wall-clock limit is reached. The run loop puts
+// it on the context of every model and tool call: compared only between
+// steps, the limit could not stop a model call that never returned.
+func (b *Budget) Deadline() time.Time {
+	return b.started.Add(b.wallclock)
+}
+
+// TokensUsed and CostMicrosUsed report what has been accounted so far.
+func (b *Budget) TokensUsed() int64     { return b.tokensUsed.Load() }
+func (b *Budget) CostMicrosUsed() int64 { return b.costUsed.Load() }
+
 // Check reports whether any dimension of the budget has been exceeded. The
 // wall-clock dimension is derived from the current time rather than an
 // atomic counter, since it advances on its own.
+//
+// A cost limit of zero means the run has none. StartRun refuses a cost limit
+// in a deployment that prices no tokens, so a zero here is a run nobody asked
+// to bound by cost — not a limit that would trip on the first priced token.
 func (b *Budget) Check() error {
 	if elapsed := time.Since(b.started); elapsed > b.wallclock {
-		return fmt.Errorf("%w: wallclock limit exceeded (%s > %s)", ErrOverBudget, elapsed, b.wallclock)
+		return fmt.Errorf("%w: wallclock limit exceeded (%s > %s)", ErrOverBudget, elapsed.Round(time.Millisecond), b.wallclock)
 	}
 	if used := b.tokensUsed.Load(); used > b.tokenLimit {
 		return fmt.Errorf("%w: tokens limit exceeded (%d > %d)", ErrOverBudget, used, b.tokenLimit)
 	}
-	if used := b.costUsed.Load(); used > b.costLimit {
+	if used := b.costUsed.Load(); b.costLimit > 0 && used > b.costLimit {
 		return fmt.Errorf("%w: cost limit exceeded (%d > %d micros)", ErrOverBudget, used, b.costLimit)
 	}
 	return nil
