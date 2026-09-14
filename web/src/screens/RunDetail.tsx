@@ -63,6 +63,13 @@ export function RunDetail() {
     onSuccess: () => qc.invalidateQueries(),
   });
 
+  // Running the gates can take a while — the tests gate runs the suite — so
+  // it is its own action, and the Evidence tab shows what it recorded.
+  const evaluate = useMutation({
+    mutationFn: () => api.post(`${base}/gates/evaluate`, {}),
+    onSettled: () => qc.invalidateQueries({ queryKey: ["proof", base] }),
+  });
+
   return (
     <Page
       title={
@@ -95,6 +102,23 @@ export function RunDetail() {
                 }}
               >
                 Review
+              </button>
+            ) : null}
+            {run.data.state === "open" ? (
+              <button
+                onClick={() => evaluate.mutate()}
+                disabled={evaluate.isPending}
+                style={{
+                  padding: "7px 14px",
+                  background: "transparent",
+                  border: "1px solid var(--line-2)",
+                  borderRadius: 8,
+                  color: "var(--fg-dim)",
+                  font: "12px var(--sans)",
+                  cursor: evaluate.isPending ? "wait" : "pointer",
+                }}
+              >
+                {evaluate.isPending ? "Running gates…" : "Run gates"}
               </button>
             ) : null}
             {run.data.state === "open" ? (
@@ -142,6 +166,11 @@ export function RunDetail() {
       {merge.error ? (
         <div style={{ marginBottom: 14 }}>
           <Failed error={merge.error} />
+        </div>
+      ) : null}
+      {evaluate.error ? (
+        <div style={{ marginBottom: 14 }}>
+          <Failed error={evaluate.error} />
         </div>
       ) : null}
       {merge.data ? (
@@ -206,7 +235,7 @@ function Evidence({ base }: { base: string }) {
           <Empty>
             No gate has recorded proof for this run yet.
             <br />
-            Gates are evaluated after an agent declares completion.
+            Merging runs them; so does Run gates.
           </Empty>
         ) : (
           <div

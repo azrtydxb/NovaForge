@@ -117,6 +117,12 @@ func main() {
 		Git:        gitClient,
 		Runs:       newRunLookup(reviewsClient, workClient, gitClient),
 		BuildInput: newInputBuilder(gitClient),
+		Proof: func(ctx context.Context, runID uuid.UUID, gate, status, detail string) error {
+			_, err := reviewsClient.RecordProof(ctx, &reviewsv1.RecordProofRequest{
+				RunId: runID.String(), Gate: gate, Status: status, Detail: detail,
+			})
+			return err
+		},
 	}
 
 	grpcServer := gates.NewGRPCServer(controller, approvalsStore, secretsBroker, grants)

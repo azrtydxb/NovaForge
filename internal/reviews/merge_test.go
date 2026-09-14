@@ -181,3 +181,55 @@ func TestMergeRequiresIndependentApproval(t *testing.T) {
 		t.Fatal("want git merge RPC never called without an independent approval")
 	}
 }
+
+// evaluatingGateChecker records the order of Evaluate and MayMerge calls.
+type evaluatingGateChecker struct {
+	calls   *[]string
+	evalErr error
+}
+
+func (e evaluatingGateChecker) Evaluate(context.Context, uuid.UUID) error {
+	*e.calls = append(*e.calls, "evaluate")
+	return e.evalErr
+}
+
+func (e evaluatingGateChecker) MayMerge(context.Context, uuid.UUID) (bool, []string, error) {
+	*e.calls = append(*e.calls, "may-merge")
+	return false, []string{"not yet"}, nil
+}
+
+// TestMergeEvaluatesGatesFirst pins that a merge runs the run's gates before
+// asking whether it may merge. Nothing else ever called Evaluate, so every
+// required gate stayed "not evaluated at head" and no repository that declared
+// a gate could merge. An evaluation that fails blocks the merge.
+func TestMergeEvaluatesGatesFirst(t *testing.T) {
+	store := newStore(t)
+	orgID := uuid.New()
+	ctx := scopedCtx(orgID)
+	run, err := store.CreateRun(ctx, reviews.Run{
+		OrgID: orgID, RepoID: uuid.New(), Title: "r", SourceRef: "src", TargetRef: "main",
+		AuthorID: uuid.New(), AuthorKind: "user",
+	})
+	if err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+
+	var calls []string
+	git := &stubMergeGitClient{}
+	m := &reviews.Merger{Store: store, Gates: evaluatingGateChecker{calls: &calls}, Git: git}
+	if _, err := m.Merge(ctx, run.ID, "merge"); !errors.Is(err, reviews.ErrMergeBlocked) {
+		t.Fatalf("Merge: %v, want blocked", err)
+	}
+	if len(calls) != 2 || calls[0] != "evaluate" || calls[1] != "may-merge" {
+		t.Fatalf("calls = %v, want evaluate then may-merge", calls)
+	}
+
+	calls = nil
+	m.Gates = evaluatingGateChecker{calls: &calls, evalErr: errors.New("tests gate: go not installed")}
+	if _, err := m.Merge(ctx, run.ID, "merge"); !errors.Is(err, reviews.ErrMergeBlocked) {
+		t.Fatalf("Merge with a failed evaluation: %v, want blocked", err)
+	}
+	if len(calls) != 1 || git.called {
+		t.Fatalf("calls = %v, git called = %v; a failed evaluation must stop the merge", calls, git.called)
+	}
+}

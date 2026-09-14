@@ -74,6 +74,7 @@ func Routes() []Route {
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}/proof", "getRunProof", "Per-gate proof for a run"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}/reviews", "submitReview", "Submit a review verdict"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}/merge", "mergeRun", "Merge, if the gates allow it"},
+		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}/gates/evaluate", "evaluateRunGates", "Run the run's gates at its current head and record their proof"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}/plan", "getRunPlan", "A run's plan"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}/tools", "getRunToolCalls", "The tool calls the agent run behind this run made"},
 

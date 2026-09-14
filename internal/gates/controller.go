@@ -40,7 +40,14 @@ type Controller struct {
 	Git        gitv1.GitServiceClient
 	Runs       RunLookup
 	BuildInput InputBuilder
+	// Proof, when set, records each gate's outcome as the run's proof in the
+	// reviews service, which is what a run presents as its evidence. Without
+	// it evaluations were stored here and shown nowhere.
+	Proof ProofRecorder
 }
+
+// ProofRecorder records one gate's outcome against a run.
+type ProofRecorder func(ctx context.Context, runID uuid.UUID, gate, status, detail string) error
 
 // resolveForRun looks up runID's current head and resolves the gate
 // definitions and latest evaluations that apply to it.
@@ -74,6 +81,9 @@ func (c *Controller) Evaluate(ctx context.Context, runID uuid.UUID) ([]Evaluatio
 	results := make([]Evaluation, 0, len(defs))
 	for _, def := range defs {
 		if eval, ok := latest[def.Name]; ok {
+			if err := c.recordProof(ctx, runID, eval); err != nil {
+				return nil, err
+			}
 			results = append(results, eval)
 			continue
 		}
@@ -96,9 +106,25 @@ func (c *Controller) Evaluate(ctx context.Context, runID uuid.UUID) ([]Evaluatio
 		if err := c.Store.RecordEvaluation(ctx, eval); err != nil {
 			return nil, fmt.Errorf("record evaluation for gate %q: %w", def.Name, err)
 		}
+		if err := c.recordProof(ctx, runID, eval); err != nil {
+			return nil, err
+		}
 		results = append(results, eval)
 	}
 	return results, nil
+}
+
+// recordProof publishes one outcome as the run's proof. It is repeated for an
+// outcome already cached at this head, so a proof write that failed once is
+// made on the next evaluation rather than lost with the cache hit.
+func (c *Controller) recordProof(ctx context.Context, runID uuid.UUID, eval Evaluation) error {
+	if c.Proof == nil {
+		return nil
+	}
+	if err := c.Proof(ctx, runID, eval.Gate, eval.Status, eval.Detail); err != nil {
+		return fmt.Errorf("record proof for gate %q: %w", eval.Gate, err)
+	}
+	return nil
 }
 
 // MayMerge is a deny-by-default fold: the run may merge only when every

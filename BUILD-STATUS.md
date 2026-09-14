@@ -70,6 +70,17 @@ the dependency-free one is startable, and the dashboard answers. This is the
 whole model path exercised for real: gateway credential, model choice,
 structured output, validation, and materialisation into the work schema.
 
+`bash tests/e2e/agent_ci_test.sh` passes: a workflow whose only job is
+`agent: security` is pushed to an organization with **no runner registered**,
+the job starts an Agent Run briefed through a Work Item, the run is verified
+against that item's acceptance criteria, and the job reports the run's outcome.
+
+`bash tests/e2e/search_test.sh` passes: four unrelated packages are pushed,
+indexed with `bge-m3` embeddings through the gateway, and "tax calculation on
+a bill" — sharing no word with the code — ranks `invoicing/invoice.go` first.
+
+MERGE_TEST_RESULT
+
 ## Defects found by running it, not by reading it
 
 Each was fixed with a test that pins it:
@@ -150,6 +161,63 @@ Each was fixed with a test that pins it:
   credential but not a platform service token, while git-platform understood
   both — so an agent's token was accepted by one service and refused by three.
 
+## Closing the pending list (2026-09-14)
+
+Eleven items were open. Each is closed below, or said plainly not to be.
+
+- **Gates and maintenance scanners ran a contract that never existed.** Five
+  gates and two scanners parsed JSON from `procoder` subcommands that print no
+  JSON, from a binary no image contained. They now run real tools
+  (`internal/analysis`: go test/vet/list, gofmt, gitleaks, osv-scanner,
+  semgrep with a vendored gosec ruleset) in an analysis image used by gates and
+  work-reviews. Verified present in both pods on the cluster.
+- **A CI job with an agent role passed with no agent.** Runners ran an empty
+  command and reported success. ci-runner now executes agent jobs as Agent
+  Runs (spec S-6; `TestAgentCIJob`, `agent_ci_test.sh`).
+- **An agent run "succeeded" when the model stopped calling tools.** `work.get`
+  never even returned the acceptance criteria. A finished run is now verified:
+  the model sees the criteria and only the run's tool calls, every criterion
+  must be met, and the verdicts are recorded as `run.verification` and shown
+  with the run's tool calls.
+- **Agent files were staged where nothing could use them.** The workspace pod
+  exited at start. It now stays up, holds the repository at its default branch
+  as a git repository, and is the run's workspace over exec (`workspace.run`
+  runs commands there with no network; `git.commit` without files commits what
+  is staged). Proven by a test that provisions a real pod on the cluster.
+- **Semantic search could not have worked** (no indexer credential, first push
+  undiffable, no embedder key, 768-wide columns for a 1024-wide model, no
+  route). Fixed and proven by `search_test.sh`.
+- **GUI actions:** cancel an Agent Run (the loop now actually stops — it used
+  to keep committing after a cancel), delete a repository (owner/admin only),
+  open an Engineering Run, approve or dismiss a maintenance proposal (a run
+  cannot start on an unapproved one), toggle a gate (commits to a
+  `gates/<gate>-*` branch and opens a run; main is untouched), and request,
+  approve, reject or revoke an external MCP server. Each was driven in a
+  browser against the cluster.
+- **Test organizations:** 57 removed with `hack/purge-orgs.sh`; every e2e script
+  now removes its own organization on exit.
+- **The model gateway key** was reissued through FastLLM's admin API (via its
+  documented `set-password` bootstrap), the key that had been written straight
+  into its database was revoked, and the temporary admin login was deleted.
+- **Spec traceability:** `.procoder/specs/traceability.yaml` maps all 33
+  criteria to real tests, enforced by `TestSpecTraceability` (see below).
+
+Driving the new screens in a browser found four more defects, each fixed:
+
+- **Every merge was refused.** work-reviews called the gate controller with no
+  credential; MayMerge answered "no authorization scope" and the merger
+  reported the gates unreachable. It failed closed, which looks exactly like
+  policy working, and no suite had ever merged. `merge_test.sh` now does.
+- **A review was recorded under whatever reviewer id the caller named.** The
+  GUI sends none, so no verdict could be recorded from it; a caller who sent
+  one could approve their own run as someone else.
+- **No member could be added from the interface.** Identity accepted only
+  UUIDs; the GUI sends an organization name and a username. Any member could
+  also add members; now only an owner or admin can.
+- **The maintenance sweep never ran.** Its first sweep waited a full 24-hour
+  interval from process start, and every deploy restarts the process. It now
+  sweeps shortly after start, and a person can scan on demand.
+
 ## The GUI
 
 `web/` implements "NovaForge GUI.dc.html" from the claude.ai/design project
@@ -223,45 +291,34 @@ These are real and are not worked around:
   gateway's upstream header timeout, so every such call 502s. The chart points
   at the MoE model (`qwen3-6-35b-a3b`), which answers the same prompt in about
   six seconds.
-- **An agent's files are staged in the service, not in its workspace pod.**
-  The per-run namespace carries the run's network policy and resource quota and
-  is torn down with the run, but `workspace.write_file` stages into a per-run
-  directory inside agent-runtime rather than into that pod. Nothing executes
-  those files — they are the content of the commit the run makes through
-  git-platform, and running a repository's own code is CI's job, in a per-job
-  pod. Moving the staging into the workspace pod is real work that has not been
-  done.
-- **A run's "succeeded" state means the model stopped asking for tools**, not
-  that the Work Item was satisfied. `tests/e2e/agent_test.sh` therefore checks
-  for the commit rather than trusting the state; nothing yet judges whether the
-  work actually meets the item's acceptance criteria.
-- **Semantic search is fixed in code but not yet proven on the cluster.**
-  Reading the pipeline end to end found that it could not have worked: the
-  indexer read repositories with no credential and git-platform refused it; a
-  repository's first push (all-zero old SHA) could not be diffed and was retried
-  forever; the embedder sent no gateway credential; the schema stored 768-wide
-  vectors while `bge-m3` answers with 1024, so every chunk was refused; and no
-  edge route reached `SearchCode` at all. Each is fixed with a test seen red
-  first, the Graph screen has a code search box, and `tests/e2e/search_test.sh`
-  asserts a query sharing no word with the code ranks it first — but that
-  script has not been run against the cluster. The width change is inferred
-  from `bge-m3` being the served embedding model; engineering-graph now probes
-  the model at startup and refuses to start if the width does not match.
+- **Verification is a model's judgement.** A run is judged against its
+  acceptance criteria by the model, shown only the run's tool calls and their
+  results — not its reasoning or its claims — but it is still a model deciding.
+  A Work Item with no acceptance criteria is not verified, and its run record
+  says so.
+- **An agent CI job needs a person behind the push.** Its run is sponsored by
+  the member who pushed or triggered CI. A commit pushed by an agent or a
+  service has nobody, and its agent jobs fail saying so.
+- **The workspace has no network.** `workspace.run` can build and test code
+  whose dependencies are vendored or in the standard library; anything that
+  downloads modules fails inside the workspace, by design of its network policy.
 - **The code index follows every branch and misses merges.** A push to any
   branch replaces the indexed content of the files it touches, so a feature
   branch overwrites what the default branch says. Merges made through the API
   and commits made by the `git.commit` tool publish no push event, so neither
   the indexer nor CI sees them.
 - **Approved external MCP servers are recorded, not yet consumed.** mcp-server
-  keeps each organization's register (request, approve or reject, revoke,
-  owner/admin only) and the MCP screen operates it, but nothing offers an
-  external MCP server to an agent: `internal/mcp.Client` exists and is called
-  only by its tests, and no agent run reads `.novaforge/mcp/` or the register.
-  Approving a server therefore changes nothing an agent can do until that
-  consumer is written, and it must read the approved list when it is.
-- **Gate toggles and the MCP register are tested against real git and
-  PostgreSQL but not yet on the cluster.** Neither has been deployed; the
-  gui_test.sh checks for their list endpoints have not run.
+  keeps each organization's register and the MCP screen operates it, but
+  nothing offers an external MCP server to an agent: `internal/mcp.Client` is
+  called only by its tests. Approving a server changes nothing an agent can do
+  until that consumer is written, and it must read the approved list when it is.
+- **The maintenance sweep covers organizations that have Work Items.** It finds
+  organizations through the work schema, since it may not read identity's; an
+  organization with repositories and no Work Item is scanned only on demand.
+- **Deleting a repository leaves other services' rows behind.** Work Items, CI
+  runs and reviews keyed on it stay in their schemas and become unreachable.
+  Deleting an organization is an operator action (`hack/purge-orgs.sh`); there
+  is no API for it.
 
 ## Spec traceability
 

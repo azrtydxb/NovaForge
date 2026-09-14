@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"gopkg.in/yaml.v3"
 
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
@@ -47,12 +49,26 @@ func Resolve(ctx context.Context, git gitv1.GitServiceClient, orgID, repoID uuid
 		Ref:  targetRef,
 		Path: gatesDir,
 	})
-	if err != nil {
+	var entries []*gitv1.TreeEntry
+	switch {
+	case err == nil:
+		entries = tree.Entries
+	case status.Code(err) == codes.NotFound:
+		// No .novaforge/gates directory is a repository that declares no
+		// gates — every repository starts that way — provided the target
+		// branch itself exists. Returning the NotFound made the merger report
+		// the gate controller unreachable, so such a repository could never
+		// merge anything. Any other error is still an error: the controller
+		// fails closed on everything it cannot read.
+		if _, rootErr := git.GetTree(ctx, &gitv1.GetTreeRequest{Repo: repoID.String(), Ref: targetRef}); rootErr != nil {
+			return nil, fmt.Errorf("resolve gate definitions at %s: %w", targetRef, rootErr)
+		}
+	default:
 		return nil, fmt.Errorf("resolve gate definitions at %s: %w", targetRef, err)
 	}
 
 	defs := make(map[string]Definition)
-	for _, entry := range tree.Entries {
+	for _, entry := range entries {
 		if entry.Kind != "blob" {
 			continue
 		}

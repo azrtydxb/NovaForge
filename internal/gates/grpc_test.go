@@ -173,3 +173,46 @@ func TestResolveApprovalRequiresOrgScope(t *testing.T) {
 		t.Fatalf("ResolveApproval for the request's own org: %v", err)
 	}
 }
+
+// TestEvaluateRecordsProof pins that an evaluation reaches the run's proof,
+// on the first evaluation and again when the result is served from cache.
+// Evaluations were stored in the gates schema and shown nowhere.
+func TestEvaluateRecordsProof(t *testing.T) {
+	orgID, repoID, runID := uuid.New(), uuid.New(), uuid.New()
+	type proof struct{ gate, status string }
+	var proofs []proof
+	controller := &gates.Controller{
+		Store: newStore(t),
+		Git:   singleGateGit(),
+		Runs: func(ctx context.Context, id uuid.UUID) (gates.RunHead, error) {
+			return gates.RunHead{OrgID: orgID, RepoID: repoID, TargetRef: "main", HeadSHA: "bbb"}, nil
+		},
+		BuildInput: func(ctx context.Context, runID uuid.UUID, head gates.RunHead, gate string, params map[string]any) (gates.Input, error) {
+			return gates.Input{OrgID: head.OrgID, RepoID: head.RepoID, RunID: runID, TargetSHA: head.HeadSHA, Exec: analysis.DefaultExec}, nil
+		},
+		Proof: func(ctx context.Context, id uuid.UUID, gate, status, detail string) error {
+			if id != runID {
+				t.Errorf("proof for run %s, want %s", id, runID)
+			}
+			proofs = append(proofs, proof{gate, status})
+			return nil
+		},
+	}
+	ctx := scopedCtx(orgID)
+	first, err := controller.Evaluate(ctx, runID)
+	if err != nil {
+		t.Fatalf("Evaluate: %v", err)
+	}
+	if len(first) == 0 || len(proofs) != len(first) {
+		t.Fatalf("evaluations %d, proofs %d; want one proof per evaluation", len(first), len(proofs))
+	}
+	if _, err := controller.Evaluate(ctx, runID); err != nil {
+		t.Fatalf("second Evaluate: %v", err)
+	}
+	if len(proofs) != 2*len(first) {
+		t.Fatalf("proofs after a cached evaluation = %d, want %d", len(proofs), 2*len(first))
+	}
+	if proofs[0].status == "" {
+		t.Fatalf("proof carries no status: %+v", proofs[0])
+	}
+}

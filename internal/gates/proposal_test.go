@@ -70,6 +70,7 @@ type proposalFixture struct {
 	runs  *reviews.GRPCServer
 	org   uuid.UUID
 	repo  string
+	root  string
 	ctx   context.Context
 }
 
@@ -111,7 +112,7 @@ func newProposalFixture(t *testing.T) proposalFixture {
 		Git:     gitDirect{srv: gitSrv},
 		Reviews: reviewsDirect{srv: runSrv},
 	}
-	return proposalFixture{gates: srv, git: gitSrv, runs: runSrv, org: org, repo: repo, ctx: ctx}
+	return proposalFixture{gates: srv, git: gitSrv, runs: runSrv, org: org, repo: repo, root: root, ctx: ctx}
 }
 
 func seedRepo(t *testing.T, bare string, files map[string]string) {
@@ -315,5 +316,40 @@ func TestProposeGateChangeRefusals(t *testing.T) {
 		if strings.HasPrefix(b.GetName(), "gates/") {
 			t.Fatalf("a refused proposal left branch %q behind", b.GetName())
 		}
+	}
+}
+
+// TestResolveARepositoryThatDeclaresNoGates pins that a repository with no
+// .novaforge/gates directory declares no gates, and a Work Item's required
+// gates still apply. Resolve used to return the directory's NotFound as an
+// error, which the merger reported as "gate controller unreachable": every
+// such repository could never merge anything, failing closed for a reason
+// that was not policy. A target branch that does not exist is still an error.
+func TestResolveARepositoryThatDeclaresNoGates(t *testing.T) {
+	f := newProposalFixture(t)
+	plain := "plain-" + uuid.NewString()[:8]
+	resp, err := f.git.CreateRepo(f.ctx, &gitv1.CreateRepoRequest{Name: plain})
+	if err != nil {
+		t.Fatalf("CreateRepo: %v", err)
+	}
+	repoID := uuid.MustParse(resp.GetRepo().GetId())
+	bare := filepath.Join(f.root, f.org.String(), plain+".git")
+	seedRepo(t, bare, map[string]string{"README.md": "no gates here\n"})
+
+	defs, err := gates.Resolve(f.ctx, gitDirect{srv: f.git}, f.org, repoID, "main", nil)
+	if err != nil {
+		t.Fatalf("Resolve with no gates directory: %v", err)
+	}
+	if len(defs) != 0 {
+		t.Fatalf("definitions = %+v, want none", defs)
+	}
+
+	defs, err = gates.Resolve(f.ctx, gitDirect{srv: f.git}, f.org, repoID, "main", []string{"tests"})
+	if err != nil || len(defs) != 1 || defs[0].Name != "tests" || !defs[0].Required {
+		t.Fatalf("work item gates with no directory = %+v, %v; want tests required", defs, err)
+	}
+
+	if _, err := gates.Resolve(f.ctx, gitDirect{srv: f.git}, f.org, repoID, "no-such-branch", nil); err == nil {
+		t.Fatal("Resolve against a branch that does not exist returned no error")
 	}
 }

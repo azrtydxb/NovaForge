@@ -19,6 +19,14 @@ type gateClient struct {
 	gates gatesv1.GatesServiceClient
 }
 
+// Evaluate runs the run's gates at its current head (see reviews.GateEvaluator).
+func (g gateClient) Evaluate(ctx context.Context, runID uuid.UUID) error {
+	if _, err := g.gates.Evaluate(ctx, &gatesv1.EvaluateRequest{RunId: runID.String()}); err != nil {
+		return fmt.Errorf("gates: evaluate %s: %w", runID, err)
+	}
+	return nil
+}
+
 func (g gateClient) MayMerge(ctx context.Context, runID uuid.UUID) (bool, []string, error) {
 	resp, err := g.gates.MayMerge(ctx, &gatesv1.MayMergeRequest{RunId: runID.String()})
 	if err != nil {

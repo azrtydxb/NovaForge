@@ -28,6 +28,13 @@ type GateChecker interface {
 	MayMerge(ctx context.Context, runID uuid.UUID) (allowed bool, reasons []string, err error)
 }
 
+// GateEvaluator is implemented by a GateChecker that can also run the gates.
+// Merger uses it, when present, to evaluate a run's gates at its current head
+// before asking whether it may merge.
+type GateEvaluator interface {
+	Evaluate(ctx context.Context, runID uuid.UUID) error
+}
+
 // Merger merges Engineering Runs only through the gate controller: Merge's
 // very first action is the MayMerge check, and every non-true result —
 // including a transport error reaching the controller — returns before any
@@ -42,6 +49,16 @@ type Merger struct {
 // Merge merges runID's source ref into its target ref using method (one of
 // "merge", "squash", or "rebase"), returning the resulting merge SHA.
 func (m *Merger) Merge(ctx context.Context, runID uuid.UUID, method string) (string, error) {
+	// Nothing else runs a run's gates. Without this, every required gate was
+	// "not evaluated at head" forever and a repository that declared one could
+	// never merge. The controller reuses an evaluation already made at the
+	// current head, so asking again is cheap. An evaluation that cannot run
+	// blocks the merge, like everything else on this path.
+	if ev, ok := m.Gates.(GateEvaluator); ok {
+		if err := ev.Evaluate(ctx, runID); err != nil {
+			return "", fmt.Errorf("%w: gates could not be evaluated: %v", ErrMergeBlocked, err)
+		}
+	}
 	allowed, reasons, err := m.Gates.MayMerge(ctx, runID)
 	if err != nil {
 		return "", fmt.Errorf("%w: gate controller unreachable: %v", ErrMergeBlocked, err)
