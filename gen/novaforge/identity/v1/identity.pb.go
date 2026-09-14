@@ -2190,11 +2190,15 @@ func (x *CreateOrgResponse) GetOrg() *Org {
 	return nil
 }
 
+// AddOrgMemberRequest adds a user to an organization. org_id may be the
+// organization's id or its name; the user is named by user_id or username.
+// role is one of owner, admin or member.
 type AddOrgMemberRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	OrgId         string                 `protobuf:"bytes,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
 	UserId        string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	Role          string                 `protobuf:"bytes,3,opt,name=role,proto3" json:"role,omitempty"`
+	Username      string                 `protobuf:"bytes,4,opt,name=username,proto3" json:"username,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2246,6 +2250,13 @@ func (x *AddOrgMemberRequest) GetUserId() string {
 func (x *AddOrgMemberRequest) GetRole() string {
 	if x != nil {
 		return x.Role
+	}
+	return ""
+}
+
+func (x *AddOrgMemberRequest) GetUsername() string {
+	if x != nil {
+		return x.Username
 	}
 	return ""
 }
@@ -2664,11 +2675,12 @@ const file_novaforge_identity_v1_identity_proto_rawDesc = "" +
 	"\x10CreateOrgRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"A\n" +
 	"\x11CreateOrgResponse\x12,\n" +
-	"\x03org\x18\x01 \x01(\v2\x1a.novaforge.identity.v1.OrgR\x03org\"Y\n" +
+	"\x03org\x18\x01 \x01(\v2\x1a.novaforge.identity.v1.OrgR\x03org\"u\n" +
 	"\x13AddOrgMemberRequest\x12\x15\n" +
 	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x12\n" +
-	"\x04role\x18\x03 \x01(\tR\x04role\"&\n" +
+	"\x04role\x18\x03 \x01(\tR\x04role\x12\x1a\n" +
+	"\busername\x18\x04 \x01(\tR\busername\"&\n" +
 	"\x14AddOrgMemberResponse\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\"\xb8\x02\n" +
 	"\x11IssueGrantRequest\x12\x15\n" +

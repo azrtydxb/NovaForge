@@ -195,19 +195,48 @@ func (s *Server) CreateOrg(ctx context.Context, req *identityv1.CreateOrgRequest
 // member of that organization; a caller who is not gets
 // codes.PermissionDenied rather than being told the org doesn't exist.
 func (s *Server) AddOrgMember(ctx context.Context, req *identityv1.AddOrgMemberRequest) (*identityv1.AddOrgMemberResponse, error) {
-	orgID, err := uuid.Parse(req.GetOrgId())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid org_id")
+	scope, err := authz.FromContext(ctx)
+	if err != nil || scope.ActorID == uuid.Nil {
+		return nil, status.Error(codes.Unauthenticated, "authentication required")
 	}
-	userID, err := uuid.Parse(req.GetUserId())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid user_id")
-	}
-	if req.GetRole() == "" {
+	switch req.GetRole() {
+	case "owner", "admin", "member":
+	case "":
 		return nil, status.Error(codes.InvalidArgument, "role is required")
+	default:
+		return nil, status.Errorf(codes.InvalidArgument, "role %q is not one of owner, admin or member", req.GetRole())
 	}
-	if err := s.requireOrgMember(ctx, orgID); err != nil {
-		return nil, err
+	// The organization is addressed as the rest of the API addresses it, by
+	// name or id, and the new member by username or id: accepting only UUIDs
+	// refused every request the interface made, which carries names.
+	org, err := s.store.OrgByNameOrID(ctx, req.GetOrgId())
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "organization %q: %v", req.GetOrgId(), err)
+	}
+	orgID := org.ID
+	callerRole, err := s.store.MemberRole(ctx, orgID, scope.ActorID)
+	if err != nil {
+		return nil, status.Error(codes.PermissionDenied, "not a member of this organization")
+	}
+	// Membership is what the organization boundary is made of, so only its
+	// owners and admins change it.
+	if callerRole != "owner" && callerRole != "admin" {
+		return nil, status.Error(codes.PermissionDenied, "only an owner or admin may add members")
+	}
+	var userID uuid.UUID
+	switch {
+	case req.GetUserId() != "":
+		if userID, err = uuid.Parse(req.GetUserId()); err != nil {
+			return nil, status.Error(codes.InvalidArgument, "invalid user_id")
+		}
+	case req.GetUsername() != "":
+		u, uerr := s.store.UserByUsername(ctx, req.GetUsername())
+		if uerr != nil {
+			return nil, status.Errorf(codes.NotFound, "no user named %q", req.GetUsername())
+		}
+		userID = u.ID
+	default:
+		return nil, status.Error(codes.InvalidArgument, "user_id or username is required")
 	}
 	if err := s.store.AddOrgMember(ctx, orgID, userID, req.GetRole()); err != nil {
 		if strings.Contains(err.Error(), "already a member") {

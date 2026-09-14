@@ -285,15 +285,16 @@ func addIdentityHandlers(h map[string]http.HandlerFunc, c identityv1.IdentitySer
 
 	h["addOrgMember"] = func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
-			UserID string `json:"user_id"`
-			Role   string `json:"role"`
+			UserID   string `json:"user_id"`
+			Username string `json:"username"`
+			Role     string `json:"role"`
 		}
 		if err := decode(r, &req); err != nil {
 			WriteError(w, http.StatusBadRequest, err)
 			return
 		}
 		_, err := c.AddOrgMember(r.Context(), &identityv1.AddOrgMemberRequest{
-			OrgId: chi.URLParam(r, "org"), UserId: req.UserID, Role: req.Role,
+			OrgId: chi.URLParam(r, "org"), UserId: req.UserID, Username: req.Username, Role: req.Role,
 		})
 		if err != nil {
 			WriteError(w, StatusFromGRPC(err), err)

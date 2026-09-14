@@ -255,3 +255,44 @@ func TestOrgMembershipAndGrantLifecycle(t *testing.T) {
 		t.Fatalf("want write branch %q, got %q", "agents/NF-1/", getResp.GetGrant().GetWriteBranch())
 	}
 }
+
+// TestAddOrgMemberAsTheScreensAsk pins adding a member the way the GUI asks:
+// by the organization's name and the new member's username. Both used to be
+// refused ("invalid org_id") because only UUIDs were accepted, so no member
+// could be added from the interface at all. It also pins who may add one:
+// an owner or admin, not any member.
+func TestAddOrgMemberAsTheScreensAsk(t *testing.T) {
+	srv := newGRPCServer(t)
+	ctx := context.Background()
+	register := func(prefix string) (uuid.UUID, string) {
+		name := randomUsername(prefix)
+		reg, err := srv.Register(ctx, &identityv1.RegisterRequest{Email: name + "@example.com", Username: name, Password: "correct horse battery staple"})
+		if err != nil {
+			t.Fatalf("register %s: %v", prefix, err)
+		}
+		return uuid.MustParse(reg.GetUserId()), name
+	}
+	ownerID, _ := register("owner")
+	memberID, memberName := register("member")
+	_, thirdName := register("third")
+	ownerCtx := authz.WithScope(ctx, authz.Scope{ActorID: ownerID, ActorKind: "user"})
+	memberCtx := authz.WithScope(ctx, authz.Scope{ActorID: memberID, ActorKind: "user"})
+
+	orgName := "team-" + uuid.NewString()[:8]
+	if _, err := srv.CreateOrg(ownerCtx, &identityv1.CreateOrgRequest{Name: orgName}); err != nil {
+		t.Fatalf("create org: %v", err)
+	}
+
+	if _, err := srv.AddOrgMember(ownerCtx, &identityv1.AddOrgMemberRequest{OrgId: orgName, Username: memberName, Role: "member"}); err != nil {
+		t.Fatalf("owner adds a member by org name and username: %v", err)
+	}
+	if _, err := srv.AddOrgMember(memberCtx, &identityv1.AddOrgMemberRequest{OrgId: orgName, Username: thirdName, Role: "member"}); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("a plain member adding a member: code = %v, want PermissionDenied", status.Code(err))
+	}
+	if _, err := srv.AddOrgMember(ownerCtx, &identityv1.AddOrgMemberRequest{OrgId: orgName, Username: thirdName, Role: "overlord"}); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("unknown role: code = %v, want InvalidArgument", status.Code(err))
+	}
+	if _, err := srv.AddOrgMember(ownerCtx, &identityv1.AddOrgMemberRequest{OrgId: orgName, Username: "nobody-" + uuid.NewString()[:8], Role: "member"}); status.Code(err) != codes.NotFound {
+		t.Fatalf("unknown username: code = %v, want NotFound", status.Code(err))
+	}
+}

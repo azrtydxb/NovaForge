@@ -224,10 +224,14 @@ message CreateOrgResponse {
   Org org = 1;
 }
 
+// AddOrgMemberRequest adds a user to an organization. org_id may be the
+// organization's id or its name; the user is named by user_id or username.
+// role is one of owner, admin or member.
 message AddOrgMemberRequest {
   string org_id = 1;
   string user_id = 2;
   string role = 3;
+  string username = 4;
 }
 message AddOrgMemberResponse {
   bool ok = 1;
