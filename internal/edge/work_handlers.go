@@ -1,9 +1,11 @@
 package edge
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -178,20 +180,68 @@ func addWorkHandlers(h map[string]http.HandlerFunc, g gitv1.GitServiceClient, w 
 				Title     string `json:"title"`
 				SourceRef string `json:"source_ref"`
 				TargetRef string `json:"target_ref"`
-				WorkItem  string `json:"work_item"`
+				// WorkItem is the Work Item's key. It used to be decoded here
+				// and never passed on, so a run opened for a Work Item was
+				// connected to nothing.
+				WorkItem string `json:"work_item"`
 			}
 			if err := decode(r, &req); err != nil {
 				WriteError(wr, http.StatusBadRequest, err)
 				return
 			}
-			rid, err := repoID(r)
+			repo, err := g.GetRepo(r.Context(), &gitv1.GetRepoRequest{Name: chi.URLParam(r, "repo")})
 			if err != nil {
 				WriteError(wr, StatusFromGRPC(err), err)
 				return
 			}
+			rid := repo.GetRepo().GetId()
+
+			// The target defaults to the repository's default branch: that is
+			// what a run merges into unless someone says otherwise.
+			target := strings.TrimSpace(req.TargetRef)
+			if target == "" {
+				target = repo.GetRepo().GetDefaultBranch()
+			}
+
+			// A source branch that does not exist can never be reviewed or
+			// merged. The target is not checked: a new repository's default
+			// branch has no commit yet, and is still the right place to merge.
+			source := strings.TrimPrefix(strings.TrimSpace(req.SourceRef), "refs/heads/")
+			if source != "" {
+				branches, err := g.ListBranches(r.Context(), &gitv1.ListBranchesRequest{Repo: chi.URLParam(r, "repo")})
+				if err != nil {
+					WriteError(wr, StatusFromGRPC(err), err)
+					return
+				}
+				if !hasBranch(branches.GetRefs(), source) {
+					WriteError(wr, http.StatusBadRequest, fmt.Errorf("source branch %q does not exist in this repository", source))
+					return
+				}
+			}
+
+			var workItemID string
+			if key := strings.TrimSpace(req.WorkItem); key != "" {
+				if w == nil {
+					WriteError(wr, http.StatusNotImplemented, errors.New("this deployment has no work service to resolve a Work Item"))
+					return
+				}
+				item, err := w.GetItem(r.Context(), &workv1.GetItemRequest{Key: key})
+				if err != nil {
+					WriteError(wr, StatusFromGRPC(err), err)
+					return
+				}
+				if item.GetItem().GetRepoId() != rid {
+					WriteError(wr, http.StatusBadRequest, fmt.Errorf("work item %s belongs to a different repository", key))
+					return
+				}
+				workItemID = item.GetItem().GetId()
+			}
+
+			// The author is not sent: reviews attributes a person's run to the
+			// person in the caller's scope.
 			resp, err := rv.CreateRun(r.Context(), &reviewsv1.CreateRunRequest{
-				RepoId: rid, Title: req.Title, AuthorKind: "user",
-				SourceRef: req.SourceRef, TargetRef: req.TargetRef,
+				RepoId: rid, Title: req.Title, WorkItemId: workItemID,
+				SourceRef: source, TargetRef: target,
 			})
 			if err != nil {
 				WriteError(wr, StatusFromGRPC(err), err)
@@ -396,6 +446,16 @@ func RunJSON(r *reviewsv1.Run) map[string]any {
 		"author_id":  r.GetAuthorId(), "author_kind": r.GetAuthorKind(),
 		"work_item_id": r.GetWorkItemId(), "created_at": r.GetCreatedAt(),
 	}
+}
+
+// hasBranch reports whether refs names branch.
+func hasBranch(refs []*gitv1.Ref, branch string) bool {
+	for _, ref := range refs {
+		if ref.GetName() == branch {
+			return true
+		}
+	}
+	return false
 }
 
 func errRunNotFound(n int) error {
