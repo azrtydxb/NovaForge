@@ -2,8 +2,8 @@ package graph
 
 import (
 	"context"
+	"errors"
 	"log"
-	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -159,7 +159,10 @@ func (s *GRPCServer) resolveSymbol(ctx context.Context, orgID, repoID uuid.UUID,
 		SELECT id, org_id, kind, key, attrs
 		FROM graph.graph_nodes
 		WHERE org_id = $1 AND repo_id = $2 AND kind = 'symbol' AND attrs->>'name' = $3
-		ORDER BY id
+		-- A name defined both in code and in a test helper means the code:
+		-- that is the symbol whose dependents and tests a caller is asking
+		-- about.
+		ORDER BY right(attrs->>'path', 8) = '_test.go', attrs->>'path', id
 		LIMIT 1
 	`, orgID, repoID, name)
 	n, err := scanNode(row)
@@ -277,14 +280,62 @@ func (s *GRPCServer) TestsCovering(ctx context.Context, req *graphv1.TestsCoveri
 		return nil, status.Errorf(codes.Internal, "tests covering: %v", err)
 	}
 	resp := &graphv1.TestsCoveringResponse{Tests: make([]string, 0, len(neighbours))}
+	seen := map[string]bool{}
 	for _, n := range neighbours {
+		resp.Nodes = append(resp.Nodes, toProtoNode(n))
 		path := n.Attrs["path"]
 		if path == "" {
 			path = n.Key
 		}
-		resp.Tests = append(resp.Tests, path)
+		// Two test functions in one file cover the symbol once, as a file.
+		if !seen[path] {
+			seen[path] = true
+			resp.Tests = append(resp.Tests, path)
+		}
 	}
 	return resp, nil
+}
+
+// FileRelations answers for a file what the symbol queries answer for one
+// symbol.
+func (s *GRPCServer) FileRelations(ctx context.Context, req *graphv1.FileRelationsRequest) (*graphv1.FileRelationsResponse, error) {
+	orgID, err := callerOrg(ctx)
+	if err != nil {
+		return nil, err
+	}
+	repoID, err := parseRepoID(req.GetRepoId())
+	if err != nil {
+		return nil, err
+	}
+	if req.GetPath() == "" {
+		return nil, status.Error(codes.InvalidArgument, "path is required")
+	}
+	ctx = authz.WithScope(ctx, authz.Scope{OrgID: orgID, ActorKind: "service"})
+	rel, err := s.Store.FileRelationsFor(ctx, orgID, repoID, req.GetPath())
+	if errors.Is(err, ErrFileNotIndexed) {
+		return nil, status.Errorf(codes.NotFound, "no file %q is indexed in this repository", req.GetPath())
+	}
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "file relations: %v", err)
+	}
+	resp := &graphv1.FileRelationsResponse{}
+	for _, n := range rel.Symbols {
+		resp.Symbols = append(resp.Symbols, toProtoSymbol(n))
+	}
+	resp.Imports = toProtoNodes(rel.Imports)
+	resp.ImportedBy = toProtoNodes(rel.ImportedBy)
+	resp.Dependents = toProtoNodes(rel.Dependents)
+	resp.Tests = toProtoNodes(rel.Tests)
+	resp.History = toProtoNodes(rel.History)
+	return resp, nil
+}
+
+func toProtoNodes(nodes []Node) []*graphv1.Node {
+	out := make([]*graphv1.Node, 0, len(nodes))
+	for _, n := range nodes {
+		out = append(out, toProtoNode(n))
+	}
+	return out
 }
 
 // LastChangedBy returns the key of the Work Item whose changed_by edge to
@@ -310,14 +361,25 @@ func (s *GRPCServer) LastChangedBy(ctx context.Context, req *graphv1.LastChanged
 	if len(neighbours) == 0 {
 		return nil, status.Errorf(codes.NotFound, "no changed_by edges for symbol %q", req.GetSymbol())
 	}
-	sort.Slice(neighbours, func(i, j int) bool {
-		return neighbours[i].Attrs["changed_at"] > neighbours[j].Attrs["changed_at"]
-	})
-	key := neighbours[0].Attrs["key"]
-	if key == "" {
-		key = neighbours[0].Key
+	SortHistory(neighbours)
+	latest := neighbours[0]
+	resp := &graphv1.LastChangedByResponse{History: toProtoNodes(neighbours)}
+	switch latest.Kind {
+	case "commit":
+		// The indexer's edges point at commits; the Work Item is whatever
+		// the commit names, and nothing when it names none.
+		resp.WorkItemKey = latest.Attrs["work_item_key"]
+		resp.CommitSha = latest.Attrs["sha"]
+		resp.Author = latest.Attrs["author"]
+		resp.Message = latest.Attrs["message"]
+	default:
+		resp.WorkItemKey = latest.Attrs["key"]
+		if resp.WorkItemKey == "" {
+			resp.WorkItemKey = latest.Key
+		}
 	}
-	return &graphv1.LastChangedByResponse{WorkItemKey: key}, nil
+	resp.ChangedAt = latest.Attrs["changed_at"]
+	return resp, nil
 }
 
 // SearchCode answers a code search: semantically when an Embedder is

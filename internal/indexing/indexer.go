@@ -46,9 +46,15 @@ const minIdle = 30 * time.Second
 // gitClient is the subset of gitv1.GitServiceClient the indexer needs: the
 // diff between two SHAs (to discover changed paths) and the blob content of
 // a path at a SHA (to parse it, or to discover it no longer exists there).
+//
+// GetRepo names the repository's default branch, the only branch the index
+// describes; ListCommits finds the commits a push brought, so each changed
+// file is attributed to the commit that changed it.
 type gitClient interface {
 	GetDiff(ctx context.Context, in *gitv1.GetDiffRequest, opts ...grpc.CallOption) (*gitv1.GetDiffResponse, error)
 	GetBlob(ctx context.Context, in *gitv1.GetBlobRequest, opts ...grpc.CallOption) (*gitv1.GetBlobResponse, error)
+	GetRepo(ctx context.Context, in *gitv1.GetRepoRequest, opts ...grpc.CallOption) (*gitv1.GetRepoResponse, error)
+	ListCommits(ctx context.Context, in *gitv1.ListCommitsRequest, opts ...grpc.CallOption) (*gitv1.ListCommitsResponse, error)
 }
 
 // Indexer keeps the engineering graph's symbol nodes and code chunks in
@@ -205,11 +211,38 @@ func (idx *Indexer) HandlePush(ctx context.Context, evt events.PushEvent) error 
 		"x-novaforge-org", evt.OrgID.String(),
 	)
 
-	paths, err := idx.changedPaths(ctx, evt)
+	// The index describes one branch: the repository's default branch. It
+	// used to follow every push, so a push to a feature branch replaced the
+	// indexed content of the files it touched — a branch that deleted a
+	// function removed it from search, from the graph and from every agent's
+	// context while the default branch still had it. Indexing per ref instead
+	// would multiply the index by every short-lived branch an agent creates,
+	// for questions ("what depends on this", "what does this project look
+	// like") that are asked of the default branch. Merges into it arrive as
+	// pushes of it, so nothing that reaches the default branch is missed.
+	repo, err := idx.Git.GetRepo(ctx, &gitv1.GetRepoRequest{Name: evt.RepoID.String()})
+	if status.Code(err) == codes.NotFound {
+		// A repository deleted since the push has nothing left to index.
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("resolve default branch of %s: %w", evt.RepoID, err)
+	}
+	if evt.Ref != "refs/heads/"+repo.GetRepo().GetDefaultBranch() {
+		return nil
+	}
+
+	unified, err := idx.diff(ctx, evt)
 	if err != nil {
 		return fmt.Errorf("compute changed paths for %s: %w", evt.NewSHA, err)
 	}
-	_, err = idx.IndexCommit(ctx, evt.OrgID, evt.RepoID, evt.NewSHA, paths)
+	paths := parseDiffPaths(unified)
+	info := pushInfo{
+		module:  idx.goModule(ctx, evt.RepoID, evt.NewSHA),
+		changed: changedLines(unified),
+		commits: idx.attribute(ctx, evt.RepoID, evt.OldSHA, evt.NewSHA, paths),
+	}
+	_, err = idx.indexCommit(ctx, evt.OrgID, evt.RepoID, evt.NewSHA, paths, info)
 	return err
 }
 
@@ -224,9 +257,9 @@ func isZeroSHA(sha string) bool {
 
 var diffGitLineRe = regexp.MustCompile(`(?m)^diff --git a/(\S+) b/(\S+)$`)
 
-// changedPaths asks the git service for the unified diff between evt's old
-// and new SHA and extracts the set of paths it touches.
-func (idx *Indexer) changedPaths(ctx context.Context, evt events.PushEvent) ([]string, error) {
+// diff asks the git service for the unified diff between evt's old and new
+// SHA.
+func (idx *Indexer) diff(ctx context.Context, evt events.PushEvent) (string, error) {
 	// A ref that did not exist before the push reports an all-zero old SHA,
 	// which git cannot diff from: every repository's first push failed here,
 	// unacknowledged, and was retried forever. Everything in such a commit is
@@ -241,9 +274,9 @@ func (idx *Indexer) changedPaths(ctx context.Context, evt events.PushEvent) ([]s
 		To:   evt.NewSHA,
 	})
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	return parseDiffPaths(resp.GetUnified()), nil
+	return resp.GetUnified(), nil
 }
 
 // parseDiffPaths extracts every path named on a "diff --git a/X b/Y" header
@@ -276,6 +309,10 @@ func parseDiffPaths(unified string) []string {
 // graph, or the vector store again — making IndexCommit idempotent under
 // the at-least-once delivery Redis Streams gives every consumer.
 func (idx *Indexer) IndexCommit(ctx context.Context, orgID, repoID uuid.UUID, sha string, changedPaths []string) (indexed int, err error) {
+	return idx.indexCommit(ctx, orgID, repoID, sha, changedPaths, pushInfo{})
+}
+
+func (idx *Indexer) indexCommit(ctx context.Context, orgID, repoID uuid.UUID, sha string, changedPaths []string, info pushInfo) (indexed int, err error) {
 	ctx = authz.WithScope(ctx, authz.Scope{OrgID: orgID, ActorKind: "service"})
 
 	last, err := idx.lastIndexedSHA(ctx, orgID, repoID)
@@ -290,7 +327,7 @@ func (idx *Indexer) IndexCommit(ctx context.Context, orgID, repoID uuid.UUID, sh
 		if path == "" {
 			continue
 		}
-		if idx.indexPath(ctx, orgID, repoID, sha, path) {
+		if idx.indexPath(ctx, orgID, repoID, sha, path, info) {
 			indexed++
 		}
 	}
@@ -304,7 +341,7 @@ func (idx *Indexer) IndexCommit(ctx context.Context, orgID, repoID uuid.UUID, sh
 // indexPath indexes (or, for a deleted file, de-indexes) a single path,
 // logging and returning false on any failure so the caller can move on to
 // the next path rather than aborting the whole commit.
-func (idx *Indexer) indexPath(ctx context.Context, orgID, repoID uuid.UUID, sha, path string) bool {
+func (idx *Indexer) indexPath(ctx context.Context, orgID, repoID uuid.UUID, sha, path string, info pushInfo) bool {
 	blob, err := idx.Git.GetBlob(ctx, &gitv1.GetBlobRequest{
 		Repo: repoID.String(),
 		Ref:  sha,
@@ -318,21 +355,29 @@ func (idx *Indexer) indexPath(ctx context.Context, orgID, repoID uuid.UUID, sha,
 		return false
 	}
 
-	symbols, _, perr := Parse(path, blob.GetContent())
+	file, perr := ParseFile(path, blob.GetContent())
 	if perr != nil {
 		log.Printf("indexing: parse %s: %v", path, perr)
 		return false
 	}
+	symbols := file.Symbols
 
+	// Parse's references used to be discarded here and the file written
+	// with nil edges, so every dependency, test and history query the graph
+	// offers answered empty on every real repository.
+	keys := make(map[*Symbol]string, len(symbols))
 	nodes := make([]graph.Node, 0, len(symbols))
-	for _, sym := range symbols {
+	for i := range symbols {
+		sym := &symbols[i]
+		keys[sym] = symbolKey(repoID, path, *sym)
 		nodes = append(nodes, graph.Node{
 			ID:    uuid.New(),
 			OrgID: orgID,
 			Kind:  "symbol",
-			Key:   symbolKey(repoID, path, sym),
+			Key:   keys[sym],
 			Attrs: map[string]string{
 				"path":       path,
+				"dir":        graphDir(path),
 				"name":       sym.Name,
 				"kind":       sym.Kind,
 				"signature":  sym.Signature,
@@ -341,8 +386,16 @@ func (idx *Indexer) indexPath(ctx context.Context, orgID, repoID uuid.UUID, sha,
 			},
 		})
 	}
-	if err := idx.Graph.ReplaceFileSubgraph(ctx, orgID, repoID, path, nodes, nil); err != nil {
-		log.Printf("indexing: replace subgraph for %s: %v", path, err)
+	fi := graph.FileIndex{OrgID: orgID, RepoID: repoID, Path: path, Symbols: nodes}
+	if strings.HasSuffix(path, ".go") {
+		fi.Imports, fi.References = goEdges(path, info.module, file, keys)
+	}
+	if commit, ok := info.commits[path]; ok {
+		fi.Commit = &commit
+		fi.Changed = symbolsTouched(symbols, keys, info.changed[path])
+	}
+	if err := idx.Graph.ReplaceFileIndex(ctx, fi); err != nil {
+		log.Printf("indexing: replace graph for %s: %v", path, err)
 		return false
 	}
 
@@ -373,7 +426,7 @@ func (idx *Indexer) indexPath(ctx context.Context, orgID, repoID uuid.UUID, sha,
 // deindexPath removes path's symbol nodes and code chunks, for a path the
 // git service reports as no longer existing at the SHA being indexed.
 func (idx *Indexer) deindexPath(ctx context.Context, orgID, repoID uuid.UUID, path string) bool {
-	if err := idx.Graph.ReplaceFileSubgraph(ctx, orgID, repoID, path, nil, nil); err != nil {
+	if err := idx.Graph.RemoveFileIndex(ctx, orgID, repoID, path); err != nil {
 		log.Printf("indexing: remove subgraph for deleted %s: %v", path, err)
 		return false
 	}

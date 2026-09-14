@@ -59,6 +59,18 @@ func (f *fakeGitClient) GetBlob(_ context.Context, in *gitv1.GetBlobRequest, _ .
 	return &gitv1.GetBlobResponse{Content: content}, nil
 }
 
+// GetRepo reports main as the default branch, which is the branch every
+// event these fake-backed tests deliver is pushed to.
+func (f *fakeGitClient) GetRepo(_ context.Context, in *gitv1.GetRepoRequest, _ ...grpc.CallOption) (*gitv1.GetRepoResponse, error) {
+	return &gitv1.GetRepoResponse{Repo: &gitv1.Repo{Id: in.GetName(), DefaultBranch: "main"}}, nil
+}
+
+// ListCommits reports no commits: these tests exercise symbols and chunks,
+// not history, which the real-git-service tests cover.
+func (f *fakeGitClient) ListCommits(_ context.Context, _ *gitv1.ListCommitsRequest, _ ...grpc.CallOption) (*gitv1.ListCommitsResponse, error) {
+	return &gitv1.ListCommitsResponse{}, nil
+}
+
 func (f *fakeGitClient) GetDiff(_ context.Context, in *gitv1.GetDiffRequest, _ ...grpc.CallOption) (*gitv1.GetDiffResponse, error) {
 	return &gitv1.GetDiffResponse{Unified: f.diffs[in.GetFrom()+".."+in.GetTo()]}, nil
 }

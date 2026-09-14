@@ -215,10 +215,13 @@ func (s *Store) ReplaceFileSubgraph(ctx context.Context, orgID, repoID uuid.UUID
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
+	// The repository is part of the predicate: two repositories in one
+	// organization both have a main.go, and re-indexing one used to delete
+	// the other's symbols.
 	if _, err := tx.Exec(ctx, `
 		DELETE FROM graph.graph_nodes
-		WHERE org_id = $1 AND kind = 'symbol' AND attrs->>'path' = $2
-	`, orgID, path); err != nil {
+		WHERE org_id = $1 AND repo_id = $2 AND kind = 'symbol' AND attrs->>'path' = $3
+	`, orgID, repoID, path); err != nil {
 		return fmt.Errorf("delete stale symbols: %w", err)
 	}
 

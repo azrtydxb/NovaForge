@@ -28,20 +28,49 @@ type Symbol struct {
 	Signature string
 }
 
-// Reference is a call site naming another symbol.
+// Reference is a site naming another symbol: a call, or (in Go) a type
+// named through its package.
 type Reference struct {
 	FromPath string
 	ToName   string
 	Line     int
+
+	// Qualifier is the identifier before the dot in "x.Name" — an import's
+	// name or a variable, which only the file's imports can tell apart. It is
+	// empty for an unqualified call.
+	Qualifier string
+	// Selector is true for any "operand.Name" reference, including ones whose
+	// operand is not a plain identifier ("a.b.Method()"), which can only be
+	// method calls.
+	Selector bool
+}
+
+// Import is one import declaration of a source file.
+type Import struct {
+	// Name is the name the file refers to the package by: the explicit alias
+	// when there is one, otherwise the last element of Path.
+	Name string
+	Path string
+}
+
+// File is everything ParseFile extracts from one source file.
+type File struct {
+	Symbols    []Symbol
+	References []Reference
+	Imports    []Import
 }
 
 // langSpec configures extraction for one language.
 type langSpec struct {
-	language      *sitter.Language
-	definitionQ   string
-	referenceQ    string
-	extractDefs   func(node *sitter.Node, src []byte, path string, out *[]Symbol)
-	extractRefKey func(node *sitter.Node, src []byte) string
+	language    *sitter.Language
+	definitionQ string
+	// referenceQ captures references. A capture named "reference" is the
+	// referenced identifier itself; "selector" is a whole selector expression
+	// (operand.field) and "qualified" a Go qualified type (pkg.Type), both
+	// taken apart so the qualifier is kept.
+	referenceQ  string
+	importQ     string
+	extractDefs func(node *sitter.Node, src []byte, path string, out *[]Symbol)
 }
 
 var extByLang = map[string]*langSpec{}
@@ -58,35 +87,43 @@ func init() {
 // extension with no configured language returns empty slices and a nil
 // error, never a failure — an unrecognised file is simply not indexed.
 func Parse(path string, src []byte) ([]Symbol, []Reference, error) {
+	f, err := ParseFile(path, src)
+	return f.Symbols, f.References, err
+}
+
+// ParseFile is Parse with the file's imports as well, which the indexer
+// needs to tell a package-qualified reference from a method call and to know
+// which directory the package it names lives in.
+func ParseFile(path string, src []byte) (File, error) {
 	if len(src) > maxFileSize {
-		return nil, nil, nil
+		return File{}, nil
 	}
 
 	spec, ok := extByLang[strings.ToLower(filepath.Ext(path))]
 	if !ok {
-		return nil, nil, nil
+		return File{}, nil
 	}
 
 	parser := sitter.NewParser()
 	defer parser.Close()
 	if err := parser.SetLanguage(spec.language); err != nil {
-		return nil, nil, nil
+		return File{}, nil
 	}
 	tree := parser.Parse(src, nil)
 	if tree == nil {
-		return nil, nil, nil
+		return File{}, nil
 	}
 	defer tree.Close()
 
 	root := tree.RootNode()
 	if root == nil {
-		return nil, nil, nil
+		return File{}, nil
 	}
 	if errorNodeSpan(root) > uint(len(src))/2 {
 		// The grammar could not make sense of more than half the file —
 		// likely a generated blob or a file in an unrelated dialect. Skip
 		// it rather than index garbage.
-		return nil, nil, nil
+		return File{}, nil
 	}
 
 	var symbols []Symbol
@@ -113,21 +150,112 @@ func Parse(path string, src []byte) ([]Symbol, []Reference, error) {
 			defer q.Close()
 			cursor := sitter.NewQueryCursor()
 			defer cursor.Close()
+			names := q.CaptureNames()
 			matches := cursor.Matches(q, root, src)
 			for match := matches.Next(); match != nil; match = matches.Next() {
 				for _, cap := range match.Captures {
 					node := cap.Node
-					refs = append(refs, Reference{
-						FromPath: path,
-						ToName:   node.Utf8Text(src),
-						Line:     int(node.StartPosition().Row) + 1,
-					})
+					if ref, ok := referenceFrom(names[cap.Index], &node, src, path); ok {
+						refs = append(refs, ref)
+					}
 				}
 			}
 		}
 	}
 
-	return symbols, refs, nil
+	var imports []Import
+	if spec.importQ != "" {
+		q, qerr := sitter.NewQuery(spec.language, spec.importQ)
+		if qerr == nil {
+			defer q.Close()
+			cursor := sitter.NewQueryCursor()
+			defer cursor.Close()
+			matches := cursor.Matches(q, root, src)
+			for match := matches.Next(); match != nil; match = matches.Next() {
+				for _, cap := range match.Captures {
+					node := cap.Node
+					if imp, ok := goImport(&node, src); ok {
+						imports = append(imports, imp)
+					}
+				}
+			}
+		}
+	}
+
+	return File{Symbols: symbols, References: refs, Imports: imports}, nil
+}
+
+// referenceFrom turns one reference capture into a Reference. A selector or
+// qualified type is taken apart here rather than captured field by field,
+// because a query capturing both halves separately loses which operand
+// belonged to which field.
+func referenceFrom(capture string, node *sitter.Node, src []byte, path string) (Reference, bool) {
+	line := int(node.StartPosition().Row) + 1
+	switch capture {
+	case "selector":
+		field := node.ChildByFieldName("field")
+		operand := node.ChildByFieldName("operand")
+		if field == nil || operand == nil {
+			return Reference{}, false
+		}
+		ref := Reference{FromPath: path, ToName: field.Utf8Text(src), Line: line, Selector: true}
+		if operand.Kind() == "identifier" {
+			ref.Qualifier = operand.Utf8Text(src)
+		}
+		return ref, true
+	case "qualified":
+		pkg := node.ChildByFieldName("package")
+		name := node.ChildByFieldName("name")
+		if pkg == nil || name == nil {
+			return Reference{}, false
+		}
+		return Reference{FromPath: path, ToName: name.Utf8Text(src), Line: line, Qualifier: pkg.Utf8Text(src), Selector: true}, true
+	default:
+		return Reference{FromPath: path, ToName: node.Utf8Text(src), Line: line}, true
+	}
+}
+
+// goImport reads one import_spec. The name a file uses for an unaliased
+// import is the imported package's own name, which only that package's
+// source declares; the last path element is what it is by convention, with a
+// trailing major-version element ("/v2") skipped as Go's module rules do.
+func goImport(node *sitter.Node, src []byte) (Import, bool) {
+	pathNode := node.ChildByFieldName("path")
+	if pathNode == nil {
+		return Import{}, false
+	}
+	importPath := strings.Trim(pathNode.Utf8Text(src), "\"`")
+	if importPath == "" {
+		return Import{}, false
+	}
+	name := ""
+	if n := node.ChildByFieldName("name"); n != nil {
+		name = n.Utf8Text(src)
+	}
+	if name == "" {
+		elems := strings.Split(importPath, "/")
+		name = elems[len(elems)-1]
+		if len(elems) > 1 && isMajorVersion(name) {
+			name = elems[len(elems)-2]
+		}
+		name = strings.TrimSuffix(strings.TrimPrefix(name, "go-"), ".go")
+		if i := strings.IndexByte(name, '.'); i > 0 {
+			name = name[:i]
+		}
+	}
+	return Import{Name: name, Path: importPath}, true
+}
+
+func isMajorVersion(s string) bool {
+	if len(s) < 2 || s[0] != 'v' {
+		return false
+	}
+	for _, r := range s[1:] {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // errorNodeSpan sums the byte length of every ERROR node in the tree so
@@ -192,8 +320,10 @@ func goSpec() *langSpec {
 		`,
 		referenceQ: `
 			(call_expression function: (identifier) @reference)
-			(call_expression function: (selector_expression field: (field_identifier) @reference))
+			(call_expression function: (selector_expression) @selector)
+			(qualified_type) @qualified
 		`,
+		importQ:     `(import_spec) @import`,
 		extractDefs: extractGoDefs,
 	}
 }

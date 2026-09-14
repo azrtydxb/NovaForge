@@ -258,13 +258,15 @@ func (x *CodeChunk) GetScore() float32 {
 }
 
 type KnowledgeEntry struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Key           string                 `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
-	Kind          string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`
-	Title         string                 `protobuf:"bytes,4,opt,name=title,proto3" json:"title,omitempty"`
-	Body          string                 `protobuf:"bytes,5,opt,name=body,proto3" json:"body,omitempty"`
-	CreatedAt     string                 `protobuf:"bytes,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Id        string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Key       string                 `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
+	Kind      string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`
+	Title     string                 `protobuf:"bytes,4,opt,name=title,proto3" json:"title,omitempty"`
+	Body      string                 `protobuf:"bytes,5,opt,name=body,proto3" json:"body,omitempty"`
+	CreatedAt string                 `protobuf:"bytes,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	// The Agent Run that recorded the entry; empty when a person did.
+	SourceRunId   string `protobuf:"bytes,7,opt,name=source_run_id,json=sourceRunId,proto3" json:"source_run_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -337,6 +339,13 @@ func (x *KnowledgeEntry) GetBody() string {
 func (x *KnowledgeEntry) GetCreatedAt() string {
 	if x != nil {
 		return x.CreatedAt
+	}
+	return ""
+}
+
+func (x *KnowledgeEntry) GetSourceRunId() string {
+	if x != nil {
+		return x.SourceRunId
 	}
 	return ""
 }
@@ -826,8 +835,11 @@ func (x *TestsCoveringRequest) GetSymbol() string {
 }
 
 type TestsCoveringResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Tests         []string               `protobuf:"bytes,1,rep,name=tests,proto3" json:"tests,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Tests []string               `protobuf:"bytes,1,rep,name=tests,proto3" json:"tests,omitempty"`
+	// The covering test functions themselves (name and path in attrs), where
+	// tests carries only their files.
+	Nodes         []*Node `protobuf:"bytes,2,rep,name=nodes,proto3" json:"nodes,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -865,6 +877,13 @@ func (*TestsCoveringResponse) Descriptor() ([]byte, []int) {
 func (x *TestsCoveringResponse) GetTests() []string {
 	if x != nil {
 		return x.Tests
+	}
+	return nil
+}
+
+func (x *TestsCoveringResponse) GetNodes() []*Node {
+	if x != nil {
+		return x.Nodes
 	}
 	return nil
 }
@@ -922,8 +941,16 @@ func (x *LastChangedByRequest) GetSymbol() string {
 }
 
 type LastChangedByResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	WorkItemKey   string                 `protobuf:"bytes,1,opt,name=work_item_key,json=workItemKey,proto3" json:"work_item_key,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Empty when the most recent change names no Work Item: a commit pushed
+	// straight to the default branch has none, and none is invented for it.
+	WorkItemKey string `protobuf:"bytes,1,opt,name=work_item_key,json=workItemKey,proto3" json:"work_item_key,omitempty"`
+	CommitSha   string `protobuf:"bytes,2,opt,name=commit_sha,json=commitSha,proto3" json:"commit_sha,omitempty"`
+	Author      string `protobuf:"bytes,3,opt,name=author,proto3" json:"author,omitempty"`
+	ChangedAt   string `protobuf:"bytes,4,opt,name=changed_at,json=changedAt,proto3" json:"changed_at,omitempty"`
+	Message     string `protobuf:"bytes,5,opt,name=message,proto3" json:"message,omitempty"`
+	// Every recorded change, most recent first (commit nodes).
+	History       []*Node `protobuf:"bytes,6,rep,name=history,proto3" json:"history,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -965,6 +992,177 @@ func (x *LastChangedByResponse) GetWorkItemKey() string {
 	return ""
 }
 
+func (x *LastChangedByResponse) GetCommitSha() string {
+	if x != nil {
+		return x.CommitSha
+	}
+	return ""
+}
+
+func (x *LastChangedByResponse) GetAuthor() string {
+	if x != nil {
+		return x.Author
+	}
+	return ""
+}
+
+func (x *LastChangedByResponse) GetChangedAt() string {
+	if x != nil {
+		return x.ChangedAt
+	}
+	return ""
+}
+
+func (x *LastChangedByResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *LastChangedByResponse) GetHistory() []*Node {
+	if x != nil {
+		return x.History
+	}
+	return nil
+}
+
+type FileRelationsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RepoId        string                 `protobuf:"bytes,1,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	Path          string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FileRelationsRequest) Reset() {
+	*x = FileRelationsRequest{}
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FileRelationsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FileRelationsRequest) ProtoMessage() {}
+
+func (x *FileRelationsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FileRelationsRequest.ProtoReflect.Descriptor instead.
+func (*FileRelationsRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *FileRelationsRequest) GetRepoId() string {
+	if x != nil {
+		return x.RepoId
+	}
+	return ""
+}
+
+func (x *FileRelationsRequest) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+type FileRelationsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Symbols       []*Symbol              `protobuf:"bytes,1,rep,name=symbols,proto3" json:"symbols,omitempty"`
+	Imports       []*Node                `protobuf:"bytes,2,rep,name=imports,proto3" json:"imports,omitempty"`
+	ImportedBy    []*Node                `protobuf:"bytes,3,rep,name=imported_by,json=importedBy,proto3" json:"imported_by,omitempty"`
+	Dependents    []*Node                `protobuf:"bytes,4,rep,name=dependents,proto3" json:"dependents,omitempty"`
+	Tests         []*Node                `protobuf:"bytes,5,rep,name=tests,proto3" json:"tests,omitempty"`
+	History       []*Node                `protobuf:"bytes,6,rep,name=history,proto3" json:"history,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FileRelationsResponse) Reset() {
+	*x = FileRelationsResponse{}
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FileRelationsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FileRelationsResponse) ProtoMessage() {}
+
+func (x *FileRelationsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FileRelationsResponse.ProtoReflect.Descriptor instead.
+func (*FileRelationsResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *FileRelationsResponse) GetSymbols() []*Symbol {
+	if x != nil {
+		return x.Symbols
+	}
+	return nil
+}
+
+func (x *FileRelationsResponse) GetImports() []*Node {
+	if x != nil {
+		return x.Imports
+	}
+	return nil
+}
+
+func (x *FileRelationsResponse) GetImportedBy() []*Node {
+	if x != nil {
+		return x.ImportedBy
+	}
+	return nil
+}
+
+func (x *FileRelationsResponse) GetDependents() []*Node {
+	if x != nil {
+		return x.Dependents
+	}
+	return nil
+}
+
+func (x *FileRelationsResponse) GetTests() []*Node {
+	if x != nil {
+		return x.Tests
+	}
+	return nil
+}
+
+func (x *FileRelationsResponse) GetHistory() []*Node {
+	if x != nil {
+		return x.History
+	}
+	return nil
+}
+
 type SearchCodeRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	RepoId        string                 `protobuf:"bytes,1,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
@@ -976,7 +1174,7 @@ type SearchCodeRequest struct {
 
 func (x *SearchCodeRequest) Reset() {
 	*x = SearchCodeRequest{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[16]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -988,7 +1186,7 @@ func (x *SearchCodeRequest) String() string {
 func (*SearchCodeRequest) ProtoMessage() {}
 
 func (x *SearchCodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[16]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1001,7 +1199,7 @@ func (x *SearchCodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchCodeRequest.ProtoReflect.Descriptor instead.
 func (*SearchCodeRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{16}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *SearchCodeRequest) GetRepoId() string {
@@ -1038,7 +1236,7 @@ type SearchCodeResponse struct {
 
 func (x *SearchCodeResponse) Reset() {
 	*x = SearchCodeResponse{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[17]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1050,7 +1248,7 @@ func (x *SearchCodeResponse) String() string {
 func (*SearchCodeResponse) ProtoMessage() {}
 
 func (x *SearchCodeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[17]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1063,7 +1261,7 @@ func (x *SearchCodeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchCodeResponse.ProtoReflect.Descriptor instead.
 func (*SearchCodeResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{17}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *SearchCodeResponse) GetChunks() []*CodeChunk {
@@ -1091,7 +1289,7 @@ type AssembleContextRequest struct {
 
 func (x *AssembleContextRequest) Reset() {
 	*x = AssembleContextRequest{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[18]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1103,7 +1301,7 @@ func (x *AssembleContextRequest) String() string {
 func (*AssembleContextRequest) ProtoMessage() {}
 
 func (x *AssembleContextRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[18]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1116,7 +1314,7 @@ func (x *AssembleContextRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AssembleContextRequest.ProtoReflect.Descriptor instead.
 func (*AssembleContextRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{18}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *AssembleContextRequest) GetRepoId() string {
@@ -1149,7 +1347,7 @@ type AssembleContextResponse struct {
 
 func (x *AssembleContextResponse) Reset() {
 	*x = AssembleContextResponse{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[19]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1161,7 +1359,7 @@ func (x *AssembleContextResponse) String() string {
 func (*AssembleContextResponse) ProtoMessage() {}
 
 func (x *AssembleContextResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[19]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1174,7 +1372,7 @@ func (x *AssembleContextResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AssembleContextResponse.ProtoReflect.Descriptor instead.
 func (*AssembleContextResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{19}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *AssembleContextResponse) GetBundle() *ContextBundle {
@@ -1185,19 +1383,22 @@ func (x *AssembleContextResponse) GetBundle() *ContextBundle {
 }
 
 type RecordKnowledgeRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RepoId        string                 `protobuf:"bytes,1,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
-	Key           string                 `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
-	Kind          string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`
-	Title         string                 `protobuf:"bytes,4,opt,name=title,proto3" json:"title,omitempty"`
-	Body          string                 `protobuf:"bytes,5,opt,name=body,proto3" json:"body,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	RepoId string                 `protobuf:"bytes,1,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	Key    string                 `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
+	Kind   string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`
+	Title  string                 `protobuf:"bytes,4,opt,name=title,proto3" json:"title,omitempty"`
+	Body   string                 `protobuf:"bytes,5,opt,name=body,proto3" json:"body,omitempty"`
+	// Set by agent-runtime for an entry an Agent Run recorded, so the entry
+	// says which run's evidence it came from.
+	SourceRunId   string `protobuf:"bytes,6,opt,name=source_run_id,json=sourceRunId,proto3" json:"source_run_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RecordKnowledgeRequest) Reset() {
 	*x = RecordKnowledgeRequest{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[20]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1209,7 +1410,7 @@ func (x *RecordKnowledgeRequest) String() string {
 func (*RecordKnowledgeRequest) ProtoMessage() {}
 
 func (x *RecordKnowledgeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[20]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1222,7 +1423,7 @@ func (x *RecordKnowledgeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordKnowledgeRequest.ProtoReflect.Descriptor instead.
 func (*RecordKnowledgeRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{20}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *RecordKnowledgeRequest) GetRepoId() string {
@@ -1260,6 +1461,13 @@ func (x *RecordKnowledgeRequest) GetBody() string {
 	return ""
 }
 
+func (x *RecordKnowledgeRequest) GetSourceRunId() string {
+	if x != nil {
+		return x.SourceRunId
+	}
+	return ""
+}
+
 type RecordKnowledgeResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -1269,7 +1477,7 @@ type RecordKnowledgeResponse struct {
 
 func (x *RecordKnowledgeResponse) Reset() {
 	*x = RecordKnowledgeResponse{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[21]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1281,7 +1489,7 @@ func (x *RecordKnowledgeResponse) String() string {
 func (*RecordKnowledgeResponse) ProtoMessage() {}
 
 func (x *RecordKnowledgeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[21]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1294,7 +1502,7 @@ func (x *RecordKnowledgeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordKnowledgeResponse.ProtoReflect.Descriptor instead.
 func (*RecordKnowledgeResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{21}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *RecordKnowledgeResponse) GetId() string {
@@ -1315,7 +1523,7 @@ type SearchKnowledgeRequest struct {
 
 func (x *SearchKnowledgeRequest) Reset() {
 	*x = SearchKnowledgeRequest{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[22]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1327,7 +1535,7 @@ func (x *SearchKnowledgeRequest) String() string {
 func (*SearchKnowledgeRequest) ProtoMessage() {}
 
 func (x *SearchKnowledgeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[22]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1340,7 +1548,7 @@ func (x *SearchKnowledgeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchKnowledgeRequest.ProtoReflect.Descriptor instead.
 func (*SearchKnowledgeRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{22}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *SearchKnowledgeRequest) GetRepoId() string {
@@ -1373,7 +1581,7 @@ type SearchKnowledgeResponse struct {
 
 func (x *SearchKnowledgeResponse) Reset() {
 	*x = SearchKnowledgeResponse{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[23]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1385,7 +1593,7 @@ func (x *SearchKnowledgeResponse) String() string {
 func (*SearchKnowledgeResponse) ProtoMessage() {}
 
 func (x *SearchKnowledgeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[23]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1398,7 +1606,7 @@ func (x *SearchKnowledgeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchKnowledgeResponse.ProtoReflect.Descriptor instead.
 func (*SearchKnowledgeResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{23}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *SearchKnowledgeResponse) GetEntries() []*KnowledgeEntry {
@@ -1437,7 +1645,7 @@ const file_novaforge_graph_v1_graph_proto_rawDesc = "" +
 	"start_line\x18\x02 \x01(\x05R\tstartLine\x12\x19\n" +
 	"\bend_line\x18\x03 \x01(\x05R\aendLine\x12\x12\n" +
 	"\x04text\x18\x04 \x01(\tR\x04text\x12\x14\n" +
-	"\x05score\x18\x05 \x01(\x02R\x05score\"\x8f\x01\n" +
+	"\x05score\x18\x05 \x01(\x02R\x05score\"\xb3\x01\n" +
 	"\x0eKnowledgeEntry\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x10\n" +
 	"\x03key\x18\x02 \x01(\tR\x03key\x12\x12\n" +
@@ -1445,7 +1653,8 @@ const file_novaforge_graph_v1_graph_proto_rawDesc = "" +
 	"\x05title\x18\x04 \x01(\tR\x05title\x12\x12\n" +
 	"\x04body\x18\x05 \x01(\tR\x04body\x12\x1d\n" +
 	"\n" +
-	"created_at\x18\x06 \x01(\tR\tcreatedAt\"\x8a\x01\n" +
+	"created_at\x18\x06 \x01(\tR\tcreatedAt\x12\"\n" +
+	"\rsource_run_id\x18\a \x01(\tR\vsourceRunId\"\x8a\x01\n" +
 	"\x0eContextSnippet\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x1d\n" +
 	"\n" +
@@ -1475,14 +1684,35 @@ const file_novaforge_graph_v1_graph_proto_rawDesc = "" +
 	"\x05nodes\x18\x01 \x03(\v2\x18.novaforge.graph.v1.NodeR\x05nodes\"G\n" +
 	"\x14TestsCoveringRequest\x12\x17\n" +
 	"\arepo_id\x18\x01 \x01(\tR\x06repoId\x12\x16\n" +
-	"\x06symbol\x18\x02 \x01(\tR\x06symbol\"-\n" +
+	"\x06symbol\x18\x02 \x01(\tR\x06symbol\"]\n" +
 	"\x15TestsCoveringResponse\x12\x14\n" +
-	"\x05tests\x18\x01 \x03(\tR\x05tests\"G\n" +
+	"\x05tests\x18\x01 \x03(\tR\x05tests\x12.\n" +
+	"\x05nodes\x18\x02 \x03(\v2\x18.novaforge.graph.v1.NodeR\x05nodes\"G\n" +
 	"\x14LastChangedByRequest\x12\x17\n" +
 	"\arepo_id\x18\x01 \x01(\tR\x06repoId\x12\x16\n" +
-	"\x06symbol\x18\x02 \x01(\tR\x06symbol\";\n" +
+	"\x06symbol\x18\x02 \x01(\tR\x06symbol\"\xdf\x01\n" +
 	"\x15LastChangedByResponse\x12\"\n" +
-	"\rwork_item_key\x18\x01 \x01(\tR\vworkItemKey\"P\n" +
+	"\rwork_item_key\x18\x01 \x01(\tR\vworkItemKey\x12\x1d\n" +
+	"\n" +
+	"commit_sha\x18\x02 \x01(\tR\tcommitSha\x12\x16\n" +
+	"\x06author\x18\x03 \x01(\tR\x06author\x12\x1d\n" +
+	"\n" +
+	"changed_at\x18\x04 \x01(\tR\tchangedAt\x12\x18\n" +
+	"\amessage\x18\x05 \x01(\tR\amessage\x122\n" +
+	"\ahistory\x18\x06 \x03(\v2\x18.novaforge.graph.v1.NodeR\ahistory\"C\n" +
+	"\x14FileRelationsRequest\x12\x17\n" +
+	"\arepo_id\x18\x01 \x01(\tR\x06repoId\x12\x12\n" +
+	"\x04path\x18\x02 \x01(\tR\x04path\"\xda\x02\n" +
+	"\x15FileRelationsResponse\x124\n" +
+	"\asymbols\x18\x01 \x03(\v2\x1a.novaforge.graph.v1.SymbolR\asymbols\x122\n" +
+	"\aimports\x18\x02 \x03(\v2\x18.novaforge.graph.v1.NodeR\aimports\x129\n" +
+	"\vimported_by\x18\x03 \x03(\v2\x18.novaforge.graph.v1.NodeR\n" +
+	"importedBy\x128\n" +
+	"\n" +
+	"dependents\x18\x04 \x03(\v2\x18.novaforge.graph.v1.NodeR\n" +
+	"dependents\x12.\n" +
+	"\x05tests\x18\x05 \x03(\v2\x18.novaforge.graph.v1.NodeR\x05tests\x122\n" +
+	"\ahistory\x18\x06 \x03(\v2\x18.novaforge.graph.v1.NodeR\ahistory\"P\n" +
 	"\x11SearchCodeRequest\x12\x17\n" +
 	"\arepo_id\x18\x01 \x01(\tR\x06repoId\x12\x14\n" +
 	"\x05query\x18\x02 \x01(\tR\x05query\x12\f\n" +
@@ -1495,13 +1725,14 @@ const file_novaforge_graph_v1_graph_proto_rawDesc = "" +
 	"\rwork_item_key\x18\x02 \x01(\tR\vworkItemKey\x12!\n" +
 	"\ftoken_budget\x18\x03 \x01(\x05R\vtokenBudget\"T\n" +
 	"\x17AssembleContextResponse\x129\n" +
-	"\x06bundle\x18\x01 \x01(\v2!.novaforge.graph.v1.ContextBundleR\x06bundle\"\x81\x01\n" +
+	"\x06bundle\x18\x01 \x01(\v2!.novaforge.graph.v1.ContextBundleR\x06bundle\"\xa5\x01\n" +
 	"\x16RecordKnowledgeRequest\x12\x17\n" +
 	"\arepo_id\x18\x01 \x01(\tR\x06repoId\x12\x10\n" +
 	"\x03key\x18\x02 \x01(\tR\x03key\x12\x12\n" +
 	"\x04kind\x18\x03 \x01(\tR\x04kind\x12\x14\n" +
 	"\x05title\x18\x04 \x01(\tR\x05title\x12\x12\n" +
-	"\x04body\x18\x05 \x01(\tR\x04body\")\n" +
+	"\x04body\x18\x05 \x01(\tR\x04body\x12\"\n" +
+	"\rsource_run_id\x18\x06 \x01(\tR\vsourceRunId\")\n" +
 	"\x17RecordKnowledgeResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"U\n" +
 	"\x16SearchKnowledgeRequest\x12\x17\n" +
@@ -1509,7 +1740,7 @@ const file_novaforge_graph_v1_graph_proto_rawDesc = "" +
 	"\x05query\x18\x02 \x01(\tR\x05query\x12\f\n" +
 	"\x01k\x18\x03 \x01(\x05R\x01k\"W\n" +
 	"\x17SearchKnowledgeResponse\x12<\n" +
-	"\aentries\x18\x01 \x03(\v2\".novaforge.graph.v1.KnowledgeEntryR\aentries2\x95\a\n" +
+	"\aentries\x18\x01 \x03(\v2\".novaforge.graph.v1.KnowledgeEntryR\aentries2\xfb\a\n" +
 	"\fGraphService\x12X\n" +
 	"\tGetSymbol\x12$.novaforge.graph.v1.GetSymbolRequest\x1a%.novaforge.graph.v1.GetSymbolResponse\x12[\n" +
 	"\n" +
@@ -1521,7 +1752,8 @@ const file_novaforge_graph_v1_graph_proto_rawDesc = "" +
 	"SearchCode\x12%.novaforge.graph.v1.SearchCodeRequest\x1a&.novaforge.graph.v1.SearchCodeResponse\x12j\n" +
 	"\x0fAssembleContext\x12*.novaforge.graph.v1.AssembleContextRequest\x1a+.novaforge.graph.v1.AssembleContextResponse\x12j\n" +
 	"\x0fRecordKnowledge\x12*.novaforge.graph.v1.RecordKnowledgeRequest\x1a+.novaforge.graph.v1.RecordKnowledgeResponse\x12j\n" +
-	"\x0fSearchKnowledge\x12*.novaforge.graph.v1.SearchKnowledgeRequest\x1a+.novaforge.graph.v1.SearchKnowledgeResponseB\xcd\x01\n" +
+	"\x0fSearchKnowledge\x12*.novaforge.graph.v1.SearchKnowledgeRequest\x1a+.novaforge.graph.v1.SearchKnowledgeResponse\x12d\n" +
+	"\rFileRelations\x12(.novaforge.graph.v1.FileRelationsRequest\x1a).novaforge.graph.v1.FileRelationsResponseB\xcd\x01\n" +
 	"\x16com.novaforge.graph.v1B\n" +
 	"GraphProtoP\x01Z=github.com/novaforge/novaforge/gen/novaforge/graph/v1;graphv1\xa2\x02\x03NGX\xaa\x02\x12Novaforge.Graph.V1\xca\x02\x12Novaforge\\Graph\\V1\xe2\x02\x1eNovaforge\\Graph\\V1\\GPBMetadata\xea\x02\x14Novaforge::Graph::V1b\x06proto3"
 
@@ -1537,7 +1769,7 @@ func file_novaforge_graph_v1_graph_proto_rawDescGZIP() []byte {
 	return file_novaforge_graph_v1_graph_proto_rawDescData
 }
 
-var file_novaforge_graph_v1_graph_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_novaforge_graph_v1_graph_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
 var file_novaforge_graph_v1_graph_proto_goTypes = []any{
 	(*Symbol)(nil),                  // 0: novaforge.graph.v1.Symbol
 	(*Node)(nil),                    // 1: novaforge.graph.v1.Node
@@ -1555,49 +1787,61 @@ var file_novaforge_graph_v1_graph_proto_goTypes = []any{
 	(*TestsCoveringResponse)(nil),   // 13: novaforge.graph.v1.TestsCoveringResponse
 	(*LastChangedByRequest)(nil),    // 14: novaforge.graph.v1.LastChangedByRequest
 	(*LastChangedByResponse)(nil),   // 15: novaforge.graph.v1.LastChangedByResponse
-	(*SearchCodeRequest)(nil),       // 16: novaforge.graph.v1.SearchCodeRequest
-	(*SearchCodeResponse)(nil),      // 17: novaforge.graph.v1.SearchCodeResponse
-	(*AssembleContextRequest)(nil),  // 18: novaforge.graph.v1.AssembleContextRequest
-	(*AssembleContextResponse)(nil), // 19: novaforge.graph.v1.AssembleContextResponse
-	(*RecordKnowledgeRequest)(nil),  // 20: novaforge.graph.v1.RecordKnowledgeRequest
-	(*RecordKnowledgeResponse)(nil), // 21: novaforge.graph.v1.RecordKnowledgeResponse
-	(*SearchKnowledgeRequest)(nil),  // 22: novaforge.graph.v1.SearchKnowledgeRequest
-	(*SearchKnowledgeResponse)(nil), // 23: novaforge.graph.v1.SearchKnowledgeResponse
-	nil,                             // 24: novaforge.graph.v1.Node.AttrsEntry
+	(*FileRelationsRequest)(nil),    // 16: novaforge.graph.v1.FileRelationsRequest
+	(*FileRelationsResponse)(nil),   // 17: novaforge.graph.v1.FileRelationsResponse
+	(*SearchCodeRequest)(nil),       // 18: novaforge.graph.v1.SearchCodeRequest
+	(*SearchCodeResponse)(nil),      // 19: novaforge.graph.v1.SearchCodeResponse
+	(*AssembleContextRequest)(nil),  // 20: novaforge.graph.v1.AssembleContextRequest
+	(*AssembleContextResponse)(nil), // 21: novaforge.graph.v1.AssembleContextResponse
+	(*RecordKnowledgeRequest)(nil),  // 22: novaforge.graph.v1.RecordKnowledgeRequest
+	(*RecordKnowledgeResponse)(nil), // 23: novaforge.graph.v1.RecordKnowledgeResponse
+	(*SearchKnowledgeRequest)(nil),  // 24: novaforge.graph.v1.SearchKnowledgeRequest
+	(*SearchKnowledgeResponse)(nil), // 25: novaforge.graph.v1.SearchKnowledgeResponse
+	nil,                             // 26: novaforge.graph.v1.Node.AttrsEntry
 }
 var file_novaforge_graph_v1_graph_proto_depIdxs = []int32{
-	24, // 0: novaforge.graph.v1.Node.attrs:type_name -> novaforge.graph.v1.Node.AttrsEntry
+	26, // 0: novaforge.graph.v1.Node.attrs:type_name -> novaforge.graph.v1.Node.AttrsEntry
 	4,  // 1: novaforge.graph.v1.ContextBundle.files:type_name -> novaforge.graph.v1.ContextSnippet
 	3,  // 2: novaforge.graph.v1.ContextBundle.knowledge:type_name -> novaforge.graph.v1.KnowledgeEntry
 	0,  // 3: novaforge.graph.v1.GetSymbolResponse.symbol:type_name -> novaforge.graph.v1.Symbol
 	1,  // 4: novaforge.graph.v1.DependentsResponse.nodes:type_name -> novaforge.graph.v1.Node
 	1,  // 5: novaforge.graph.v1.DependenciesResponse.nodes:type_name -> novaforge.graph.v1.Node
-	2,  // 6: novaforge.graph.v1.SearchCodeResponse.chunks:type_name -> novaforge.graph.v1.CodeChunk
-	5,  // 7: novaforge.graph.v1.AssembleContextResponse.bundle:type_name -> novaforge.graph.v1.ContextBundle
-	3,  // 8: novaforge.graph.v1.SearchKnowledgeResponse.entries:type_name -> novaforge.graph.v1.KnowledgeEntry
-	6,  // 9: novaforge.graph.v1.GraphService.GetSymbol:input_type -> novaforge.graph.v1.GetSymbolRequest
-	8,  // 10: novaforge.graph.v1.GraphService.Dependents:input_type -> novaforge.graph.v1.DependentsRequest
-	10, // 11: novaforge.graph.v1.GraphService.Dependencies:input_type -> novaforge.graph.v1.DependenciesRequest
-	12, // 12: novaforge.graph.v1.GraphService.TestsCovering:input_type -> novaforge.graph.v1.TestsCoveringRequest
-	14, // 13: novaforge.graph.v1.GraphService.LastChangedBy:input_type -> novaforge.graph.v1.LastChangedByRequest
-	16, // 14: novaforge.graph.v1.GraphService.SearchCode:input_type -> novaforge.graph.v1.SearchCodeRequest
-	18, // 15: novaforge.graph.v1.GraphService.AssembleContext:input_type -> novaforge.graph.v1.AssembleContextRequest
-	20, // 16: novaforge.graph.v1.GraphService.RecordKnowledge:input_type -> novaforge.graph.v1.RecordKnowledgeRequest
-	22, // 17: novaforge.graph.v1.GraphService.SearchKnowledge:input_type -> novaforge.graph.v1.SearchKnowledgeRequest
-	7,  // 18: novaforge.graph.v1.GraphService.GetSymbol:output_type -> novaforge.graph.v1.GetSymbolResponse
-	9,  // 19: novaforge.graph.v1.GraphService.Dependents:output_type -> novaforge.graph.v1.DependentsResponse
-	11, // 20: novaforge.graph.v1.GraphService.Dependencies:output_type -> novaforge.graph.v1.DependenciesResponse
-	13, // 21: novaforge.graph.v1.GraphService.TestsCovering:output_type -> novaforge.graph.v1.TestsCoveringResponse
-	15, // 22: novaforge.graph.v1.GraphService.LastChangedBy:output_type -> novaforge.graph.v1.LastChangedByResponse
-	17, // 23: novaforge.graph.v1.GraphService.SearchCode:output_type -> novaforge.graph.v1.SearchCodeResponse
-	19, // 24: novaforge.graph.v1.GraphService.AssembleContext:output_type -> novaforge.graph.v1.AssembleContextResponse
-	21, // 25: novaforge.graph.v1.GraphService.RecordKnowledge:output_type -> novaforge.graph.v1.RecordKnowledgeResponse
-	23, // 26: novaforge.graph.v1.GraphService.SearchKnowledge:output_type -> novaforge.graph.v1.SearchKnowledgeResponse
-	18, // [18:27] is the sub-list for method output_type
-	9,  // [9:18] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	1,  // 6: novaforge.graph.v1.TestsCoveringResponse.nodes:type_name -> novaforge.graph.v1.Node
+	1,  // 7: novaforge.graph.v1.LastChangedByResponse.history:type_name -> novaforge.graph.v1.Node
+	0,  // 8: novaforge.graph.v1.FileRelationsResponse.symbols:type_name -> novaforge.graph.v1.Symbol
+	1,  // 9: novaforge.graph.v1.FileRelationsResponse.imports:type_name -> novaforge.graph.v1.Node
+	1,  // 10: novaforge.graph.v1.FileRelationsResponse.imported_by:type_name -> novaforge.graph.v1.Node
+	1,  // 11: novaforge.graph.v1.FileRelationsResponse.dependents:type_name -> novaforge.graph.v1.Node
+	1,  // 12: novaforge.graph.v1.FileRelationsResponse.tests:type_name -> novaforge.graph.v1.Node
+	1,  // 13: novaforge.graph.v1.FileRelationsResponse.history:type_name -> novaforge.graph.v1.Node
+	2,  // 14: novaforge.graph.v1.SearchCodeResponse.chunks:type_name -> novaforge.graph.v1.CodeChunk
+	5,  // 15: novaforge.graph.v1.AssembleContextResponse.bundle:type_name -> novaforge.graph.v1.ContextBundle
+	3,  // 16: novaforge.graph.v1.SearchKnowledgeResponse.entries:type_name -> novaforge.graph.v1.KnowledgeEntry
+	6,  // 17: novaforge.graph.v1.GraphService.GetSymbol:input_type -> novaforge.graph.v1.GetSymbolRequest
+	8,  // 18: novaforge.graph.v1.GraphService.Dependents:input_type -> novaforge.graph.v1.DependentsRequest
+	10, // 19: novaforge.graph.v1.GraphService.Dependencies:input_type -> novaforge.graph.v1.DependenciesRequest
+	12, // 20: novaforge.graph.v1.GraphService.TestsCovering:input_type -> novaforge.graph.v1.TestsCoveringRequest
+	14, // 21: novaforge.graph.v1.GraphService.LastChangedBy:input_type -> novaforge.graph.v1.LastChangedByRequest
+	18, // 22: novaforge.graph.v1.GraphService.SearchCode:input_type -> novaforge.graph.v1.SearchCodeRequest
+	20, // 23: novaforge.graph.v1.GraphService.AssembleContext:input_type -> novaforge.graph.v1.AssembleContextRequest
+	22, // 24: novaforge.graph.v1.GraphService.RecordKnowledge:input_type -> novaforge.graph.v1.RecordKnowledgeRequest
+	24, // 25: novaforge.graph.v1.GraphService.SearchKnowledge:input_type -> novaforge.graph.v1.SearchKnowledgeRequest
+	16, // 26: novaforge.graph.v1.GraphService.FileRelations:input_type -> novaforge.graph.v1.FileRelationsRequest
+	7,  // 27: novaforge.graph.v1.GraphService.GetSymbol:output_type -> novaforge.graph.v1.GetSymbolResponse
+	9,  // 28: novaforge.graph.v1.GraphService.Dependents:output_type -> novaforge.graph.v1.DependentsResponse
+	11, // 29: novaforge.graph.v1.GraphService.Dependencies:output_type -> novaforge.graph.v1.DependenciesResponse
+	13, // 30: novaforge.graph.v1.GraphService.TestsCovering:output_type -> novaforge.graph.v1.TestsCoveringResponse
+	15, // 31: novaforge.graph.v1.GraphService.LastChangedBy:output_type -> novaforge.graph.v1.LastChangedByResponse
+	19, // 32: novaforge.graph.v1.GraphService.SearchCode:output_type -> novaforge.graph.v1.SearchCodeResponse
+	21, // 33: novaforge.graph.v1.GraphService.AssembleContext:output_type -> novaforge.graph.v1.AssembleContextResponse
+	23, // 34: novaforge.graph.v1.GraphService.RecordKnowledge:output_type -> novaforge.graph.v1.RecordKnowledgeResponse
+	25, // 35: novaforge.graph.v1.GraphService.SearchKnowledge:output_type -> novaforge.graph.v1.SearchKnowledgeResponse
+	17, // 36: novaforge.graph.v1.GraphService.FileRelations:output_type -> novaforge.graph.v1.FileRelationsResponse
+	27, // [27:37] is the sub-list for method output_type
+	17, // [17:27] is the sub-list for method input_type
+	17, // [17:17] is the sub-list for extension type_name
+	17, // [17:17] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_novaforge_graph_v1_graph_proto_init() }
@@ -1611,7 +1855,7 @@ func file_novaforge_graph_v1_graph_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_novaforge_graph_v1_graph_proto_rawDesc), len(file_novaforge_graph_v1_graph_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   25,
+			NumMessages:   27,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
