@@ -1026,8 +1026,12 @@ func (x *SearchCodeRequest) GetK() int32 {
 }
 
 type SearchCodeResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Chunks        []*CodeChunk           `protobuf:"bytes,1,rep,name=chunks,proto3" json:"chunks,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Chunks []*CodeChunk           `protobuf:"bytes,1,rep,name=chunks,proto3" json:"chunks,omitempty"`
+	// How the results were found: "semantic" (nearest embeddings) or "lexical"
+	// (a substring match, used when no embedding model answered). A caller
+	// cannot tell the two apart from the chunks, and they mean different things.
+	Mode          string `protobuf:"bytes,2,opt,name=mode,proto3" json:"mode,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1067,6 +1071,13 @@ func (x *SearchCodeResponse) GetChunks() []*CodeChunk {
 		return x.Chunks
 	}
 	return nil
+}
+
+func (x *SearchCodeResponse) GetMode() string {
+	if x != nil {
+		return x.Mode
+	}
+	return ""
 }
 
 type AssembleContextRequest struct {
@@ -1475,9 +1486,10 @@ const file_novaforge_graph_v1_graph_proto_rawDesc = "" +
 	"\x11SearchCodeRequest\x12\x17\n" +
 	"\arepo_id\x18\x01 \x01(\tR\x06repoId\x12\x14\n" +
 	"\x05query\x18\x02 \x01(\tR\x05query\x12\f\n" +
-	"\x01k\x18\x03 \x01(\x05R\x01k\"K\n" +
+	"\x01k\x18\x03 \x01(\x05R\x01k\"_\n" +
 	"\x12SearchCodeResponse\x125\n" +
-	"\x06chunks\x18\x01 \x03(\v2\x1d.novaforge.graph.v1.CodeChunkR\x06chunks\"x\n" +
+	"\x06chunks\x18\x01 \x03(\v2\x1d.novaforge.graph.v1.CodeChunkR\x06chunks\x12\x12\n" +
+	"\x04mode\x18\x02 \x01(\tR\x04mode\"x\n" +
 	"\x16AssembleContextRequest\x12\x17\n" +
 	"\arepo_id\x18\x01 \x01(\tR\x06repoId\x12\"\n" +
 	"\rwork_item_key\x18\x02 \x01(\tR\vworkItemKey\x12!\n" +

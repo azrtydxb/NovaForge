@@ -115,6 +115,10 @@ message SearchCodeRequest {
 }
 message SearchCodeResponse {
   repeated CodeChunk chunks = 1;
+  // How the results were found: "semantic" (nearest embeddings) or "lexical"
+  // (a substring match, used when no embedding model answered). A caller
+  // cannot tell the two apart from the chunks, and they mean different things.
+  string mode = 2;
 }
 
 message AssembleContextRequest {

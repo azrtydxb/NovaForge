@@ -3,6 +3,8 @@ package edge
 import (
 	"errors"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -153,6 +155,41 @@ func addPlatformHandlers(
 		WriteJSON(wr, http.StatusOK, map[string]any{"entries": out})
 	}
 
+	// searchCode is the code index's only door for a person. The SearchCode
+	// RPC was reachable by agents and MCP clients but by no route, so nobody
+	// could see whether a push had ever been indexed — and none had.
+	h["searchCode"] = func(wr http.ResponseWriter, r *http.Request) {
+		q := strings.TrimSpace(r.URL.Query().Get("q"))
+		if q == "" {
+			WriteError(wr, http.StatusBadRequest, errMissingQuery)
+			return
+		}
+		k := codeSearchLimit
+		if raw := r.URL.Query().Get("k"); raw != "" {
+			n, err := strconv.Atoi(raw)
+			if err != nil || n < 1 || n > codeSearchLimit {
+				WriteError(wr, http.StatusBadRequest, errBadSearchLimit)
+				return
+			}
+			k = n
+		}
+		rid, err := repoID(r)
+		if err != nil {
+			WriteError(wr, StatusFromGRPC(err), err)
+			return
+		}
+		resp, err := graph.SearchCode(r.Context(), &graphv1.SearchCodeRequest{
+			RepoId: rid,
+			Query:  q,
+			K:      int32(k),
+		})
+		if err != nil {
+			WriteError(wr, StatusFromGRPC(err), err)
+			return
+		}
+		WriteJSON(wr, http.StatusOK, SearchCodeJSON(resp))
+	}
+
 	// getSymbolRelations answers the questions a file tree cannot: what this
 	// depends on, what depends on it, what tests cover it, and which Work
 	// Item last changed it. They are four RPCs because the graph stores four
@@ -250,6 +287,31 @@ func humanAction(a approvals.Action) string {
 	}
 	return string(a)
 }
+
+// SearchCodeJSON renders a code search. results is always a list, never null,
+// and mode says whether the results are nearest by meaning ("semantic") or a
+// substring match made because no embedding model answered ("lexical").
+func SearchCodeJSON(resp *graphv1.SearchCodeResponse) map[string]any {
+	results := make([]map[string]any, 0, len(resp.GetChunks()))
+	for _, c := range resp.GetChunks() {
+		results = append(results, map[string]any{
+			"path":       c.GetPath(),
+			"start_line": c.GetStartLine(),
+			"end_line":   c.GetEndLine(),
+			"score":      c.GetScore(),
+			"text":       c.GetText(),
+		})
+	}
+	return map[string]any{"mode": resp.GetMode(), "results": results}
+}
+
+// codeSearchLimit bounds a code search: enough to scan, not an export.
+const codeSearchLimit = 25
+
+var (
+	errMissingQuery   = errors.New("q is required")
+	errBadSearchLimit = errors.New("k must be a number from 1 to 25")
+)
 
 // errMissingSymbol is returned when a symbol lookup names nothing.
 var errMissingSymbol = errors.New("name is required")

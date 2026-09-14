@@ -2,6 +2,7 @@ package graph
 
 import (
 	"context"
+	"log"
 	"sort"
 	"time"
 
@@ -340,11 +341,16 @@ func (s *GRPCServer) SearchCode(ctx context.Context, req *graphv1.SearchCodeRequ
 		vecs, err := s.Embedder.Embed(ctx, []string{req.GetQuery()})
 		if err == nil && len(vecs) == 1 {
 			ctx = authz.WithScope(ctx, authz.Scope{OrgID: orgID, ActorKind: "service"})
-			chunks, err := s.Vectors.Search(ctx, orgID, repoID, vecs[0], k)
-			if err == nil {
-				return &graphv1.SearchCodeResponse{Chunks: toProtoChunks(chunks)}, nil
+			chunks, serr := s.Vectors.Search(ctx, orgID, repoID, vecs[0], k)
+			if serr == nil {
+				return &graphv1.SearchCodeResponse{Chunks: toProtoChunks(chunks), Mode: "semantic"}, nil
 			}
+			err = serr
 		}
+		// Falling back silently is how a broken embedder hid: the caller got
+		// an empty lexical answer to a semantic question and could not know.
+		// The fallback stays, but it is logged and the response names it.
+		log.Printf("graph: semantic code search unavailable, answering lexically: %v", err)
 	}
 
 	rows, err := s.Store.pool.Query(ctx, `
@@ -358,7 +364,7 @@ func (s *GRPCServer) SearchCode(ctx context.Context, req *graphv1.SearchCodeRequ
 	}
 	defer rows.Close()
 
-	resp := &graphv1.SearchCodeResponse{}
+	resp := &graphv1.SearchCodeResponse{Mode: "lexical"}
 	for rows.Next() {
 		var path, text string
 		var start, end int
