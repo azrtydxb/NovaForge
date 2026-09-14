@@ -100,12 +100,21 @@ func main() {
 	// Auto-merge is considered after every review submission, and only ever
 	// merges through the same gate check a person's merge passes.
 	if cfg.GitAddr != "" && cfg.GatesAddr != "" {
-		gitConn, err := grpc.NewClient(cfg.GitAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		// A merge is asked for by a person, and the gate check and the git merge
+		// it leads to are made on their behalf: their credential is forwarded.
+		// Without it the gate controller received an anonymous call, refused
+		// it with "no authorization scope", and every merge on the platform
+		// was blocked — failing closed, but for a reason that had nothing to
+		// do with the run's gates. Background callers (the maintenance sweep)
+		// have no incoming credential and attach a service token themselves.
+		gitConn, err := grpc.NewClient(cfg.GitAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithChainUnaryInterceptor(svcauth.ForwardIncomingCredential))
 		if err != nil {
 			log.Fatalf("work-reviews: dial git-platform: %v", err)
 		}
 		defer gitConn.Close()
-		gatesConn, err := grpc.NewClient(cfg.GatesAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		gatesConn, err := grpc.NewClient(cfg.GatesAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithChainUnaryInterceptor(svcauth.ForwardIncomingCredential))
 		if err != nil {
 			log.Fatalf("work-reviews: dial gates: %v", err)
 		}
