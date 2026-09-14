@@ -12,29 +12,6 @@ import (
 	"github.com/novaforge/novaforge/internal/work"
 )
 
-// gateClient adapts the gates service's gRPC client to reviews.GateChecker.
-// Merger asks it before any git operation, so auto-merge and a person
-// clicking merge pass through the identical check.
-type gateClient struct {
-	gates gatesv1.GatesServiceClient
-}
-
-// Evaluate runs the run's gates at its current head (see reviews.GateEvaluator).
-func (g gateClient) Evaluate(ctx context.Context, runID uuid.UUID) error {
-	if _, err := g.gates.Evaluate(ctx, &gatesv1.EvaluateRequest{RunId: runID.String()}); err != nil {
-		return fmt.Errorf("gates: evaluate %s: %w", runID, err)
-	}
-	return nil
-}
-
-func (g gateClient) MayMerge(ctx context.Context, runID uuid.UUID) (bool, []string, error) {
-	resp, err := g.gates.MayMerge(ctx, &gatesv1.MayMergeRequest{RunId: runID.String()})
-	if err != nil {
-		return false, nil, fmt.Errorf("gates: may merge %s: %w", runID, err)
-	}
-	return resp.GetAllowed(), resp.GetReasons(), nil
-}
-
 // newAutoMerger builds the auto-merger from the policy the chart configures.
 // It is nil when policy is disabled, so a deployment that has not opted in
 // carries no auto-merge machinery at all rather than a disabled copy of it.
@@ -44,7 +21,7 @@ func newAutoMerger(policy reviews.AutoMergePolicy, store *reviews.Store, git git
 	}
 	return &reviews.AutoMerger{
 		Store:  store,
-		Merger: &reviews.Merger{Store: store, Gates: gateClient{gates: gates}, Git: git},
+		Merger: &reviews.Merger{Store: store, Gates: reviews.GatesClient{Gates: gates}, Git: git},
 		Policy: policy,
 		Impact: func(ctx context.Context, run reviews.Run) (reviews.Impact, error) {
 			return reviews.ComputeImpact(ctx, git, run.OrgID, run.RepoID, run.TargetRef, run.SourceRef)

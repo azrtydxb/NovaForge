@@ -18,6 +18,13 @@ type RunHead struct {
 	TargetRef     string
 	HeadSHA       string
 	WorkItemGates []string
+	// SourceRef is the branch carrying the change. Approval requirements are
+	// read from what it changes relative to TargetRef.
+	SourceRef string
+	// AuthorID and AuthorKind identify who opened the run, so the person who
+	// made a change can never be the one who approves it.
+	AuthorID   uuid.UUID
+	AuthorKind string
 }
 
 // RunLookup resolves the current RunHead for runID. In production this is
