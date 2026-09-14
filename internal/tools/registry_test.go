@@ -119,8 +119,13 @@ func TestRegistryHasExactlyThirteenTools(t *testing.T) {
 }
 
 func TestUnknownToolRejected(t *testing.T) {
-	reg := tools.NewRegistry(tools.Runtime{Budget: agents.NewBudget(time.Hour, 1000, 1000)}, agents.NewAuditLog(nil))
-	_, err := reg.Call(context.Background(), uuid.New(), "shell.exec", nil)
+	pool := auditPool(t)
+	store := agents.NewStore(pool)
+	orgID := uuid.New()
+	ctx := scopedCtx(orgID)
+	run := newTestRun(t, ctx, store, orgID)
+	reg := tools.NewRegistry(tools.Runtime{Budget: agents.NewBudget(time.Hour, 1000, 1000)}, agents.NewAuditLog(pool))
+	_, err := reg.Call(ctx, run.ID, "shell.exec", nil)
 	if err == nil {
 		t.Fatal("expected error for unknown tool")
 	}
@@ -190,13 +195,13 @@ func TestBudgetCheckedBeforeCall(t *testing.T) {
 		t.Fatal("handler ran despite exhausted budget")
 	}
 
+	// The refused call is on the record as refused: it is still a call the
+	// agent made (see TestToolCallAudited), but nothing it asked for ran.
 	entries, err := audit.List(ctx, run.ID)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	for _, e := range entries {
-		if e.Tool == "test.marker" {
-			t.Fatalf("audit entry recorded for a call that never passed the budget check: %+v", e)
-		}
+	if len(entries) != 1 || entries[0].Tool != "test.marker" || entries[0].Outcome != tools.OutcomeRefused {
+		t.Fatalf("entries = %+v, want one refused test.marker entry", entries)
 	}
 }

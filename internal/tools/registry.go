@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sort"
 
 	"github.com/google/uuid"
@@ -154,23 +155,35 @@ func (r *Registry) Names() []string {
 	return names
 }
 
-// Call dispatches name for runID with argsJSON, in the fixed order: budget
-// check, audit Record, capability check, handler, audit Complete. Any
-// failing step stops the pipeline before the next one runs, so a handler is
-// never reached when the budget is exhausted or the capability check
-// refuses the call.
+// Audit outcomes a tool call can end with.
+const (
+	// OutcomeOK: the handler ran and returned a result.
+	OutcomeOK = "ok"
+	// OutcomeError: the handler ran and failed.
+	OutcomeError = "error"
+	// OutcomeDenied: the run's capability grant refused the call; the
+	// handler never ran.
+	OutcomeDenied = "denied"
+	// OutcomeRefused: the call could not be dispatched at all — the tool does
+	// not exist, or the run's budget was already spent.
+	OutcomeRefused = "refused"
+)
+
+// Call dispatches name for runID with argsJSON, in the fixed order: audit
+// Record, tool lookup, budget check, capability check, handler, audit
+// Complete. Any failing step stops the pipeline before the next one runs, so
+// a handler is never reached when the tool is unknown, the budget is
+// exhausted or the capability check refuses the call.
+//
+// Recording comes first. Every call the model asks for is a call the agent
+// made, and the log is only "every call" if a refused one is in it too: an
+// unknown tool and a call over budget used to return before anything was
+// written, so a run that asked for a shell read exactly like one that never
+// did.
 func (r *Registry) Call(ctx context.Context, runID uuid.UUID, name string, argsJSON []byte) ([]byte, error) {
-	entry, ok := r.tools[name]
-	if !ok {
-		return nil, fmt.Errorf("unknown tool %q", name)
+	if r.audit == nil {
+		return nil, fmt.Errorf("tool %q: this run has no audit log, and no call is made unrecorded", name)
 	}
-
-	if r.rt.Budget != nil {
-		if err := r.rt.Budget.Check(); err != nil {
-			return nil, err
-		}
-	}
-
 	auditID, err := r.audit.Record(ctx, agents.Entry{
 		RunID:    runID,
 		Tool:     name,
@@ -179,21 +192,42 @@ func (r *Registry) Call(ctx context.Context, runID uuid.UUID, name string, argsJ
 	if err != nil {
 		return nil, fmt.Errorf("audit record: %w", err)
 	}
+	// The outcome is written even when the run's context has been cancelled
+	// part-way through the call: under that context the write failed, and the
+	// calls of exactly the runs someone chose to stop stayed "pending".
+	complete := func(outcome, errText string) error {
+		return r.audit.Complete(context.WithoutCancel(ctx), auditID, outcome, errText)
+	}
+	fail := func(outcome string, callErr error) ([]byte, error) {
+		if err := complete(outcome, callErr.Error()); err != nil {
+			log.Printf("tools: record %s outcome of %s for run %s: %v", outcome, name, runID, err)
+		}
+		return nil, callErr
+	}
+
+	entry, ok := r.tools[name]
+	if !ok {
+		return fail(OutcomeRefused, fmt.Errorf("unknown tool %q", name))
+	}
+
+	if r.rt.Budget != nil {
+		if err := r.rt.Budget.Check(); err != nil {
+			return fail(OutcomeRefused, err)
+		}
+	}
 
 	if entry.capCheck != nil {
 		if err := entry.capCheck(r.rt, argsJSON); err != nil {
-			_ = r.audit.Complete(ctx, auditID, "error", err.Error())
-			return nil, err
+			return fail(OutcomeDenied, err)
 		}
 	}
 
 	result, err := entry.handler(ctx, r.rt, argsJSON)
 	if err != nil {
-		_ = r.audit.Complete(ctx, auditID, "error", err.Error())
-		return nil, err
+		return fail(OutcomeError, err)
 	}
 
-	if err := r.audit.Complete(ctx, auditID, "ok", ""); err != nil {
+	if err := complete(OutcomeOK, ""); err != nil {
 		return nil, fmt.Errorf("audit complete: %w", err)
 	}
 	return result, nil

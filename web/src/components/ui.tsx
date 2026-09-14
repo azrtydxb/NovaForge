@@ -131,6 +131,10 @@ export const STATE_COLORS: Record<string, [string, string]> = {
   pass: ["var(--ok-bg)", "var(--ok)"],
   fail: ["var(--bad-bg)", "var(--bad)"],
   error: ["var(--bad-bg)", "var(--bad)"],
+  // Tool-call outcomes: denied by the run's capability grant, or refused
+  // before dispatch (unknown tool, budget already spent).
+  denied: ["var(--bad-bg)", "var(--bad)"],
+  refused: ["var(--warn-bg)", "var(--warn)"],
   pending: ["var(--warn-bg)", "var(--warn)"],
   approved: ["var(--ok-bg)", "var(--ok)"],
   rejected: ["var(--bad-bg)", "var(--bad)"],
