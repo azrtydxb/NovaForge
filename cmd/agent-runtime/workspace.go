@@ -96,6 +96,21 @@ func seedWorkspace(ctx context.Context, git gitv1.GitServiceClient, provisioner 
 	if res.ExitCode != 0 {
 		return "", fmt.Errorf("unpack repository into workspace: tar exit %d: %s", res.ExitCode, res.Stderr)
 	}
+	// The copy is committed once, locally, so "git status" and "git diff" in
+	// workspace.run show exactly what the agent changed. Without it the
+	// workspace was a bare file tree, and agents spent their first steps
+	// running "git init" and hunting for a remote that the network policy
+	// would never let them reach.
+	res, err = provisioner.Exec(ctx, runID, []string{"sh", "-c",
+		`cd "$1" && git init -q -b "$2" && git add -A && ` +
+			`git -c user.name=NovaForge -c user.email=workspace@novaforge.local commit -q --allow-empty -m "$2 at the start of this run"`,
+		"sh", workspace.Root, ref}, nil)
+	if err != nil {
+		return "", fmt.Errorf("record workspace baseline: %w", err)
+	}
+	if res.ExitCode != 0 {
+		return "", fmt.Errorf("record workspace baseline: git exit %d: %s", res.ExitCode, res.Stderr)
+	}
 	return ref, nil
 }
 
