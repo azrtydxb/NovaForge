@@ -16,8 +16,10 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	agentsv1 "github.com/novaforge/novaforge/gen/novaforge/agents/v1"
 	civ1 "github.com/novaforge/novaforge/gen/novaforge/ci/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
+	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
 	"github.com/novaforge/novaforge/internal/blobstore"
 	"github.com/novaforge/novaforge/internal/ci"
 	"github.com/novaforge/novaforge/internal/database"
@@ -42,6 +44,12 @@ func main() {
 	}
 	if cfg.GitAddr == "" {
 		log.Fatal("ci-runner: GIT_ADDR is required")
+	}
+	// Agent jobs run as Agent Runs briefed through Work Items. Without these
+	// peers every agent job would sit pending forever — the silence that hid
+	// agent jobs never running at all — so their absence is fatal instead.
+	if cfg.AgentsAddr == "" || cfg.WorkAddr == "" {
+		log.Fatal("ci-runner: AGENTS_ADDR and WORK_ADDR are required to execute agent jobs")
 	}
 	if cfg.S3Endpoint == "" {
 		log.Fatal("ci-runner: S3_ENDPOINT is required")
@@ -113,9 +121,27 @@ func main() {
 	civ1.RegisterRunnerServiceServer(srv, svc.Server)
 	civ1.RegisterCIServiceServer(srv, svc.Query)
 
+	agentsConn, err := grpc.NewClient(cfg.AgentsAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatalf("ci-runner: dial agent-runtime: %v", err)
+	}
+	defer agentsConn.Close()
+	workConn, err := grpc.NewClient(cfg.WorkAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatalf("ci-runner: dial work-reviews: %v", err)
+	}
+	defer workConn.Close()
+
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	svc.Run(runCtx)
+	agentJobs := &ci.AgentJobs{
+		Store:      svc.Store,
+		Agents:     agentsv1.NewAgentServiceClient(agentsConn),
+		Work:       workv1.NewWorkServiceClient(workConn),
+		HMACSecret: cfg.HMACSecret,
+	}
+	go agentJobs.Run(runCtx)
 
 	check := func(ctx context.Context) error {
 		if err := pool.Ping(ctx); err != nil {

@@ -144,6 +144,10 @@ export interface CIJob {
   name: string;
   status: string;
   detail: string;
+  /** Set for an agent job, which runs as an Agent Run rather than on a runner. */
+  agent_role: string;
+  agent_run_id: string;
+  work_item_key: string;
 }
 
 export interface Artifact {

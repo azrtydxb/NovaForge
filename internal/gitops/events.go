@@ -46,14 +46,15 @@ func repoIDPublisher(rdb *redis.Client, resolve RepoIDFunc) func(context.Context
 		}
 		for _, u := range updates {
 			evt := events.PushEvent{
-				OrgID:    orgID,
-				RepoID:   repoID,
-				RepoName: repo,
-				PusherID: scope.ActorID,
-				Ref:      u.Ref,
-				OldSHA:   u.OldSHA,
-				NewSHA:   u.NewSHA,
-				At:       time.Now().UTC(),
+				OrgID:      orgID,
+				RepoID:     repoID,
+				RepoName:   repo,
+				PusherID:   scope.ActorID,
+				PusherKind: scope.ActorKind,
+				Ref:        u.Ref,
+				OldSHA:     u.OldSHA,
+				NewSHA:     u.NewSHA,
+				At:         time.Now().UTC(),
 			}
 			if err := events.Publish(ctx, rdb, events.StreamGitPush, evt); err != nil {
 				log.Printf("gitops: publish push event for %s/%s %s: %v", orgID, repo, u.Ref, err)
@@ -66,13 +67,14 @@ func WireRedisPushEvents(rdb *redis.Client) {
 	PushPublisher = func(ctx context.Context, scope authz.Scope, orgID uuid.UUID, repo string, updates []RefUpdate) {
 		for _, u := range updates {
 			evt := events.PushEvent{
-				OrgID:    orgID,
-				RepoID:   uuid.Nil,
-				PusherID: scope.ActorID,
-				Ref:      u.Ref,
-				OldSHA:   u.OldSHA,
-				NewSHA:   u.NewSHA,
-				At:       time.Now().UTC(),
+				OrgID:      orgID,
+				RepoID:     uuid.Nil,
+				PusherID:   scope.ActorID,
+				PusherKind: scope.ActorKind,
+				Ref:        u.Ref,
+				OldSHA:     u.OldSHA,
+				NewSHA:     u.NewSHA,
+				At:         time.Now().UTC(),
 			}
 			if err := events.Publish(ctx, rdb, events.StreamGitPush, evt); err != nil {
 				log.Printf("gitops: publish push event for %s/%s %s: %v", orgID, repo, u.Ref, err)

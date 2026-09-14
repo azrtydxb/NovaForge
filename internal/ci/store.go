@@ -27,6 +27,9 @@ type Run struct {
 	Ref       string
 	Status    string
 	CreatedAt time.Time
+	// TriggeredBy is the member whose push or request scheduled the run, or
+	// uuid.Nil when nobody is recorded. An agent job is sponsored by them.
+	TriggeredBy uuid.UUID
 }
 
 // Job is a row in the ci.workflow_jobs table: one job of a Run, either a
@@ -45,6 +48,9 @@ type WorkflowJob struct {
 	Detail        string
 	StartedAt     *time.Time
 	FinishedAt    *time.Time
+	// AgentRunID and WorkItemKey are set once an agent job's run has started.
+	AgentRunID  *uuid.UUID
+	WorkItemKey string
 }
 
 // ErrNoClaimableJob is returned by ClaimJob when no pending job with
@@ -83,11 +89,11 @@ func (s *Store) CreateRun(ctx context.Context, run Run) (Run, bool, error) {
 		run.Status = "queued"
 	}
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO ci.workflow_runs (id, org_id, repo_id, repo_name, commit_sha, ref, status)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO ci.workflow_runs (id, org_id, repo_id, repo_name, commit_sha, ref, status, triggered_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (repo_id, commit_sha, ref) DO NOTHING
 		RETURNING id, created_at`,
-		run.ID, run.OrgID, run.RepoID, run.RepoName, run.CommitSHA, run.Ref, run.Status,
+		run.ID, run.OrgID, run.RepoID, run.RepoName, run.CommitSHA, run.Ref, run.Status, nullableUUID(run.TriggeredBy),
 	).Scan(&run.ID, &run.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -233,6 +239,7 @@ func (s *Store) ClaimJob(ctx context.Context, runnerID uuid.UUID, labels []strin
 		SELECT j.id, j.run_id, j.name, j.needs, j.run_cmd, j.agent_role, j.image, j.status
 		FROM ci.workflow_jobs j
 		WHERE j.status = 'pending'
+		  AND coalesce(j.agent_role, '') = ''
 		  AND NOT EXISTS (
 		    SELECT 1 FROM unnest(j.needs) AS need(name)
 		    WHERE NOT EXISTS (
@@ -342,11 +349,11 @@ func (s *Store) GetJob(ctx context.Context, jobID uuid.UUID) (WorkflowJob, error
 	var job WorkflowJob
 	var runCmd, agentRole, image, detail *string
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, run_id, name, needs, run_cmd, agent_role, image, status, runner_id, detail, started_at, finished_at
+		SELECT id, run_id, name, needs, run_cmd, agent_role, image, status, runner_id, detail, started_at, finished_at, agent_run_id, coalesce(work_item_key, '')
 		FROM ci.workflow_jobs WHERE id = $1`,
 		jobID,
 	).Scan(&job.ID, &job.RunID, &job.Name, &job.Needs, &runCmd, &agentRole, &image, &job.Status,
-		&job.RunnerID, &detail, &job.StartedAt, &job.FinishedAt)
+		&job.RunnerID, &detail, &job.StartedAt, &job.FinishedAt, &job.AgentRunID, &job.WorkItemKey)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return WorkflowJob{}, fmt.Errorf("job %s not found: %w", jobID, err)
@@ -371,7 +378,7 @@ func (s *Store) GetJob(ctx context.Context, jobID uuid.UUID) (WorkflowJob, error
 // ListJobsForRun returns every job belonging to runID, ordered by name.
 func (s *Store) ListJobsForRun(ctx context.Context, runID uuid.UUID) ([]WorkflowJob, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, run_id, name, needs, run_cmd, agent_role, image, status, runner_id, detail, started_at, finished_at
+		SELECT id, run_id, name, needs, run_cmd, agent_role, image, status, runner_id, detail, started_at, finished_at, agent_run_id, coalesce(work_item_key, '')
 		FROM ci.workflow_jobs WHERE run_id = $1 ORDER BY name`,
 		runID,
 	)
@@ -385,7 +392,7 @@ func (s *Store) ListJobsForRun(ctx context.Context, runID uuid.UUID) ([]Workflow
 		var job WorkflowJob
 		var runCmd, agentRole, image, detail *string
 		if err := rows.Scan(&job.ID, &job.RunID, &job.Name, &job.Needs, &runCmd, &agentRole, &image, &job.Status,
-			&job.RunnerID, &detail, &job.StartedAt, &job.FinishedAt); err != nil {
+			&job.RunnerID, &detail, &job.StartedAt, &job.FinishedAt, &job.AgentRunID, &job.WorkItemKey); err != nil {
 			return nil, fmt.Errorf("scan job: %w", err)
 		}
 		if runCmd != nil {
@@ -514,6 +521,11 @@ func (s *Store) ClaimForDispatch(ctx context.Context, runnerID uuid.UUID, labels
 		JOIN ci.workflow_runs r ON r.id = j.run_id
 		JOIN ci.runners rn ON rn.id = $1 AND rn.org_id = r.org_id
 		WHERE j.status = 'pending'
+		  -- An agent job is executed by the platform as an Agent Run
+		  -- (agentjobs.go), never by a runner: a runner handed one ran
+		  -- "sh -c ''", exited 0, and reported an agent review that never
+		  -- happened as a success.
+		  AND coalesce(j.agent_role, '') = ''
 		  AND NOT EXISTS (
 		    SELECT 1 FROM unnest(j.needs) AS need(name)
 		    WHERE NOT EXISTS (

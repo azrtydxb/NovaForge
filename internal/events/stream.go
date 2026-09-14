@@ -44,10 +44,13 @@ type PushEvent struct {
 	// without reading another service's schema.
 	RepoName string    `json:"repo_name"`
 	PusherID uuid.UUID `json:"pusher_id"`
-	Ref      string    `json:"ref"`
-	OldSHA   string    `json:"old_sha"`
-	NewSHA   string    `json:"new_sha"`
-	At       time.Time `json:"at"`
+	// PusherKind is the pusher's actor kind ("user", "agent", "service").
+	// A CI agent job is sponsored by the pusher only when a person pushed.
+	PusherKind string    `json:"pusher_kind,omitempty"`
+	Ref        string    `json:"ref"`
+	OldSHA     string    `json:"old_sha"`
+	NewSHA     string    `json:"new_sha"`
+	At         time.Time `json:"at"`
 }
 
 // Publish marshals payload to JSON and adds it to stream in the "data"

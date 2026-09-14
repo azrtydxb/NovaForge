@@ -90,10 +90,15 @@ func (q *QueryServer) GetRun(ctx context.Context, req *civ1.GetRunRequest) (*civ
 	}
 	outJobs := make([]*civ1.WorkflowJobSummary, 0, len(jobs))
 	for _, j := range jobs {
-		outJobs = append(outJobs, &civ1.WorkflowJobSummary{
+		summary := &civ1.WorkflowJobSummary{
 			Id: j.ID.String(), RunId: j.RunID.String(),
 			Name: j.Name, Status: j.Status, Detail: j.Detail,
-		})
+			AgentRole: j.AgentRole, WorkItemKey: j.WorkItemKey,
+		}
+		if j.AgentRunID != nil {
+			summary.AgentRunId = j.AgentRunID.String()
+		}
+		outJobs = append(outJobs, summary)
 	}
 	return &civ1.GetRunResponse{Run: runSummary(run), Jobs: outJobs}, nil
 }

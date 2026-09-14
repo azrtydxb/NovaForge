@@ -98,6 +98,12 @@ message WorkflowJobSummary {
   string name = 3;
   string status = 4;
   string detail = 5;
+  // agent_role is set for an agent job, which runs as an Agent Run.
+  string agent_role = 6;
+  // agent_run_id and work_item_key identify that run and the Work Item it
+  // was briefed with, once it has started.
+  string agent_run_id = 7;
+  string work_item_key = 8;
 }
 
 message ArtifactSummary {

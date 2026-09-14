@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import {
   useMutation,
   useQueries,
@@ -210,6 +211,12 @@ function RunDetail({
     queryKey: ["ci-run", org, repo, runId],
     queryFn: () =>
       api.get<{ run: CIRun; jobs: CIJob[] }>(`${base}/runs/${enc(runId)}`),
+    // An agent job takes minutes and settles on its own; follow it.
+    refetchInterval: (q) =>
+      q.state.data?.run.status === "running" ||
+      q.state.data?.run.status === "queued"
+        ? 5_000
+        : false,
   });
 
   const firstJob = run.data?.jobs[0];
@@ -257,6 +264,28 @@ function RunDetail({
                   >
                     <span style={{ flex: 1, font: "13px var(--sans)" }}>
                       {j.name}
+                      {j.agent_role ? (
+                        <span
+                          style={{
+                            marginLeft: 8,
+                            font: "10px var(--mono)",
+                            color: "var(--accent)",
+                          }}
+                        >
+                          agent · {j.agent_role}
+                        </span>
+                      ) : null}
+                      {j.work_item_key ? (
+                        <Link
+                          to={`/work/${enc(repo)}/${enc(j.work_item_key)}`}
+                          style={{
+                            marginLeft: 8,
+                            font: "11px var(--mono)",
+                          }}
+                        >
+                          {j.work_item_key}
+                        </Link>
+                      ) : null}
                     </span>
                     <span
                       style={{

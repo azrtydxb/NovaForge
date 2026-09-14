@@ -53,7 +53,11 @@ func (q *QueryServer) TriggerRun(ctx context.Context, req *civ1.TriggerRunReques
 		return nil, err
 	}
 
-	run, err := q.scheduler.ScheduleRun(ctx, sc.OrgID, repoID, repo.GetRepo().GetName(), ref, sha)
+	var requester uuid.UUID
+	if sc.ActorKind == "user" {
+		requester = sc.ActorID
+	}
+	run, err := q.scheduler.ScheduleRun(ctx, sc.OrgID, repoID, repo.GetRepo().GetName(), ref, sha, requester)
 	if err != nil {
 		// "Nothing happened" needs a reason when a person asked for it; the
 		// push consumer is the one that treats these as ordinary and silent.

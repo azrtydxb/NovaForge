@@ -208,7 +208,11 @@ func (s *Scheduler) handlePush(ctx context.Context, evt events.PushEvent) error 
 	if err != nil {
 		return err
 	}
-	if _, err := s.ScheduleRun(ctx, evt.OrgID, evt.RepoID, evt.RepoName, evt.Ref, evt.NewSHA); err != nil {
+	var pusher uuid.UUID
+	if evt.PusherKind == "user" {
+		pusher = evt.PusherID
+	}
+	if _, err := s.ScheduleRun(ctx, evt.OrgID, evt.RepoID, evt.RepoName, evt.Ref, evt.NewSHA, pusher); err != nil {
 		// A push to a repository with no workflow is the ordinary case, not
 		// a failure worth retrying the message for.
 		if errors.Is(err, ErrNoWorkflow) || errors.Is(err, ErrInvalidWorkflow) {
@@ -239,7 +243,10 @@ var ErrInvalidWorkflow = errors.New("the commit's CI workflow is invalid")
 // identity able to read the repository. The returned bool is false when the
 // run already existed, which is how an at-least-once redelivery of the same
 // push stays idempotent.
-func (s *Scheduler) ScheduleRun(ctx context.Context, orgID, repoID uuid.UUID, repoName, ref, commitSHA string) (Run, error) {
+//
+// triggeredBy is the member who pushed or asked for the run, or uuid.Nil when
+// no person did; it sponsors the run's agent jobs.
+func (s *Scheduler) ScheduleRun(ctx context.Context, orgID, repoID uuid.UUID, repoName, ref, commitSHA string, triggeredBy uuid.UUID) (Run, error) {
 	blob, err := s.git.GetBlob(ctx, &gitv1.GetBlobRequest{
 		Repo: repoID.String(),
 		Ref:  commitSHA,
@@ -265,11 +272,12 @@ func (s *Scheduler) ScheduleRun(ctx context.Context, orgID, repoID uuid.UUID, re
 	}
 
 	run, created, err := s.store.CreateRun(ctx, Run{
-		OrgID:     orgID,
-		RepoID:    repoID,
-		RepoName:  repoName,
-		CommitSHA: commitSHA,
-		Ref:       ref,
+		OrgID:       orgID,
+		RepoID:      repoID,
+		RepoName:    repoName,
+		CommitSHA:   commitSHA,
+		Ref:         ref,
+		TriggeredBy: triggeredBy,
 	})
 	if err != nil {
 		return Run{}, fmt.Errorf("create run: %w", err)

@@ -639,12 +639,18 @@ func (x *WorkflowRunSummary) GetCreatedAt() string {
 }
 
 type WorkflowJobSummary struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	RunId         string                 `protobuf:"bytes,2,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
-	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	Status        string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
-	Detail        string                 `protobuf:"bytes,5,opt,name=detail,proto3" json:"detail,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Id     string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	RunId  string                 `protobuf:"bytes,2,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	Name   string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Status string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	Detail string                 `protobuf:"bytes,5,opt,name=detail,proto3" json:"detail,omitempty"`
+	// agent_role is set for an agent job, which runs as an Agent Run.
+	AgentRole string `protobuf:"bytes,6,opt,name=agent_role,json=agentRole,proto3" json:"agent_role,omitempty"`
+	// agent_run_id and work_item_key identify that run and the Work Item it
+	// was briefed with, once it has started.
+	AgentRunId    string `protobuf:"bytes,7,opt,name=agent_run_id,json=agentRunId,proto3" json:"agent_run_id,omitempty"`
+	WorkItemKey   string `protobuf:"bytes,8,opt,name=work_item_key,json=workItemKey,proto3" json:"work_item_key,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -710,6 +716,27 @@ func (x *WorkflowJobSummary) GetStatus() string {
 func (x *WorkflowJobSummary) GetDetail() string {
 	if x != nil {
 		return x.Detail
+	}
+	return ""
+}
+
+func (x *WorkflowJobSummary) GetAgentRole() string {
+	if x != nil {
+		return x.AgentRole
+	}
+	return ""
+}
+
+func (x *WorkflowJobSummary) GetAgentRunId() string {
+	if x != nil {
+		return x.AgentRunId
+	}
+	return ""
+}
+
+func (x *WorkflowJobSummary) GetWorkItemKey() string {
+	if x != nil {
+		return x.WorkItemKey
 	}
 	return ""
 }
@@ -1422,13 +1449,18 @@ const file_novaforge_ci_v1_ci_proto_rawDesc = "" +
 	"\x03ref\x18\x04 \x01(\tR\x03ref\x12\x16\n" +
 	"\x06status\x18\x05 \x01(\tR\x06status\x12\x1d\n" +
 	"\n" +
-	"created_at\x18\x06 \x01(\tR\tcreatedAt\"\x7f\n" +
+	"created_at\x18\x06 \x01(\tR\tcreatedAt\"\xe4\x01\n" +
 	"\x12WorkflowJobSummary\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x15\n" +
 	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x16\n" +
 	"\x06status\x18\x04 \x01(\tR\x06status\x12\x16\n" +
-	"\x06detail\x18\x05 \x01(\tR\x06detail\"k\n" +
+	"\x06detail\x18\x05 \x01(\tR\x06detail\x12\x1d\n" +
+	"\n" +
+	"agent_role\x18\x06 \x01(\tR\tagentRole\x12 \n" +
+	"\fagent_run_id\x18\a \x01(\tR\n" +
+	"agentRunId\x12\"\n" +
+	"\rwork_item_key\x18\b \x01(\tR\vworkItemKey\"k\n" +
 	"\x0fArtifactSummary\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x15\n" +
 	"\x06job_id\x18\x02 \x01(\tR\x05jobId\x12\x12\n" +

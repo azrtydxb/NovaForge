@@ -68,6 +68,8 @@ func addCIHandlers(h map[string]http.HandlerFunc, g gitv1.GitServiceClient, c ci
 			jobs = append(jobs, map[string]any{
 				"id": j.GetId(), "name": j.GetName(),
 				"status": j.GetStatus(), "detail": j.GetDetail(),
+				"agent_role": j.GetAgentRole(), "agent_run_id": j.GetAgentRunId(),
+				"work_item_key": j.GetWorkItemKey(),
 			})
 		}
 		body := ciRunJSON(resp.GetRun())

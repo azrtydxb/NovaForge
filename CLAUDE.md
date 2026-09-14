@@ -55,6 +55,7 @@ bash tests/e2e/deploy_test.sh     # git round trip over HTTPS and SSH
 bash tests/e2e/work_ci_test.sh    # Work Item, push, CI run in a pod, log and artifact
 bash tests/e2e/factory_test.sh    # epic decomposition by the real model, dependency ordering
 bash tests/e2e/agent_test.sh      # an Agent Run executes and commits its work
+bash tests/e2e/agent_ci_test.sh   # a CI job with an agent role runs as an Agent Run
 bash tests/e2e/gui_test.sh        # the app is served and every screen's endpoint answers
 ```
 
