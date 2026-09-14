@@ -107,6 +107,8 @@ var validTransitions = map[string]map[string]bool{
 	"queued": {
 		"running":   true,
 		"cancelled": true,
+		// A run that could not take its branch lock never ran.
+		"failed": true,
 	},
 	"running": {
 		"succeeded":   true,

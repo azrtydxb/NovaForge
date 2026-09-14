@@ -3,6 +3,7 @@ package agents
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -237,7 +238,7 @@ func (g *GRPCServer) StartRun(ctx context.Context, req *agentsv1.StartRunRequest
 		SubjectID:     agentID,
 		SubjectKind:   "agent",
 		RepoRead:      true,
-		WriteBranch:   "agents/" + req.GetWorkItemKey() + "/",
+		WriteBranch:   BranchNamespace + req.GetWorkItemKey() + "/",
 		SecretsProd:   false,
 		DeployStaging: false,
 		DeployProd:    false,
@@ -275,9 +276,31 @@ func (g *GRPCServer) StartRun(ctx context.Context, req *agentsv1.StartRunRequest
 // and publishes that change, then hands off to Execute if one is
 // configured. It runs in the background, detached from the StartRun
 // request's context, since an agent run outlives the RPC that started it.
+//
+// Moving to running is taking the branch lock (BranchLock.Acquire): the run
+// holds its grant's prefix from this moment until it reaches any terminal
+// state, and the git transports refuse everyone else a push there meanwhile.
+// BranchLock existed, was tested, and nothing acquired it — every person
+// could push to an agent's branch in the middle of its run.
 func (g *GRPCServer) driveToRunning(run Run) {
 	ctx := authz.WithScope(context.Background(), authz.Scope{OrgID: run.OrgID, ActorID: run.AgentID, ActorKind: "agent"})
-	if err := g.Store.SetRunState(ctx, run.ID, "running"); err != nil {
+	if err := NewBranchLock(g.Store.Pool()).Acquire(ctx, run.OrgID, run.RepoID, run.Branch, run.ID); err != nil {
+		// A run that cannot take its branch — another run on the same Work
+		// Item still holds it — fails saying so. It used to return silently
+		// and leave the run queued forever, which reads as a platform that
+		// decided not to start it.
+		current, getErr := g.Store.GetRun(ctx, run.ID)
+		if getErr != nil || current.State != "queued" {
+			return // cancelled before it could start; nothing to settle
+		}
+		if spendErr := g.Store.RecordSpend(ctx, run.ID, Spend{Reason: "could not start: " + err.Error()}); spendErr != nil {
+			log.Printf("agents: record why run %s could not start: %v", run.ID, spendErr)
+		}
+		if stateErr := g.Store.SetRunState(ctx, run.ID, "failed"); stateErr != nil {
+			log.Printf("agents: fail run %s that could not take its branch: %v", run.ID, stateErr)
+			return
+		}
+		g.publishStateChange(run.ID, "queued", "failed")
 		return
 	}
 	g.publishStateChange(run.ID, "queued", "running")

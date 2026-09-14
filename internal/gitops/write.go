@@ -30,6 +30,9 @@ func (s *Server) CreateBranch(ctx context.Context, req *gitv1.CreateBranchReques
 	if err != nil {
 		return nil, err
 	}
+	if err := s.guardRef(ctx, scope, row.Name, name); err != nil {
+		return nil, err
+	}
 	repo, err := Open(s.root, scope.OrgID, row.Name)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "resolve repository path: %v", err)
@@ -96,6 +99,9 @@ func (s *Server) CreateCommit(ctx context.Context, req *gitv1.CreateCommitReques
 	branch := strings.TrimPrefix(req.GetBranch(), refHeadsPrefix)
 	if branch == "" {
 		branch = row.DefaultBranch
+	}
+	if err := s.guardRef(ctx, scope, row.Name, branch); err != nil {
+		return nil, err
 	}
 
 	sha, err := commitFiles(repo.Path(), branch, req)

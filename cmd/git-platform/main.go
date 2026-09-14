@@ -23,6 +23,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 
+	agentsv1 "github.com/novaforge/novaforge/gen/novaforge/agents/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
 	"github.com/novaforge/novaforge/internal/authz"
@@ -112,6 +113,21 @@ func main() {
 
 	grants := capability.NewStore(pool)
 
+	// Agent-runtime answers whether an Agent Run holds a branch. It is
+	// required rather than optional: a git-platform started without it would
+	// refuse every push to an agent branch (the lock check fails closed), and
+	// one that skipped the check would let people push into running agents'
+	// work — neither should look like a configured deployment.
+	if cfg.AgentsAddr == "" {
+		log.Fatal("git-platform: AGENTS_ADDR is required to enforce agent branch locks")
+	}
+	agentsConn, err := grpc.NewClient(cfg.AgentsAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatalf("git-platform: dial agent-runtime: %v", err)
+	}
+	defer agentsConn.Close()
+	agentsClient := agentsv1.NewAgentServiceClient(agentsConn)
+
 	if err := os.MkdirAll(cfg.GitDataDir, 0o755); err != nil {
 		log.Fatalf("git-platform: create git data dir: %v", err)
 	}
@@ -123,7 +139,9 @@ func main() {
 
 	// --- smart-HTTP ---
 	authFunc := newAuthFunc(identityClient)
-	capFunc := newCapFunc(grants)
+	capFunc := newCapFunc(grants, newBranchLockGuard(agentsClient, hmacSecret, repoIDResolver(pool)))
+	// Branches written through the API answer to the same rules as a push.
+	grpcServer.RefGuard = capFunc
 	httpHandler := gitops.NewHTTPHandler(cfg.GitDataDir, authFunc, capFunc)
 
 	// --- SSH ---
@@ -334,10 +352,17 @@ func newFingerprintFunc(identityClient identityv1.IdentityServiceClient) gitops.
 // ordinary write access to its repositories — requiring them to mint a grant to
 // push their own work would be a different product. The caller's kind, which
 // identity established, decides which rule applies.
-func newCapFunc(grants *capability.Store) gitops.CapFunc {
+//
+// A branch an Agent Run holds is refused to everyone but that run's agent
+// before either rule is consulted (locks; see newBranchLockGuard): a member's
+// ordinary write access does not extend to a branch an agent is working on.
+func newCapFunc(grants *capability.Store, locks gitops.CapFunc) gitops.CapFunc {
 	return func(ctx context.Context, s authz.Scope, orgID uuid.UUID, repo string, refs []string) error {
 		if len(refs) == 0 {
 			return nil
+		}
+		if err := locks(ctx, s, orgID, repo, refs); err != nil {
+			return err
 		}
 		if s.ActorKind == "user" {
 			// Org membership was verified during authentication; reaching here

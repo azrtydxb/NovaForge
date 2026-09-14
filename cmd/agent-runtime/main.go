@@ -206,6 +206,7 @@ func main() {
 	if provisioner != nil {
 		go runReaper(ctx, provisioner)
 	}
+	go runOrphanRecovery(ctx, store, rdb)
 
 	check := func(ctx context.Context) error {
 		if err := pool.Ping(ctx); err != nil {
@@ -225,6 +226,34 @@ func main() {
 // workspaceReadyTimeout bounds how long a run waits for its workspace pod,
 // including a first pull of the workspace image onto a node.
 const workspaceReadyTimeout = 5 * time.Minute
+
+// orphanRecoveryInterval is how often runs left "running" by a replica that
+// died are looked for.
+const orphanRecoveryInterval = time.Minute
+
+// runOrphanRecovery settles runs whose executing replica is gone, so their
+// branch locks are released (agents.RecoverOrphanedRuns). It runs once at
+// start — a restart is exactly when this replica's own runs were orphaned —
+// and then on an interval, whether or not this replica can provision
+// workspaces: an orphan holds a branch however it was started.
+func runOrphanRecovery(ctx context.Context, store *agents.Store, rdb *redis.Client) {
+	ticker := time.NewTicker(orphanRecoveryInterval)
+	defer ticker.Stop()
+	for {
+		n, err := agents.RecoverOrphanedRuns(ctx, store, rdb, agents.OrphanGrace)
+		if err != nil {
+			log.Printf("agent-runtime: recover orphaned runs: %v", err)
+		}
+		if n > 0 {
+			log.Printf("agent-runtime: settled %d orphaned run(s) and released their branches", n)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
 
 // runReaper destroys any workspace older than reapOlderThan every
 // reapInterval, until ctx is cancelled.
