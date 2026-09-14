@@ -23,7 +23,7 @@ func TestLoadConfigPopulatesEveryField(t *testing.T) {
 		"REDIS_URL": "redis://x", "GRPC_PORT": "1", "HTTP_PORT": "2", "SSH_PORT": "3",
 		"HEALTH_PORT": "4", "GIT_DATA_DIR": "/d", "IDENTITY_ADDR": "a:1",
 		"GIT_ADDR": "a:2", "WORK_ADDR": "a:3", "CI_ADDR": "a:4", "GATES_ADDR": "a:5",
-		"AGENTS_ADDR": "a:6", "GRAPH_ADDR": "a:7", "S3_ENDPOINT": "a:8",
+		"AGENTS_ADDR": "a:6", "GRAPH_ADDR": "a:7", "MCP_ADDR": "a:9", "S3_ENDPOINT": "a:8",
 		"S3_ACCESS_KEY": "k", "S3_SECRET_KEY": "s", "AI_ENDPOINT": "http://m/v1",
 		"AI_API_KEY": "sk-x", "AI_PROVIDER_OPTIONS": `{"a":1}`, "AI_MODEL": "m",
 		"EMBED_ENDPOINT": "http://m/v1", "EMBED_MODEL": "e",

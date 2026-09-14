@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package novaforge.mcp.v1;
+
+// McpService is an organization's register of external MCP servers: which
+// ones someone has asked agents to be able to use, and which an owner or
+// admin has approved. Every RPC derives its organization from the caller's
+// resolved scope, never from a field of the request message.
+service McpService {
+  rpc RequestServer(RequestServerRequest) returns (RequestServerResponse);
+  rpc ListServers(ListServersRequest) returns (ListServersResponse);
+  rpc DecideServer(DecideServerRequest) returns (DecideServerResponse);
+  rpc RevokeServer(RevokeServerRequest) returns (RevokeServerResponse);
+}
+
+// McpServer mirrors a row in the mcp.mcp_servers table.
+message McpServer {
+  string id = 1;
+  string org_id = 2;
+  string name = 3;
+  // url is the server's endpoint for streamable_http, or the command line
+  // that launches it for stdio.
+  string url = 4;
+  // transport is "stdio" or "streamable_http".
+  string transport = 5;
+  string description = 6;
+  // status is "pending", "approved", "rejected" or "revoked".
+  string status = 7;
+  string requested_by = 8;
+  string decided_by = 9;
+  string decided_at = 10;
+  string reason = 11;
+  string created_at = 12;
+}
+
+message RequestServerRequest {
+  string name = 1;
+  string url = 2;
+  string transport = 3;
+  string description = 4;
+}
+
+message RequestServerResponse {
+  McpServer server = 1;
+}
+
+message ListServersRequest {
+  // status, when non-empty, lists only servers in that status.
+  string status = 1;
+}
+
+message ListServersResponse {
+  repeated McpServer servers = 1;
+  // can_decide reports whether the caller may approve, reject and revoke,
+  // so a screen offers those actions only to someone who can take them.
+  bool can_decide = 2;
+}
+
+message DecideServerRequest {
+  string id = 1;
+  // approve is true to approve, false to reject.
+  bool approve = 2;
+  // reason is required to reject, optional to approve.
+  string reason = 3;
+}
+
+message DecideServerResponse {
+  McpServer server = 1;
+}
+
+message RevokeServerRequest {
+  string id = 1;
+  string reason = 2;
+}
+
+message RevokeServerResponse {
+  McpServer server = 1;
+}

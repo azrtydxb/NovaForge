@@ -15,6 +15,7 @@ import (
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	graphv1 "github.com/novaforge/novaforge/gen/novaforge/graph/v1"
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
+	mcpv1 "github.com/novaforge/novaforge/gen/novaforge/mcp/v1"
 	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
 	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
 	"github.com/novaforge/novaforge/internal/edge"
@@ -108,6 +109,7 @@ func TestEveryRouteHasAHandlerWhenWired(t *testing.T) {
 		Agents:   agentsv1.NewAgentServiceClient(nil),
 		Graph:    graphv1.NewGraphServiceClient(nil),
 		Gates:    gatesv1.NewGatesServiceClient(nil),
+		MCP:      mcpv1.NewMcpServiceClient(nil),
 	}
 	handlers := edge.Handlers(cfg)
 

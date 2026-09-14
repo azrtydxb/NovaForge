@@ -19,14 +19,20 @@ import (
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	graphv1 "github.com/novaforge/novaforge/gen/novaforge/graph/v1"
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
+	mcpv1 "github.com/novaforge/novaforge/gen/novaforge/mcp/v1"
 	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
 	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
+	"github.com/novaforge/novaforge/internal/database"
 	"github.com/novaforge/novaforge/internal/mcp"
 	"github.com/novaforge/novaforge/internal/service"
+	"github.com/novaforge/novaforge/internal/svcauth"
 )
 
 // defaultHTTPPort is used when HTTP_PORT is not set in the environment.
 const defaultHTTPPort = 8084
+
+// defaultGRPCPort matches services.mcp-server.grpcPort in the chart.
+const defaultGRPCPort = 9098
 
 func main() {
 	cfg := service.LoadConfig()
@@ -50,6 +56,18 @@ func main() {
 	}
 	if cfg.HTTPPort == 0 {
 		cfg.HTTPPort = defaultHTTPPort
+	}
+	if cfg.GRPCPort == 0 {
+		cfg.GRPCPort = defaultGRPCPort
+	}
+	// The register of approved external MCP servers is this service's own
+	// data, in its own schema. Without a database the register cannot answer,
+	// and a service that starts anyway looks like it has no servers approved.
+	if cfg.DatabaseURL == "" {
+		log.Fatal("mcp-server: DATABASE_URL is required")
+	}
+	if err := database.Migrate(cfg.DatabaseURL, "mcp", mcp.MigrationsFS); err != nil {
+		log.Fatalf("mcp-server: migrate mcp schema: %v", err)
 	}
 
 	dial := func(name, addr string) *grpc.ClientConn {
@@ -94,6 +112,29 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	pool, err := database.Connect(ctx, cfg.DatabaseURL)
+	if err != nil {
+		log.Fatalf("mcp-server: connect database: %v", err)
+	}
+	defer pool.Close()
+
+	// The register's role check calls identity as the person asking, so its
+	// identity client forwards the incoming credential. It is a separate
+	// connection from the MCP backend's, which builds its own outgoing
+	// credentials per tool call and must not have a second one appended.
+	registryIdentityConn, err := grpc.NewClient(cfg.IdentityAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(svcauth.ForwardIncomingCredential))
+	if err != nil {
+		log.Fatalf("mcp-server: dial identity for the server register: %v", err)
+	}
+	defer registryIdentityConn.Close()
+	registryIdentity := identityv1.NewIdentityServiceClient(registryIdentityConn)
+
+	grpcSrv := grpc.NewServer(grpc.UnaryInterceptor(
+		svcauth.UnaryServerInterceptor(registryIdentity, cfg.HMACSecret)))
+	mcpv1.RegisterMcpServiceServer(grpcSrv, mcp.NewRegistry(pool, registryIdentity))
+
 	errCh := make(chan error, 2)
 
 	// stdio is served only on an explicit opt-in. In a pod stdin is never a
@@ -128,9 +169,16 @@ func main() {
 
 	// Readiness lives on HEALTH_PORT like every other service, because that is
 	// the port the chart probes; serving it only on the MCP port left the pod
-	// permanently unready while the server itself was fine.
+	// permanently unready while the server itself was fine. The same call
+	// serves the register's gRPC API on GRPC_PORT.
 	go func() {
-		if err := service.Serve(ctx, cfg, nil, func(context.Context) error { return nil }); err != nil {
+		check := func(ctx context.Context) error {
+			if err := pool.Ping(ctx); err != nil {
+				return fmt.Errorf("database: %w", err)
+			}
+			return nil
+		}
+		if err := service.Serve(ctx, cfg, grpcSrv, check); err != nil {
 			errCh <- fmt.Errorf("health: %w", err)
 		}
 	}()

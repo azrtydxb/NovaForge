@@ -96,6 +96,10 @@ func Routes() []Route {
 
 		{http.MethodGet, "/api/v1/approvals/policy", "approvalPolicy", "What the platform requires before each action"},
 		{http.MethodGet, "/api/v1/mcp/tools", "mcpTools", "The MCP tools this deployment exposes"},
+		{http.MethodGet, "/api/v1/orgs/{org}/mcp/servers", "listMcpServers", "External MCP servers registered for an organization"},
+		{http.MethodPost, "/api/v1/orgs/{org}/mcp/servers", "requestMcpServer", "Ask for an external MCP server to be approved"},
+		{http.MethodPost, "/api/v1/orgs/{org}/mcp/servers/{id}/decision", "decideMcpServer", "Approve or reject a pending MCP server (owner or admin)"},
+		{http.MethodDelete, "/api/v1/orgs/{org}/mcp/servers/{id}", "revokeMcpServer", "Revoke an approved MCP server (owner or admin)"},
 
 		{http.MethodGet, "/healthz", "healthz", "Readiness"},
 	}

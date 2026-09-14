@@ -22,6 +22,7 @@ import (
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	graphv1 "github.com/novaforge/novaforge/gen/novaforge/graph/v1"
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
+	mcpv1 "github.com/novaforge/novaforge/gen/novaforge/mcp/v1"
 	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
 	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
 )
@@ -37,6 +38,7 @@ type Config struct {
 	Agents   agentsv1.AgentServiceClient
 	Graph    graphv1.GraphServiceClient
 	Gates    gatesv1.GatesServiceClient
+	MCP      mcpv1.McpServiceClient
 	Handlers map[string]http.HandlerFunc
 }
 

@@ -32,6 +32,9 @@ func Handlers(cfg Config) map[string]http.HandlerFunc {
 	if cfg.Gates != nil {
 		addGateConfigHandlers(h, cfg.Gates)
 	}
+	if cfg.MCP != nil {
+		addMcpServerHandlers(h, cfg.MCP)
+	}
 	h["healthz"] = func(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	}
