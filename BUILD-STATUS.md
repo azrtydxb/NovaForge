@@ -235,7 +235,87 @@ These are real and are not worked around:
   that the Work Item was satisfied. `tests/e2e/agent_test.sh` therefore checks
   for the commit rather than trusting the state; nothing yet judges whether the
   work actually meets the item's acceptance criteria.
-- **Embeddings are configured but not proven end to end.** `embed`/`bge-m3`
-  answer on the gateway (verified by hand), and the indexing path is tested
-  against the real pgvector database, but no acceptance test drives a push all
-  the way through to a semantic search result.
+- **Semantic search is fixed in code but not yet proven on the cluster.**
+  Reading the pipeline end to end found that it could not have worked: the
+  indexer read repositories with no credential and git-platform refused it; a
+  repository's first push (all-zero old SHA) could not be diffed and was retried
+  forever; the embedder sent no gateway credential; the schema stored 768-wide
+  vectors while `bge-m3` answers with 1024, so every chunk was refused; and no
+  edge route reached `SearchCode` at all. Each is fixed with a test seen red
+  first, the Graph screen has a code search box, and `tests/e2e/search_test.sh`
+  asserts a query sharing no word with the code ranks it first — but that
+  script has not been run against the cluster. The width change is inferred
+  from `bge-m3` being the served embedding model; engineering-graph now probes
+  the model at startup and refuses to start if the width does not match.
+- **The code index follows every branch and misses merges.** A push to any
+  branch replaces the indexed content of the files it touches, so a feature
+  branch overwrites what the default branch says. Merges made through the API
+  and commits made by the `git.commit` tool publish no push event, so neither
+  the indexer nor CI sees them.
+
+## Spec traceability
+
+`.procoder/specs/traceability.yaml` maps each of the spec's 33 acceptance
+criteria to the tests and e2e steps that actually prove it. Only
+`TestAgentCIJob` exists under the name the spec gives. The mapping was decided
+by reading test bodies, not by matching names.
+`internal/spectrace`'s `TestSpecTraceability` fails when a criterion is missing
+from the map, when the map names a criterion the spec lacks, when a cited Go
+test is renamed or deleted, or when a cited e2e script or step no longer exists.
+
+**7 covered, 21 partial, 5 uncovered.**
+
+Uncovered: the component is tested, but nothing in production calls it, so the
+behaviour cannot be seen on the deployed platform:
+
+- S-7 `TestAgentBranchLockedDuringRun`: nothing acquires `agents.BranchLock`,
+  and git-platform lets every user push to an agent branch mid-run.
+- S-11 `TestApprovalPaths`: nothing calls `approvals.Decide`.
+- S-12 `TestBrokerDownFailsClosed`: nothing calls `ResolveJobCredentials`, so a
+  job that needs credentials is not blocked when the broker is down.
+- S-14 `TestGraphQueries`: no production code writes `depends_on`, `tested_by`
+  or `changed_by` edges, so every graph query returns empty.
+- S-17 `TestKnowledgeRecall`: agent runs never assemble context, and the
+  `AssembleContext` RPC has no caller.
+
+Partial (the map's `note` says exactly what is missing):
+
+- S-1 `TestPATGitClone`: no clone with a PAT; revoked tokens are refused only at
+  token resolution, never at the git transport.
+- S-2 `TestRepoBrowseAPI`: tree, blob, diff and tags are never read through REST.
+- S-3 `TestAgentBranchScopeEnforced`: the transport half runs against a stub
+  capability function, never a real agent grant.
+- S-3 `TestCrossOrgAccessDenied`: most cross-org repo, Work Item write, CI run and
+  Agent Run paths are unasserted.
+- S-4 `TestWorkItemLifecycle`: acceptance criteria, constraints, required gates
+  and assignment to a human are never asserted.
+- S-5 `TestEngineeringRunProof`: plan, change impact and the producing
+  agent/model are never exposed by a run in any test.
+- S-6 `TestRunnerJobStreamAndArtifact`: logs are never read while a job runs,
+  and artifact content has no download route.
+- S-7 `TestAgentRunIsolationAndEvidence`: namespaces are only checked against
+  the fake clientset, and evidence is never read after teardown.
+- S-7 `TestRunBudgetHardStop`: only the token limit stops a run; the stored
+  over_budget state is never read back.
+- S-8 `TestToolCallAudited`: the registry's audit entry is not checked for
+  arguments or outcome.
+- S-9 `TestAirGappedAgentRun`: "no egress to a hosted provider" is asserted
+  nowhere.
+- S-10 `TestGateBlocksMerge`: the controller and the merger are never joined
+  through the real client, and no merge is attempted end to end.
+- S-10 `TestGateConfigSelfEditRejected`: checked at the controller only, and
+  only for deleting gates, not weakening them.
+- S-12 `TestShortLivedCredential`: no job ever receives a brokered credential.
+- S-13 `TestMCPServerOperations`: none of the four operations succeeds over
+  either transport.
+- S-15 `TestIndexUpdatedOnPush`: the dependency index is not implemented, and
+  the search e2e has not been run.
+- S-18 `TestRepoConfigGoverns`: `.novaforge` agent configuration governs nothing
+  (`repoconfig.Load` has no caller).
+- S-19 `TestSwarmDependencyOrder`: role-to-agent assignment is not asserted, and
+  nothing marks a subtask blocked when its run fails.
+- S-20 `TestMaintenanceProposesWorkItem`: the production sweep from scanner to
+  proposal is untested.
+- S-21 `TestCLIFullLifecycle`: `nf run gates` and `nf run merge` are never
+  exercised.
+- S-22 `TestHelmDeploy`: the expected set of services is never checked.

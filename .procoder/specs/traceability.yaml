@@ -1,0 +1,495 @@
+# Traceability from backend-platform.md's acceptance criteria to the evidence
+# that actually proves them.
+#
+# The spec names one Go test per criterion. Most of those names were never
+# written: the behaviour is proven (or not) by tests with other names and by
+# the e2e scripts. Tests are not renamed to match, and no empty test carries a
+# criterion's name — this map says where the proof really is, and where it is
+# not. internal/spectrace's TestSpecTraceability fails when a criterion is
+# missing here, when this file names one the spec does not, when a mapped Go
+# test no longer exists, or when a mapped e2e script or step does not.
+#
+# Coverage was decided by reading the tests, not by their names.
+#   covered   every clause of the criterion is asserted somewhere below
+#   partial   some clauses are asserted; note says exactly what is not
+#   uncovered the behaviour cannot be observed on the deployed platform: the
+#             component is tested, but nothing in production calls it (or no
+#             test exists at all); note says what is missing
+#
+# go_tests entries are "<package path> <TestName>". e2e entries name a script
+# and the exact text of one of its `echo "== <step> =="` lines.
+
+spec: .procoder/specs/backend-platform.md
+
+criteria:
+  S-1/TestRegisterLoginTOTP:
+    status: covered
+    note: >-
+      Clauses are asserted across tests rather than in one flow: TOTP is turned
+      on through the enrolment RPCs in one test and written straight to the
+      store in the login test; a login with a wrong code (rather than none) is
+      not asserted.
+    go_tests:
+      - ./internal/identity TestLoginRequiresTOTPWhenEnabled
+      - ./internal/identity TestTOTPEnrolmentIsTwoStep
+      - ./internal/identity TestTOTPKnownVector
+      - ./internal/identity TestTOTPWindowTolerance
+    e2e:
+      - script: tests/e2e/deploy_test.sh
+        step: "3. register, log in, create an org and a repo through the API"
+      - script: tests/e2e/gui_test.sh
+        step: "3. an account can sign in and read what the app reads"
+
+  S-1/TestPATGitClone:
+    status: partial
+    note: >-
+      No test clones over Git-HTTPS with a personal access token (the e2e
+      clones use the session token), and a revoked token is rejected only at
+      token resolution, never at the git transport; git-platform's real
+      credential adapter (newAuthFunc/resolveSubject) is untested — transport
+      tests inject a stub AuthFunc.
+    go_tests:
+      - ./internal/identity TestTokenResolve
+      - ./internal/identity TestRevokedTokenRejected
+      - ./internal/identity TestResolveTokenRejectsRevoked
+      - ./internal/gitops TestCloneAndPushOverHTTP
+
+  S-2/TestStandardGitRoundTrip:
+    status: covered
+    note: >-
+      Only the e2e script proves every clause (HTTPS and SSH with an unmodified
+      client, then a REST read); the Go tests use stub auth and read back
+      through gitops.Repo, not REST.
+    go_tests:
+      - ./internal/gitops TestCloneAndPushOverHTTP
+      - ./internal/gitops TestCloneOverSSH
+      - ./internal/gitops TestPushOverSSH
+    e2e:
+      - script: tests/e2e/deploy_test.sh
+        step: "4. a standard git client clones, commits and pushes over HTTPS"
+      - script: tests/e2e/deploy_test.sh
+        step: "5. the same repository works over SSH"
+      - script: tests/e2e/deploy_test.sh
+        step: "6. the pushed commit is readable through the REST API"
+
+  S-2/TestRepoBrowseAPI:
+    status: partial
+    note: >-
+      Only commit history and branches are read through REST. Tree, blob and
+      diff are asserted at the gitops.Repo layer only, and tags are asserted
+      nowhere at any layer although the route exists.
+    go_tests:
+      - ./internal/gitops TestInitAndBranches
+      - ./internal/gitops TestTreeBlobAndDiff
+      - ./internal/gitops TestGetBlobUnknownPath
+      - ./internal/edge TestRefWithSlashesReachesTheService
+    e2e:
+      - script: tests/e2e/deploy_test.sh
+        step: "6. the pushed commit is readable through the REST API"
+
+  S-3/TestAgentBranchScopeEnforced:
+    status: partial
+    note: >-
+      The commit-tool half is proven with a real grant. The Git-transport half
+      is not: HTTP/SSH denial tests inject a stub CapFunc hard-coded to refuse
+      main, git-platform's real newCapFunc is untested, and no test pushes as
+      an agent — so "identically through both paths" is never asserted.
+    go_tests:
+      - ./internal/capability TestWriteBranchScopeEnforced
+      - ./internal/capability TestPrefixEscapeDenied
+      - ./internal/tools TestGitCommitRefusesOutOfScopeBranch
+      - ./internal/gitops TestPushDeniedByCapability
+      - ./internal/gitops TestPushOverSSHDeniedByCapability
+
+  S-3/TestCrossOrgAccessDenied:
+    status: partial
+    note: >-
+      Every service test injects an org scope rather than starting from real
+      credentials. Missing: cross-org repository reads other than ListRepos
+      (GetRepo, tree, blob, clone/push over HTTP/SSH) and any cross-org
+      repository write; cross-org Work Item writes other than AddComment; CI
+      run reads, logs and artifacts, and Agent Run get/cancel across orgs. No
+      e2e step uses a second organization.
+    go_tests:
+      - ./internal/authz TestRequireOrgRejectsCrossOrg
+      - ./internal/identity TestResolveOrgScopeRefusesNonMember
+      - ./internal/gitops TestListReposIsOrgScoped
+      - ./internal/work TestGetItemDeniedForForeignOrg
+      - ./internal/work TestListIsOrgScoped
+      - ./internal/work TestCommentsAreOrgScoped
+      - ./internal/reviews TestGetRunDeniedForForeignOrg
+      - ./internal/reviews TestAddCommentDeniedForForeignOrg
+      - ./internal/ci TestClaimNeverCrossesOrganizations
+      - ./internal/agents TestListAgentsIsOrgScoped
+
+  S-4/TestWorkItemLifecycle:
+    status: partial
+    note: >-
+      Only type and goal are asserted on create; acceptance criteria,
+      constraints and required gates are never created and read back.
+      Assignment to an agent is asserted, assignment to a human is not.
+    go_tests:
+      - ./internal/work TestCreateWorkItemAllocatesKey
+      - ./internal/work TestCreateItemAllocatesKeyOverGRPC
+      - ./internal/work TestRejectUnknownType
+      - ./internal/work TestAssignToAgent
+    e2e:
+      - script: tests/e2e/work_ci_test.sh
+        step: "2. a Work Item is created through the API"
+      - script: tests/e2e/agent_test.sh
+        step: "3. a Work Item is created for it"
+
+  S-5/TestEngineeringRunProof:
+    status: partial
+    note: >-
+      Per-gate proof is asserted. Change impact is only a pure function over a
+      stubbed diff, plan steps are asserted nowhere, and no test sets or reads
+      the agent and model behind an Engineering Run (the provenance test is for
+      Agent Runs). Nothing reads plan, impact and proof through the API.
+    go_tests:
+      - ./internal/reviews TestProofRecordsAccumulate
+      - ./internal/reviews TestReviewVerdictsRecordedAsProof
+      - ./internal/reviews TestComputeImpactCountsFiles
+      - ./internal/reviews TestCreateRunOverGRPC
+
+  S-5/TestSelfApprovalRejected:
+    status: covered
+    note: >-
+      The merge-refusal test uses a user author rather than an agent; the
+      agent-author case is asserted at SubmitReview and reviewer selection.
+    go_tests:
+      - ./internal/reviews TestAuthorCannotBeSoleApprover
+      - ./internal/reviews TestAuthorAgentExcludedFromReviewers
+      - ./internal/reviews TestMergeRequiresIndependentApproval
+      - ./internal/reviews TestSecondReviewerApproves
+
+  S-6/TestRunnerJobStreamAndArtifact:
+    status: partial
+    note: >-
+      A real runner runs a job and its log and artifact listing are read after
+      the run ends. "Logs observable while the job runs" is asserted only on
+      the Redis log stream with no job running, artifact content round-trips
+      only at the store (the edge has no artifact download route), and the
+      dispatch tests use in-process channels, not the gRPC stream.
+    go_tests:
+      - ./internal/ci TestPumpHandsAPendingJobToAConnectedRunner
+      - ./internal/ci TestDispatchReachesMatchingRunner
+      - ./internal/ci TestTailReceivesAppendedLines
+      - ./internal/ci TestSealMovesLogToObjectStorage
+      - ./internal/ci TestUploadThenOpen
+      - ./internal/runner TestExecuteStreamsLogLines
+      - ./internal/runner TestArtifactsRoundTripThroughOutput
+    e2e:
+      - script: tests/e2e/work_ci_test.sh
+        step: "4. pushing a workflow schedules a CI run"
+      - script: tests/e2e/work_ci_test.sh
+        step: "5. the run reaches a terminal state"
+      - script: tests/e2e/work_ci_test.sh
+        step: "6. the job log and artifact are retrievable"
+
+  S-6/TestAgentCIJob:
+    status: covered
+    go_tests:
+      - ./internal/ci TestAgentCIJob
+      - ./internal/ci TestAgentCIJobWithNoAgentForRoleFails
+      - ./internal/ci TestAgentCIJobWithoutSponsorFails
+      - ./internal/ci TestParseWorkflowWithAgentJob
+    e2e:
+      - script: tests/e2e/agent_ci_test.sh
+        step: "3. the agent job starts an Agent Run"
+      - script: tests/e2e/agent_ci_test.sh
+        step: "4. the job settles with the run's outcome"
+      - script: tests/e2e/agent_ci_test.sh
+        step: "5. the review is on the record"
+
+  S-7/TestAgentRunIsolationAndEvidence:
+    status: partial
+    note: >-
+      The per-run namespace and its destruction are asserted only against
+      client-go's fake clientset; no test observes a real namespace during a
+      run and gone after it, and no test reads a run's audit entries and
+      events after its namespace is destroyed.
+    go_tests:
+      - ./internal/workspace TestCreateMakesNamespacedPod
+      - ./internal/workspace TestCreateAppliesDenyAllNetworkPolicy
+      - ./internal/workspace TestDestroyRemovesNamespace
+      - ./internal/workspace TestReapRemovesOrphanedNamespaces
+      - ./internal/agentrun TestLoopRecordsEvidenceNotReasoning
+    e2e:
+      - script: tests/e2e/agent_test.sh
+        step: "6. the run is on the record with its capability grant"
+      - script: tests/e2e/agent_test.sh
+        step: "7. the agent actually did the work"
+
+  S-7/TestRunBudgetHardStop:
+    status: partial
+    note: >-
+      Only the token limit is shown stopping a run; wall-clock and cost are
+      asserted as Budget.Check errors only. The stored over_budget state is
+      never read back from the store, and evidence after the stop is not
+      asserted beyond provenance.
+    go_tests:
+      - ./internal/agentrun TestLoopStopsOnBudget
+      - ./internal/agents TestWallclockExceeded
+      - ./internal/agents TestTokenLimitExceeded
+      - ./internal/agents TestCostLimitExceeded
+      - ./internal/tools TestBudgetCheckedBeforeCall
+
+  S-7/TestAgentBranchLockedDuringRun:
+    status: uncovered
+    note: >-
+      agents.BranchLock is tested but has no production caller: nothing
+      acquires the lock when a run starts and git-platform's capability check
+      lets every user push, so a human push to an agent branch during a run is
+      accepted on the deployed platform.
+    go_tests:
+      - ./internal/agents TestHumanPushRejectedWhileLocked
+      - ./internal/agents TestAcquireThenSecondAcquireFails
+
+  S-8/TestToolCallAudited:
+    status: partial
+    note: >-
+      The registry test proves one work.get call is recorded by tool name but
+      not its arguments or outcome; arguments and outcome are asserted only by
+      calling AuditLog directly. No test covers the outcome the registry writes
+      for a failed call, "every" is proven for one tool, and no e2e step reads
+      the audit log.
+    go_tests:
+      - ./internal/tools TestEveryCallIsAudited
+      - ./internal/agents TestRecordThenComplete
+      - ./internal/agents TestArgsAreStoredVerbatim
+      - ./internal/agents TestFailedCallRetainsError
+
+  S-9/TestAirGappedAgentRun:
+    status: partial
+    note: >-
+      Runs complete against the cluster's FastLLM-served model (agent_test,
+      agent_ci_test), but "no network egress to any hosted provider" is
+      asserted nowhere: the chart has no egress NetworkPolicy for the services
+      and nothing checks the proxy does not forward upstream.
+    go_tests:
+      - ./internal/agentrun TestNewModelClientPassesProviderThrough
+    e2e:
+      - script: tests/e2e/agent_test.sh
+        step: "5. the run reaches a terminal state"
+      - script: tests/e2e/agent_test.sh
+        step: "7. the agent actually did the work"
+
+  S-10/TestGateBlocksMerge:
+    status: partial
+    note: >-
+      The controller refuses a failing, missing or stale gate and the merger
+      refuses when a stubbed checker says no, but no test joins the two through
+      work-reviews' real gate client, no run is authored by an agent that
+      declared completion, and no e2e step attempts a merge.
+    go_tests:
+      - ./internal/reviews TestMergeBlockedByFailingGate
+      - ./internal/gates TestMayMergeFalseWhenGateFails
+      - ./internal/gates TestMayMergeFalseWhenGateMissing
+      - ./internal/gates TestMayMergeFalseWhenEvaluationIsStale
+      - ./internal/reviews TestAllApprovalsStillRequireGates
+
+  S-10/TestGateConfigSelfEditRejected:
+    status: partial
+    note: >-
+      Asserted at the controller only, and only for a source branch that
+      deletes its gates; weakening a gate (e.g. required false) is not tested
+      and no self-editing change is sent through Merger.Merge.
+    go_tests:
+      - ./internal/gates TestGateConfigEditedInSourceIgnored
+      - ./internal/gates TestResolveReadsFromTargetRefNotSource
+
+  S-10/TestGateControllerUnreachableBlocks:
+    status: covered
+    note: >-
+      Unreachability is a stub checker returning Unavailable, not a dead gRPC
+      connection; the adapter that passes the error through is trivial.
+    go_tests:
+      - ./internal/reviews TestMergeBlockedWhenControllerUnreachable
+
+  S-11/TestApprovalPaths:
+    status: uncovered
+    note: >-
+      approvals.Decide is tested (schema change and production deploy paths,
+      and that model output is not an input) but nothing in production calls
+      it, so no real dependency addition, schema change or deploy follows an
+      approval path; adding a dependency has no test stating its decision.
+    go_tests:
+      - ./internal/approvals TestChangeDBSchemaRequiresArchitectureApproval
+      - ./internal/approvals TestDeployProductionForbiddenWithoutGrant
+      - ./internal/approvals TestPolicyIsNotDerivedFromModelOutput
+      - ./internal/approvals TestRulesMatchDecide
+
+  S-12/TestShortLivedCredential:
+    status: partial
+    note: >-
+      Expiry and the production-secret denial are asserted on the real broker,
+      but "a job receives a credential" is not: ci.ResolveJobCredentials and
+      the gates IssueLease/Redeem RPCs have no production caller, and the
+      denial is a grant flag rather than a staging-scoped run.
+    go_tests:
+      - ./internal/secrets TestLeaseExpires
+      - ./internal/secrets TestProductionSecretDeniedToStagingGrant
+      - ./internal/secrets TestRedeemedTokenIsSingleUse
+      - ./internal/secrets TestCrossRunRedeemDenied
+
+  S-12/TestBrokerDownFailsClosed:
+    status: uncovered
+    note: >-
+      ResolveJobCredentials and StateAfterCredentialResolution are tested
+      against a stub broker but neither is called by the scheduler, dispatcher
+      or runner, so on the deployed platform a credential-needing job is not
+      blocked when the broker is down.
+    go_tests:
+      - ./internal/ci TestCredentialFreeJobRunsWhenBrokerDown
+      - ./internal/ci TestCredentialJobBlocksWhenBrokerDown
+      - ./internal/ci TestJobStaysQueuedNotFailed
+
+  S-13/TestMCPServerOperations:
+    status: partial
+    note: >-
+      Only protocol plumbing is proven (initialize and tools/list over stdio,
+      tools/list over Streamable HTTP, a denied call against a fake backend).
+      None of the four operations — get a Work Item, search a repository,
+      create a branch, read gate status — succeeds in any test over either
+      transport, and the real backend (cmd/mcp-server/backend.go) is untested.
+    go_tests:
+      - ./internal/mcp TestToolsListReturnsExactlySeven
+      - ./internal/mcp TestStreamableHTTPRoundTrip
+      - ./internal/mcp TestInitializeAdvertisesCurrentProtocolVersion
+      - ./internal/mcp TestCallToolIsOrgScoped
+
+  S-14/TestGraphQueries:
+    status: uncovered
+    note: >-
+      The three query RPCs work against edges a test inserts by hand, but no
+      production code writes depends_on, tested_by or changed_by edges (the
+      indexer passes nil edges), so on a real repository every query answers
+      empty.
+    go_tests:
+      - ./internal/graph TestDependentsAnswersForSymbol
+      - ./internal/graph TestTestsCoveringAnswersForSymbol
+      - ./internal/graph TestLastChangedByReturnsWorkItem
+
+  S-15/TestIndexUpdatedOnPush:
+    status: partial
+    note: >-
+      A push publishes its event and the indexer, reading through the real git
+      service with a service credential, replaces the symbols and chunks of
+      exactly the changed files. The dependency index is not implemented: the
+      indexer discards Parse's references and writes no edges. search_test.sh
+      has not yet been run against the cluster.
+    go_tests:
+      - ./internal/gitops TestPushOverHTTPPublishesEvent
+      - ./internal/indexing TestRunConsumesPushEventsAndAcks
+      - ./internal/indexing TestFirstPushIsIndexedThroughTheRealGitService
+      - ./internal/indexing TestIndexesOnlyChangedPaths
+      - ./internal/indexing TestDeletedFileRemovesSymbols
+      - ./internal/indexing TestParseRecordsReferences
+    e2e:
+      - script: tests/e2e/search_test.sh
+        step: "3. the push is indexed with embeddings"
+
+  S-16/TestContextBounded:
+    status: covered
+    note: >-
+      Proven at the component against real Postgres with a fake git client;
+      the production adapter in cmd/engineering-graph is untested and nothing
+      calls the AssembleContext RPC (see S-17).
+    go_tests:
+      - ./internal/ctxasm TestBundleRespectsTokenBudget
+      - ./internal/ctxasm TestBundleExcludesUnrelatedFiles
+      - ./internal/ctxasm TestStaleIndexDegradesNotFails
+
+  S-17/TestKnowledgeRecall:
+    status: uncovered
+    note: >-
+      Knowledge appears in a ctxasm bundle, but agent runs never assemble
+      context — the AssembleContext RPC has no caller and the opening brief
+      carries only ids — so a recorded decision does not reach a later agent
+      run's context.
+    go_tests:
+      - ./internal/ctxasm TestKnowledgeIsIncluded
+      - ./internal/knowledge TestRecordAndSearch
+
+  S-18/TestRepoConfigGoverns:
+    status: partial
+    note: >-
+      Gates are governed by .novaforge/gates from the target ref and malformed
+      gate config fails closed, in production. Agent behaviour is not:
+      repoconfig.Load has no production caller, so .novaforge/agents and
+      project.yaml govern nothing and their loud failure is never seen.
+    go_tests:
+      - ./internal/gates TestResolveReadsFromTargetRefNotSource
+      - ./internal/gates TestMalformedGateConfigFailsClosed
+      - ./internal/gates TestUnknownGateNameRejected
+      - ./internal/repoconfig TestMalformedConfigFailsLoudly
+      - ./internal/repoconfig TestUnknownAgentToolRejected
+
+  S-19/TestSwarmDependencyOrder:
+    status: partial
+    note: >-
+      Ordered decomposition, materialisation and ready-only starts are proven,
+      on the cluster too. No test asserts a subtask goes to the agent for its
+      role, and the failed prerequisite is simulated with SetState — no
+      production code marks a subtask blocked when its Agent Run fails.
+    go_tests:
+      - ./internal/swarm TestDecomposeProducesOrderedSubtasks
+      - ./internal/swarm TestMaterialiseCreatesChildWorkItems
+      - ./internal/swarm TestTickStartsOnlyReadySubtasks
+      - ./internal/swarm TestFailedPrerequisiteBlocksDependents
+      - ./internal/work TestFailedBlockerKeepsDependentsBlocked
+    e2e:
+      - script: tests/e2e/factory_test.sh
+        step: "2. an epic decomposes into dependency-ordered subtasks"
+      - script: tests/e2e/factory_test.sh
+        step: "3. only dependency-free subtasks are startable"
+
+  S-20/TestMaintenanceProposesWorkItem:
+    status: partial
+    note: >-
+      The real CVE scanner finds a vulnerable module, and Propose turns a
+      hand-built finding into an unassigned Work Item with no agent run; the
+      production sweep joining them (cmd/work-reviews/maintenance.go) is
+      untested and factory_test.sh has no vulnerable-dependency step despite
+      its header.
+    go_tests:
+      - ./internal/maintenance TestCVEScannerFindsAKnownVulnerability
+      - ./internal/maintenance TestProposalCreatesUnassignedWorkItem
+      - ./internal/maintenance TestProposalNeverStartsAnAgentRun
+
+  S-21/TestOpenAPICoverage:
+    status: covered
+    note: Compared at method and path; operation schemas and parameters are not.
+    go_tests:
+      - ./internal/edge TestEveryRouteIsInOpenAPI
+      - ./internal/edge TestRouterMountsEveryRoute
+      - ./internal/edge TestEveryRouteHasAHandlerWhenWired
+
+  S-21/TestCLIFullLifecycle:
+    status: partial
+    note: >-
+      nf creates a repository and starts a run on the cluster, and the push is
+      a plain git push (nf has none). `nf run gates` and `nf run merge` exist
+      but no test or e2e step calls them, and no single test runs the whole
+      lifecycle.
+    go_tests:
+      - ./internal/cli TestRepoCreateAndList
+      - ./internal/cli TestLoginPersistsToken
+    e2e:
+      - script: tests/e2e/deploy_test.sh
+        step: "3. register, log in, create an org and a repo through the API"
+      - script: tests/e2e/agent_test.sh
+        step: "4. an Agent Run starts through the API"
+
+  S-22/TestHelmDeploy:
+    status: partial
+    note: >-
+      Every Deployment present must be ready, and readiness is /healthz, but
+      the step never checks the expected set of services exists — a chart that
+      omitted one would pass — and no test renders or installs the chart.
+    e2e:
+      - script: tests/e2e/deploy_test.sh
+        step: "1. every deployment reports ready"
+      - script: tests/e2e/deploy_test.sh
+        step: "2. edge answers readiness"
