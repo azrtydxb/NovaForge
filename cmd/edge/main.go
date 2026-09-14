@@ -20,6 +20,7 @@ import (
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	graphv1 "github.com/novaforge/novaforge/gen/novaforge/graph/v1"
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
+	mcpv1 "github.com/novaforge/novaforge/gen/novaforge/mcp/v1"
 	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
 	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
 	"github.com/novaforge/novaforge/internal/edge"
@@ -96,6 +97,21 @@ func main() {
 		gatesClient = gatesv1.NewGatesServiceClient(gatesConn)
 	}
 
+	// The chart has always set MCP_ADDR, and nothing read it. The MCP server
+	// register routes now depend on it; unset, they are absent (501) rather
+	// than answering as if no server had ever been requested.
+	var mcpClient mcpv1.McpServiceClient
+	if cfg.MCPAddr != "" {
+		mcpConn, err := dial(cfg.MCPAddr)
+		if err != nil {
+			log.Fatalf("edge: dial mcp-server: %v", err)
+		}
+		defer mcpConn.Close()
+		mcpClient = mcpv1.NewMcpServiceClient(mcpConn)
+	} else {
+		log.Println("edge: MCP_ADDR is unset; the MCP server register routes are not mounted")
+	}
+
 	ecfg := edge.Config{
 		Identity: identityv1.NewIdentityServiceClient(identityConn),
 		Git:      gitv1.NewGitServiceClient(gitConn),
@@ -105,6 +121,7 @@ func main() {
 		Agents:   agentsClient,
 		Graph:    graphClient,
 		Gates:    gatesClient,
+		MCP:      mcpClient,
 	}
 	ecfg.Handlers = edge.Handlers(ecfg)
 

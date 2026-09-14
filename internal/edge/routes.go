@@ -88,6 +88,8 @@ func Routes() []Route {
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/search", "searchCode", "Search a repository's indexed code by meaning"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/graph/symbol", "getSymbolRelations", "A symbol and what it relates to"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/maintenance", "listMaintenanceProposals", "What the maintenance scanners proposed"},
+		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/gates", "listGateConfig", "Every gate, as the default branch configures it"},
+		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/gates/{gate}/proposals", "proposeGateChange", "Propose a gate change as an Engineering Run; never writes the default branch"},
 
 		{http.MethodGet, "/api/v1/orgs/{org}/secrets", "listSecrets", "Secrets registered for an organization, names only"},
 		{http.MethodGet, "/api/v1/orgs/{org}/leases", "listLeases", "Credentials currently brokered to runs"},
@@ -95,6 +97,10 @@ func Routes() []Route {
 
 		{http.MethodGet, "/api/v1/approvals/policy", "approvalPolicy", "What the platform requires before each action"},
 		{http.MethodGet, "/api/v1/mcp/tools", "mcpTools", "The MCP tools this deployment exposes"},
+		{http.MethodGet, "/api/v1/orgs/{org}/mcp/servers", "listMcpServers", "External MCP servers registered for an organization"},
+		{http.MethodPost, "/api/v1/orgs/{org}/mcp/servers", "requestMcpServer", "Ask for an external MCP server to be approved"},
+		{http.MethodPost, "/api/v1/orgs/{org}/mcp/servers/{id}/decision", "decideMcpServer", "Approve or reject a pending MCP server (owner or admin)"},
+		{http.MethodDelete, "/api/v1/orgs/{org}/mcp/servers/{id}", "revokeMcpServer", "Revoke an approved MCP server (owner or admin)"},
 
 		{http.MethodGet, "/healthz", "healthz", "Readiness"},
 	}

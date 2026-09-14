@@ -17,6 +17,7 @@ export interface Field {
  * everywhere and there is one place that decides how a failure is shown. */
 export function Dialog({
   title,
+  description,
   submitLabel,
   fields,
   busy,
@@ -25,6 +26,9 @@ export function Dialog({
   onClose,
 }: {
   title: string;
+  /** description explains what submitting will do. A confirmation with no
+   * fields is a Dialog that is all description. */
+  description?: ReactNode;
   submitLabel: string;
   fields: Field[];
   busy: boolean;
@@ -72,6 +76,19 @@ export function Dialog({
         <h2 style={{ font: "600 15px var(--sans)", margin: "0 0 16px" }}>
           {title}
         </h2>
+
+        {description ? (
+          <div
+            style={{
+              font: "13px var(--sans)",
+              color: "var(--fg-dim)",
+              lineHeight: 1.6,
+              marginBottom: 16,
+            }}
+          >
+            {description}
+          </div>
+        ) : null}
 
         {fields.map((f) => (
           <label key={f.name} style={{ display: "block", marginBottom: 13 }}>

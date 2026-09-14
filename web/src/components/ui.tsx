@@ -131,6 +131,10 @@ export const STATE_COLORS: Record<string, [string, string]> = {
   pass: ["var(--ok-bg)", "var(--ok)"],
   fail: ["var(--bad-bg)", "var(--bad)"],
   error: ["var(--bad-bg)", "var(--bad)"],
+  pending: ["var(--warn-bg)", "var(--warn)"],
+  approved: ["var(--ok-bg)", "var(--ok)"],
+  rejected: ["var(--bad-bg)", "var(--bad)"],
+  revoked: ["rgba(255,255,255,.07)", "var(--fg-muted)"],
 };
 
 export function StatePill({ state }: { state: string }) {

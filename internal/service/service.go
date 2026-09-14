@@ -41,6 +41,9 @@ type Config struct {
 	GatesAddr    string
 	AgentsAddr   string
 	GraphAddr    string
+	// MCPAddr is mcp-server's gRPC address, which serves the register of
+	// approved external MCP servers.
+	MCPAddr string
 
 	S3Endpoint  string
 	S3AccessKey string
@@ -88,6 +91,7 @@ func LoadConfig() Config {
 		GatesAddr:                env("GATES_ADDR", ""),
 		AgentsAddr:               env("AGENTS_ADDR", ""),
 		GraphAddr:                env("GRAPH_ADDR", ""),
+		MCPAddr:                  env("MCP_ADDR", ""),
 		S3Endpoint:               env("S3_ENDPOINT", ""),
 		S3AccessKey:              env("S3_ACCESS_KEY", ""),
 		S3SecretKey:              env("S3_SECRET_KEY", ""),

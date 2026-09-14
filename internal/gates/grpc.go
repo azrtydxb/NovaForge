@@ -29,6 +29,10 @@ type GRPCServer struct {
 	Approvals  *approvals.Store
 	Secrets    *secrets.Broker
 	Grants     *capability.Store
+	// Proposals backs ListGateConfig and ProposeGateChange. Nil means this
+	// server was built without git and reviews clients, and those RPCs answer
+	// Unimplemented rather than pretending a repository has no gates.
+	Proposals *Proposer
 }
 
 // NewGRPCServer wraps the given dependencies as a gatesv1.GatesServiceServer.

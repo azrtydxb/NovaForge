@@ -87,14 +87,19 @@ func main() {
 	defer identityConn.Close()
 	identityClient := identityv1.NewIdentityServiceClient(identityConn)
 
-	gitConn, err := grpc.NewClient(cfg.GitAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// The caller's credential is forwarded on outbound calls. ProposeGateChange
+	// writes a branch and opens a run as the person who asked, and git-platform
+	// and reviews both refuse a call that arrives with no caller — correctly.
+	gitConn, err := grpc.NewClient(cfg.GitAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(svcauth.ForwardIncomingCredential))
 	if err != nil {
 		log.Fatalf("gates: dial git-platform: %v", err)
 	}
 	defer gitConn.Close()
 	gitClient := gitv1.NewGitServiceClient(gitConn)
 
-	workConn, err := grpc.NewClient(cfg.WorkAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	workConn, err := grpc.NewClient(cfg.WorkAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(svcauth.ForwardIncomingCredential))
 	if err != nil {
 		log.Fatalf("gates: dial work-reviews: %v", err)
 	}
@@ -115,6 +120,7 @@ func main() {
 	}
 
 	grpcServer := gates.NewGRPCServer(controller, approvalsStore, secretsBroker, grants)
+	grpcServer.Proposals = &gates.Proposer{Git: gitClient, Reviews: reviewsClient}
 
 	// Callers are resolved the same way every service resolves them: a
 	// person's credential through identity, or a platform service token

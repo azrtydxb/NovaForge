@@ -17,6 +17,8 @@ service GatesService {
   rpc ListSecrets(ListSecretsRequest) returns (ListSecretsResponse);
   rpc ListLeases(ListLeasesRequest) returns (ListLeasesResponse);
   rpc RevokeLease(RevokeLeaseRequest) returns (RevokeLeaseResponse);
+  rpc ListGateConfig(ListGateConfigRequest) returns (ListGateConfigResponse);
+  rpc ProposeGateChange(ProposeGateChangeRequest) returns (ProposeGateChangeResponse);
 }
 
 message Evaluation {
@@ -141,4 +143,51 @@ message RevokeLeaseRequest {
 }
 message RevokeLeaseResponse {
   bool revoked = 1;
+}
+
+// GateConfig is one gate the platform understands, as a repository's default
+// branch declares it. A gate with no file under .novaforge/gates is still
+// listed, undeclared, so a screen can offer to turn it on.
+message GateConfig {
+  string name = 1;
+  // declared is whether a file under .novaforge/gates names this gate.
+  bool declared = 2;
+  // enabled is the file's `required` flag: an enabled gate blocks a merge
+  // until it passes; a declared but disabled one is evaluated as advice.
+  bool enabled = 3;
+  string path = 4;
+  // params_json is the file's params mapping, JSON-encoded; "{}" when none.
+  string params_json = 5;
+}
+
+message ListGateConfigRequest {
+  string repo = 1;
+}
+
+message ListGateConfigResponse {
+  // ref is the branch the configuration was read from: the default branch.
+  string ref = 1;
+  string commit_sha = 2;
+  repeated GateConfig gates = 3;
+}
+
+// ProposeGateChangeRequest asks for a change to one gate. The change is never
+// written to the default branch: it is committed to a new branch and opened
+// as an Engineering Run, so weakening a gate is itself reviewed.
+message ProposeGateChangeRequest {
+  string repo = 1;
+  string gate = 2;
+  // enabled, when set, becomes the gate file's `required` flag.
+  optional bool enabled = 3;
+  // params_json, when non-empty, replaces the gate's params with this JSON
+  // object.
+  string params_json = 4;
+}
+
+message ProposeGateChangeResponse {
+  string run_id = 1;
+  int32 run_number = 2;
+  string branch = 3;
+  string commit_sha = 4;
+  string title = 5;
 }

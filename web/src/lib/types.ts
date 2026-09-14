@@ -168,3 +168,39 @@ export interface SSHKey {
   title: string;
   fingerprint: string;
 }
+
+/** One gate the platform understands, as a repository's default branch
+ * configures it. `enabled` is the file's `required` flag: an enabled gate
+ * blocks a merge until it passes. */
+export interface GateConfig {
+  name: string;
+  declared: boolean;
+  enabled: boolean;
+  path: string;
+  params: Record<string, unknown>;
+}
+
+/** An external MCP server an organization has been asked to let agents use.
+ * `url` is the endpoint for streamable_http, or the launch command for stdio. */
+export interface McpServer {
+  id: string;
+  name: string;
+  url: string;
+  transport: "stdio" | "streamable_http";
+  description: string;
+  status: "pending" | "approved" | "rejected" | "revoked";
+  requested_by: string;
+  decided_by: string;
+  decided_at: string;
+  reason: string;
+  created_at: string;
+}
+
+/** The Engineering Run a gate change became. */
+export interface GateProposal {
+  run_id: string;
+  run_number: number;
+  branch: string;
+  commit_sha: string;
+  title: string;
+}

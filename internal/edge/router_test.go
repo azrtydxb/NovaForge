@@ -146,6 +146,13 @@ func TestGRPCStatusMapping(t *testing.T) {
 		codes.AlreadyExists:    http.StatusConflict,
 		codes.InvalidArgument:  http.StatusBadRequest,
 		codes.Internal:         http.StatusInternalServerError,
+		// A refused merge and a gate proposal that changes nothing are the
+		// caller's answer, not a server fault; a 500 made the GUI report
+		// them as the platform breaking.
+		codes.FailedPrecondition: http.StatusConflict,
+		// "This deployment has no X" is how services say a feature is not
+		// configured, and 501 is what the GUI reads as unavailable.
+		codes.Unimplemented: http.StatusNotImplemented,
 	}
 	for code, want := range cases {
 		if got := edge.StatusFromGRPC(status.Error(code, "x")); got != want {

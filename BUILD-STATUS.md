@@ -252,6 +252,16 @@ These are real and are not worked around:
   branch overwrites what the default branch says. Merges made through the API
   and commits made by the `git.commit` tool publish no push event, so neither
   the indexer nor CI sees them.
+- **Approved external MCP servers are recorded, not yet consumed.** mcp-server
+  keeps each organization's register (request, approve or reject, revoke,
+  owner/admin only) and the MCP screen operates it, but nothing offers an
+  external MCP server to an agent: `internal/mcp.Client` exists and is called
+  only by its tests, and no agent run reads `.novaforge/mcp/` or the register.
+  Approving a server therefore changes nothing an agent can do until that
+  consumer is written, and it must read the approved list when it is.
+- **Gate toggles and the MCP register are tested against real git and
+  PostgreSQL but not yet on the cluster.** Neither has been deployed; the
+  gui_test.sh checks for their list endpoints have not run.
 
 ## Spec traceability
 
