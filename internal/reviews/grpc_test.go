@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
+	"github.com/novaforge/novaforge/internal/authz"
 	"github.com/novaforge/novaforge/internal/reviews"
 )
 
@@ -111,5 +112,43 @@ func TestListRunsRequiresScope(t *testing.T) {
 	_, err := srv.ListRuns(context.Background(), &reviewsv1.ListRunsRequest{RepoId: uuid.New().String()})
 	if status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("ListRuns with no scope: code = %v, want PermissionDenied", status.Code(err))
+	}
+}
+
+// TestSubmitReviewIsByTheCaller pins that a review is recorded as the person
+// who submitted it. reviewer_id used to be taken from the request, so the GUI
+// (which sends none) could not record a verdict at all, and a caller who did
+// send one could review under anyone's name — including approving a run as
+// someone other than its author when they were the author.
+func TestSubmitReviewIsByTheCaller(t *testing.T) {
+	srv := newGRPCServer(t)
+	orgID := uuid.New()
+	author := uuid.New()
+	authorCtx := authz.WithScope(context.Background(), authz.Scope{OrgID: orgID, ActorID: author, ActorKind: "user"})
+	run, err := srv.Store.CreateRun(authorCtx, reviews.Run{
+		OrgID: orgID, RepoID: uuid.New(), Title: "t", SourceRef: "feature", TargetRef: "main",
+		AuthorID: author, AuthorKind: "user",
+	})
+	if err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+
+	// No reviewer_id, as the GUI sends it: recorded as the caller.
+	reviewer := uuid.New()
+	reviewerCtx := authz.WithScope(context.Background(), authz.Scope{OrgID: orgID, ActorID: reviewer, ActorKind: "user"})
+	if _, err := srv.SubmitReview(reviewerCtx, &reviewsv1.SubmitReviewRequest{RunId: run.ID.String(), Verdict: "approve"}); err != nil {
+		t.Fatalf("SubmitReview without reviewer_id: %v", err)
+	}
+
+	// The author naming someone else as reviewer is refused.
+	_, err = srv.SubmitReview(authorCtx, &reviewsv1.SubmitReviewRequest{
+		RunId: run.ID.String(), Verdict: "approve", ReviewerId: uuid.NewString(), ReviewerKind: "user",
+	})
+	if status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("author reviewing under another id: code = %v, want PermissionDenied", status.Code(err))
+	}
+	// And reviewing as themselves still hits the self-approval rule.
+	if _, err := srv.SubmitReview(authorCtx, &reviewsv1.SubmitReviewRequest{RunId: run.ID.String(), Verdict: "approve"}); err == nil {
+		t.Fatal("the author approved their own run")
 	}
 }

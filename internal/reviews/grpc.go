@@ -248,11 +248,22 @@ func (g *GRPCServer) SubmitReview(ctx context.Context, req *reviewsv1.SubmitRevi
 	if err := g.requireRunInOrg(ctx, runID); err != nil {
 		return nil, err
 	}
-	reviewerID, err := parseUUID("reviewer_id", req.GetReviewerId())
+	// A review is recorded as the person who submitted it. reviewer_id was
+	// taken from the request, so the GUI (which sends none) could record no
+	// verdict, and a caller who sent one could review under anyone's name —
+	// an author could approve their own run as someone else. Agent reviews
+	// are recorded in-process by AgentReviewer, not through this RPC.
+	scope, err := authz.FromContext(ctx)
 	if err != nil {
-		return nil, err
+		return nil, status.Error(codes.Unauthenticated, "authentication required")
 	}
-	if err := g.Store.SubmitReview(ctx, runID, reviewerID, req.GetReviewerKind(), req.GetVerdict()); err != nil {
+	if scope.ActorKind != "user" || scope.ActorID == uuid.Nil {
+		return nil, status.Error(codes.PermissionDenied, "a review through the API is submitted by a person")
+	}
+	if id := req.GetReviewerId(); id != "" && id != scope.ActorID.String() {
+		return nil, status.Error(codes.PermissionDenied, "a review can only be submitted as yourself")
+	}
+	if err := g.Store.SubmitReview(ctx, runID, scope.ActorID, "user", req.GetVerdict()); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "submit review: %v", err)
 	}
 	g.considerAutoMerge(ctx, runID)
@@ -268,11 +279,18 @@ func (g *GRPCServer) AddComment(ctx context.Context, req *reviewsv1.AddCommentRe
 	if err := g.requireRunInOrg(ctx, runID); err != nil {
 		return nil, err
 	}
-	authorID, err := parseUUID("author_id", req.GetAuthorId())
+	// As with SubmitReview, the author is the caller, never a request field.
+	scope, err := authz.FromContext(ctx)
 	if err != nil {
-		return nil, err
+		return nil, status.Error(codes.Unauthenticated, "authentication required")
 	}
-	comment, err := g.Store.AddComment(ctx, runID, authorID, req.GetAuthorKind(), req.GetBody())
+	if scope.ActorKind != "user" || scope.ActorID == uuid.Nil {
+		return nil, status.Error(codes.PermissionDenied, "a comment through the API is written by a person")
+	}
+	if id := req.GetAuthorId(); id != "" && id != scope.ActorID.String() {
+		return nil, status.Error(codes.PermissionDenied, "a comment can only be written as yourself")
+	}
+	comment, err := g.Store.AddComment(ctx, runID, scope.ActorID, "user", req.GetBody())
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "add comment: %v", err)
 	}
