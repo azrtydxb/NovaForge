@@ -214,6 +214,36 @@ func (s *Server) DeleteRepo(ctx context.Context, req *gitv1.DeleteRepoRequest) (
 	return &gitv1.DeleteRepoResponse{Ok: true}, nil
 }
 
+// ListOrganizationsWithRepositories returns the id of every organization that
+// has at least one repository. It is the one query here without an
+// organization predicate, so it answers only a platform worker — a caller
+// whose token names no organization — and returns ids and nothing else. A
+// person, an agent, or an org-scoped service token is refused: none of them
+// has any business knowing which other organizations exist.
+func (s *Server) ListOrganizationsWithRepositories(ctx context.Context, _ *gitv1.ListOrganizationsWithRepositoriesRequest) (*gitv1.ListOrganizationsWithRepositoriesResponse, error) {
+	scope, err := authz.FromContext(ctx)
+	if err != nil || !scope.IsPlatformWorker() {
+		return nil, status.Error(codes.PermissionDenied, "only a platform worker may list organizations")
+	}
+	rows, err := s.pool.Query(ctx, `SELECT DISTINCT org_id FROM gitplatform.repositories ORDER BY org_id`)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "list organizations: %v", err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, status.Errorf(codes.Internal, "scan organization: %v", err)
+		}
+		out = append(out, id.String())
+	}
+	if err := rows.Err(); err != nil {
+		return nil, status.Errorf(codes.Internal, "list organizations: %v", err)
+	}
+	return &gitv1.ListOrganizationsWithRepositoriesResponse{OrgIds: out}, nil
+}
+
 // ListBranches lists a repository's branches.
 func (s *Server) ListBranches(ctx context.Context, req *gitv1.ListBranchesRequest) (*gitv1.ListBranchesResponse, error) {
 	repo, err := s.openScopedRepo(ctx, req.GetRepo())

@@ -19,19 +19,20 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	GitService_CreateRepo_FullMethodName   = "/novaforge.git.v1.GitService/CreateRepo"
-	GitService_GetRepo_FullMethodName      = "/novaforge.git.v1.GitService/GetRepo"
-	GitService_ListRepos_FullMethodName    = "/novaforge.git.v1.GitService/ListRepos"
-	GitService_DeleteRepo_FullMethodName   = "/novaforge.git.v1.GitService/DeleteRepo"
-	GitService_ListBranches_FullMethodName = "/novaforge.git.v1.GitService/ListBranches"
-	GitService_ListTags_FullMethodName     = "/novaforge.git.v1.GitService/ListTags"
-	GitService_ListCommits_FullMethodName  = "/novaforge.git.v1.GitService/ListCommits"
-	GitService_GetTree_FullMethodName      = "/novaforge.git.v1.GitService/GetTree"
-	GitService_GetBlob_FullMethodName      = "/novaforge.git.v1.GitService/GetBlob"
-	GitService_GetDiff_FullMethodName      = "/novaforge.git.v1.GitService/GetDiff"
-	GitService_Merge_FullMethodName        = "/novaforge.git.v1.GitService/Merge"
-	GitService_CreateBranch_FullMethodName = "/novaforge.git.v1.GitService/CreateBranch"
-	GitService_CreateCommit_FullMethodName = "/novaforge.git.v1.GitService/CreateCommit"
+	GitService_CreateRepo_FullMethodName                        = "/novaforge.git.v1.GitService/CreateRepo"
+	GitService_GetRepo_FullMethodName                           = "/novaforge.git.v1.GitService/GetRepo"
+	GitService_ListRepos_FullMethodName                         = "/novaforge.git.v1.GitService/ListRepos"
+	GitService_DeleteRepo_FullMethodName                        = "/novaforge.git.v1.GitService/DeleteRepo"
+	GitService_ListBranches_FullMethodName                      = "/novaforge.git.v1.GitService/ListBranches"
+	GitService_ListTags_FullMethodName                          = "/novaforge.git.v1.GitService/ListTags"
+	GitService_ListCommits_FullMethodName                       = "/novaforge.git.v1.GitService/ListCommits"
+	GitService_GetTree_FullMethodName                           = "/novaforge.git.v1.GitService/GetTree"
+	GitService_GetBlob_FullMethodName                           = "/novaforge.git.v1.GitService/GetBlob"
+	GitService_GetDiff_FullMethodName                           = "/novaforge.git.v1.GitService/GetDiff"
+	GitService_Merge_FullMethodName                             = "/novaforge.git.v1.GitService/Merge"
+	GitService_CreateBranch_FullMethodName                      = "/novaforge.git.v1.GitService/CreateBranch"
+	GitService_CreateCommit_FullMethodName                      = "/novaforge.git.v1.GitService/CreateCommit"
+	GitService_ListOrganizationsWithRepositories_FullMethodName = "/novaforge.git.v1.GitService/ListOrganizationsWithRepositories"
 )
 
 // GitServiceClient is the client API for GitService service.
@@ -55,6 +56,11 @@ type GitServiceClient interface {
 	Merge(ctx context.Context, in *MergeRequest, opts ...grpc.CallOption) (*MergeResponse, error)
 	CreateBranch(ctx context.Context, in *CreateBranchRequest, opts ...grpc.CallOption) (*CreateBranchResponse, error)
 	CreateCommit(ctx context.Context, in *CreateCommitRequest, opts ...grpc.CallOption) (*CreateCommitResponse, error)
+	// ListOrganizationsWithRepositories is a platform-worker RPC: it answers
+	// only a caller presenting a platform token (svcauth.MintPlatform), and only
+	// with organization ids. The worker re-enters each organization's scope with
+	// an org-scoped token before reading anything in it.
+	ListOrganizationsWithRepositories(ctx context.Context, in *ListOrganizationsWithRepositoriesRequest, opts ...grpc.CallOption) (*ListOrganizationsWithRepositoriesResponse, error)
 }
 
 type gitServiceClient struct {
@@ -195,6 +201,16 @@ func (c *gitServiceClient) CreateCommit(ctx context.Context, in *CreateCommitReq
 	return out, nil
 }
 
+func (c *gitServiceClient) ListOrganizationsWithRepositories(ctx context.Context, in *ListOrganizationsWithRepositoriesRequest, opts ...grpc.CallOption) (*ListOrganizationsWithRepositoriesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListOrganizationsWithRepositoriesResponse)
+	err := c.cc.Invoke(ctx, GitService_ListOrganizationsWithRepositories_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // GitServiceServer is the server API for GitService service.
 // All implementations should embed UnimplementedGitServiceServer
 // for forward compatibility.
@@ -216,6 +232,11 @@ type GitServiceServer interface {
 	Merge(context.Context, *MergeRequest) (*MergeResponse, error)
 	CreateBranch(context.Context, *CreateBranchRequest) (*CreateBranchResponse, error)
 	CreateCommit(context.Context, *CreateCommitRequest) (*CreateCommitResponse, error)
+	// ListOrganizationsWithRepositories is a platform-worker RPC: it answers
+	// only a caller presenting a platform token (svcauth.MintPlatform), and only
+	// with organization ids. The worker re-enters each organization's scope with
+	// an org-scoped token before reading anything in it.
+	ListOrganizationsWithRepositories(context.Context, *ListOrganizationsWithRepositoriesRequest) (*ListOrganizationsWithRepositoriesResponse, error)
 }
 
 // UnimplementedGitServiceServer should be embedded to have
@@ -263,6 +284,9 @@ func (UnimplementedGitServiceServer) CreateBranch(context.Context, *CreateBranch
 }
 func (UnimplementedGitServiceServer) CreateCommit(context.Context, *CreateCommitRequest) (*CreateCommitResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateCommit not implemented")
+}
+func (UnimplementedGitServiceServer) ListOrganizationsWithRepositories(context.Context, *ListOrganizationsWithRepositoriesRequest) (*ListOrganizationsWithRepositoriesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListOrganizationsWithRepositories not implemented")
 }
 func (UnimplementedGitServiceServer) testEmbeddedByValue() {}
 
@@ -518,6 +542,24 @@ func _GitService_CreateCommit_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GitService_ListOrganizationsWithRepositories_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListOrganizationsWithRepositoriesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GitServiceServer).ListOrganizationsWithRepositories(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GitService_ListOrganizationsWithRepositories_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GitServiceServer).ListOrganizationsWithRepositories(ctx, req.(*ListOrganizationsWithRepositoriesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // GitService_ServiceDesc is the grpc.ServiceDesc for GitService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -576,6 +618,10 @@ var GitService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateCommit",
 			Handler:    _GitService_CreateCommit_Handler,
+		},
+		{
+			MethodName: "ListOrganizationsWithRepositories",
+			Handler:    _GitService_ListOrganizationsWithRepositories_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -59,6 +59,13 @@ func withCallerScope(ctx context.Context, identity identityv1.IdentityServiceCli
 	if strings.HasPrefix(token, Prefix) {
 		service, orgID, err := Verify(hmacSecret, token)
 		if err != nil {
+			// A platform worker's token names no organization. Its scope has
+			// none either, so every org-scoped handler refuses it exactly as
+			// it refuses no scope; only a handler that asks IsPlatformWorker
+			// lets it in.
+			if worker, perr := VerifyPlatform(hmacSecret, token); perr == nil {
+				return authz.WithScope(ctx, authz.Scope{ActorKind: "service", PlatformWorker: worker})
+			}
 			return ctx
 		}
 		return authz.WithScope(ctx, authz.Scope{

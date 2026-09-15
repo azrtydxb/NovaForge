@@ -6,11 +6,13 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/novaforge/novaforge/internal/agentrun"
-	"github.com/novaforge/novaforge/internal/swarm"
 	"log"
 	"strings"
 	"time"
+
+	"github.com/novaforge/novaforge/internal/agentrun"
+	"github.com/novaforge/novaforge/internal/maintenance"
+	"github.com/novaforge/novaforge/internal/swarm"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -121,19 +123,20 @@ func main() {
 		defer gatesConn.Close()
 
 		gitClient := gitv1.NewGitServiceClient(gitConn)
+		sweeper := maintenance.NewSweeper(workStore, gitClient, cfg.HMACSecret)
 
 		// The maintenance scanners sweep every repository on an interval,
 		// proposing Work Items for what they find. Nothing here executes a
 		// fix or starts an agent: a proposal is a plain, unassigned Work
 		// Item somebody decides about.
 		if hours := cfg.MaintenanceIntervalHours; hours > 0 {
-			go runMaintenanceScanners(ctx, workStore, gitClient, cfg.HMACSecret, time.Duration(hours)*time.Hour)
+			go runMaintenanceScanners(ctx, sweeper, time.Duration(hours)*time.Hour)
 			log.Printf("work-reviews: maintenance scanners sweeping every %dh", hours)
 		} else {
 			log.Println("work-reviews: MAINTENANCE_INTERVAL_HOURS is unset; no maintenance sweep runs")
 		}
 
-		workServer.SetScanner(newRepositoryScanner(workStore, gitClient))
+		workServer.SetScanner(sweeper.Scanner())
 
 		// The same Merger backs the MergeRun RPC and auto-merge, so a person
 		// merging and the platform merging pass the identical gate check.

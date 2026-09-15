@@ -453,17 +453,28 @@ criteria:
         step: "3. only dependency-free subtasks are startable"
 
   S-20/TestMaintenanceProposesWorkItem:
-    status: partial
+    status: covered
     note: >-
-      The real CVE scanner finds a vulnerable module, and Propose turns a
-      hand-built finding into an unassigned Work Item with no agent run; the
-      production sweep joining them (cmd/work-reviews/maintenance.go) is
-      untested and factory_test.sh has no vulnerable-dependency step despite
-      its header.
+      TestMaintenanceProposesWorkItem runs the sweep production builds
+      (maintenance.NewSweeper): a repository holding golang.org/x/text v0.3.0
+      is served by the real git service over gRPC, the organization (which has
+      no Work Item) is found through git-platform's platform-worker RPC, the
+      real osv-scanner runs on the tree read through the service, and the
+      proposal is a security Work Item with no assignee awaiting approval. The
+      sweep is confined to the test's organization after asserting the
+      unfiltered list names it, because the dev database is shared. Only the
+      cve kind is exercised end to end. factory_test.sh step 5 was written in
+      this change and has not yet been run against the cluster.
     go_tests:
+      - ./internal/maintenance TestMaintenanceProposesWorkItem
+      - ./internal/svcauth TestPlatformTokenNamesNoOrganization
+      - ./cmd/git-platform TestInterceptorAdmitsThePlatformSweep
       - ./internal/maintenance TestCVEScannerFindsAKnownVulnerability
       - ./internal/maintenance TestProposalCreatesUnassignedWorkItem
       - ./internal/maintenance TestProposalNeverStartsAnAgentRun
+    e2e:
+      - script: tests/e2e/factory_test.sh
+        step: "5. a vulnerable dependency produces a proposed Work Item that nothing executes"
 
   S-21/TestOpenAPICoverage:
     status: covered

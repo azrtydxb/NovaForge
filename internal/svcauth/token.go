@@ -33,10 +33,41 @@ type claims struct {
 	Service   string    `json:"svc"`
 	OrgID     uuid.UUID `json:"org"`
 	ExpiresAt int64     `json:"exp"`
+	// Platform marks a token that names no organization (see MintPlatform).
+	Platform bool `json:"plat,omitempty"`
+}
+
+// MintPlatform returns a token for a platform worker that acts across
+// organizations, naming none. Verify refuses it — every org-scoped path uses
+// Verify — so the only thing it can reach is an RPC that checks for a
+// platform worker explicitly, and such an RPC returns ids only; the worker
+// then mints an org-scoped token to act inside each organization.
+func MintPlatform(secret, service string, ttl time.Duration) (string, error) {
+	return mint(secret, claims{Service: service, Platform: true}, ttl)
+}
+
+// VerifyPlatform checks a platform token and returns the worker's name. An
+// org-scoped token is refused.
+func VerifyPlatform(secret, token string) (string, error) {
+	c, err := verifyClaims(secret, token)
+	if err != nil {
+		return "", err
+	}
+	if !c.Platform || c.OrgID != uuid.Nil {
+		return "", fmt.Errorf("not a platform token")
+	}
+	if c.Service == "" {
+		return "", fmt.Errorf("platform token names no service")
+	}
+	return c.Service, nil
 }
 
 // Mint returns a token for service acting within orgID.
 func Mint(secret, service string, orgID uuid.UUID, ttl time.Duration) (string, error) {
+	return mint(secret, claims{Service: service, OrgID: orgID}, ttl)
+}
+
+func mint(secret string, c claims, ttl time.Duration) (string, error) {
 	if secret == "" {
 		return "", fmt.Errorf("no HMAC secret configured for service authentication")
 	}
@@ -45,9 +76,8 @@ func Mint(secret, service string, orgID uuid.UUID, ttl time.Duration) (string, e
 	if ttl == 0 {
 		ttl = DefaultTTL
 	}
-	body, err := json.Marshal(claims{
-		Service: service, OrgID: orgID, ExpiresAt: time.Now().Add(ttl).Unix(),
-	})
+	c.ExpiresAt = time.Now().Add(ttl).Unix()
+	body, err := json.Marshal(c)
 	if err != nil {
 		return "", err
 	}
@@ -56,39 +86,48 @@ func Mint(secret, service string, orgID uuid.UUID, ttl time.Duration) (string, e
 }
 
 // Verify checks a token's signature and expiry, returning the service name and
-// the organization it may act within.
+// the organization it may act within. A platform token, which names no
+// organization, is refused.
 func Verify(secret, token string) (string, uuid.UUID, error) {
+	c, err := verifyClaims(secret, token)
+	if err != nil {
+		return "", uuid.Nil, err
+	}
+	if c.OrgID == uuid.Nil || c.Platform {
+		return "", uuid.Nil, fmt.Errorf("service token carries no organization")
+	}
+	return c.Service, c.OrgID, nil
+}
+
+func verifyClaims(secret, token string) (claims, error) {
 	if secret == "" {
-		return "", uuid.Nil, fmt.Errorf("no HMAC secret configured for service authentication")
+		return claims{}, fmt.Errorf("no HMAC secret configured for service authentication")
 	}
 	rest, ok := strings.CutPrefix(token, Prefix)
 	if !ok {
-		return "", uuid.Nil, fmt.Errorf("not a service token")
+		return claims{}, fmt.Errorf("not a service token")
 	}
 	payload, sig, ok := strings.Cut(rest, ".")
 	if !ok {
-		return "", uuid.Nil, fmt.Errorf("malformed service token")
+		return claims{}, fmt.Errorf("malformed service token")
 	}
 	// Constant-time comparison: a timing-variable check on a signature leaks
 	// the signature a byte at a time.
 	if !hmac.Equal([]byte(sig), []byte(sign(secret, payload))) {
-		return "", uuid.Nil, fmt.Errorf("bad service token signature")
+		return claims{}, fmt.Errorf("bad service token signature")
 	}
 	raw, err := base64.RawURLEncoding.DecodeString(payload)
 	if err != nil {
-		return "", uuid.Nil, fmt.Errorf("malformed service token payload: %w", err)
+		return claims{}, fmt.Errorf("malformed service token payload: %w", err)
 	}
 	var c claims
 	if err := json.Unmarshal(raw, &c); err != nil {
-		return "", uuid.Nil, fmt.Errorf("malformed service token claims: %w", err)
+		return claims{}, fmt.Errorf("malformed service token claims: %w", err)
 	}
 	if time.Now().Unix() > c.ExpiresAt {
-		return "", uuid.Nil, fmt.Errorf("service token expired")
+		return claims{}, fmt.Errorf("service token expired")
 	}
-	if c.OrgID == uuid.Nil {
-		return "", uuid.Nil, fmt.Errorf("service token carries no organization")
-	}
-	return c.Service, c.OrgID, nil
+	return c, nil
 }
 
 func sign(secret, payload string) string {

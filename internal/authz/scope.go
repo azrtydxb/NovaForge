@@ -22,6 +22,19 @@ type Scope struct {
 	// It is empty for an agent or a platform service, which hold no
 	// membership role — so an owner-only action refuses them by default.
 	Role string
+
+	// PlatformWorker names a platform worker acting across organizations
+	// (see svcauth.MintPlatform). Such a scope has no OrgID, so every
+	// org-scoped query refuses it; only an RPC that checks IsPlatformWorker
+	// admits it, and such an RPC returns ids and nothing of an organization's
+	// content.
+	PlatformWorker string
+}
+
+// IsPlatformWorker reports whether the scope is a platform worker with no
+// organization.
+func (s Scope) IsPlatformWorker() bool {
+	return s.PlatformWorker != "" && s.ActorKind == "service" && s.OrgID == uuid.Nil
 }
 
 // IsOrgAdmin reports whether the scope is a person holding the owner or admin

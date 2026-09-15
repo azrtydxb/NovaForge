@@ -245,6 +245,22 @@ attachment and never with a renderable type. The work_ci e2e steps that read a
 running job's log and download the artifact are written but have not yet been
 run against the cluster.
 
+## The maintenance sweep, end to end (2026-09-15)
+
+The sweep moved from `cmd/work-reviews` into `maintenance.Sweeper`, and
+`TestMaintenanceProposesWorkItem` runs it as production builds it: a
+repository holding `golang.org/x/text v0.3.0` served by the real git service,
+the real osv-scanner, a security proposal with no assignee awaiting approval.
+It found that **the sweep skipped every organization without a Work Item** —
+it listed organizations through the work schema — so a new organization's
+first vulnerability could never be proposed. Organizations now come from
+git-platform's `ListOrganizationsWithRepositories`, which answers only a
+platform token (`svcauth.MintPlatform`, which names no organization and which
+every org-scoped path refuses) and returns ids only; the sweep then mints an
+org-scoped token per organization. `factory_test.sh` step 5 pushes a
+vulnerable `go.mod`, scans on demand and asserts the proposal; it is written
+but not yet run against the cluster.
+
 ## The GUI
 
 `web/` implements "NovaForge GUI.dc.html" from the claude.ai/design project
@@ -339,9 +355,6 @@ These are real and are not worked around:
   nothing offers an external MCP server to an agent: `internal/mcp.Client` is
   called only by its tests. Approving a server changes nothing an agent can do
   until that consumer is written, and it must read the approved list when it is.
-- **The maintenance sweep covers organizations that have Work Items.** It finds
-  organizations through the work schema, since it may not read identity's; an
-  organization with repositories and no Work Item is scanned only on demand.
 - **Deleting a repository leaves other services' rows behind.** Work Items, CI
   runs and reviews keyed on it stay in their schemas and become unreachable.
   Deleting an organization is an operator action (`hack/purge-orgs.sh`); there
@@ -357,7 +370,7 @@ by reading test bodies, not by matching names.
 from the map, when the map names a criterion the spec lacks, when a cited Go
 test is renamed or deleted, or when a cited e2e script or step no longer exists.
 
-**9 covered, 19 partial, 5 uncovered.**
+**10 covered, 18 partial, 5 uncovered.**
 
 Uncovered: the component is tested, but nothing in production calls it, so the
 behaviour cannot be seen on the deployed platform:
@@ -406,7 +419,5 @@ Partial (the map's `note` says exactly what is missing):
   (`repoconfig.Load` has no caller).
 - S-19 `TestSwarmDependencyOrder`: role-to-agent assignment is not asserted, and
   nothing marks a subtask blocked when its run fails.
-- S-20 `TestMaintenanceProposesWorkItem`: the production sweep from scanner to
-  proposal is untested.
 - S-21 `TestCLIFullLifecycle`: `nf run gates` and `nf run merge` are never
   exercised.

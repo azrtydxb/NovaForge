@@ -230,6 +230,14 @@ func resolveScopeFromMetadata(ctx context.Context, identityClient identityv1.Ide
 	if strings.HasPrefix(token, svcauth.Prefix) {
 		name, orgID, err := svcauth.Verify(hmacSecret, token)
 		if err != nil {
+			// A platform worker (the maintenance sweep) names no organization.
+			// Its scope has none, so every org-scoped RPC refuses it; only
+			// ListOrganizationsWithRepositories admits it. Without this branch
+			// that RPC refused the one caller it exists for, and the sweep
+			// silently covered nothing.
+			if worker, perr := svcauth.VerifyPlatform(hmacSecret, token); perr == nil {
+				return authz.Scope{ActorKind: "service", PlatformWorker: worker}, true
+			}
 			return authz.Scope{}, false
 		}
 		log.Printf("git-platform: accepted service token from %s for org %s", name, orgID)
