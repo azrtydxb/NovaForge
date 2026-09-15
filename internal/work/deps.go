@@ -56,6 +56,25 @@ func (s *Store) SetState(ctx context.Context, id uuid.UUID, newState string) err
 	return nil
 }
 
+// TransitionState moves id from state from to state to, scoped to the
+// caller's org, and reports whether it did: a Work Item that has already
+// moved on (completed, reopened by a person) is left as it is.
+func (s *Store) TransitionState(ctx context.Context, id uuid.UUID, from, to string) (bool, error) {
+	scope, err := authz.FromContext(ctx)
+	if err != nil {
+		return false, err
+	}
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE work.work_items SET state = $1
+		WHERE id = $2 AND org_id = $3 AND state = $4`,
+		to, id, scope.OrgID, from,
+	)
+	if err != nil {
+		return false, fmt.Errorf("transition state: %w", err)
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
 // ClaimOpen atomically claims id for execution by transitioning it from
 // "open" to "in_progress", returning claimed=false (no error) if it was not
 // in state "open" — the compare-and-swap that lets Task 3's scheduler start
