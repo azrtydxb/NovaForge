@@ -212,3 +212,24 @@ func TestRepoResolvableByIDAndName(t *testing.T) {
 		t.Fatalf("ListBranches by id: %v", err)
 	}
 }
+
+// TestReadsOfAnEmptyRepositoryAreNotFound pins that a repository with no commit
+// yet answers NotFound for its default branch, not Internal. git reports the
+// missing branch as "invalid object name", which matched none of the markers, so
+// every agent run against a new repository failed loading its .novaforge
+// configuration with an internal error.
+func TestReadsOfAnEmptyRepositoryAreNotFound(t *testing.T) {
+	srv, _ := newGitGRPCServer(t)
+	ctx := scopedCtx(uuid.New())
+	if _, err := srv.CreateRepo(ctx, &gitv1.CreateRepoRequest{Name: "empty"}); err != nil {
+		t.Fatalf("CreateRepo: %v", err)
+	}
+	_, err := srv.GetBlob(ctx, &gitv1.GetBlobRequest{Repo: "empty", Ref: "main", Path: ".novaforge/project.yaml"})
+	if status.Code(err) != codes.NotFound {
+		t.Fatalf("GetBlob on an empty repository: %v, want NotFound", err)
+	}
+	_, err = srv.GetTree(ctx, &gitv1.GetTreeRequest{Repo: "empty", Ref: "main", Path: ".novaforge/agents"})
+	if status.Code(err) != codes.NotFound {
+		t.Fatalf("GetTree on an empty repository: %v, want NotFound", err)
+	}
+}

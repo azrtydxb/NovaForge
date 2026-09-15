@@ -587,6 +587,9 @@ func isGitNotFound(err error) bool {
 		"Not a valid object name",
 		"fatal: bad object",
 		"ambiguous argument",
+		// An empty repository has no branch yet: "fatal: invalid object name
+		// 'main'" is the branch not existing, not the platform failing.
+		"invalid object name",
 	}
 	for _, m := range markers {
 		if strings.Contains(msg, m) {
