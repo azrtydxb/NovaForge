@@ -1214,12 +1214,17 @@ func (x *GetBlobResponse) GetContent() []byte {
 }
 
 type GetDiffRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Repo          string                 `protobuf:"bytes,1,opt,name=repo,proto3" json:"repo,omitempty"`
-	From          string                 `protobuf:"bytes,2,opt,name=from,proto3" json:"from,omitempty"`
-	To            string                 `protobuf:"bytes,3,opt,name=to,proto3" json:"to,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Repo  string                 `protobuf:"bytes,1,opt,name=repo,proto3" json:"repo,omitempty"`
+	From  string                 `protobuf:"bytes,2,opt,name=from,proto3" json:"from,omitempty"`
+	To    string                 `protobuf:"bytes,3,opt,name=to,proto3" json:"to,omitempty"`
+	// since_merge_base diffs `to` against the point it diverged from `from`
+	// (git's from...to) rather than against `from` as it is now. A branch's
+	// change is the former: the latter also counts, in reverse, everything
+	// that landed on `from` since the branch was cut.
+	SinceMergeBase bool `protobuf:"varint,4,opt,name=since_merge_base,json=sinceMergeBase,proto3" json:"since_merge_base,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *GetDiffRequest) Reset() {
@@ -1271,6 +1276,13 @@ func (x *GetDiffRequest) GetTo() string {
 		return x.To
 	}
 	return ""
+}
+
+func (x *GetDiffRequest) GetSinceMergeBase() bool {
+	if x != nil {
+		return x.SinceMergeBase
+	}
+	return false
 }
 
 type GetDiffResponse struct {
@@ -1803,11 +1815,12 @@ const file_novaforge_git_v1_git_proto_rawDesc = "" +
 	"\x03ref\x18\x02 \x01(\tR\x03ref\x12\x12\n" +
 	"\x04path\x18\x03 \x01(\tR\x04path\"+\n" +
 	"\x0fGetBlobResponse\x12\x18\n" +
-	"\acontent\x18\x01 \x01(\fR\acontent\"H\n" +
+	"\acontent\x18\x01 \x01(\fR\acontent\"r\n" +
 	"\x0eGetDiffRequest\x12\x12\n" +
 	"\x04repo\x18\x01 \x01(\tR\x04repo\x12\x12\n" +
 	"\x04from\x18\x02 \x01(\tR\x04from\x12\x0e\n" +
-	"\x02to\x18\x03 \x01(\tR\x02to\"+\n" +
+	"\x02to\x18\x03 \x01(\tR\x02to\x12(\n" +
+	"\x10since_merge_base\x18\x04 \x01(\bR\x0esinceMergeBase\"+\n" +
 	"\x0fGetDiffResponse\x12\x18\n" +
 	"\aunified\x18\x01 \x01(\tR\aunified\"\x92\x01\n" +
 	"\fMergeRequest\x12\x12\n" +

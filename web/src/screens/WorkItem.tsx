@@ -17,7 +17,13 @@ import {
   ACTIVE_RUN_STATES,
   CancelAgentRun,
 } from "../components/CancelAgentRun";
-import type { Agent, AgentRun, Subtask, WorkItem as Item } from "../lib/types";
+import type {
+  Agent,
+  AgentRun,
+  OrgMember,
+  Subtask,
+  WorkItem as Item,
+} from "../lib/types";
 
 interface Comment {
   id: string;
@@ -109,6 +115,47 @@ export function WorkItemDetail() {
     },
   });
 
+  // A Work Item is assignable to a person or an agent. The choices are the
+  // organization's members and its agents, labelled by kind, so the id sent
+  // is always one the platform issued rather than a typed name.
+  const members = useQuery({
+    queryKey: ["members", w.org],
+    queryFn: () =>
+      api.get<{ members: OrgMember[] }>(`/api/v1/orgs/${enc(w.org!)}/members`),
+    enabled: w.org !== null,
+  });
+  const assignees = [
+    ...(members.data?.members ?? []).map((m) => ({
+      label: `person · ${m.username}`,
+      id: m.user_id,
+      kind: "user",
+    })),
+    ...(agents.data?.agents ?? []).map((a) => ({
+      label: `agent · ${a.name}`,
+      id: a.id,
+      kind: "agent",
+    })),
+  ];
+  const assigneeName = (id: string, kind: string) =>
+    kind === "agent"
+      ? `agent · ${agentName(id)}`
+      : `person · ${members.data?.members.find((m) => m.user_id === id)?.username ?? id.slice(0, 8)}`;
+  const [assigning, setAssigning] = useState(false);
+  const assign = useMutation({
+    mutationFn: (v: Record<string, string>) => {
+      const choice = assignees.find((a) => a.label === v.assignee);
+      if (!choice) throw new Error("pick someone to assign");
+      return api.post(`${base}/assign`, {
+        assignee_id: choice.id,
+        assignee_kind: choice.kind,
+      });
+    },
+    onSuccess: () => {
+      setAssigning(false);
+      qc.invalidateQueries({ queryKey: ["work-item"] });
+    },
+  });
+
   const subs = subtasks.data?.subtasks ?? [];
 
   return (
@@ -118,6 +165,11 @@ export function WorkItemDetail() {
       actions={
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {item.data ? <StatePill state={item.data.state} /> : null}
+          {item.data && assignees.length > 0 ? (
+            <button onClick={() => setAssigning(true)} style={secondary}>
+              Assign
+            </button>
+          ) : null}
           {subs.length === 0 ? (
             <button
               onClick={() => decompose.mutate()}
@@ -162,6 +214,27 @@ export function WorkItemDetail() {
         />
       ) : null}
 
+      {assigning ? (
+        <Dialog
+          title={`Assign ${key}`}
+          submitLabel="Assign"
+          fields={[
+            {
+              name: "assignee",
+              label: "Assignee",
+              type: "select",
+              options: assignees.map((a) => a.label),
+              required: true,
+              help: "Assigning an agent does not start it; start an Agent Run when you want it to work.",
+            },
+          ]}
+          busy={assign.isPending}
+          error={assign.error}
+          onSubmit={(v) => assign.mutate(v)}
+          onClose={() => setAssigning(false)}
+        />
+      ) : null}
+
       {decompose.error ? (
         <div style={{ marginBottom: 14 }}>
           <Failed error={decompose.error} />
@@ -182,6 +255,17 @@ export function WorkItemDetail() {
               {(d) => (
                 <div style={{ padding: 14 }}>
                   <div style={{ font: "14px/1.6 var(--sans)" }}>{d.goal}</div>
+                  <div
+                    style={{
+                      marginTop: 8,
+                      font: "11px var(--mono)",
+                      color: "var(--fg-muted)",
+                    }}
+                  >
+                    {d.assignee_id
+                      ? `assigned to ${assigneeName(d.assignee_id, d.assignee_kind)}`
+                      : "unassigned"}
+                  </div>
                   <List title="Acceptance criteria" items={d.acceptance} />
                   <List title="Constraints" items={d.constraints} />
                   <List title="Required gates" items={d.required_gates} />

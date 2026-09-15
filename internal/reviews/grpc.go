@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
 	"github.com/novaforge/novaforge/internal/authz"
 )
@@ -34,6 +35,10 @@ type GRPCServer struct {
 	// enabled auto-merge, and Consider itself refuses when the policy is
 	// off, so this is two independent "no"s rather than one.
 	AutoMerge *AutoMerger
+
+	// Git measures a run's change impact. Nil means the deployment has no git
+	// service wired, and GetRunImpact says so.
+	Git gitv1.GitServiceClient
 }
 
 // NewGRPCServer wraps store as a reviewsv1.ReviewsServiceServer.

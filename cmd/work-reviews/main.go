@@ -150,6 +150,7 @@ func main() {
 
 		// The same Merger backs the MergeRun RPC and auto-merge, so a person
 		// merging and the platform merging pass the identical gate check.
+		reviewsServer.Git = gitClient
 		reviewsServer.Merger = &reviews.Merger{
 			Store: reviewsStore,
 			Gates: gateClient{gates: gatesv1.NewGatesServiceClient(gatesConn)},

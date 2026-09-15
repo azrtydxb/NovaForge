@@ -347,6 +347,52 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 			log.Printf("agent-runtime: run %s loop failed: %v", run.ID, err)
 		}
 		finishRun(ctx, store, run, state)
+		if state == "succeeded" {
+			openEngineeringRun(ctx, store, workClient, reviewsClient, gitClient, run, cfg)
+		}
+	}
+}
+
+// openEngineeringRun records which agent and model produced a succeeded run
+// and opens the Engineering Run its change is reviewed and merged through.
+// Failing to do either does not unmake the run's success, so it is logged.
+func openEngineeringRun(ctx context.Context, store *agents.Store, work workv1.WorkServiceClient, reviews reviewsv1.ReviewsServiceClient, git gitv1.GitServiceClient, run agents.Run, cfg service.Config) {
+	// The run's own token was minted when it started and may have expired
+	// over a long run; this is new work on its behalf, with a fresh one.
+	callCtx, err := withRunIdentity(context.WithoutCancel(ctx), cfg.HMACSecret, run.OrgID)
+	if err != nil {
+		log.Printf("agent-runtime: run %s: %v", run.ID, err)
+		return
+	}
+	scoped := authz.WithScope(callCtx, authz.Scope{OrgID: run.OrgID, ActorID: run.AgentID, ActorKind: "agent"})
+	agent, err := store.GetAgent(scoped, run.AgentID)
+	if err != nil {
+		log.Printf("agent-runtime: run %s: resolve agent: %v", run.ID, err)
+		return
+	}
+	item, err := work.GetItem(callCtx, &workv1.GetItemRequest{Id: run.WorkItemID.String()})
+	if err != nil {
+		log.Printf("agent-runtime: run %s: read work item: %v", run.ID, err)
+		return
+	}
+	if err := store.RecordProvenance(scoped, run.ID, agents.Provenance{
+		AgentName: agent.Name, ModelName: cfg.AIModel, WorkItemKey: item.GetItem().GetKey(),
+		RunRef: run.Branch, SponsorName: run.SponsorID.String(),
+	}); err != nil {
+		log.Printf("agent-runtime: run %s: record provenance: %v", run.ID, err)
+	}
+	opened, err := agentrun.OpenEngineeringRun(callCtx, reviews, git, agentrun.EngineeringRunSpec{
+		RepoID: run.RepoID, WorkItemID: run.WorkItemID, WorkItemKey: item.GetItem().GetKey(),
+		Goal: item.GetItem().GetGoal(), Acceptance: item.GetItem().GetAcceptance(),
+		Branch: run.Branch, AgentID: run.AgentID, AgentName: agent.Name, ModelName: cfg.AIModel,
+	})
+	switch {
+	case err != nil:
+		log.Printf("agent-runtime: run %s: open engineering run: %v", run.ID, err)
+	case opened == nil:
+		log.Printf("agent-runtime: run %s succeeded with no change on %s; no engineering run opened", run.ID, run.Branch)
+	default:
+		log.Printf("agent-runtime: run %s opened engineering run #%d", run.ID, opened.GetNumber())
 	}
 }
 

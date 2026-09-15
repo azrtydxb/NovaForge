@@ -123,12 +123,17 @@ criteria:
       - ./internal/agents TestListAgentsIsOrgScoped
 
   S-4/TestWorkItemLifecycle:
-    status: partial
+    status: covered
     note: >-
-      Only type and goal are asserted on create; acceptance criteria,
-      constraints and required gates are never created and read back.
-      Assignment to an agent is asserted, assignment to a human is not.
+      TestWorkItemLifecycle goes through the edge's REST handlers to the real
+      work service over gRPC on the real database: type, goal, acceptance
+      criteria, constraints and required gates are created and read back, an
+      unknown required gate is refused, and the item is assigned to a person
+      and then to an agent. The services' credential resolution is stood in
+      for by a scope-injecting interceptor; the edge's own authentication is
+      not part of this test.
     go_tests:
+      - ./internal/edge TestWorkItemLifecycle
       - ./internal/work TestCreateWorkItemAllocatesKey
       - ./internal/work TestCreateItemAllocatesKeyOverGRPC
       - ./internal/work TestRejectUnknownType
@@ -140,13 +145,20 @@ criteria:
         step: "3. a Work Item is created for it"
 
   S-5/TestEngineeringRunProof:
-    status: partial
+    status: covered
     note: >-
-      Per-gate proof is asserted. Change impact is only a pure function over a
-      stubbed diff, plan steps are asserted nowhere, and no test sets or reads
-      the agent and model behind an Engineering Run (the provenance test is for
-      Agent Runs). Nothing reads plan, impact and proof through the API.
+      TestEngineeringRunProof opens an agent-authored run with
+      agentrun.OpenEngineeringRun (what agent-runtime calls when an Agent Run
+      succeeds) against a real repository in the real git service, then reads
+      through the REST API: the agent and model behind it, the plan (the Work
+      Item's criteria), change impact from the real diff since the merge base
+      (seen red at three files with a two-point diff) with its risk and
+      reason, and per-gate proof. The agent-runtime call site itself runs only
+      after a real model run and is proven by no test here; the proof is
+      recorded through RecordProof rather than a gate evaluation.
     go_tests:
+      - ./internal/edge TestEngineeringRunProof
+      - ./internal/reviews TestAssessRiskSaysWhy
       - ./internal/reviews TestProofRecordsAccumulate
       - ./internal/reviews TestReviewVerdictsRecordedAsProof
       - ./internal/reviews TestComputeImpactCountsFiles

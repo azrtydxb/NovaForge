@@ -131,6 +131,11 @@ message GetDiffRequest {
   string repo = 1;
   string from = 2;
   string to = 3;
+  // since_merge_base diffs `to` against the point it diverged from `from`
+  // (git's from...to) rather than against `from` as it is now. A branch's
+  // change is the former: the latter also counts, in reverse, everything
+  // that landed on `from` since the branch was cut.
+  bool since_merge_base = 4;
 }
 message GetDiffResponse {
   string unified = 1;

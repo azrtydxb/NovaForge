@@ -48,6 +48,14 @@ const FILTERS: { label: string; state: string | null }[] = [
   { label: "Done", state: "done" },
 ];
 
+/** lines turns a one-per-line textarea into the list the API takes. */
+function lines(v: string | undefined): string[] {
+  return (v ?? "")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+}
+
 export function Work() {
   const w = useWorkspace();
   const repos = scopedRepos(w);
@@ -90,10 +98,9 @@ export function Work() {
       api.post(`/api/v1/orgs/${enc(w.org!)}/repos/${enc(v.repo!)}/work`, {
         type: v.type,
         goal: v.goal,
-        acceptance: (v.acceptance ?? "")
-          .split("\n")
-          .map((l) => l.trim())
-          .filter(Boolean),
+        acceptance: lines(v.acceptance),
+        constraints: lines(v.constraints),
+        required_gates: lines(v.required_gates),
       }),
     onSuccess: () => {
       setCreating(false);
@@ -181,6 +188,20 @@ export function Work() {
               type: "textarea",
               placeholder: "One per line",
               help: "What must be true when this is done. An agent is judged against these.",
+            },
+            {
+              name: "constraints",
+              label: "Constraints",
+              type: "textarea",
+              placeholder: "One per line",
+              help: "What the work must not do, e.g. no new datastore.",
+            },
+            {
+              name: "required_gates",
+              label: "Required gates",
+              type: "textarea",
+              placeholder: "One per line",
+              help: "Gates the change must pass before it merges: tests, architecture, security, api-compatibility, dependencies, quality, documentation.",
             },
           ]}
           busy={create.isPending}

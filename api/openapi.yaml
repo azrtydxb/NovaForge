@@ -1202,6 +1202,35 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/orgs/{org}/repos/{repo}/runs/{number}/impact:
+    get:
+      operationId: getRunImpact
+      summary: A run's change impact, measured from its merge base, with a stated risk
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: number
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/orgs/{org}/repos/{repo}/runs/{number}/merge:
     post:
       operationId: mergeRun

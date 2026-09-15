@@ -222,7 +222,18 @@ func (r Repo) Blob(ref, path string) ([]byte, error) {
 
 // Diff returns the unified diff between from and to.
 func (r Repo) Diff(from, to string) (string, error) {
-	out, err := run("", "--git-dir="+r.path, "diff", from+".."+to)
+	return r.diff(from + ".." + to)
+}
+
+// DiffSinceMergeBase returns the unified diff of to against the commit where
+// it diverged from from — a branch's own change, whatever has landed on from
+// since.
+func (r Repo) DiffSinceMergeBase(from, to string) (string, error) {
+	return r.diff(from + "..." + to)
+}
+
+func (r Repo) diff(rangeSpec string) (string, error) {
+	out, err := run("", "--git-dir="+r.path, "diff", rangeSpec)
 	if err != nil {
 		return "", err
 	}

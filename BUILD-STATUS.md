@@ -293,6 +293,27 @@ Not covered: a schema added on another branch after this change
 (`graph.file_references` exists in the shared dev database) is not purged
 until its owner's purge learns it.
 
+## Work Items and Engineering Runs through the API (2026-09-15)
+
+`TestWorkItemLifecycle` and `TestEngineeringRunProof` drive the REST handlers
+against the real work, reviews and git services. They found:
+
+- **No Engineering Run was ever opened for an agent's work.** A succeeded Agent
+  Run's commits stopped on its branch, with no plan, impact, proof or record of
+  agent and model, and `RecordProvenance` had no caller. agent-runtime now
+  records provenance and opens a run authored by the agent, naming the model it
+  ran on, with the Work Item's acceptance criteria as its plan.
+- **Change impact counted changes the run never made.** It diffed the branch
+  against the target as it is now, so everything merged to the target after the
+  branch was cut counted, in reverse — auto-merge's size cap included. Impact
+  and the run's Changes tab now diff from the merge base.
+- **Change impact had no route.** `GET .../runs/{number}/impact` returns files,
+  lines, paths and a risk level with the rule that set it; RunDetail shows it.
+- **A Work Item could require a gate that does not exist** and never be
+  mergeable; unknown gates are refused. The Work screen can now set
+  constraints and required gates, and a Work Item can be assigned to a person
+  or an agent from its page.
+
 ## The GUI
 
 `web/` implements "NovaForge GUI.dc.html" from the claude.ai/design project
@@ -398,7 +419,7 @@ by reading test bodies, not by matching names.
 from the map, when the map names a criterion the spec lacks, when a cited Go
 test is renamed or deleted, or when a cited e2e script or step no longer exists.
 
-**10 covered, 18 partial, 5 uncovered.**
+**12 covered, 16 partial, 5 uncovered.**
 
 Uncovered: the component is tested, but nothing in production calls it, so the
 behaviour cannot be seen on the deployed platform:
@@ -422,10 +443,6 @@ Partial (the map's `note` says exactly what is missing):
   capability function, never a real agent grant.
 - S-3 `TestCrossOrgAccessDenied`: most cross-org repo, Work Item write, CI run and
   Agent Run paths are unasserted.
-- S-4 `TestWorkItemLifecycle`: acceptance criteria, constraints, required gates
-  and assignment to a human are never asserted.
-- S-5 `TestEngineeringRunProof`: plan, change impact and the producing
-  agent/model are never exposed by a run in any test.
 - S-7 `TestAgentRunIsolationAndEvidence`: namespaces are only checked against
   the fake clientset, and evidence is never read after teardown.
 - S-7 `TestRunBudgetHardStop`: only the token limit stops a run; the stored

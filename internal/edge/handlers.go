@@ -453,6 +453,9 @@ func addGitHandlers(h map[string]http.HandlerFunc, c gitv1.GitServiceClient) {
 		q := r.URL.Query()
 		resp, err := c.GetDiff(r.Context(), &gitv1.GetDiffRequest{
 			Repo: chi.URLParam(r, "repo"), From: q.Get("from"), To: q.Get("to"),
+			// merge_base=true diffs `to` from where it diverged from `from`:
+			// a branch's own change, which is what a run's reviewer reads.
+			SinceMergeBase: q.Get("merge_base") == "true",
 		})
 		if err != nil {
 			WriteError(w, StatusFromGRPC(err), err)

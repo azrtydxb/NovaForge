@@ -12,21 +12,20 @@ import (
 	"gopkg.in/yaml.v3"
 
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
+	"github.com/novaforge/novaforge/internal/gatenames"
 )
 
 // knownGates is the fixed set of gate names the platform understands. A
 // definition or a Work Item requirement naming anything outside this set is
 // rejected rather than silently accepted, so enforcement can never be
 // weakened by a typo or a made-up gate.
-var knownGates = map[string]bool{
-	"tests":             true,
-	"architecture":      true,
-	"security":          true,
-	"api-compatibility": true,
-	"dependencies":      true,
-	"quality":           true,
-	"documentation":     true,
-}
+var knownGates = func() map[string]bool {
+	m := map[string]bool{}
+	for _, n := range gatenames.All() {
+		m[n] = true
+	}
+	return m
+}()
 
 // gateFile is the YAML shape of one file under .novaforge/gates/.
 type gateFile struct {

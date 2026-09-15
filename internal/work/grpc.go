@@ -2,6 +2,7 @@ package work
 
 import (
 	"context"
+	"strings"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
@@ -9,6 +10,7 @@ import (
 
 	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
 	"github.com/novaforge/novaforge/internal/authz"
+	"github.com/novaforge/novaforge/internal/gatenames"
 )
 
 // GRPCServer implements workv1.WorkServiceServer. Every method derives the
@@ -77,6 +79,13 @@ func (g *GRPCServer) CreateItem(ctx context.Context, req *workv1.CreateItemReque
 	repoID, err := parseUUID("repo_id", req.GetRepoId())
 	if err != nil {
 		return nil, err
+	}
+	// A required gate the platform does not enforce can never pass, so the
+	// item could never be merged — for a typo nobody would notice until then.
+	for _, gate := range req.GetRequiredGates() {
+		if !gatenames.Known(gate) {
+			return nil, status.Errorf(codes.InvalidArgument, "required gate %q is not one of %s", gate, strings.Join(gatenames.All(), ", "))
+		}
 	}
 	item, err := g.Store.Create(ctx, Item{
 		OrgID:         orgID,

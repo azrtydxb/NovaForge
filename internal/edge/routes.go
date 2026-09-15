@@ -77,6 +77,7 @@ func Routes() []Route {
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}/merge", "mergeRun", "Merge, if the gates allow it"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}/gates/evaluate", "evaluateRunGates", "Run the run's gates at its current head and record their proof"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}/plan", "getRunPlan", "A run's plan"},
+		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}/impact", "getRunImpact", "A run's change impact, measured from its merge base, with a stated risk"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}/tools", "getRunToolCalls", "The tool calls the agent run behind this run made"},
 
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/ci/runs", "listCIRuns", "CI runs for a repository"},
