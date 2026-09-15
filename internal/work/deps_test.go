@@ -238,23 +238,3 @@ func TestOpenEpicsFindsDecomposedEpics(t *testing.T) {
 		t.Fatal("an item with no subtasks was listed as an epic")
 	}
 }
-
-func TestOrganizationsWithWorkListsTheOrg(t *testing.T) {
-	store := newStore(t)
-	orgID := uuid.New()
-	ctx := scopedCtx(orgID)
-
-	if _, err := store.Create(ctx, work.Item{OrgID: orgID, RepoID: uuid.New(), Type: "bug", Goal: "x"}); err != nil {
-		t.Fatalf("create: %v", err)
-	}
-	orgs, err := store.OrganizationsWithWork(context.Background())
-	if err != nil {
-		t.Fatalf("OrganizationsWithWork: %v", err)
-	}
-	for _, id := range orgs {
-		if id == orgID {
-			return
-		}
-	}
-	t.Fatal("the organization is not listed, so the maintenance sweep would skip it")
-}

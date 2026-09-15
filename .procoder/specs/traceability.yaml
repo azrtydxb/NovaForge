@@ -152,12 +152,17 @@ criteria:
         step: "5. A cannot reach B's Work Items, runs, Agent Runs, CI or MCP register"
 
   S-4/TestWorkItemLifecycle:
-    status: partial
+    status: covered
     note: >-
-      Only type and goal are asserted on create; acceptance criteria,
-      constraints and required gates are never created and read back.
-      Assignment to an agent is asserted, assignment to a human is not.
+      TestWorkItemLifecycle goes through the edge's REST handlers to the real
+      work service over gRPC on the real database: type, goal, acceptance
+      criteria, constraints and required gates are created and read back, an
+      unknown required gate is refused, and the item is assigned to a person
+      and then to an agent. The services' credential resolution is stood in
+      for by a scope-injecting interceptor; the edge's own authentication is
+      not part of this test.
     go_tests:
+      - ./internal/edge TestWorkItemLifecycle
       - ./internal/work TestCreateWorkItemAllocatesKey
       - ./internal/work TestCreateItemAllocatesKeyOverGRPC
       - ./internal/work TestRejectUnknownType
@@ -169,13 +174,20 @@ criteria:
         step: "3. a Work Item is created for it"
 
   S-5/TestEngineeringRunProof:
-    status: partial
+    status: covered
     note: >-
-      Per-gate proof is asserted. Change impact is only a pure function over a
-      stubbed diff, plan steps are asserted nowhere, and no test sets or reads
-      the agent and model behind an Engineering Run (the provenance test is for
-      Agent Runs). Nothing reads plan, impact and proof through the API.
+      TestEngineeringRunProof opens an agent-authored run with
+      agentrun.OpenEngineeringRun (what agent-runtime calls when an Agent Run
+      succeeds) against a real repository in the real git service, then reads
+      through the REST API: the agent and model behind it, the plan (the Work
+      Item's criteria), change impact from the real diff since the merge base
+      (seen red at three files with a two-point diff) with its risk and
+      reason, and per-gate proof. The agent-runtime call site itself runs only
+      after a real model run and is proven by no test here; the proof is
+      recorded through RecordProof rather than a gate evaluation.
     go_tests:
+      - ./internal/edge TestEngineeringRunProof
+      - ./internal/reviews TestAssessRiskSaysWhy
       - ./internal/reviews TestProofRecordsAccumulate
       - ./internal/reviews TestReviewVerdictsRecordedAsProof
       - ./internal/reviews TestComputeImpactCountsFiles
@@ -193,28 +205,37 @@ criteria:
       - ./internal/reviews TestSecondReviewerApproves
 
   S-6/TestRunnerJobStreamAndArtifact:
-    status: partial
+    status: covered
     note: >-
-      A real runner runs a job and its log and artifact listing are read after
-      the run ends. "Logs observable while the job runs" is asserted only on
-      the Redis log stream with no job running, artifact content round-trips
-      only at the store (the edge has no artifact download route), and the
-      dispatch tests use in-process channels, not the gRPC stream.
+      TestRunnerJobStreamAndArtifact runs the whole path over a real gRPC
+      server on a local listener: the runner's own Session receives the job
+      from the pump on its Connect stream, streams LogChunks, and GetJobLogs
+      returns the first line while the job is provably still running; the
+      finished log is sealed into MinIO and the artifact downloads byte for
+      byte, and not for another organization. The job runs through
+      LocalExecutor, which shares the pod executor's live output filter
+      (TestJobOutputReachesTheLogWhileTheJobRuns); a pod job itself is proven
+      only by work_ci_test.sh, whose live-log and download steps were written
+      in this change and have not yet been run against the cluster.
     go_tests:
+      - ./internal/ci TestRunnerJobStreamAndArtifact
+      - ./internal/runner TestJobOutputReachesTheLogWhileTheJobRuns
+      - ./internal/edge TestDownloadArtifactServesTheFile
+      - ./internal/edge TestDownloadArtifactReportsAbsence
       - ./internal/ci TestPumpHandsAPendingJobToAConnectedRunner
-      - ./internal/ci TestDispatchReachesMatchingRunner
-      - ./internal/ci TestTailReceivesAppendedLines
       - ./internal/ci TestSealMovesLogToObjectStorage
-      - ./internal/ci TestUploadThenOpen
-      - ./internal/runner TestExecuteStreamsLogLines
       - ./internal/runner TestArtifactsRoundTripThroughOutput
     e2e:
       - script: tests/e2e/work_ci_test.sh
         step: "5. pushing a workflow schedules a CI run"
       - script: tests/e2e/work_ci_test.sh
-        step: "6. the run reaches a terminal state"
+        step: "6. the job log is readable while the job runs"
       - script: tests/e2e/work_ci_test.sh
-        step: "7. the job log and artifact are retrievable"
+        step: "8. the job log and artifact are retrievable"
+      - script: tests/e2e/work_ci_test.sh
+        step: "9. the artifact's content downloads through the API"
+      - script: tests/e2e/work_ci_test.sh
+        step: "7. the run reaches a terminal state"
 
   S-6/TestAgentCIJob:
     status: covered
@@ -419,7 +440,7 @@ criteria:
       - script: tests/e2e/work_ci_test.sh
         step: "4. a secret is registered through the API, and no read returns it"
       - script: tests/e2e/work_ci_test.sh
-        step: "8. the secret job read its brokered credential, and its log never shows it"
+        step: "10. the secret job read its brokered credential, and its log never shows it"
 
   S-12/TestBrokerDownFailsClosed:
     status: covered
@@ -584,17 +605,28 @@ criteria:
         step: "3. only dependency-free subtasks are startable"
 
   S-20/TestMaintenanceProposesWorkItem:
-    status: partial
+    status: covered
     note: >-
-      The real CVE scanner finds a vulnerable module, and Propose turns a
-      hand-built finding into an unassigned Work Item with no agent run; the
-      production sweep joining them (cmd/work-reviews/maintenance.go) is
-      untested and factory_test.sh has no vulnerable-dependency step despite
-      its header.
+      TestMaintenanceProposesWorkItem runs the sweep production builds
+      (maintenance.NewSweeper): a repository holding golang.org/x/text v0.3.0
+      is served by the real git service over gRPC, the organization (which has
+      no Work Item) is found through git-platform's platform-worker RPC, the
+      real osv-scanner runs on the tree read through the service, and the
+      proposal is a security Work Item with no assignee awaiting approval. The
+      sweep is confined to the test's organization after asserting the
+      unfiltered list names it, because the dev database is shared. Only the
+      cve kind is exercised end to end. factory_test.sh step 5 was written in
+      this change and has not yet been run against the cluster.
     go_tests:
+      - ./internal/maintenance TestMaintenanceProposesWorkItem
+      - ./internal/svcauth TestPlatformTokenNamesNoOrganization
+      - ./internal/svcauth TestInterceptorAdmitsThePlatformWorker
       - ./internal/maintenance TestCVEScannerFindsAKnownVulnerability
       - ./internal/maintenance TestProposalCreatesUnassignedWorkItem
       - ./internal/maintenance TestProposalNeverStartsAnAgentRun
+    e2e:
+      - script: tests/e2e/factory_test.sh
+        step: "5. a vulnerable dependency produces a proposed Work Item that nothing executes"
 
   S-21/TestOpenAPICoverage:
     status: covered
@@ -625,11 +657,18 @@ criteria:
         step: "6. nf merges and main carries the change"
 
   S-22/TestHelmDeploy:
-    status: partial
+    status: covered
     note: >-
-      Every Deployment present must be ready, and readiness is /healthz, but
-      the step never checks the expected set of services exists — a chart that
-      omitted one would pass — and no test renders or installs the chart.
+      The chart is rendered with the helm binary and every values.yaml service
+      must have a Deployment running its own binary, a Service, and every
+      environment variable its binary's type-checked package reads without
+      defaulting (skipped only where helm is absent). On the cluster the
+      expected Deployments are rendered from the release's own values and must
+      all exist and be ready, readiness being /healthz. The expected-set part
+      of step 1 was written in this change and has not yet been run against
+      the cluster. Agent runs as pods in per-run namespaces are S-7's evidence.
+    go_tests:
+      - ./internal/service TestHelmChartDeploysEveryServiceWithTheEnvironmentItsBinaryReads
     e2e:
       - script: tests/e2e/deploy_test.sh
         step: "1. every deployment reports ready"

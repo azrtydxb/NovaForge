@@ -19,6 +19,16 @@ service GitService {
   rpc Merge(MergeRequest) returns (MergeResponse);
   rpc CreateBranch(CreateBranchRequest) returns (CreateBranchResponse);
   rpc CreateCommit(CreateCommitRequest) returns (CreateCommitResponse);
+  // ListOrganizationsWithRepositories is a platform-worker RPC: it answers
+  // only a caller presenting a platform token (svcauth.MintPlatform), and only
+  // with organization ids. The worker re-enters each organization's scope with
+  // an org-scoped token before reading anything in it.
+  rpc ListOrganizationsWithRepositories(ListOrganizationsWithRepositoriesRequest) returns (ListOrganizationsWithRepositoriesResponse);
+}
+
+message ListOrganizationsWithRepositoriesRequest {}
+message ListOrganizationsWithRepositoriesResponse {
+  repeated string org_ids = 1;
 }
 
 message Repo {

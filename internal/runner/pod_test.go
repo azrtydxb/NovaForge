@@ -50,11 +50,12 @@ func TestPodExecutorCreatesIsolatedPod(t *testing.T) {
 		}
 		if len(list.Items) > 0 {
 			pod = &list.Items[0]
-		} else {
-			// The executor runs in its own goroutine; a loop that never yields
-			// can finish before that goroutine has created anything.
-			time.Sleep(10 * time.Millisecond)
+			break
 		}
+		// The pod is created on another goroutine; a hundred lists with no
+		// pause can all finish before it is scheduled, which failed this test
+		// intermittently under a loaded machine.
+		time.Sleep(20 * time.Millisecond)
 	}
 	if pod == nil {
 		t.Fatal("no job pod was created")
@@ -111,11 +112,9 @@ func TestDefaultJobImageIsConfigurable(t *testing.T) {
 		list, _ := cs.CoreV1().Pods("novaforge").List(context.Background(), metav1.ListOptions{})
 		if len(list.Items) > 0 {
 			pod = &list.Items[0]
-		} else {
-			// The executor runs in its own goroutine; a loop that never yields
-			// can finish before that goroutine has created anything.
-			time.Sleep(10 * time.Millisecond)
+			break
 		}
+		time.Sleep(10 * time.Millisecond) // see TestPodExecutorCreatesIsolatedPod
 	}
 	if pod == nil {
 		t.Fatal("no job pod was created")

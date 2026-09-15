@@ -132,3 +132,57 @@ func (a *ArtifactStore) Open(ctx context.Context, id uuid.UUID) (io.ReadCloser, 
 	}
 	return r, nil
 }
+
+// ErrArtifactNotFound is returned when no artifact with that id exists in the
+// organization asked about — including when one exists in another.
+var ErrArtifactNotFound = errors.New("artifact not found")
+
+// ListForJob returns the artifacts one job produced, oldest first.
+func (a *ArtifactStore) ListForJob(ctx context.Context, jobID uuid.UUID) ([]Artifact, error) {
+	rows, err := a.pool.Query(ctx, `
+		SELECT id, job_id, name, size_bytes, object_key, created_at
+		FROM ci.artifacts
+		WHERE job_id = $1
+		ORDER BY created_at`,
+		jobID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list artifacts for job %s: %w", jobID, err)
+	}
+	defer rows.Close()
+	var artifacts []Artifact
+	for rows.Next() {
+		var art Artifact
+		if err := rows.Scan(&art.ID, &art.JobID, &art.Name, &art.SizeBytes, &art.ObjectKey, &art.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan artifact: %w", err)
+		}
+		artifacts = append(artifacts, art)
+	}
+	return artifacts, rows.Err()
+}
+
+// OpenInOrg returns the artifact identified by id and its content, provided
+// it belongs to orgID. The organization is part of the query, not a check
+// made afterwards, so an id from another organization never reaches object
+// storage at all.
+func (a *ArtifactStore) OpenInOrg(ctx context.Context, orgID, id uuid.UUID) (Artifact, io.ReadCloser, error) {
+	var art Artifact
+	err := a.pool.QueryRow(ctx, `
+		SELECT id, job_id, name, size_bytes, object_key, created_at
+		FROM ci.artifacts WHERE id = $1 AND org_id = $2`, id, orgID,
+	).Scan(&art.ID, &art.JobID, &art.Name, &art.SizeBytes, &art.ObjectKey, &art.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Artifact{}, nil, ErrArtifactNotFound
+	}
+	if err != nil {
+		return Artifact{}, nil, fmt.Errorf("look up artifact %s: %w", id, err)
+	}
+	r, err := a.blobs.Get(ctx, art.ObjectKey)
+	if errors.Is(err, blobstore.ErrNotFound) {
+		return Artifact{}, nil, ErrArtifactNotFound
+	}
+	if err != nil {
+		return Artifact{}, nil, fmt.Errorf("open artifact %s: %w", id, err)
+	}
+	return art, r, nil
+}

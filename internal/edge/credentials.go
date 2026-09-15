@@ -53,11 +53,25 @@ func ForwardCredential(
 	ctx context.Context, method string, req, reply any,
 	cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption,
 ) error {
+	return invoker(withForwardedCredential(ctx), method, req, reply, cc, opts...)
+}
+
+// ForwardCredentialStream is ForwardCredential for streaming calls. A unary
+// interceptor never sees a stream, so a streaming RPC made without this one
+// reaches its service anonymously and is refused.
+func ForwardCredentialStream(
+	ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string,
+	streamer grpc.Streamer, opts ...grpc.CallOption,
+) (grpc.ClientStream, error) {
+	return streamer(withForwardedCredential(ctx), desc, cc, method, opts...)
+}
+
+func withForwardedCredential(ctx context.Context) context.Context {
 	if tok := CredentialFrom(ctx); tok != "" {
 		ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+tok)
 	}
 	if org := OrgRefFrom(ctx); org != "" {
 		ctx = metadata.AppendToOutgoingContext(ctx, "x-novaforge-org", org)
 	}
-	return invoker(ctx, method, req, reply, cc, opts...)
+	return ctx
 }

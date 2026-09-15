@@ -96,10 +96,12 @@ than one that admits the gap.
 
 - **Organizations are a hard security boundary.** Every query carries an org predicate
   taken from `authz.FromContext` — never from a request field, or a caller could name
-  another org and be believed. The three exceptions (`work.Store.OpenEpics`,
-  `OrganizationsWithWork`, `agents.Store.staleRunning`) are platform-worker queries that
-  return only ids and re-enter each org's scope before reading anything; each says so in
-  its doc comment.
+  another org and be believed. The exceptions (`work.Store.OpenEpics`,
+  `agents.Store.staleRunning`, git-platform's `ListOrganizationsWithRepositories`) are
+  platform-worker queries that return only ids and re-enter each org's scope before reading
+  anything; each says so in its doc comment. The RPC admits only a platform token
+  (`svcauth.MintPlatform`, a scope with `IsPlatformWorker()` and no org), which every
+  org-scoped path refuses.
 - **One PostgreSQL cluster, one schema per service, no cross-schema reads.** A service
   needing another's data calls its RPC. `database.Migrate(url, schema, fs)` owns this.
 - **Capability grants constrain agents, not human members.** A member has ordinary write

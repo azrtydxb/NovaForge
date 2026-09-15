@@ -25,7 +25,7 @@ ORG="facorg$RANDOM$$"
 # Every run creates its own organization so runs cannot see each other's
 # data; remove it on exit, pass or fail, or the cluster fills with them.
 # NF_KEEP_TEST_DATA=1 keeps it for debugging a failure.
-cleanup_org() { [ -n "${NF_KEEP_TEST_DATA:-}" ] || ./hack/purge-orgs.sh "^$ORG\$" --yes >/dev/null 2>&1 || true; }
+cleanup_org() { [ -n "${NF_KEEP_TEST_DATA:-}" ] || ./hack/delete-org.sh "$ORG" "http://${EDGE_IP:-}:8080" "${XDG_CONFIG_HOME:-}" >/dev/null 2>&1 || true; }
 trap cleanup_org EXIT
 REPO="sso$RANDOM"
 go build -o /tmp/nf ./cmd/nf
@@ -70,6 +70,45 @@ for _ in $(seq 1 12); do
 done
 [ -n "$DASH" ] || fail "the dashboard returned nothing recognisable within 60s"
 ok "dashboard answers"
+
+echo "== 5. a vulnerable dependency produces a proposed Work Item that nothing executes =="
+# A second repository, so the epic's items above cannot be mistaken for the
+# proposal. It holds a module pinned to golang.org/x/text v0.3.0, which carries
+# published advisories, pushed with an unmodified git client.
+VULN="vuln$RANDOM"
+/tmp/nf repo create "$VULN" >/dev/null || fail "repo create failed"
+GIT_IP="$($KC get svc "$REL-git-platform" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
+[ -n "$GIT_IP" ] || fail "git-platform has no LoadBalancer IP"
+TOKEN="$(python3 -c "import json,os;print(json.load(open(os.environ['XDG_CONFIG_HOME']+'/novaforge/config.json'))['token'])")"
+WORK="$(mktemp -d)"
+git clone -q "http://$USER:$TOKEN@$GIT_IP:8081/$ORG/$VULN.git" "$WORK/repo" 2>/dev/null || fail "clone failed"
+(
+	cd "$WORK/repo"
+	printf 'module example.com/probe\n\ngo 1.22\n\nrequire golang.org/x/text v0.3.0\n' >go.mod
+	printf 'package probe\n\nimport _ "golang.org/x/text/language"\n' >main.go
+	go mod tidy >/dev/null 2>&1 || true
+	git add -A
+	git -c user.email=factory@example.com -c user.name="Factory E2E" commit -q -m "add a module with a vulnerable dependency"
+	git push -q origin HEAD:main
+) || fail "push of the vulnerable module failed"
+
+API="http://$EDGE_IP:8080/api/v1/orgs/$ORG/repos/$VULN"
+SCAN="$(curl -fsS -X POST -H "Authorization: Bearer $TOKEN" "$API/maintenance/scan")" || fail "the scan request failed"
+echo "  scan: $SCAN"
+PROPOSAL="$(curl -fsS -H "Authorization: Bearer $TOKEN" "$API/maintenance" | python3 -c '
+import json,sys
+for p in json.load(sys.stdin)["proposals"]:
+    if p["work_item_type"]=="security" and "golang.org/x/text" in p["work_item_goal"]:
+        print(p["work_item_key"], p["assignee_id"] or "-", p["decision"] or "-")
+        break
+')"
+[ -n "$PROPOSAL" ] || fail "no security proposal for golang.org/x/text after the scan"
+read -r KEY ASSIGNEE DECISION <<<"$PROPOSAL"
+[ "$ASSIGNEE" = "-" ] || fail "the proposal $KEY is already assigned to $ASSIGNEE; nothing may be assigned before approval"
+[ "$DECISION" = "-" ] || fail "the proposal $KEY already carries a decision ($DECISION)"
+RUNS="$(curl -fsS -H "Authorization: Bearer $TOKEN" "$API/work/$KEY/agent-runs" | python3 -c 'import json,sys;print(len(json.load(sys.stdin).get("runs",[])))')"
+[ "$RUNS" = "0" ] || fail "an Agent Run was started on the unapproved proposal $KEY"
+ok "proposal $KEY awaits approval with no assignee and no run"
 
 echo
 echo "PASS: the software factory layer works end to end on the kw cluster."

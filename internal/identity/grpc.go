@@ -33,6 +33,7 @@ type Server struct {
 	sshKeys    *SSHKeyStore
 	grants     *capability.Store
 	sessionTTL time.Duration
+	orgDeleted OrgDeletedPublisher
 }
 
 // NewGRPCServer wires store, sessions, tokens, sshKeys, and grants into an

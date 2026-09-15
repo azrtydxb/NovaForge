@@ -13,6 +13,7 @@ import (
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	"github.com/novaforge/novaforge/internal/authz"
 	"github.com/novaforge/novaforge/internal/database"
+	"github.com/novaforge/novaforge/internal/events"
 	"github.com/novaforge/novaforge/internal/gitops"
 )
 
@@ -39,7 +40,11 @@ func newGitGRPCServer(t *testing.T) (*gitops.Server, string) {
 	t.Cleanup(pool.Close)
 
 	root := t.TempDir()
-	return gitops.NewGRPCServer(pool, root), root
+	srv := gitops.NewGRPCServer(pool, root)
+	// Deletion refuses to run unannounced; these tests are not about the
+	// announcement (TestDeleteRepoAnnouncesTheDeletion is), so it goes nowhere.
+	srv.SetRepoDeletedPublisher(func(context.Context, events.RepoDeletedEvent) error { return nil })
+	return srv, root
 }
 
 func scopedCtx(orgID uuid.UUID) context.Context {

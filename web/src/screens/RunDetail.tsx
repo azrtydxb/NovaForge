@@ -23,6 +23,17 @@ interface PlanStep {
   state: string;
 }
 
+/** Impact is measured by the platform from the run's diff since its merge
+ * base; risk_reasons is the rule that set the risk, shown with it. */
+interface Impact {
+  files_changed: number;
+  insertions: number;
+  deletions: number;
+  paths: string[];
+  risk: string;
+  risk_reasons: string[];
+}
+
 interface ToolCall {
   tool: string;
   args: string;
@@ -213,9 +224,17 @@ export function RunDetail() {
       </div>
 
       {tab === "Evidence" ? <Evidence base={base} /> : null}
-      {tab === "Plan" ? <Plan base={base} /> : null}
+      {tab === "Plan" ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <ChangeImpact base={base} />
+          <Plan base={base} />
+        </div>
+      ) : null}
       {tab === "Changes" ? (
-        <Changes org={w.org} repo={repo} run={run.data} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <ChangeImpact base={base} />
+          <Changes org={w.org} repo={repo} run={run.data} />
+        </div>
       ) : null}
       {tab === "Tool calls" ? <Tools base={base} /> : null}
     </Page>
@@ -336,6 +355,86 @@ function Evidence({ base }: { base: string }) {
   );
 }
 
+/** ChangeImpact is the CHANGE IMPACT block: what the run changes, measured by
+ * the platform from its diff, and the risk that follows from it — with the
+ * rule that set the risk, so it is never a bare label to take on trust. */
+function ChangeImpact({ base }: { base: string }) {
+  const impact = useQuery({
+    queryKey: ["impact", base],
+    queryFn: () => api.get<Impact>(`${base}/impact`),
+  });
+  const riskColor = (risk: string) =>
+    risk === "high"
+      ? "var(--bad)"
+      : risk === "medium"
+        ? "var(--warn, #d9a441)"
+        : "var(--ok)";
+
+  return (
+    <Panel>
+      <PanelHead>CHANGE IMPACT</PanelHead>
+      <Async query={impact}>
+        {(d) => (
+          <div style={{ padding: "12px 14px", display: "grid", gap: 10 }}>
+            <div
+              style={{
+                display: "flex",
+                gap: 18,
+                flexWrap: "wrap",
+                alignItems: "baseline",
+              }}
+            >
+              <span style={{ font: "13px var(--sans)" }}>
+                <b>{d.files_changed}</b>{" "}
+                {d.files_changed === 1 ? "file" : "files"} changed
+              </span>
+              <span style={{ font: "12px var(--mono)", color: "var(--ok)" }}>
+                +{d.insertions}
+              </span>
+              <span style={{ font: "12px var(--mono)", color: "var(--bad)" }}>
+                −{d.deletions}
+              </span>
+              <span
+                style={{
+                  font: "600 11px var(--mono)",
+                  color: riskColor(d.risk),
+                  textTransform: "uppercase",
+                }}
+              >
+                {d.risk} risk
+              </span>
+            </div>
+            {d.risk_reasons.map((r) => (
+              <div
+                key={r}
+                style={{ font: "12px var(--sans)", color: "var(--fg-dim)" }}
+              >
+                {r}
+              </div>
+            ))}
+            {d.paths.length > 0 ? (
+              <ul
+                style={{
+                  margin: 0,
+                  paddingLeft: 18,
+                  font: "12px/1.7 var(--mono)",
+                  color: "var(--fg-dim)",
+                }}
+              >
+                {d.paths.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+            ) : (
+              <Empty>The source branch changes nothing.</Empty>
+            )}
+          </div>
+        )}
+      </Async>
+    </Panel>
+  );
+}
+
 function Plan({ base }: { base: string }) {
   const plan = useQuery({
     queryKey: ["plan", base],
@@ -402,7 +501,7 @@ function Changes({
       api.get<{ unified: string }>(
         `/api/v1/orgs/${enc(org!)}/repos/${enc(repo)}/diff?from=${enc(
           run!.target_ref,
-        )}&to=${enc(run!.source_ref)}`,
+        )}&to=${enc(run!.source_ref)}&merge_base=true`,
       ),
     enabled: org !== null && run !== undefined,
   });

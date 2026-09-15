@@ -256,6 +256,102 @@ What production now does:
 None of this has been built into images or run on the cluster yet;
 `work_ci_test.sh` step 8 is written and not run.
 
+## Live CI logs and artifact downloads (2026-09-15)
+
+`TestRunnerJobStreamAndArtifact` now drives the runner protocol over a real
+gRPC listener — the runner's own `runner.Session`, the pump, LogChunks into
+Redis, `GetJobLogs` — and reads a job's log while the job is provably still
+running. Writing it found:
+
+- **A pod job's log was never live.** The pod executor collected the whole
+  output and forwarded it when the pod exited, to keep the artifact block out
+  of the log. Only that block is now held back.
+- **No log was ever sealed.** `LogSink.Seal` had no caller; every job's log
+  stayed in Redis and the retention sweep had nothing to delete. A runner's
+  terminal status report now seals it, and a read merges sealed and live
+  lines, since the last chunks can land after the report.
+- **Listing one job's artifacts always failed**: the job id was ignored and the
+  request resolved as an empty run id.
+- **The CI screen never knew a run was running**: it read `body.run`, which the
+  edge never sent, so the log was never refetched.
+- **Any runner could write into any job's log or report any job's status** by
+  naming its id.
+
+Artifacts download through a streaming `DownloadArtifact` RPC and
+`GET /api/v1/orgs/{org}/repos/{repo}/ci/artifacts/{id}`, always as an
+attachment and never with a renderable type. The work_ci e2e steps that read a
+running job's log and download the artifact are written but have not yet been
+run against the cluster.
+
+## The maintenance sweep, end to end (2026-09-15)
+
+The sweep moved from `cmd/work-reviews` into `maintenance.Sweeper`, and
+`TestMaintenanceProposesWorkItem` runs it as production builds it: a
+repository holding `golang.org/x/text v0.3.0` served by the real git service,
+the real osv-scanner, a security proposal with no assignee awaiting approval.
+It found that **the sweep skipped every organization without a Work Item** —
+it listed organizations through the work schema — so a new organization's
+first vulnerability could never be proposed. Organizations now come from
+git-platform's `ListOrganizationsWithRepositories`, which answers only a
+platform token (`svcauth.MintPlatform`, which names no organization and which
+every org-scoped path refuses) and returns ids only; the sweep then mints an
+org-scoped token per organization. `factory_test.sh` step 5 pushes a
+vulnerable `go.mod`, scans on demand and asserts the proposal; it is written
+but not yet run against the cluster.
+
+## Deleting a repository or an organization (2026-09-15)
+
+Deleting a repository used to publish nothing, so its Work Items, CI runs and
+artifacts, reviews, index and Agent Runs stayed behind, unreachable; an
+organization could be deleted only by `hack/purge-orgs.sh` writing across every
+schema. Now:
+
+- git-platform's `DeleteRepo` announces `stream:git:repo-deleted` before
+  removing anything, and refuses to delete what it cannot announce.
+- identity's owner-only `DeleteOrg` (the name must be typed again) announces
+  `stream:identity:org-deleted`, then removes the organization and its
+  memberships; accounts are kept. `DELETE /api/v1/orgs/{org}` and a danger
+  zone on the Orgs screen call it.
+- Every service consumes the announcements and deletes only its own share
+  (`internal/cleanup`): work-reviews (Work Items, proposals, comments,
+  Engineering Runs), ci-runner (runs, jobs, artifact rows **and objects**,
+  sealed and live logs, runners, retention policy), engineering-graph (graph,
+  code chunks, knowledge), agent-runtime (cancels, then removes Agent Runs and
+  tool calls; agents), gates (evaluations, approvals, leases, secrets), mcp-server
+  (registered servers) and git-platform (repositories on disk, grants). Runs a
+  service cannot trace to a repository reach gates as `stream:runs:deleted`.
+- Messages are acknowledged only once handled, so a failed deletion is retried;
+  every purge is idempotent. The consumers are proven against the real
+  datastores; the deploy e2e step that deletes a repository and an
+  organization on the cluster is written but not yet run.
+- `hack/purge-orgs.sh` is now break-glass; the e2e scripts delete their
+  organizations through the API (`hack/delete-org.sh`) and fall back to it.
+
+Not covered: a schema added on another branch after this change
+(`graph.file_references` exists in the shared dev database) is not purged
+until its owner's purge learns it.
+
+## Work Items and Engineering Runs through the API (2026-09-15)
+
+`TestWorkItemLifecycle` and `TestEngineeringRunProof` drive the REST handlers
+against the real work, reviews and git services. They found:
+
+- **No Engineering Run was ever opened for an agent's work.** A succeeded Agent
+  Run's commits stopped on its branch, with no plan, impact, proof or record of
+  agent and model, and `RecordProvenance` had no caller. agent-runtime now
+  records provenance and opens a run authored by the agent, naming the model it
+  ran on, with the Work Item's acceptance criteria as its plan.
+- **Change impact counted changes the run never made.** It diffed the branch
+  against the target as it is now, so everything merged to the target after the
+  branch was cut counted, in reverse — auto-merge's size cap included. Impact
+  and the run's Changes tab now diff from the merge base.
+- **Change impact had no route.** `GET .../runs/{number}/impact` returns files,
+  lines, paths and a risk level with the rule that set it; RunDetail shows it.
+- **A Work Item could require a gate that does not exist** and never be
+  mergeable; unknown gates are refused. The Work screen can now set
+  constraints and required gates, and a Work Item can be assigned to a person
+  or an agent from its page.
+
 ## The GUI
 
 `web/` implements "NovaForge GUI.dc.html" from the claude.ai/design project
@@ -363,9 +459,6 @@ These are real and are not worked around:
   line, and running an organization-supplied command inside agent-runtime would
   hand it that service's cluster credentials. The register carries no
   per-server credential, so a server needing a bearer token cannot be used yet.
-- **The maintenance sweep covers organizations that have Work Items.** It finds
-  organizations through the work schema, since it may not read identity's; an
-  organization with repositories and no Work Item is scanned only on demand.
 - **There is no deploy action.** Section 14's deploy-to-staging and
   deploy-to-production paths exist only as `approvals.Decide` rules; nothing
   deploys, so nothing follows them.
@@ -381,10 +474,6 @@ These are real and are not worked around:
 - **Run proof can be written by any member.** `RecordProof` checks the
   organization, not the caller, so an `approval/...` proof row is display, not
   authority: `MayMerge` reads the approvals store, never the proof.
-- **Deleting a repository leaves other services' rows behind.** Work Items, CI
-  runs and reviews keyed on it stay in their schemas and become unreachable.
-  Deleting an organization is an operator action (`hack/purge-orgs.sh`); there
-  is no API for it.
 - **A push to an agent branch depends on agent-runtime.** git-platform asks
   agent-runtime whether a run holds a ref under `agents/` before accepting a
   push (or a CreateBranch/CreateCommit) there, and refuses when it cannot get
@@ -397,9 +486,6 @@ These are real and are not worked around:
 - **An orphaned run holds its branch for up to its wall-clock limit plus 15
   minutes.** A run whose replica died is only recognisable once no loop could
   still be executing it.
-- **A subtask whose run succeeded is not marked done.** The swarm blocks a
-  subtask whose run failed, but nothing moves a succeeded one to `done`, so
-  its dependents still wait for a person (or a merge) to finish it.
 - **The workspace reaper destroys namespaces older than one hour** regardless
   of the run's own wall-clock limit, so a run allowed longer than that loses
   its workspace mid-run.
@@ -445,7 +531,7 @@ by reading test bodies, not by matching names.
 from the map, when the map names a criterion the spec lacks, when a cited Go
 test is renamed or deleted, or when a cited e2e script or step no longer exists.
 
-**27 covered, 6 partial, 0 uncovered.**
+**32 covered, 1 partial, 0 uncovered.**
 
 S-1 `TestPATGitClone`, S-2 `TestRepoBrowseAPI`, S-3 `TestAgentBranchScopeEnforced`
 and `TestCrossOrgAccessDenied`, S-13 `TestMCPServerOperations` and S-21
@@ -483,9 +569,4 @@ caller.
 
 Partial (the map's `note` says exactly what is missing):
 
-- S-4 `TestWorkItemLifecycle`: Only type and goal are asserted on create; acceptance criteria, constraints and required gates are never created and read back. Assignment to an agent is asserted, assignment to a human is not.
-- S-5 `TestEngineeringRunProof`: Per-gate proof is asserted. Change impact is only a pure function over a stubbed diff, plan steps are asserted nowhere, and no test sets or reads the agent and model behind an Engineering Run (the provenance test is for Agent Runs). Nothing reads plan, impact and proof through the API.
-- S-6 `TestRunnerJobStreamAndArtifact`: A real runner runs a job and its log and artifact listing are read after the run ends. "Logs observable while the job runs" is asserted only on the Redis log stream with no job running, artifact content round-trips only at the store (the edge has no artifact download route), and the dispatch tests use in-process channels, not the gRPC stream.
 - S-9 `TestAirGappedAgentRun`: Runs complete against the cluster's FastLLM-served model (agent_test, agent_ci_test), but "no network egress to any hosted provider" is asserted nowhere: the chart has no egress NetworkPolicy for the services and nothing checks the proxy does not forward upstream.
-- S-20 `TestMaintenanceProposesWorkItem`: The real CVE scanner finds a vulnerable module, and Propose turns a hand-built finding into an unassigned Work Item with no agent run; the production sweep joining them (cmd/work-reviews/maintenance.go) is untested and factory_test.sh has no vulnerable-dependency step despite its header.
-- S-22 `TestHelmDeploy`: Every Deployment present must be ready, and readiness is /healthz, but the step never checks the expected set of services exists — a chart that omitted one would pass — and no test renders or installs the chart.

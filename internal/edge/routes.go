@@ -34,6 +34,7 @@ func Routes() []Route {
 		{http.MethodGet, "/api/v1/orgs", "listOrgs", "Organizations the caller belongs to"},
 		{http.MethodPost, "/api/v1/orgs", "createOrg", "Create an organization"},
 		{http.MethodGet, "/api/v1/orgs/{org}", "getOrg", "One organization"},
+		{http.MethodDelete, "/api/v1/orgs/{org}", "deleteOrg", "Delete an organization and everything held for it (owner only, name confirmed)"},
 		{http.MethodGet, "/api/v1/orgs/{org}/members", "listOrgMembers", "Organization members"},
 		{http.MethodPost, "/api/v1/orgs/{org}/members", "addOrgMember", "Add an organization member"},
 
@@ -77,6 +78,7 @@ func Routes() []Route {
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}/gates/evaluate", "evaluateRunGates", "Run the run's gates at its current head and record their proof"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}/plan", "getRunPlan", "A run's plan"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}/approvals", "listRunApprovals", "The approvals a run's change raised, in every state"},
+		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}/impact", "getRunImpact", "A run's change impact, measured from its merge base, with a stated risk"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/runs/{number}/tools", "getRunToolCalls", "The tool calls the agent run behind this run made"},
 
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/ci/runs", "listCIRuns", "CI runs for a repository"},
@@ -86,6 +88,7 @@ func Routes() []Route {
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/ci/jobs/{id}/logs", "getJobLogs", "One job's log"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/ci/artifacts", "listLatestArtifacts", "The newest run's artifacts"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/ci/jobs/{id}/artifacts", "listJobArtifacts", "One job's artifacts"},
+		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/ci/artifacts/{id}", "downloadArtifact", "Download one artifact's content"},
 
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/knowledge", "searchKnowledge", "Project knowledge for a repository"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/search", "searchCode", "Search a repository's indexed code by meaning"},

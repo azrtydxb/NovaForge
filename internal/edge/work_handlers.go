@@ -381,6 +381,36 @@ func addWorkHandlers(h map[string]http.HandlerFunc, g gitv1.GitServiceClient, w 
 			WriteJSON(wr, http.StatusOK, map[string]any{"steps": out})
 		}
 
+		h["getRunImpact"] = func(wr http.ResponseWriter, r *http.Request) {
+			n, err := strconv.Atoi(chi.URLParam(r, "number"))
+			if err != nil {
+				WriteError(wr, http.StatusBadRequest, err)
+				return
+			}
+			rid, err := repoID(r)
+			if err != nil {
+				WriteError(wr, StatusFromGRPC(err), err)
+				return
+			}
+			resp, err := rv.GetRunImpact(r.Context(), &reviewsv1.GetRunImpactRequest{RepoId: rid, Number: int32(n)})
+			if err != nil {
+				WriteError(wr, StatusFromGRPC(err), err)
+				return
+			}
+			paths := resp.GetPaths()
+			if paths == nil {
+				paths = []string{}
+			}
+			WriteJSON(wr, http.StatusOK, map[string]any{
+				"files_changed": resp.GetFilesChanged(),
+				"insertions":    resp.GetInsertions(),
+				"deletions":     resp.GetDeletions(),
+				"paths":         paths,
+				"risk":          resp.GetRisk(),
+				"risk_reasons":  resp.GetRiskReasons(),
+			})
+		}
+
 		h["submitReview"] = func(wr http.ResponseWriter, r *http.Request) {
 			n, err := strconv.Atoi(chi.URLParam(r, "number"))
 			if err != nil {

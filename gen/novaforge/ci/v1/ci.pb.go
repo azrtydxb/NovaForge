@@ -1435,6 +1435,111 @@ func (x *TriggerRunResponse) GetRun() *WorkflowRunSummary {
 	return nil
 }
 
+type DownloadArtifactRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ArtifactId    string                 `protobuf:"bytes,1,opt,name=artifact_id,json=artifactId,proto3" json:"artifact_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DownloadArtifactRequest) Reset() {
+	*x = DownloadArtifactRequest{}
+	mi := &file_novaforge_ci_v1_ci_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DownloadArtifactRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DownloadArtifactRequest) ProtoMessage() {}
+
+func (x *DownloadArtifactRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_ci_v1_ci_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DownloadArtifactRequest.ProtoReflect.Descriptor instead.
+func (*DownloadArtifactRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_ci_v1_ci_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *DownloadArtifactRequest) GetArtifactId() string {
+	if x != nil {
+		return x.ArtifactId
+	}
+	return ""
+}
+
+type DownloadArtifactResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// name and size_bytes are set on the first message only.
+	Name          string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	SizeBytes     int64  `protobuf:"varint,2,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	Data          []byte `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DownloadArtifactResponse) Reset() {
+	*x = DownloadArtifactResponse{}
+	mi := &file_novaforge_ci_v1_ci_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DownloadArtifactResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DownloadArtifactResponse) ProtoMessage() {}
+
+func (x *DownloadArtifactResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_ci_v1_ci_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DownloadArtifactResponse.ProtoReflect.Descriptor instead.
+func (*DownloadArtifactResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_ci_v1_ci_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *DownloadArtifactResponse) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *DownloadArtifactResponse) GetSizeBytes() int64 {
+	if x != nil {
+		return x.SizeBytes
+	}
+	return 0
+}
+
+func (x *DownloadArtifactResponse) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
 var File_novaforge_ci_v1_ci_proto protoreflect.FileDescriptor
 
 const file_novaforge_ci_v1_ci_proto_rawDesc = "" +
@@ -1546,7 +1651,15 @@ const file_novaforge_ci_v1_ci_proto_rawDesc = "" +
 	"\arepo_id\x18\x01 \x01(\tR\x06repoId\x12\x10\n" +
 	"\x03ref\x18\x02 \x01(\tR\x03ref\"K\n" +
 	"\x12TriggerRunResponse\x125\n" +
-	"\x03run\x18\x01 \x01(\v2#.novaforge.ci.v1.WorkflowRunSummaryR\x03run2\xb5\x03\n" +
+	"\x03run\x18\x01 \x01(\v2#.novaforge.ci.v1.WorkflowRunSummaryR\x03run\":\n" +
+	"\x17DownloadArtifactRequest\x12\x1f\n" +
+	"\vartifact_id\x18\x01 \x01(\tR\n" +
+	"artifactId\"a\n" +
+	"\x18DownloadArtifactResponse\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1d\n" +
+	"\n" +
+	"size_bytes\x18\x02 \x01(\x03R\tsizeBytes\x12\x12\n" +
+	"\x04data\x18\x03 \x01(\fR\x04data2\xa0\x04\n" +
 	"\tCIService\x12O\n" +
 	"\bListRuns\x12 .novaforge.ci.v1.ListRunsRequest\x1a!.novaforge.ci.v1.ListRunsResponse\x12I\n" +
 	"\x06GetRun\x12\x1e.novaforge.ci.v1.GetRunRequest\x1a\x1f.novaforge.ci.v1.GetRunResponse\x12U\n" +
@@ -1554,7 +1667,8 @@ const file_novaforge_ci_v1_ci_proto_rawDesc = "" +
 	"GetJobLogs\x12\".novaforge.ci.v1.GetJobLogsRequest\x1a#.novaforge.ci.v1.GetJobLogsResponse\x12^\n" +
 	"\rListArtifacts\x12%.novaforge.ci.v1.ListArtifactsRequest\x1a&.novaforge.ci.v1.ListArtifactsResponse\x12U\n" +
 	"\n" +
-	"TriggerRun\x12\".novaforge.ci.v1.TriggerRunRequest\x1a#.novaforge.ci.v1.TriggerRunResponse2\xf2\x02\n" +
+	"TriggerRun\x12\".novaforge.ci.v1.TriggerRunRequest\x1a#.novaforge.ci.v1.TriggerRunResponse\x12i\n" +
+	"\x10DownloadArtifact\x12(.novaforge.ci.v1.DownloadArtifactRequest\x1a).novaforge.ci.v1.DownloadArtifactResponse0\x012\xf2\x02\n" +
 	"\rRunnerService\x12O\n" +
 	"\bRegister\x12 .novaforge.ci.v1.RegisterRequest\x1a!.novaforge.ci.v1.RegisterResponse\x12P\n" +
 	"\aConnect\x12\x1f.novaforge.ci.v1.ConnectRequest\x1a .novaforge.ci.v1.ConnectResponse(\x010\x01\x12[\n" +
@@ -1574,39 +1688,41 @@ func file_novaforge_ci_v1_ci_proto_rawDescGZIP() []byte {
 	return file_novaforge_ci_v1_ci_proto_rawDescData
 }
 
-var file_novaforge_ci_v1_ci_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_novaforge_ci_v1_ci_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
 var file_novaforge_ci_v1_ci_proto_goTypes = []any{
-	(*RegisterRequest)(nil),        // 0: novaforge.ci.v1.RegisterRequest
-	(*RegisterResponse)(nil),       // 1: novaforge.ci.v1.RegisterResponse
-	(*Heartbeat)(nil),              // 2: novaforge.ci.v1.Heartbeat
-	(*LogChunk)(nil),               // 3: novaforge.ci.v1.LogChunk
-	(*ConnectRequest)(nil),         // 4: novaforge.ci.v1.ConnectRequest
-	(*ConnectResponse)(nil),        // 5: novaforge.ci.v1.ConnectResponse
-	(*ReportStatusRequest)(nil),    // 6: novaforge.ci.v1.ReportStatusRequest
-	(*ReportStatusResponse)(nil),   // 7: novaforge.ci.v1.ReportStatusResponse
-	(*WorkflowRunSummary)(nil),     // 8: novaforge.ci.v1.WorkflowRunSummary
-	(*WorkflowJobSummary)(nil),     // 9: novaforge.ci.v1.WorkflowJobSummary
-	(*ArtifactSummary)(nil),        // 10: novaforge.ci.v1.ArtifactSummary
-	(*ListRunsRequest)(nil),        // 11: novaforge.ci.v1.ListRunsRequest
-	(*ListRunsResponse)(nil),       // 12: novaforge.ci.v1.ListRunsResponse
-	(*GetRunRequest)(nil),          // 13: novaforge.ci.v1.GetRunRequest
-	(*GetRunResponse)(nil),         // 14: novaforge.ci.v1.GetRunResponse
-	(*GetJobLogsRequest)(nil),      // 15: novaforge.ci.v1.GetJobLogsRequest
-	(*GetJobLogsResponse)(nil),     // 16: novaforge.ci.v1.GetJobLogsResponse
-	(*ListArtifactsRequest)(nil),   // 17: novaforge.ci.v1.ListArtifactsRequest
-	(*ListArtifactsResponse)(nil),  // 18: novaforge.ci.v1.ListArtifactsResponse
-	(*UploadArtifactRequest)(nil),  // 19: novaforge.ci.v1.UploadArtifactRequest
-	(*UploadArtifactResponse)(nil), // 20: novaforge.ci.v1.UploadArtifactResponse
-	(*TriggerRunRequest)(nil),      // 21: novaforge.ci.v1.TriggerRunRequest
-	(*TriggerRunResponse)(nil),     // 22: novaforge.ci.v1.TriggerRunResponse
-	nil,                            // 23: novaforge.ci.v1.ConnectResponse.EnvEntry
-	nil,                            // 24: novaforge.ci.v1.ConnectResponse.SecretEnvEntry
+	(*RegisterRequest)(nil),          // 0: novaforge.ci.v1.RegisterRequest
+	(*RegisterResponse)(nil),         // 1: novaforge.ci.v1.RegisterResponse
+	(*Heartbeat)(nil),                // 2: novaforge.ci.v1.Heartbeat
+	(*LogChunk)(nil),                 // 3: novaforge.ci.v1.LogChunk
+	(*ConnectRequest)(nil),           // 4: novaforge.ci.v1.ConnectRequest
+	(*ConnectResponse)(nil),          // 5: novaforge.ci.v1.ConnectResponse
+	(*ReportStatusRequest)(nil),      // 6: novaforge.ci.v1.ReportStatusRequest
+	(*ReportStatusResponse)(nil),     // 7: novaforge.ci.v1.ReportStatusResponse
+	(*WorkflowRunSummary)(nil),       // 8: novaforge.ci.v1.WorkflowRunSummary
+	(*WorkflowJobSummary)(nil),       // 9: novaforge.ci.v1.WorkflowJobSummary
+	(*ArtifactSummary)(nil),          // 10: novaforge.ci.v1.ArtifactSummary
+	(*ListRunsRequest)(nil),          // 11: novaforge.ci.v1.ListRunsRequest
+	(*ListRunsResponse)(nil),         // 12: novaforge.ci.v1.ListRunsResponse
+	(*GetRunRequest)(nil),            // 13: novaforge.ci.v1.GetRunRequest
+	(*GetRunResponse)(nil),           // 14: novaforge.ci.v1.GetRunResponse
+	(*GetJobLogsRequest)(nil),        // 15: novaforge.ci.v1.GetJobLogsRequest
+	(*GetJobLogsResponse)(nil),       // 16: novaforge.ci.v1.GetJobLogsResponse
+	(*ListArtifactsRequest)(nil),     // 17: novaforge.ci.v1.ListArtifactsRequest
+	(*ListArtifactsResponse)(nil),    // 18: novaforge.ci.v1.ListArtifactsResponse
+	(*UploadArtifactRequest)(nil),    // 19: novaforge.ci.v1.UploadArtifactRequest
+	(*UploadArtifactResponse)(nil),   // 20: novaforge.ci.v1.UploadArtifactResponse
+	(*TriggerRunRequest)(nil),        // 21: novaforge.ci.v1.TriggerRunRequest
+	(*TriggerRunResponse)(nil),       // 22: novaforge.ci.v1.TriggerRunResponse
+	(*DownloadArtifactRequest)(nil),  // 23: novaforge.ci.v1.DownloadArtifactRequest
+	(*DownloadArtifactResponse)(nil), // 24: novaforge.ci.v1.DownloadArtifactResponse
+	nil,                              // 25: novaforge.ci.v1.ConnectResponse.EnvEntry
+	nil,                              // 26: novaforge.ci.v1.ConnectResponse.SecretEnvEntry
 }
 var file_novaforge_ci_v1_ci_proto_depIdxs = []int32{
 	2,  // 0: novaforge.ci.v1.ConnectRequest.heartbeat:type_name -> novaforge.ci.v1.Heartbeat
 	3,  // 1: novaforge.ci.v1.ConnectRequest.log_chunk:type_name -> novaforge.ci.v1.LogChunk
-	23, // 2: novaforge.ci.v1.ConnectResponse.env:type_name -> novaforge.ci.v1.ConnectResponse.EnvEntry
-	24, // 3: novaforge.ci.v1.ConnectResponse.secret_env:type_name -> novaforge.ci.v1.ConnectResponse.SecretEnvEntry
+	25, // 2: novaforge.ci.v1.ConnectResponse.env:type_name -> novaforge.ci.v1.ConnectResponse.EnvEntry
+	26, // 3: novaforge.ci.v1.ConnectResponse.secret_env:type_name -> novaforge.ci.v1.ConnectResponse.SecretEnvEntry
 	8,  // 4: novaforge.ci.v1.ListRunsResponse.runs:type_name -> novaforge.ci.v1.WorkflowRunSummary
 	8,  // 5: novaforge.ci.v1.GetRunResponse.run:type_name -> novaforge.ci.v1.WorkflowRunSummary
 	9,  // 6: novaforge.ci.v1.GetRunResponse.jobs:type_name -> novaforge.ci.v1.WorkflowJobSummary
@@ -1617,21 +1733,23 @@ var file_novaforge_ci_v1_ci_proto_depIdxs = []int32{
 	15, // 11: novaforge.ci.v1.CIService.GetJobLogs:input_type -> novaforge.ci.v1.GetJobLogsRequest
 	17, // 12: novaforge.ci.v1.CIService.ListArtifacts:input_type -> novaforge.ci.v1.ListArtifactsRequest
 	21, // 13: novaforge.ci.v1.CIService.TriggerRun:input_type -> novaforge.ci.v1.TriggerRunRequest
-	0,  // 14: novaforge.ci.v1.RunnerService.Register:input_type -> novaforge.ci.v1.RegisterRequest
-	4,  // 15: novaforge.ci.v1.RunnerService.Connect:input_type -> novaforge.ci.v1.ConnectRequest
-	6,  // 16: novaforge.ci.v1.RunnerService.ReportStatus:input_type -> novaforge.ci.v1.ReportStatusRequest
-	19, // 17: novaforge.ci.v1.RunnerService.UploadArtifact:input_type -> novaforge.ci.v1.UploadArtifactRequest
-	12, // 18: novaforge.ci.v1.CIService.ListRuns:output_type -> novaforge.ci.v1.ListRunsResponse
-	14, // 19: novaforge.ci.v1.CIService.GetRun:output_type -> novaforge.ci.v1.GetRunResponse
-	16, // 20: novaforge.ci.v1.CIService.GetJobLogs:output_type -> novaforge.ci.v1.GetJobLogsResponse
-	18, // 21: novaforge.ci.v1.CIService.ListArtifacts:output_type -> novaforge.ci.v1.ListArtifactsResponse
-	22, // 22: novaforge.ci.v1.CIService.TriggerRun:output_type -> novaforge.ci.v1.TriggerRunResponse
-	1,  // 23: novaforge.ci.v1.RunnerService.Register:output_type -> novaforge.ci.v1.RegisterResponse
-	5,  // 24: novaforge.ci.v1.RunnerService.Connect:output_type -> novaforge.ci.v1.ConnectResponse
-	7,  // 25: novaforge.ci.v1.RunnerService.ReportStatus:output_type -> novaforge.ci.v1.ReportStatusResponse
-	20, // 26: novaforge.ci.v1.RunnerService.UploadArtifact:output_type -> novaforge.ci.v1.UploadArtifactResponse
-	18, // [18:27] is the sub-list for method output_type
-	9,  // [9:18] is the sub-list for method input_type
+	23, // 14: novaforge.ci.v1.CIService.DownloadArtifact:input_type -> novaforge.ci.v1.DownloadArtifactRequest
+	0,  // 15: novaforge.ci.v1.RunnerService.Register:input_type -> novaforge.ci.v1.RegisterRequest
+	4,  // 16: novaforge.ci.v1.RunnerService.Connect:input_type -> novaforge.ci.v1.ConnectRequest
+	6,  // 17: novaforge.ci.v1.RunnerService.ReportStatus:input_type -> novaforge.ci.v1.ReportStatusRequest
+	19, // 18: novaforge.ci.v1.RunnerService.UploadArtifact:input_type -> novaforge.ci.v1.UploadArtifactRequest
+	12, // 19: novaforge.ci.v1.CIService.ListRuns:output_type -> novaforge.ci.v1.ListRunsResponse
+	14, // 20: novaforge.ci.v1.CIService.GetRun:output_type -> novaforge.ci.v1.GetRunResponse
+	16, // 21: novaforge.ci.v1.CIService.GetJobLogs:output_type -> novaforge.ci.v1.GetJobLogsResponse
+	18, // 22: novaforge.ci.v1.CIService.ListArtifacts:output_type -> novaforge.ci.v1.ListArtifactsResponse
+	22, // 23: novaforge.ci.v1.CIService.TriggerRun:output_type -> novaforge.ci.v1.TriggerRunResponse
+	24, // 24: novaforge.ci.v1.CIService.DownloadArtifact:output_type -> novaforge.ci.v1.DownloadArtifactResponse
+	1,  // 25: novaforge.ci.v1.RunnerService.Register:output_type -> novaforge.ci.v1.RegisterResponse
+	5,  // 26: novaforge.ci.v1.RunnerService.Connect:output_type -> novaforge.ci.v1.ConnectResponse
+	7,  // 27: novaforge.ci.v1.RunnerService.ReportStatus:output_type -> novaforge.ci.v1.ReportStatusResponse
+	20, // 28: novaforge.ci.v1.RunnerService.UploadArtifact:output_type -> novaforge.ci.v1.UploadArtifactResponse
+	19, // [19:29] is the sub-list for method output_type
+	9,  // [9:19] is the sub-list for method input_type
 	9,  // [9:9] is the sub-list for extension type_name
 	9,  // [9:9] is the sub-list for extension extendee
 	0,  // [0:9] is the sub-list for field type_name
@@ -1652,7 +1770,7 @@ func file_novaforge_ci_v1_ci_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_novaforge_ci_v1_ci_proto_rawDesc), len(file_novaforge_ci_v1_ci_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   25,
+			NumMessages:   27,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

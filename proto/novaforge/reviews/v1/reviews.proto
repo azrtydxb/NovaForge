@@ -17,6 +17,27 @@ service ReviewsService {
   rpc ListProof(ListProofRequest) returns (ListProofResponse);
   rpc MergeRun(MergeRunRequest) returns (MergeRunResponse);
   rpc ListPlan(ListPlanRequest) returns (ListPlanResponse);
+  // GetRunImpact measures a run's change — its source branch against the
+  // point it diverged from its target — through the git service.
+  rpc GetRunImpact(GetRunImpactRequest) returns (GetRunImpactResponse);
+}
+
+message GetRunImpactRequest {
+  string run_id = 1;
+  string repo_id = 2;
+  int32 number = 3;
+}
+
+// GetRunImpactResponse is a run's change impact. risk is "low", "medium" or
+// "high", and risk_reasons says which rule put it there, so a reader never
+// has to take the level on trust.
+message GetRunImpactResponse {
+  int32 files_changed = 1;
+  int32 insertions = 2;
+  int32 deletions = 3;
+  repeated string paths = 4;
+  string risk = 5;
+  repeated string risk_reasons = 6;
 }
 
 // Run mirrors a row in the reviews.runs table.

@@ -15,6 +15,11 @@ service CIService {
   rpc GetJobLogs(GetJobLogsRequest) returns (GetJobLogsResponse);
   rpc ListArtifacts(ListArtifactsRequest) returns (ListArtifactsResponse);
   rpc TriggerRun(TriggerRunRequest) returns (TriggerRunResponse);
+  // DownloadArtifact streams one artifact's content. The first message
+  // carries the artifact's name and size; every message carries data. It is
+  // a stream because an artifact may be tens of megabytes, far past a unary
+  // message's default limit.
+  rpc DownloadArtifact(DownloadArtifactRequest) returns (stream DownloadArtifactResponse);
 }
 
 service RunnerService {
@@ -174,4 +179,14 @@ message TriggerRunRequest {
 }
 message TriggerRunResponse {
   WorkflowRunSummary run = 1;
+}
+
+message DownloadArtifactRequest {
+  string artifact_id = 1;
+}
+message DownloadArtifactResponse {
+  // name and size_bytes are set on the first message only.
+  string name = 1;
+  int64 size_bytes = 2;
+  bytes data = 3;
 }

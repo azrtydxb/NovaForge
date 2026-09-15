@@ -18,6 +18,10 @@ service IdentityService {
   rpc GetCurrentUser(GetCurrentUserRequest) returns (GetCurrentUserResponse);
   rpc ListOrgs(ListOrgsRequest) returns (ListOrgsResponse);
   rpc GetOrg(GetOrgRequest) returns (GetOrgResponse);
+  // DeleteOrg deletes an organization. Only an owner may, and only by naming
+  // it twice: confirm_name must equal the organization's name. The deletion
+  // is announced first, and every service removes that organization's data.
+  rpc DeleteOrg(DeleteOrgRequest) returns (DeleteOrgResponse);
   rpc ListOrgMembers(ListOrgMembersRequest) returns (ListOrgMembersResponse);
   rpc AddSSHKey(AddSSHKeyRequest) returns (AddSSHKeyResponse);
   rpc ListSSHKeys(ListSSHKeysRequest) returns (ListSSHKeysResponse);
@@ -69,6 +73,14 @@ message GetOrgRequest {
   string org = 1;
 }
 message GetOrgResponse {
+  Org org = 1;
+}
+
+message DeleteOrgRequest {
+  string org = 1;
+  string confirm_name = 2;
+}
+message DeleteOrgResponse {
   Org org = 1;
 }
 

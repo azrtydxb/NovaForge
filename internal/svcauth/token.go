@@ -38,11 +38,38 @@ type claims struct {
 	// platform's own workers, which act as nobody in particular.
 	Actor     uuid.UUID `json:"act,omitempty"`
 	ExpiresAt int64     `json:"exp"`
+	// Platform marks a token that names no organization (see MintPlatform).
+	Platform bool `json:"plat,omitempty"`
+}
+
+// MintPlatform returns a token for a platform worker that acts across
+// organizations, naming none. Verify refuses it — every org-scoped path uses
+// Verify — so the only thing it can reach is an RPC that checks for a
+// platform worker explicitly, and such an RPC returns ids only; the worker
+// then mints an org-scoped token to act inside each organization.
+func MintPlatform(secret, service string, ttl time.Duration) (string, error) {
+	return mint(secret, claims{Service: service, Platform: true}, ttl)
+}
+
+// VerifyPlatform checks a platform token and returns the worker's name. An
+// org-scoped token is refused.
+func VerifyPlatform(secret, token string) (string, error) {
+	c, err := verifyClaims(secret, token)
+	if err != nil {
+		return "", err
+	}
+	if !c.Platform || c.OrgID != uuid.Nil {
+		return "", fmt.Errorf("not a platform token")
+	}
+	if c.Service == "" {
+		return "", fmt.Errorf("platform token names no service")
+	}
+	return c.Service, nil
 }
 
 // Mint returns a token for service acting within orgID.
 func Mint(secret, service string, orgID uuid.UUID, ttl time.Duration) (string, error) {
-	return mint(secret, service, orgID, uuid.Nil, ttl)
+	return mint(secret, claims{Service: service, OrgID: orgID}, ttl)
 }
 
 // MintAgentRun returns the credential an agent run presents: agentID acting
@@ -53,18 +80,21 @@ func MintAgentRun(secret string, orgID, agentID uuid.UUID, ttl time.Duration) (s
 	if agentID == uuid.Nil {
 		return "", fmt.Errorf("an agent run credential must name its agent")
 	}
-	return mint(secret, AgentRunService, orgID, agentID, ttl)
+	return mint(secret, claims{Service: AgentRunService, OrgID: orgID, Actor: agentID}, ttl)
 }
 
-// ScopeFromToken verifies a service token and classifies its holder into the
-// scope every service applies: an agent run is the agent it names, anything
-// else is the platform acting for one organization. It is the one place this
-// is decided, so git-platform and the gRPC services cannot disagree about who
-// an agent is.
+// ScopeFromToken verifies an org-scoped service token and classifies its
+// holder into the scope every service applies: an agent run is the agent it
+// names, anything else is the platform acting for one organization. It is the
+// one place this is decided, so git-platform and the gRPC services cannot
+// disagree about who an agent is. A platform token is refused here.
 func ScopeFromToken(secret, token string) (authz.Scope, error) {
-	c, err := verify(secret, token)
+	c, err := verifyClaims(secret, token)
 	if err != nil {
 		return authz.Scope{}, err
+	}
+	if c.OrgID == uuid.Nil || c.Platform {
+		return authz.Scope{}, fmt.Errorf("service token carries no organization")
 	}
 	scope := authz.Scope{OrgID: c.OrgID, ActorKind: actorKindFor(c.Service)}
 	if scope.ActorKind == "agent" {
@@ -73,7 +103,7 @@ func ScopeFromToken(secret, token string) (authz.Scope, error) {
 	return scope, nil
 }
 
-func mint(secret, service string, orgID, actor uuid.UUID, ttl time.Duration) (string, error) {
+func mint(secret string, c claims, ttl time.Duration) (string, error) {
 	if secret == "" {
 		return "", fmt.Errorf("no HMAC secret configured for service authentication")
 	}
@@ -82,9 +112,8 @@ func mint(secret, service string, orgID, actor uuid.UUID, ttl time.Duration) (st
 	if ttl == 0 {
 		ttl = DefaultTTL
 	}
-	body, err := json.Marshal(claims{
-		Service: service, OrgID: orgID, Actor: actor, ExpiresAt: time.Now().Add(ttl).Unix(),
-	})
+	c.ExpiresAt = time.Now().Add(ttl).Unix()
+	body, err := json.Marshal(c)
 	if err != nil {
 		return "", err
 	}
@@ -93,16 +122,20 @@ func mint(secret, service string, orgID, actor uuid.UUID, ttl time.Duration) (st
 }
 
 // Verify checks a token's signature and expiry, returning the service name and
-// the organization it may act within.
+// the organization it may act within. A platform token, which names no
+// organization, is refused.
 func Verify(secret, token string) (string, uuid.UUID, error) {
-	c, err := verify(secret, token)
+	c, err := verifyClaims(secret, token)
 	if err != nil {
 		return "", uuid.Nil, err
+	}
+	if c.OrgID == uuid.Nil || c.Platform {
+		return "", uuid.Nil, fmt.Errorf("service token carries no organization")
 	}
 	return c.Service, c.OrgID, nil
 }
 
-func verify(secret, token string) (claims, error) {
+func verifyClaims(secret, token string) (claims, error) {
 	if secret == "" {
 		return claims{}, fmt.Errorf("no HMAC secret configured for service authentication")
 	}
@@ -129,9 +162,6 @@ func verify(secret, token string) (claims, error) {
 	}
 	if time.Now().Unix() > c.ExpiresAt {
 		return claims{}, fmt.Errorf("service token expired")
-	}
-	if c.OrgID == uuid.Nil {
-		return claims{}, fmt.Errorf("service token carries no organization")
 	}
 	return c, nil
 }

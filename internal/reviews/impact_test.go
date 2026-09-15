@@ -67,6 +67,29 @@ func TestComputeImpactCountsFiles(t *testing.T) {
 	}
 }
 
+// TestAssessRiskSaysWhy pins the risk rules and that each level carries the
+// rule that set it: a bare level is a number a reviewer must take on trust.
+func TestAssessRiskSaysWhy(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		im   reviews.Impact
+		want string
+	}{
+		{"small", reviews.Impact{FilesChanged: 2, Insertions: 10, Paths: []string{"api/a.go", "api/b.go"}}, "low"},
+		{"many files", reviews.Impact{FilesChanged: 8, Insertions: 40, Paths: []string{"a.go"}}, "medium"},
+		{"many lines", reviews.Impact{FilesChanged: 1, Insertions: 300, Paths: []string{"a.go"}}, "medium"},
+		{"huge", reviews.Impact{FilesChanged: 30, Insertions: 10, Paths: []string{"a.go"}}, "high"},
+		{"migration", reviews.Impact{FilesChanged: 1, Insertions: 3, Paths: []string{"internal/work/migrations/000008_x.up.sql"}}, "high"},
+		{"gate config", reviews.Impact{FilesChanged: 1, Insertions: 1, Paths: []string{".novaforge/gates/tests.yaml"}}, "high"},
+		{"dependency", reviews.Impact{FilesChanged: 1, Insertions: 1, Paths: []string{"go.mod"}}, "high"},
+	} {
+		got, reasons := reviews.AssessRisk(c.im)
+		if got != c.want || len(reasons) == 0 || reasons[0] == "" {
+			t.Errorf("%s: risk %q %v, want %q with a reason", c.name, got, reasons, c.want)
+		}
+	}
+}
+
 func TestComputeImpactEmptyDiff(t *testing.T) {
 	client := &stubGitClient{diff: ""}
 	impact, err := reviews.ComputeImpact(context.Background(), client, uuid.New(), uuid.New(), "main", "feature")

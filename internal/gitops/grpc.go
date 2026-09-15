@@ -18,6 +18,7 @@ import (
 
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	"github.com/novaforge/novaforge/internal/authz"
+	"github.com/novaforge/novaforge/internal/events"
 )
 
 // defaultCommitLimit caps ListCommits when the caller does not specify one.
@@ -62,6 +63,8 @@ type Server struct {
 	// between an agent's credential and the default branch: the transport
 	// and the API disagreed about what the same credential could write.
 	Grants GrantLister
+
+	repoDeleted RepoDeletedPublisher
 }
 
 // guardRef applies RefGuard to one branch write.
@@ -205,10 +208,16 @@ func (s *Server) ListRepos(ctx context.Context, req *gitv1.ListReposRequest) (*g
 // the renamed directory is removed. A failure before the row is gone renames
 // the directory back, so the repository is either fully present or fully
 // gone — never a record pointing at a missing directory, or a leftover
-// directory that makes re-creating the name fail. Nothing is published: no
-// consumer subscribes to a repository's deletion, and the rows other
-// services key on this repository's id are unreachable once its name no
-// longer resolves.
+// directory that makes re-creating the name fail.
+//
+// The deletion is announced on events.StreamRepoDeleted before anything is
+// removed, and every service holding rows keyed on the repository deletes its
+// own. Nothing used to be published, so Work Items, CI runs and artifacts,
+// reviews, the code index and agent runs all stayed behind. Announcing first
+// means a failure after it leaves a repository whose dependent data is going
+// or gone — which its owner asked for — rather than a repository gone with its
+// data left behind; a retry of the deletion announces again, and every
+// consumer's delete is idempotent.
 func (s *Server) DeleteRepo(ctx context.Context, req *gitv1.DeleteRepoRequest) (*gitv1.DeleteRepoResponse, error) {
 	scope, err := scopeFromContext(ctx)
 	if err != nil {
@@ -220,6 +229,14 @@ func (s *Server) DeleteRepo(ctx context.Context, req *gitv1.DeleteRepoRequest) (
 	row, err := s.repoByName(ctx, scope.OrgID, req.GetName())
 	if err != nil {
 		return nil, err
+	}
+	if s.repoDeleted == nil {
+		return nil, status.Error(codes.FailedPrecondition, "this deployment cannot announce a repository's deletion, so nothing was deleted")
+	}
+	if err := s.repoDeleted(ctx, events.RepoDeletedEvent{
+		OrgID: scope.OrgID, RepoID: row.ID, RepoName: row.Name, At: time.Now().UTC(),
+	}); err != nil {
+		return nil, status.Errorf(codes.Unavailable, "announce the deletion to the services that hold its data: %v; nothing was deleted", err)
 	}
 	repo, err := Open(s.root, scope.OrgID, row.Name)
 	if err != nil {
@@ -263,6 +280,36 @@ func (s *Server) DeleteRepo(ctx context.Context, req *gitv1.DeleteRepoRequest) (
 		}
 	}
 	return &gitv1.DeleteRepoResponse{Ok: true}, nil
+}
+
+// ListOrganizationsWithRepositories returns the id of every organization that
+// has at least one repository. It is the one query here without an
+// organization predicate, so it answers only a platform worker — a caller
+// whose token names no organization — and returns ids and nothing else. A
+// person, an agent, or an org-scoped service token is refused: none of them
+// has any business knowing which other organizations exist.
+func (s *Server) ListOrganizationsWithRepositories(ctx context.Context, _ *gitv1.ListOrganizationsWithRepositoriesRequest) (*gitv1.ListOrganizationsWithRepositoriesResponse, error) {
+	scope, err := authz.FromContext(ctx)
+	if err != nil || !scope.IsPlatformWorker() {
+		return nil, status.Error(codes.PermissionDenied, "only a platform worker may list organizations")
+	}
+	rows, err := s.pool.Query(ctx, `SELECT DISTINCT org_id FROM gitplatform.repositories ORDER BY org_id`)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "list organizations: %v", err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, status.Errorf(codes.Internal, "scan organization: %v", err)
+		}
+		out = append(out, id.String())
+	}
+	if err := rows.Err(); err != nil {
+		return nil, status.Errorf(codes.Internal, "list organizations: %v", err)
+	}
+	return &gitv1.ListOrganizationsWithRepositoriesResponse{OrgIds: out}, nil
 }
 
 // ListBranches lists a repository's branches.

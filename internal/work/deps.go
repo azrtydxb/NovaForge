@@ -303,30 +303,6 @@ func (s *Store) OpenEpics(ctx context.Context) ([]Epic, error) {
 	return out, rows.Err()
 }
 
-// OrganizationsWithWork returns every organization that has at least one
-// Work Item. Like OpenEpics it deliberately carries no organization
-// predicate: the maintenance sweeper is a platform worker with no
-// organization of its own, and it re-enters each organization's scope
-// before reading anything belonging to it. Only ids are returned, so
-// nothing of one organization's content is visible to another.
-func (s *Store) OrganizationsWithWork(ctx context.Context) ([]uuid.UUID, error) {
-	rows, err := s.pool.Query(ctx, `SELECT DISTINCT org_id FROM work.work_items`)
-	if err != nil {
-		return nil, fmt.Errorf("list organizations with work: %w", err)
-	}
-	defer rows.Close()
-
-	var out []uuid.UUID
-	for rows.Next() {
-		var id uuid.UUID
-		if err := rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("scan organization: %w", err)
-		}
-		out = append(out, id)
-	}
-	return out, rows.Err()
-}
-
 // Proposal is one maintenance finding that became a Work Item, together with
 // the item it created. resolved marks a finding that has stopped reproducing.
 // Decision is empty while the proposal awaits a person's approval.

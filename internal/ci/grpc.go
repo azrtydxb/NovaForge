@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
+	"log"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -22,6 +23,11 @@ type logAppender interface {
 	Append(ctx context.Context, jobID uuid.UUID, line string) error
 }
 
+// logSealer moves a finished job's live log into object storage.
+type logSealer interface {
+	Seal(ctx context.Context, jobID uuid.UUID) (string, error)
+}
+
 // Server implements novaforge.ci.v1.RunnerService: runners register once,
 // then hold a single persistent outbound Connect stream that jobs are
 // pushed down, so a runner never needs inbound network reachability.
@@ -31,6 +37,7 @@ type Server struct {
 	store      *Store
 	dispatcher *Dispatcher
 	logs       logAppender
+	sealer     logSealer
 	artifacts  *ArtifactStore
 	redactions *Redactions
 }
@@ -48,8 +55,13 @@ func NewServer(store *Store, dispatcher *Dispatcher) *Server {
 }
 
 // SetLogSink wires a live-log destination for streamed log_chunk frames.
+// When the sink can also seal (LogSink can), a job's log is sealed as soon as
+// its runner reports it finished.
 func (s *Server) SetLogSink(logs logAppender) {
 	s.logs = logs
+	if sealer, ok := logs.(logSealer); ok {
+		s.sealer = sealer
+	}
 }
 
 // Register enrolls a new runner, returning the id and bearer token it must
@@ -196,6 +208,17 @@ func (s *Server) ReportStatus(ctx context.Context, req *civ1.ReportStatusRequest
 	if err := s.jobIsRunners(ctx, jobID, runnerID); err != nil {
 		return nil, err
 	}
+	// A finished job's log moves to object storage. Nothing used to call Seal,
+	// so every job's log stayed in Redis forever and the retention sweep, which
+	// deletes sealed logs, had nothing to delete. It is sealed before the status
+	// is written, so a job anyone sees as finished already has its log sealed.
+	// A failure to seal does not stop the job finishing: its lines stay
+	// readable live.
+	if terminalJobStatus(req.GetStatus()) && s.sealer != nil {
+		if _, err := s.sealer.Seal(ctx, jobID); err != nil {
+			log.Printf("ci: seal log of job %s: %v", jobID, err)
+		}
+	}
 	detail := s.redactions.Line(jobID, req.GetDetail())
 	if err := s.store.SetJobStatus(ctx, jobID, req.GetStatus(), detail); err != nil {
 		return nil, err
@@ -205,6 +228,10 @@ func (s *Server) ReportStatus(ctx context.Context, req *civ1.ReportStatusRequest
 		s.redactions.Forget(jobID)
 	}
 	return &civ1.ReportStatusResponse{Ok: true}, nil
+}
+
+func terminalJobStatus(s string) bool {
+	return s == "success" || s == "failure" || s == "cancelled"
 }
 
 // maxArtifactBytes bounds one uploaded artifact. CI artifacts are reports and

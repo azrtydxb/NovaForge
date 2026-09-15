@@ -2,6 +2,7 @@ package ci
 
 import (
 	"context"
+	"errors"
 	"io"
 
 	"github.com/google/uuid"
@@ -116,35 +117,59 @@ func (q *QueryServer) GetJobLogs(ctx context.Context, req *civ1.GetJobLogsReques
 		return nil, err
 	}
 
-	// Sealed first: a finished job's log lives in object storage, and reading
-	// Redis for it would return nothing.
-	if rc, err := q.blobs.Get(ctx, sealedObjectKey(jobID)); err == nil {
-		defer rc.Close()
-		body, err := io.ReadAll(rc)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "read sealed log: %v", err)
+	// A finished job's log lives in object storage; a running job's in Redis.
+	// Both are read, sealed first: a runner's last chunks can land after the
+	// status report that sealed the log, and those lines stay live until the
+	// next seal. Reading only one side would drop them.
+	var lines []string
+	rc, err := q.blobs.Get(ctx, sealedObjectKey(jobID))
+	switch {
+	case err == nil:
+		body, rerr := io.ReadAll(rc)
+		rc.Close()
+		if rerr != nil {
+			return nil, status.Errorf(codes.Internal, "read sealed log: %v", rerr)
 		}
-		return &civ1.GetJobLogsResponse{Lines: splitLines(string(body))}, nil
+		lines = splitLines(string(body))
+	case !errors.Is(err, blobstore.ErrNotFound):
+		return nil, status.Errorf(codes.Internal, "read sealed log: %v", err)
 	}
 
-	lines, err := q.logs.Snapshot(ctx, jobID)
+	live, err := q.logs.Snapshot(ctx, jobID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "read live log: %v", err)
+	}
+	lines = append(lines, live...)
+	if lines == nil {
+		lines = []string{}
 	}
 	return &civ1.GetJobLogsResponse{Lines: lines}, nil
 }
 
-// ListArtifacts returns a run's artifacts.
+// ListArtifacts returns a run's artifacts, or one job's when job_id is set.
+//
+// job_id used to be ignored: the request was resolved as a run, an empty run
+// id is invalid, and so every "this job's artifacts" read — the only one the
+// interface makes — failed.
 func (q *QueryServer) ListArtifacts(ctx context.Context, req *civ1.ListArtifactsRequest) (*civ1.ListArtifactsResponse, error) {
 	sc, err := q.scope(ctx)
 	if err != nil {
 		return nil, err
 	}
-	runID, err := q.resolveRun(ctx, sc, req.GetRunId())
-	if err != nil {
-		return nil, err
+	var arts []Artifact
+	if req.GetJobId() != "" {
+		jobID, jerr := q.resolveJob(ctx, sc, req.GetJobId(), "")
+		if jerr != nil {
+			return nil, jerr
+		}
+		arts, err = q.artifacts.ListForJob(ctx, jobID)
+	} else {
+		runID, rerr := q.resolveRun(ctx, sc, req.GetRunId())
+		if rerr != nil {
+			return nil, rerr
+		}
+		arts, err = q.artifacts.List(ctx, runID)
 	}
-	arts, err := q.artifacts.List(ctx, runID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "list artifacts: %v", err)
 	}
@@ -156,6 +181,55 @@ func (q *QueryServer) ListArtifacts(ctx context.Context, req *civ1.ListArtifacts
 		})
 	}
 	return &civ1.ListArtifactsResponse{Artifacts: out}, nil
+}
+
+// downloadChunk is the size of each message DownloadArtifact sends, well
+// under gRPC's default 4 MiB message limit.
+const downloadChunk = 256 << 10
+
+// DownloadArtifact streams one artifact's content to a member of the
+// organization that owns it. An artifact of another organization reads as
+// absent, exactly like one that does not exist.
+func (q *QueryServer) DownloadArtifact(req *civ1.DownloadArtifactRequest, stream civ1.CIService_DownloadArtifactServer) error {
+	ctx := stream.Context()
+	sc, err := q.scope(ctx)
+	if err != nil {
+		return err
+	}
+	id, err := uuid.Parse(req.GetArtifactId())
+	if err != nil {
+		return status.Error(codes.InvalidArgument, "invalid artifact id")
+	}
+	art, rc, err := q.artifacts.OpenInOrg(ctx, sc.OrgID, id)
+	if err != nil {
+		if errors.Is(err, ErrArtifactNotFound) {
+			return status.Error(codes.NotFound, "no such artifact")
+		}
+		return status.Errorf(codes.Internal, "open artifact: %v", err)
+	}
+	defer rc.Close()
+
+	buf := make([]byte, downloadChunk)
+	first := true
+	for {
+		n, rerr := io.ReadFull(rc, buf)
+		if n > 0 || first {
+			msg := &civ1.DownloadArtifactResponse{Data: buf[:n]}
+			if first {
+				msg.Name, msg.SizeBytes = art.Name, art.SizeBytes
+				first = false
+			}
+			if err := stream.Send(msg); err != nil {
+				return err
+			}
+		}
+		if errors.Is(rerr, io.EOF) || errors.Is(rerr, io.ErrUnexpectedEOF) {
+			return nil
+		}
+		if rerr != nil {
+			return status.Errorf(codes.Internal, "read artifact: %v", rerr)
+		}
+	}
 }
 
 func (q *QueryServer) resolveRun(ctx context.Context, sc authz.Scope, id string) (uuid.UUID, error) {

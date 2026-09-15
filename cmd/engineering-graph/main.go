@@ -22,6 +22,7 @@ import (
 	graphv1 "github.com/novaforge/novaforge/gen/novaforge/graph/v1"
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
 	"github.com/novaforge/novaforge/internal/authz"
+	"github.com/novaforge/novaforge/internal/cleanup"
 	"github.com/novaforge/novaforge/internal/ctxasm"
 	"github.com/novaforge/novaforge/internal/database"
 	"github.com/novaforge/novaforge/internal/graph"
@@ -92,6 +93,10 @@ func main() {
 	graphStore := graph.NewStore(pool)
 	vectors := graph.NewVectorStore(pool)
 	knowledgeStore := knowledge.NewStore(pool)
+	// A deleted repository's index and knowledge, and a deleted
+	// organization's, are removed when the deletion is announced; otherwise a
+	// deleted repository's code went on answering searches.
+	cleanup.EngineeringGraph(graphStore, knowledgeStore).Run(ctx, rdb, "engineering-graph")
 	workStore := work.NewStore(pool)
 
 	// Embedder is optional: EMBED_ENDPOINT/EMBED_MODEL are unset on a

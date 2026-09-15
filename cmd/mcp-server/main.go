@@ -23,6 +23,7 @@ import (
 	mcpv1 "github.com/novaforge/novaforge/gen/novaforge/mcp/v1"
 	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
 	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
+	"github.com/novaforge/novaforge/internal/cleanup"
 	"github.com/novaforge/novaforge/internal/database"
 	"github.com/novaforge/novaforge/internal/mcp"
 	"github.com/novaforge/novaforge/internal/service"
@@ -140,7 +141,16 @@ func main() {
 
 	grpcSrv := grpc.NewServer(grpc.UnaryInterceptor(
 		svcauth.UnaryServerInterceptor(registryIdentity, cfg.HMACSecret)))
-	mcpv1.RegisterMcpServiceServer(grpcSrv, mcp.NewRegistry(pool, registryIdentity))
+	registry := mcp.NewRegistry(pool, registryIdentity)
+	mcpv1.RegisterMcpServiceServer(grpcSrv, registry)
+
+	// A deleted organization's registered servers go with it.
+	eventBus, err := cleanup.Redis(cfg.RedisURL)
+	if err != nil {
+		log.Fatalf("mcp-server: %v", err)
+	}
+	defer eventBus.Close()
+	cleanup.MCPServer(registry).Run(ctx, eventBus, "mcp-server")
 
 	errCh := make(chan error, 2)
 

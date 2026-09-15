@@ -125,11 +125,51 @@ async function text(path: string): Promise<string> {
   return body;
 }
 
+/** download saves a file the edge serves as an attachment. A plain link
+ * cannot do it: the credential lives in this page, not in a cookie every
+ * session has, so the request is made here with it and the bytes are handed
+ * to the browser as a local object. */
+async function download(path: string, filename: string): Promise<void> {
+  const headers: Record<string, string> = {};
+  const token = storedToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(path, { method: "GET", headers });
+  if (!res.ok) {
+    const body = await res.text();
+    let parsed: unknown = null;
+    try {
+      parsed = JSON.parse(body);
+    } catch {
+      parsed = null;
+    }
+    throw new ApiError(
+      res.status,
+      errorMessage(parsed) || body || res.statusText,
+    );
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  try {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } finally {
+    // Revoked on the next tick: revoking synchronously can cancel the save
+    // before the browser has started it.
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+}
+
 export const api = {
   get: <T>(path: string) => request<T>("GET", path),
   text,
+  download,
   post: <T>(path: string, body?: unknown) => request<T>("POST", path, body),
-  del: <T>(path: string) => request<T>("DELETE", path),
+  del: <T>(path: string, body?: unknown) => request<T>("DELETE", path, body),
 };
 
 /** enc escapes one path segment. Organization and repository names travel in
