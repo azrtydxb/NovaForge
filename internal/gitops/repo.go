@@ -107,15 +107,20 @@ func (r Repo) refs(kind string) ([]Ref, error) {
 		pattern = "refs/tags/"
 		refType = "tag"
 	}
+	// %(*objectname) is the commit an annotated tag points at, and empty for
+	// anything else. The ref's kind is what the caller asked for — branch or
+	// tag — not the type of the object behind it: that was "commit" for every
+	// branch and lightweight tag, and an annotated tag was reported as its
+	// own tag object's sha, which no tree or history lookup can use.
 	out, err := run("", "--git-dir="+r.path, "for-each-ref",
-		"--format=%(refname:short)%00%(objectname)%00%(objecttype)", pattern)
+		"--format=%(refname:short)%00%(objectname)%00%(*objectname)", pattern)
 	if err != nil {
 		return nil, err
 	}
 	return parseRefs(out, refType), nil
 }
 
-func parseRefs(out []byte, fallbackKind string) []Ref {
+func parseRefs(out []byte, kind string) []Ref {
 	var refs []Ref
 	lines := strings.Split(strings.TrimSuffix(string(out), "\n"), "\n")
 	for _, line := range lines {
@@ -126,11 +131,11 @@ func parseRefs(out []byte, fallbackKind string) []Ref {
 		if len(parts) != 3 {
 			continue
 		}
-		kind := parts[2]
-		if kind == "" {
-			kind = fallbackKind
+		sha := parts[1]
+		if parts[2] != "" {
+			sha = parts[2]
 		}
-		refs = append(refs, Ref{Name: parts[0], SHA: parts[1], Kind: kind})
+		refs = append(refs, Ref{Name: parts[0], SHA: sha, Kind: kind})
 	}
 	return refs
 }

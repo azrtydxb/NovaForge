@@ -156,6 +156,11 @@ function Browser({
     queryFn: () => api.get<{ refs: Ref[] }>(`${base}/branches`),
   });
   const refs = branches.data?.refs ?? [];
+  const tagList = useQuery({
+    queryKey: ["tags", org, repo],
+    queryFn: () => api.get<{ refs: Ref[] }>(`${base}/tags`),
+  });
+  const tags = tagList.data?.refs ?? [];
   // A repository with no branch has no commit to read a tree or a log from.
   // Asking anyway answered 404, which the panels showed as "not available in
   // this deployment" — wrong on both counts for an empty repository.
@@ -166,7 +171,9 @@ function Browser({
   // which is every repository an agent has written to and nobody has pushed
   // to — would otherwise show nothing at all.
   const head =
-    (branch && refs.some((r) => r.name === branch) ? branch : null) ??
+    (branch && [...refs, ...tags].some((r) => r.name === branch)
+      ? branch
+      : null) ??
     refs.find((r) => r.name === defaultBranch)?.name ??
     refs[0]?.name ??
     defaultBranch;
@@ -265,11 +272,22 @@ function Browser({
               }}
             >
               {refs.length === 0 ? <option>{head}</option> : null}
-              {refs.map((r) => (
-                <option key={r.name} value={r.name}>
-                  {r.name}
-                </option>
-              ))}
+              <optgroup label="Branches">
+                {refs.map((r) => (
+                  <option key={r.name} value={r.name}>
+                    {r.name}
+                  </option>
+                ))}
+              </optgroup>
+              {tags.length > 0 ? (
+                <optgroup label="Tags">
+                  {tags.map((r) => (
+                    <option key={`tag:${r.name}`} value={r.name}>
+                      {r.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
             </select>
           </PanelHead>
           <div
@@ -390,6 +408,15 @@ function Browser({
             </Async>
           )}
         </Panel>
+
+        {empty ? null : (
+          <Compare
+            base={base}
+            refs={[...refs, ...tags]}
+            defaultFrom={defaultBranch}
+            defaultTo={head}
+          />
+        )}
       </div>
 
       <Panel style={{ minWidth: 0 }}>
@@ -420,6 +447,132 @@ function Browser({
     </div>
   );
 }
+
+/** Compare shows the unified diff between two refs, branches or tags, as
+ * git-platform computes it. Nothing is fetched until someone asks, so the
+ * panel never shows an empty diff for a question nobody put. */
+function Compare({
+  base,
+  refs,
+  defaultFrom,
+  defaultTo,
+}: {
+  base: string;
+  refs: Ref[];
+  defaultFrom: string;
+  defaultTo: string;
+}) {
+  const [from, setFrom] = useState(defaultFrom);
+  const [to, setTo] = useState(defaultTo);
+  const [asked, setAsked] = useState<{ from: string; to: string } | null>(null);
+  const diff = useQuery({
+    queryKey: ["diff", base, asked?.from, asked?.to],
+    queryFn: () =>
+      api.get<{ unified: string }>(
+        `${base}/diff?from=${enc(asked!.from)}&to=${enc(asked!.to)}`,
+      ),
+    enabled: asked !== null,
+  });
+  const names = Array.from(new Set(refs.map((r) => r.name)));
+  const picker = (value: string, onChange: (v: string) => void) => (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      style={selectStyle}
+    >
+      {names.includes(value) ? null : <option>{value}</option>}
+      {names.map((n) => (
+        <option key={n} value={n}>
+          {n}
+        </option>
+      ))}
+    </select>
+  );
+  return (
+    <Panel>
+      <PanelHead>COMPARE</PanelHead>
+      <div
+        style={{
+          display: "flex",
+          gap: 6,
+          alignItems: "center",
+          flexWrap: "wrap",
+          padding: "8px 14px",
+        }}
+      >
+        {picker(from, setFrom)}
+        <span style={{ color: "var(--fg-faint)", font: "11px var(--mono)" }}>
+          ..
+        </span>
+        {picker(to, setTo)}
+        <button
+          onClick={() => setAsked({ from, to })}
+          disabled={from === to}
+          style={{
+            background: "transparent",
+            border: "1px solid var(--line-2)",
+            borderRadius: 6,
+            color: "var(--fg-muted)",
+            font: "10px var(--sans)",
+            padding: "3px 7px",
+            cursor: from === to ? "default" : "pointer",
+          }}
+        >
+          show diff
+        </button>
+      </div>
+      {asked === null ? (
+        <Empty>Choose two refs to see what changed between them.</Empty>
+      ) : (
+        <Async query={diff}>
+          {(d) =>
+            d.unified === "" ? (
+              <Empty>
+                No difference between {asked.from} and {asked.to}.
+              </Empty>
+            ) : (
+              <pre
+                style={{
+                  margin: 0,
+                  padding: 14,
+                  maxHeight: 360,
+                  overflow: "auto",
+                  font: "11px/1.6 var(--mono)",
+                  whiteSpace: "pre",
+                }}
+              >
+                {d.unified.split("\n").map((line, i) => (
+                  <div key={i} style={{ color: diffColor(line) }}>
+                    {line || " "}
+                  </div>
+                ))}
+              </pre>
+            )
+          }
+        </Async>
+      )}
+    </Panel>
+  );
+}
+
+function diffColor(line: string): string {
+  if (line.startsWith("+++") || line.startsWith("---"))
+    return "var(--fg-muted)";
+  if (line.startsWith("+")) return "var(--ok)";
+  if (line.startsWith("-")) return "var(--bad)";
+  return "var(--fg-dim)";
+}
+
+const selectStyle: React.CSSProperties = {
+  background: "var(--bg)",
+  border: "1px solid var(--line-2)",
+  borderRadius: 6,
+  color: "var(--fg-dim)",
+  font: "11px var(--mono)",
+  padding: "3px 6px",
+  outline: "none",
+  maxWidth: 160,
+};
 
 const dangerButton: React.CSSProperties = {
   padding: "7px 14px",
