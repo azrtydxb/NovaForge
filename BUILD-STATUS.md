@@ -162,6 +162,12 @@ Each was fixed with a test that pins it:
 - Three services kept their own auth interceptor that understood a person's
   credential but not a platform service token, while git-platform understood
   both — so an agent's token was accepted by one service and refused by three.
+- A fix for one log defect hid the previous one: the follow that held its
+  latest line back (so a kubelet-invented line could not be trusted) left a
+  print-then-sleep job's log empty for its whole running life, and the whole
+  log arrived in one burst racing the status flip to success. The runner now
+  polls the log without following, which also makes the inotify defect
+  unrepresentable.
 
 ## Closing the pending list (2026-09-14)
 
@@ -520,6 +526,27 @@ Four gaps, each a seam with a tested component on either side:
 The Graph screen answers for a symbol or a file from these edges; the
 Knowledge screen lists entries, says who recorded them, and lets a person
 record one.
+
+## A log that was not live, and the fix that made it worse (2026-09-15)
+
+On revision 64 the `work_ci` suite failed at exactly the step that proves
+liveness: the job prints a line, sleeps thirty seconds, prints another; the
+suite reads the log while the job still reports running, and fails if it finds
+the job's last line. Two things had stacked. The inotify fix made the follow
+hold its latest line back, so a print-then-sleep job's only line during its
+running life was never forwarded at all — the live log was empty — and the
+whole log arrived in one burst at job end, racing the status flip to success;
+that burst was what the step read while the job still reported running.
+
+The follow is gone. The runner polls the log without following while the job
+runs, and settles the last lines with a settled read once the pod is terminal.
+Polling touches no fsnotify watcher, so the inotify defect — the kubelet
+ending the follow early and writing its own error into the stream as if the
+job had printed it — cannot occur at all. Each poll forwards the lines past
+the byte offset the previous poll already forwarded: a line still without its
+newline would otherwise go out twice, truncated and then whole. The e2e read
+it red on revision 64 before the fix, and pins both sides: a line is readable
+while the job runs, and the last line arrives exactly once.
 
 ## Spec traceability
 

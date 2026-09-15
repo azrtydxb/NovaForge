@@ -1,7 +1,7 @@
 package runner
 
 import (
-	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -189,8 +189,7 @@ func (p *PodExecutor) Run(ctx context.Context, job *civ1.ConnectResponse, logs c
 		arts, err := filterOutput(ctx, raw, logs)
 		done <- filtered{arts, err}
 	}()
-	sent, err := p.streamLogs(ctx, created.Name, raw)
-	if err != nil {
+	if err := p.streamLogs(ctx, created.Name, raw); err != nil {
 		close(raw)
 		<-done
 		return 0, err
@@ -203,27 +202,6 @@ func (p *PodExecutor) Run(ctx context.Context, job *civ1.ConnectResponse, logs c
 		return code, err
 	}
 
-	// A followed log is not a complete one. When a node runs out of inotify
-	// instances the kubelet ends the follow early and writes its own error
-	// ("failed to create fsnotify watcher: too many open files") into the
-	// stream as if the job had printed it; the job's last lines never arrived,
-	// and neither did its artifacts. So once the job has exited its whole log
-	// is read again, without following, and every line past what was already
-	// forwarded is sent. The follow holds its latest line back for exactly this
-	// reason: a line the kubelet invented is not in the job's real log.
-	if full, ferr := p.fullLog(ctx, created.Name); ferr == nil {
-		for _, line := range remainingLines(full, sent) {
-			select {
-			case raw <- line:
-			case <-ctx.Done():
-			}
-		}
-	} else {
-		select {
-		case raw <- "novaforge: the job's complete log could not be read, so it may be missing its last lines: " + ferr.Error():
-		case <-ctx.Done():
-		}
-	}
 	close(raw)
 	out := <-done
 	if ctx.Err() != nil {
@@ -257,78 +235,109 @@ func defaultJobImage() string {
 	return "debian:13-slim"
 }
 
-func (p *PodExecutor) streamLogs(ctx context.Context, podName string, logs chan<- string) (int, error) {
-	// Wait for the container to start producing output before attaching.
+func (p *PodExecutor) streamLogs(ctx context.Context, podName string, logs chan<- string) error {
+	// The log is read by polling the complete log, not by following it. A
+	// follow makes the kubelet create an fsnotify watcher for the stream, and
+	// on a node out of inotify instances it ends the follow early and writes
+	// its own error into the stream as if the job had printed it: the job's
+	// last lines and its artifact block never arrived, and the error read as
+	// job output. A read without follow touches no watcher, so none of that
+	// can happen; and once the pod is terminal the last read is the truth, so
+	// the job's last line is settled here, not against a held-back line.
+	// Each poll forwards the lines past what the previous poll already
+	// forwarded, by byte offset rather than line count: a line still without
+	// its newline would otherwise go out twice, truncated and then whole.
+	sent := 0
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
 	for {
+		data, err := p.logData(ctx, podName)
+		if err == nil {
+			if cut := bytes.IndexByte(data, '\n') + 1; cut > sent {
+				for _, line := range lines(data[:cut]) {
+					select {
+					case logs <- line:
+					case <-ctx.Done():
+						return ctx.Err()
+					}
+				}
+				sent = cut
+			}
+		}
 		pod, err := p.Client.CoreV1().Pods(p.Namespace).Get(ctx, podName, metav1.GetOptions{})
 		if err != nil {
-			return 0, fmt.Errorf("get job pod: %w", err)
+			return fmt.Errorf("get job pod: %w", err)
 		}
-		switch pod.Status.Phase {
-		case corev1.PodRunning, corev1.PodSucceeded, corev1.PodFailed:
-			goto attach
+		if terminal(pod) {
+			// The phase can settle before the last line does, so give the log
+			// a moment to land before the read that must not miss it.
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(300 * time.Millisecond):
+			}
+			data, rerr := p.logData(ctx, podName)
+			if rerr != nil {
+				// The settled read is the one that must not miss the last lines;
+				// if it fails, say so rather than deliver a log that is missing them.
+				select {
+				case logs <- "novaforge: the job's complete log could not be read, so it may be missing its last lines: " + rerr.Error():
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+				return nil
+			}
+			if len(data) > sent {
+				for _, line := range lines(data[sent:]) {
+					select {
+					case logs <- line:
+					case <-ctx.Done():
+						return ctx.Err()
+					}
+				}
+			}
+			return nil
 		}
 		select {
 		case <-ctx.Done():
-			return 0, ctx.Err()
-		case <-time.After(time.Second):
+			return ctx.Err()
+		case <-ticker.C:
 		}
 	}
-attach:
-	stream, err := p.Client.CoreV1().Pods(p.Namespace).
-		GetLogs(podName, &corev1.PodLogOptions{Follow: true}).Stream(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("stream job logs: %w", err)
-	}
-	defer stream.Close()
-	return forwardHoldingLast(ctx, stream, logs)
 }
 
-// forwardHoldingLast forwards each line of r except the last one it has read,
-// which is held until the next arrives. It returns how many lines it forwarded.
-// The held line is the one a broken follow may have invented; the caller settles
-// it against the job's complete log.
-func forwardHoldingLast(ctx context.Context, r io.Reader, logs chan<- string) (int, error) {
-	sc := bufio.NewScanner(r)
-	sc.Buffer(make([]byte, 0, 64*1024), logScannerMaxLine)
-	sent := 0
-	held, holding := "", false
-	for sc.Scan() {
-		if holding {
-			select {
-			case logs <- held:
-				sent++
-			case <-ctx.Done():
-				return sent, ctx.Err()
-			}
-		}
-		held, holding = sc.Text(), true
-	}
-	return sent, sc.Err()
-}
-
-// fullLog reads a finished job pod's entire log, without following.
-func (p *PodExecutor) fullLog(ctx context.Context, podName string) ([]string, error) {
+// logData reads the pod's complete log, without following.
+func (p *PodExecutor) logData(ctx context.Context, podName string) ([]byte, error) {
 	stream, err := p.Client.CoreV1().Pods(p.Namespace).GetLogs(podName, &corev1.PodLogOptions{}).Stream(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("read job log: %w", err)
+		return nil, err
 	}
 	defer stream.Close()
-	var lines []string
-	sc := bufio.NewScanner(stream)
-	sc.Buffer(make([]byte, 0, 64*1024), logScannerMaxLine)
-	for sc.Scan() {
-		lines = append(lines, sc.Text())
-	}
-	return lines, sc.Err()
+	return io.ReadAll(stream)
 }
 
-// remainingLines is the part of a job's complete log not yet forwarded.
-func remainingLines(full []string, sent int) []string {
-	if sent >= len(full) {
-		return nil
+// lines splits a log payload into lines; a trailing newline terminates the
+// last line rather than starting an empty one.
+func lines(b []byte) []string {
+	s := strings.Split(string(b), "\n")
+	if len(s) > 0 && s[len(s)-1] == "" {
+		s = s[:len(s)-1]
 	}
-	return full[sent:]
+	return s
+}
+
+// terminal reports whether a pod can no longer produce output.
+func terminal(pod *corev1.Pod) bool {
+	for _, cs := range pod.Status.ContainerStatuses {
+		if cs.State.Terminated != nil {
+			return true
+		}
+	}
+	switch pod.Status.Phase {
+	case corev1.PodSucceeded, corev1.PodFailed:
+		return true
+	}
+	return false
 }
 
 func (p *PodExecutor) waitForExit(ctx context.Context, podName string) (int, error) {
@@ -355,12 +364,3 @@ func (p *PodExecutor) waitForExit(ctx context.Context, podName string) (int, err
 		}
 	}
 }
-
-// ForwardHoldingLastForTest and RemainingLinesForTest expose the log completion
-// helpers to the package's external tests.
-func ForwardHoldingLastForTest(ctx context.Context, r io.Reader, logs chan<- string) (int, error) {
-	return forwardHoldingLast(ctx, r, logs)
-}
-
-// RemainingLinesForTest exposes remainingLines.
-func RemainingLinesForTest(full []string, sent int) []string { return remainingLines(full, sent) }
