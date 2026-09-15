@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/azrtydxb/go-ai-sdk/provider"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
@@ -250,7 +251,7 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 		// every tool call reaches its service anonymously and is refused —
 		// an agent that can call nothing looks exactly like an agent that
 		// chose to do nothing.
-		ctx, err := withRunIdentity(ctx, cfg.HMACSecret, run.OrgID)
+		ctx, err := agentrun.WithRunIdentity(ctx, cfg.HMACSecret, run.OrgID)
 		if err != nil {
 			log.Printf("agent-runtime: run %s: %v", run.ID, err)
 			finishRun(ctx, store, run, "failed")
@@ -284,15 +285,6 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 		}
 		log.Printf("agent-runtime: run %s workspace holds %s", run.ID, ref)
 
-		model, err := agentrun.NewModelClient(agentrun.ModelConfig{Endpoint: cfg.AIEndpoint, Model: cfg.AIModel, APIKey: cfg.AIAPIKey})
-		if err != nil {
-			log.Printf("agent-runtime: build model client for run %s: %v", run.ID, err)
-			finishRun(ctx, store, run, "failed")
-			return
-		}
-
-		budget := agents.NewBudget(run.WallclockLimit, run.TokenLimit, run.CostLimitMicros)
-
 		var grant capability.Grant
 		if run.GrantID != uuid.Nil {
 			// The grant was already issued and validated by StartRun; the
@@ -307,42 +299,43 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 			}
 		}
 
-		reg := tools.NewRegistry(tools.Runtime{
-			RunID:     run.ID,
-			Grant:     grant,
-			Budget:    budget,
-			Workspace: &podWorkspace{provisioner: provisioner, runID: run.ID},
-			Git:       newGitAdapter(gitClient, graphClient),
-			Work:      newWorkAdapter(workClient),
-			Graph:     newGraphAdapter(graphClient, run.RepoID.String()),
-			Reviews:   newReviewsAdapter(reviewsClient),
-			CI:        newCIAdapter(ciClient),
-		}, audit)
-
-		loop := agentrun.NewLoop(model, budget, audit)
-		loop.Runs = store
-		loop.Criteria = func(ctx context.Context, workItemID uuid.UUID) (agentrun.Criteria, error) {
-			resp, err := workClient.GetItem(ctx, &workv1.GetItemRequest{Id: workItemID.String()})
-			if err != nil {
-				return agentrun.Criteria{}, err
-			}
-			return agentrun.Criteria{Goal: resp.GetItem().GetGoal(), Acceptance: resp.GetItem().GetAcceptance()}, nil
-		}
 		providerOptions, poErr := agentrun.ParseProviderOptions(cfg.AIProviderOptions)
 		if poErr != nil {
 			log.Printf("agent-runtime: %v", poErr)
 			finishRun(ctx, store, run, "failed")
 			return
 		}
-		loop.ProviderOptions = providerOptions
-		result, err := loop.Execute(ctx, run, reg)
-		state := "failed"
-		if err == nil {
-			state = result.State
-		} else {
-			log.Printf("agent-runtime: run %s loop failed: %v", run.ID, err)
+
+		// The runner reads the repository's .novaforge configuration and the
+		// context assembled for the Work Item before the first model turn;
+		// both used to reach no run at all.
+		runner := &agentrun.Runner{
+			Git:   gitClient,
+			Work:  workClient,
+			Graph: graphClient,
+			Runs:  store,
+			Audit: audit,
+			NewModel: func(model string) (provider.LanguageModel, error) {
+				// A repository may pin a model for its agents; otherwise the
+				// deployment's model runs.
+				if model == "" {
+					model = cfg.AIModel
+				}
+				return agentrun.NewModelClient(agentrun.ModelConfig{Endpoint: cfg.AIEndpoint, Model: model, APIKey: cfg.AIAPIKey})
+			},
+			ProviderOptions: providerOptions,
 		}
-		finishRun(ctx, store, run, state)
+		result := runner.Run(ctx, run, tools.Runtime{
+			Grant:     grant,
+			Workspace: &podWorkspace{provisioner: provisioner, runID: run.ID},
+			Git:       newGitAdapter(gitClient, graphClient),
+			Work:      tools.NewWorkClient(workClient),
+			Graph:     newGraphAdapter(graphClient, run.RepoID.String()),
+			Reviews:   newReviewsAdapter(reviewsClient),
+			CI:        newCIAdapter(ciClient),
+			Knowledge: tools.NewKnowledgeClient(graphClient, run.RepoID.String(), run.ID.String()),
+		})
+		finishRun(ctx, store, run, result.State)
 	}
 }
 
@@ -446,18 +439,4 @@ func bearerTokenFromContext(ctx context.Context) string {
 		return ""
 	}
 	return strings.TrimPrefix(values[0], "Bearer ")
-}
-
-// withRunIdentity attaches a service token for orgID to every outbound call
-// an agent run makes. The token names one organization, so a run cannot
-// reach outside the organization it belongs to even if a tool were asked to.
-func withRunIdentity(ctx context.Context, hmacSecret string, orgID uuid.UUID) (context.Context, error) {
-	tok, err := svcauth.Mint(hmacSecret, svcauth.AgentRunService, orgID, svcauth.DefaultTTL)
-	if err != nil {
-		return ctx, fmt.Errorf("mint service token: %w", err)
-	}
-	return metadata.AppendToOutgoingContext(ctx,
-		"authorization", "Bearer "+tok,
-		"x-novaforge-org", orgID.String(),
-	), nil
 }
