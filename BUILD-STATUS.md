@@ -307,11 +307,24 @@ These are real and are not worked around:
   branch overwrites what the default branch says. Merges made through the API
   and commits made by the `git.commit` tool publish no push event, so neither
   the indexer nor CI sees them.
-- **Approved external MCP servers are recorded, not yet consumed.** mcp-server
-  keeps each organization's register and the MCP screen operates it, but
-  nothing offers an external MCP server to an agent: `internal/mcp.Client` is
-  called only by its tests. Approving a server changes nothing an agent can do
-  until that consumer is written, and it must read the approved list when it is.
+- **Only Streamable HTTP external MCP servers reach agents.** agent-runtime
+  offers an organization's approved servers' tools to every run
+  (`mcp.<server>.<tool>`, audited, re-checked against the register on each
+  call). An approved **stdio** server is skipped and logged: it is a command
+  line, and running an organization-supplied command inside agent-runtime would
+  hand it that service's cluster credentials. The register carries no
+  per-server credential, so a server needing a bearer token cannot be used yet.
+- **An agent run's credential lives five minutes.** agent-runtime mints it once
+  at run start (`svcauth.DefaultTTL`), so a run longer than that loses every
+  service call, external MCP tools included. Not fixed here.
+- **Gates are evaluated at the target branch's head, not the change's.**
+  `gates.NewRunLookup` returns the target branch's head as the SHA to judge;
+  `nf run gates` reports what that evaluation says. Observed, not changed.
+- **The shared dev database runs ahead of any one branch.** Other branches'
+  migrations (agents v5, ci v6, graph v4, approvals v2) leave schemas this
+  checkout cannot migrate, so the `internal/agents`, `internal/ci` and
+  `internal/indexing` suites fail at `Migrate` from a stale checkout. The
+  in-process platform harness tolerates an additive schema ahead of it.
 - **The maintenance sweep covers organizations that have Work Items.** It finds
   organizations through the work schema, since it may not read identity's; an
   organization with repositories and no Work Item is scanned only on demand.
@@ -330,7 +343,38 @@ by reading test bodies, not by matching names.
 from the map, when the map names a criterion the spec lacks, when a cited Go
 test is renamed or deleted, or when a cited e2e script or step no longer exists.
 
-**7 covered, 21 partial, 5 uncovered.**
+**13 covered, 15 partial, 5 uncovered.**
+
+S-1 `TestPATGitClone`, S-2 `TestRepoBrowseAPI`, S-3 `TestAgentBranchScopeEnforced`
+and `TestCrossOrgAccessDenied`, S-13 `TestMCPServerOperations` and S-21
+`TestCLIFullLifecycle` became covered on 2026-09-15, on `internal/platformtest`:
+every service's real gRPC server behind the real interceptor, on the dev
+datastores, from credentials identity issues. `cli_test.sh` and
+`crossorg_test.sh` were written for them and have **not yet been run on the
+cluster**.
+
+Writing them found, and fixed:
+
+- **SECURITY: the CI runner protocol authenticated nobody.** `Register` took the
+  organization from the request with no credential, so anything that could
+  reach ci-runner (CI job pods can) could enrol a runner into any organization,
+  be dispatched its jobs and receive each job's 30-minute clone credential for
+  that organization. The token `Register` returned was never checked:
+  `ConnectRequest` did not carry it, and `ReportStatus`, log chunks and
+  `UploadArtifact` accepted any job id. Registration now needs an owner/admin
+  or a platform credential for the organization, and every later call the
+  registration token.
+- **SECURITY: `StartRun` trusted `agent_id` and `sponsor_id`.** A member could
+  issue a grant in their organization to another organization's agent, and
+  name anyone as sponsor. `StreamRunEvents` filtered a shared stream by run id
+  alone (unreachable today: agent-runtime has no stream interceptor).
+- **An agent's credential meant different things on different surfaces.**
+  git-platform's own interceptor called an agent run a "service" with no actor:
+  its pushes were refused inside its grant, while `CreateCommit`, `CreateBranch`
+  and `Merge` let the same credential write main. The credential now names the
+  agent and every surface applies its grant.
+- **Every ref was reported as kind "commit"**, and an annotated tag as its
+  tag-object sha, which no tree or history lookup can use.
 
 Uncovered: the component is tested, but nothing in production calls it, so the
 behaviour cannot be seen on the deployed platform:
@@ -347,13 +391,6 @@ behaviour cannot be seen on the deployed platform:
 
 Partial (the map's `note` says exactly what is missing):
 
-- S-1 `TestPATGitClone`: no clone with a PAT; revoked tokens are refused only at
-  token resolution, never at the git transport.
-- S-2 `TestRepoBrowseAPI`: tree, blob, diff and tags are never read through REST.
-- S-3 `TestAgentBranchScopeEnforced`: the transport half runs against a stub
-  capability function, never a real agent grant.
-- S-3 `TestCrossOrgAccessDenied`: most cross-org repo, Work Item write, CI run and
-  Agent Run paths are unasserted.
 - S-4 `TestWorkItemLifecycle`: acceptance criteria, constraints, required gates
   and assignment to a human are never asserted.
 - S-5 `TestEngineeringRunProof`: plan, change impact and the producing
@@ -373,8 +410,6 @@ Partial (the map's `note` says exactly what is missing):
 - S-10 `TestGateConfigSelfEditRejected`: checked at the controller only, and
   only for deleting gates, not weakening them.
 - S-12 `TestShortLivedCredential`: no job ever receives a brokered credential.
-- S-13 `TestMCPServerOperations`: none of the four operations succeeds over
-  either transport.
 - S-15 `TestIndexUpdatedOnPush`: the dependency index is not implemented, and
   the search e2e has not been run.
 - S-18 `TestRepoConfigGoverns`: `.novaforge` agent configuration governs nothing
@@ -383,6 +418,4 @@ Partial (the map's `note` says exactly what is missing):
   nothing marks a subtask blocked when its run fails.
 - S-20 `TestMaintenanceProposesWorkItem`: the production sweep from scanner to
   proposal is untested.
-- S-21 `TestCLIFullLifecycle`: `nf run gates` and `nf run merge` are never
-  exercised.
 - S-22 `TestHelmDeploy`: the expected set of services is never checked.

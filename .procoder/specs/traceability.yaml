@@ -41,18 +41,23 @@ criteria:
         step: "3. an account can sign in and read what the app reads"
 
   S-1/TestPATGitClone:
-    status: partial
+    status: covered
     note: >-
-      No test clones over Git-HTTPS with a personal access token (the e2e
-      clones use the session token), and a revoked token is rejected only at
-      token resolution, never at the git transport; git-platform's real
-      credential adapter (newAuthFunc/resolveSubject) is untested — transport
-      tests inject a stub AuthFunc.
+      An unmodified git client clones and pushes over smart-HTTP with a
+      personal access token minted through identity, through git-platform's
+      real credential adapter (gitops.NewCredentialAuthFunc, formerly
+      cmd/git-platform newAuthFunc); after DeleteToken the same clone and
+      ls-remote are refused by the transport with an authentication failure.
+      The transport is plain HTTP in-process, not HTTPS: TLS terminates in
+      front of git-platform, not in it.
     go_tests:
+      - ./internal/gitops TestPATGitClone
       - ./internal/identity TestTokenResolve
       - ./internal/identity TestRevokedTokenRejected
       - ./internal/identity TestResolveTokenRejectsRevoked
-      - ./internal/gitops TestCloneAndPushOverHTTP
+    e2e:
+      - script: tests/e2e/crossorg_test.sh
+        step: "4. A cannot clone or push B's repository over smart-HTTP or SSH"
 
   S-2/TestStandardGitRoundTrip:
     status: covered
@@ -73,12 +78,17 @@ criteria:
         step: "6. the pushed commit is readable through the REST API"
 
   S-2/TestRepoBrowseAPI:
-    status: partial
+    status: covered
     note: >-
-      Only commit history and branches are read through REST. Tree, blob and
-      diff are asserted at the gitops.Repo layer only, and tags are asserted
-      nowhere at any layer although the route exists.
+      TestRepoBrowseAPI pushes with an unmodified git client (including a
+      lightweight and an annotated tag and a slashed agent branch) and reads
+      branches, tags, history, trees, blobs and diffs through the real REST
+      edge in front of the real git-platform. It found every ref reported with
+      kind "commit" and annotated tags reported as their tag-object sha; both
+      are fixed in gitops.Repo.refs. The GUI Repos screen lists tags and
+      compares two refs; that screen has not been driven in a browser.
     go_tests:
+      - ./internal/edge TestRepoBrowseAPI
       - ./internal/gitops TestInitAndBranches
       - ./internal/gitops TestTreeBlobAndDiff
       - ./internal/gitops TestGetBlobUnknownPath
@@ -88,13 +98,20 @@ criteria:
         step: "6. the pushed commit is readable through the REST API"
 
   S-3/TestAgentBranchScopeEnforced:
-    status: partial
+    status: covered
     note: >-
-      The commit-tool half is proven with a real grant. The Git-transport half
-      is not: HTTP/SSH denial tests inject a stub CapFunc hard-coded to refuse
-      main, git-platform's real newCapFunc is untested, and no test pushes as
-      an agent — so "identically through both paths" is never asserted.
+      An agent run's credential (svcauth.MintAgentRun, what agent-runtime
+      mints) for an agent whose run StartRun granted agents/<key>/ pushes
+      inside the grant and is refused main with the same reason over
+      smart-HTTP, over SSH (password authentication accepts only an agent
+      credential), and through CreateCommit/Merge — the API git.commit calls —
+      all through gitops.NewGrantCapFunc and git-platform's composition. The
+      commit tool's own check is proven separately. Not yet exercised on the
+      cluster: no e2e pushes as an agent over a transport.
     go_tests:
+      - ./internal/gitops TestAgentBranchScopeEnforced
+      - ./internal/gitops TestSSHPasswordIsOnlyForAgents
+      - ./internal/svcauth TestAgentRunTokenNamesItsAgent
       - ./internal/capability TestWriteBranchScopeEnforced
       - ./internal/capability TestPrefixEscapeDenied
       - ./internal/tools TestGitCommitRefusesOutOfScopeBranch
@@ -102,15 +119,22 @@ criteria:
       - ./internal/gitops TestPushOverSSHDeniedByCapability
 
   S-3/TestCrossOrgAccessDenied:
-    status: partial
+    status: covered
     note: >-
-      Every service test injects an org scope rather than starting from real
-      credentials. Missing: cross-org repository reads other than ListRepos
-      (GetRepo, tree, blob, clone/push over HTTP/SSH) and any cross-org
-      repository write; cross-org Work Item writes other than AddComment; CI
-      run reads, logs and artifacts, and Agent Run get/cancel across orgs. No
-      e2e step uses a second organization.
+      Starting from identity-issued sessions, a personal access token and a
+      registered SSH key, org A is refused B's repositories (GetRepo, tree,
+      blob, diff, tags, branch/commit/delete writes, clone and push over HTTP
+      and SSH), Work Items (get, assign, comment, list), Agent Runs (get,
+      cancel, event stream, starting a run with B's agent or sponsor), CI
+      runs, logs, artifacts and triggers, the runner protocol, and the MCP
+      register — both naming B and naming A with B's ids. This found and
+      fixed an unauthenticated CI runner protocol (runner registration into
+      any org, unverified runner tokens) and StartRun trusting agent and
+      sponsor ids. crossorg_test.sh has been written but not yet run on the
+      cluster.
     go_tests:
+      - ./internal/platformtest TestCrossOrgAccessDenied
+      - ./internal/platformtest TestCrossOrgCIDenied
       - ./internal/authz TestRequireOrgRejectsCrossOrg
       - ./internal/identity TestResolveOrgScopeRefusesNonMember
       - ./internal/gitops TestListReposIsOrgScoped
@@ -121,6 +145,11 @@ criteria:
       - ./internal/reviews TestAddCommentDeniedForForeignOrg
       - ./internal/ci TestClaimNeverCrossesOrganizations
       - ./internal/agents TestListAgentsIsOrgScoped
+    e2e:
+      - script: tests/e2e/crossorg_test.sh
+        step: "3. A cannot read or write B's repository through the REST API"
+      - script: tests/e2e/crossorg_test.sh
+        step: "5. A cannot reach B's Work Items, runs, Agent Runs, CI or MCP register"
 
   S-4/TestWorkItemLifecycle:
     status: partial
@@ -346,14 +375,24 @@ criteria:
       - ./internal/ci TestJobStaysQueuedNotFailed
 
   S-13/TestMCPServerOperations:
-    status: partial
+    status: covered
     note: >-
-      Only protocol plumbing is proven (initialize and tools/list over stdio,
-      tools/list over Streamable HTTP, a denied call against a fake backend).
-      None of the four operations — get a Work Item, search a repository,
-      create a branch, read gate status — succeeds in any test over either
-      transport, and the real backend (cmd/mcp-server/backend.go) is untested.
+      get_work_item, search_repository, create_branch and get_gate_status
+      succeed over stdio and over Streamable HTTP (2025-06-18 transport rules
+      enforced: Origin, MCP-Protocol-Version, 401 challenge) through
+      mcp.PlatformBackend — the backend mcp-server runs, moved from
+      cmd/mcp-server — against real in-process identity, git-platform,
+      work-reviews, gates and engineering-graph; the created branch is read
+      back through git-platform. Search is answered lexically: the test
+      indexer's embedding model is a fixed-vector double. Approved external
+      servers are now consumed: agent-runtime offers their tools per run.
+      Not yet run against the cluster's mcp-server.
     go_tests:
+      - ./internal/mcp TestMCPServerOperations
+      - ./internal/mcp TestStreamableHTTPTransportRules
+      - ./internal/mcp TestClientSpeaksStreamableHTTP
+      - ./internal/mcp TestListApprovedServersOffersOnlyApproved
+      - ./internal/tools TestApprovedExternalMCPServersAreOfferedToAgents
       - ./internal/mcp TestToolsListReturnsExactlySeven
       - ./internal/mcp TestStreamableHTTPRoundTrip
       - ./internal/mcp TestInitializeAdvertisesCurrentProtocolVersion
@@ -467,20 +506,24 @@ criteria:
       - ./internal/edge TestEveryRouteHasAHandlerWhenWired
 
   S-21/TestCLIFullLifecycle:
-    status: partial
+    status: covered
     note: >-
-      nf creates a repository and starts a run on the cluster, and the push is
-      a plain git push (nf has none). `nf run gates` and `nf run merge` exist
-      but no test or e2e step calls them, and no single test runs the whole
-      lifecycle.
+      One test drives nf through login, org create/add-member, repo create
+      and clone, a plain git push, work create with acceptance and a required
+      gate, agent create/start/get, run create, run gates (evaluated, pass),
+      run proof, a refused self-approval and unreviewed merge, an independent
+      review and run merge, then reads main back — against the real REST edge
+      and services in process. Registration is not an nf command.
+      cli_test.sh runs the same on the cluster but has not yet been run there.
     go_tests:
+      - ./internal/cli TestCLIFullLifecycle
       - ./internal/cli TestRepoCreateAndList
       - ./internal/cli TestLoginPersistsToken
     e2e:
-      - script: tests/e2e/deploy_test.sh
-        step: "3. register, log in, create an org and a repo through the API"
-      - script: tests/e2e/agent_test.sh
-        step: "4. an Agent Run starts through the API"
+      - script: tests/e2e/cli_test.sh
+        step: "4. nf opens an Engineering Run and inspects its gates"
+      - script: tests/e2e/cli_test.sh
+        step: "6. nf merges and main carries the change"
 
   S-22/TestHelmDeploy:
     status: partial

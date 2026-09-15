@@ -59,6 +59,8 @@ bash tests/e2e/agent_ci_test.sh   # a CI job with an agent role runs as an Agent
 bash tests/e2e/merge_test.sh      # independent review, then a merge that lands on main
 bash tests/e2e/gui_test.sh        # the app is served and every screen's endpoint answers
 bash tests/e2e/search_test.sh     # a push is indexed and found by meaning, not by keyword
+bash tests/e2e/cli_test.sh        # nf alone: repo, push, Work Item, Agent Run, gates, review, merge
+bash tests/e2e/crossorg_test.sh   # one organization's credentials reach nothing in another
 ```
 
 `hack/env.local.sh` is untracked and holds `REGISTRY_PASSWORD` and `AI_API_KEY`. A fresh
