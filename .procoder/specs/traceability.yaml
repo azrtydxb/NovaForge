@@ -490,11 +490,18 @@ criteria:
         step: "4. an Agent Run starts through the API"
 
   S-22/TestHelmDeploy:
-    status: partial
+    status: covered
     note: >-
-      Every Deployment present must be ready, and readiness is /healthz, but
-      the step never checks the expected set of services exists — a chart that
-      omitted one would pass — and no test renders or installs the chart.
+      The chart is rendered with the helm binary and every values.yaml service
+      must have a Deployment running its own binary, a Service, and every
+      environment variable its binary's type-checked package reads without
+      defaulting (skipped only where helm is absent). On the cluster the
+      expected Deployments are rendered from the release's own values and must
+      all exist and be ready, readiness being /healthz. The expected-set part
+      of step 1 was written in this change and has not yet been run against
+      the cluster. Agent runs as pods in per-run namespaces are S-7's evidence.
+    go_tests:
+      - ./internal/service TestHelmChartDeploysEveryServiceWithTheEnvironmentItsBinaryReads
     e2e:
       - script: tests/e2e/deploy_test.sh
         step: "1. every deployment reports ready"

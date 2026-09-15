@@ -357,7 +357,7 @@ by reading test bodies, not by matching names.
 from the map, when the map names a criterion the spec lacks, when a cited Go
 test is renamed or deleted, or when a cited e2e script or step no longer exists.
 
-**8 covered, 20 partial, 5 uncovered.**
+**9 covered, 19 partial, 5 uncovered.**
 
 Uncovered: the component is tested, but nothing in production calls it, so the
 behaviour cannot be seen on the deployed platform:
@@ -410,4 +410,3 @@ Partial (the map's `note` says exactly what is missing):
   proposal is untested.
 - S-21 `TestCLIFullLifecycle`: `nf run gates` and `nf run merge` are never
   exercised.
-- S-22 `TestHelmDeploy`: the expected set of services is never checked.

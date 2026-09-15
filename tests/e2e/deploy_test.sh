@@ -19,6 +19,51 @@ fail() {
 ok() { echo "ok: $*"; }
 
 echo "== 1. every deployment reports ready =="
+# The expected set comes from the chart, rendered with the values this release
+# was installed with: every entry of values.yaml's services, the datastores
+# when enabled, and the runner when it has an organization. Checking only that
+# the deployments present are ready passed a chart that omitted a service.
+VALUES="$(mktemp)"
+helm --kube-context "$KUBE_CONTEXT" -n "$NS" get values "$REL" -o yaml >"$VALUES" || fail "cannot read the release's values"
+EXPECTED="$(helm template "$REL" deploy/helm/novaforge -f "$VALUES" | python3 -c '
+import sys
+kind=None
+names=[]
+for doc in sys.stdin.read().split("\n---"):
+    kind=None; name=None; inmeta=False
+    for line in doc.splitlines():
+        if line.startswith("kind:"): kind=line.split(":",1)[1].strip()
+        if line.startswith("metadata:"):
+            inmeta=True
+            rest=line.split(":",1)[1].strip()
+            if rest.startswith("{") and "name:" in rest:
+                name=rest.split("name:",1)[1].strip(" {}").split(",")[0].strip()
+            continue
+        if inmeta and line.startswith("  name:") and name is None:
+            name=line.split(":",1)[1].strip()
+        if line and not line.startswith(" ") and not line.startswith("metadata:"): inmeta=False
+    if kind=="Deployment" and name: names.append(name)
+print(" ".join(sorted(set(names))))
+')" || fail "helm template failed"
+[ -n "$EXPECTED" ] || fail "the chart renders no Deployments"
+# Values the chart itself defaults (the service list) must be in the expected
+# set even if a release overrode nothing, so check each values.yaml service too.
+for svc in $(python3 -c '
+import re
+inside=False
+for line in open("deploy/helm/novaforge/values.yaml"):
+    if line.startswith("services:"): inside=True; continue
+    if inside and line.strip() and not line.startswith(" "): break
+    m=re.match(r"^  ([a-z0-9-]+):\s*$", line)
+    if inside and m: print(m.group(1))
+'); do
+	case " $EXPECTED " in *" $REL-$svc "*) ;; *) fail "values.yaml lists $svc but the rendered chart has no Deployment $REL-$svc" ;; esac
+done
+PRESENT="$($KC get deploy -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')"
+for want in $EXPECTED; do
+	echo "$PRESENT" | grep -qx "$want" || fail "expected Deployment $want is not on the cluster"
+done
+ok "all $(echo "$EXPECTED" | wc -w | tr -d ' ') expected deployments exist"
 $KC get deploy -o json | python3 -c '
 import json,sys
 items=json.load(sys.stdin)["items"]
