@@ -169,7 +169,7 @@ export const api = {
   text,
   download,
   post: <T>(path: string, body?: unknown) => request<T>("POST", path, body),
-  del: <T>(path: string) => request<T>("DELETE", path),
+  del: <T>(path: string, body?: unknown) => request<T>("DELETE", path, body),
 };
 
 /** enc escapes one path segment. Organization and repository names travel in

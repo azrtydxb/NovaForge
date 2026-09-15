@@ -31,6 +31,7 @@ import (
 	"github.com/novaforge/novaforge/internal/agents"
 	"github.com/novaforge/novaforge/internal/authz"
 	"github.com/novaforge/novaforge/internal/capability"
+	"github.com/novaforge/novaforge/internal/cleanup"
 	"github.com/novaforge/novaforge/internal/database"
 	"github.com/novaforge/novaforge/internal/service"
 	"github.com/novaforge/novaforge/internal/svcauth"
@@ -155,6 +156,9 @@ func main() {
 	reviewsClient := reviewsv1.NewReviewsServiceClient(workConn)
 
 	store := agents.NewStore(pool)
+	// A deleted repository's Agent Runs, and a deleted organization's runs and
+	// agents, are cancelled and removed when the deletion is announced.
+	cleanup.AgentRuntime(store, cleanup.RedisRunsPublisher(rdb)).Run(ctx, rdb, "agent-runtime")
 	grants := capability.NewStore(pool)
 	audit := agents.NewAuditLog(pool)
 

@@ -158,6 +158,29 @@ func addIdentityHandlers(h map[string]http.HandlerFunc, c identityv1.IdentitySer
 		})
 	}
 
+	// deleteOrg is the owner's deletion of an organization. The name is typed
+	// again in the body and identity refuses a mismatch, so a stray DELETE
+	// cannot remove an organization and everything every service holds for it.
+	h["deleteOrg"] = func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			ConfirmName string `json:"confirm_name"`
+		}
+		if err := decode(r, &req); err != nil {
+			WriteError(w, http.StatusBadRequest, err)
+			return
+		}
+		resp, err := c.DeleteOrg(r.Context(), &identityv1.DeleteOrgRequest{
+			Org: chi.URLParam(r, "org"), ConfirmName: req.ConfirmName,
+		})
+		if err != nil {
+			WriteError(w, StatusFromGRPC(err), err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, map[string]any{
+			"id": resp.GetOrg().GetId(), "name": resp.GetOrg().GetName(), "deleted": true,
+		})
+	}
+
 	h["listOrgMembers"] = func(w http.ResponseWriter, r *http.Request) {
 		resp, err := c.ListOrgMembers(r.Context(), &identityv1.ListOrgMembersRequest{Org: chi.URLParam(r, "org")})
 		if err != nil {

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/novaforge/novaforge/internal/agentrun"
+	"github.com/novaforge/novaforge/internal/cleanup"
 	"github.com/novaforge/novaforge/internal/maintenance"
 	"github.com/novaforge/novaforge/internal/swarm"
 
@@ -72,6 +73,15 @@ func main() {
 
 	workStore := work.NewStore(pool)
 	reviewsStore := reviews.NewStore(pool)
+
+	// A deleted repository's Work Items and Engineering Runs, and a deleted
+	// organization's, are removed when the deletion is announced.
+	eventBus, err := cleanup.Redis(cfg.RedisURL)
+	if err != nil {
+		log.Fatalf("work-reviews: %v", err)
+	}
+	defer eventBus.Close()
+	cleanup.WorkReviews(workStore, reviewsStore, cleanup.RedisRunsPublisher(eventBus)).Run(ctx, eventBus, "work-reviews")
 
 	workServer := work.NewGRPCServer(workStore)
 

@@ -2,9 +2,9 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, enc } from "../lib/api";
 import { useWorkspace } from "../lib/workspace";
-import { Async, Empty, Page, Panel, PanelHead } from "../components/ui";
+import { Async, Empty, Failed, Page, Panel, PanelHead } from "../components/ui";
 import { Dialog, NewButton } from "../components/Dialog";
-import type { OrgMember } from "../lib/types";
+import type { OrgMember, User } from "../lib/types";
 
 /** Orgs is the design's admin view: the organization's repositories and its
  * members. Agents appear here alongside people because they are members —
@@ -54,6 +54,27 @@ export function Orgs() {
     queryFn: () =>
       api.get<{ members: OrgMember[] }>(`/api/v1/orgs/${enc(w.org!)}/members`),
     enabled: w.org !== null,
+  });
+
+  // Deleting the organization is offered only to its owners: identity refuses
+  // everyone else, and a button that can only lead to a refusal is noise.
+  const me = useQuery({
+    queryKey: ["user"],
+    queryFn: () => api.get<User>("/api/v1/user"),
+  });
+  const isOwner =
+    members.data?.members.find((m) => m.user_id === me.data?.id)?.role ===
+    "owner";
+  const [confirmName, setConfirmName] = useState("");
+  const deleteOrg = useMutation({
+    mutationFn: (name: string) =>
+      api.del(`/api/v1/orgs/${enc(name)}`, { confirm_name: confirmName }),
+    onSuccess: (_d, name) => {
+      setConfirmName("");
+      const next = w.orgs.find((o) => o.name !== name);
+      if (next) w.setOrg(next.name);
+      qc.invalidateQueries();
+    },
   });
 
   return (
@@ -235,6 +256,69 @@ export function Orgs() {
           </Async>
         </Panel>
       </div>
+
+      {w.org && isOwner ? (
+        <Panel style={{ marginTop: 14, borderColor: "var(--bad)" }}>
+          <PanelHead>
+            <span style={{ color: "var(--bad)" }}>DANGER ZONE</span>
+          </PanelHead>
+          <div style={{ padding: "12px 14px", display: "grid", gap: 10 }}>
+            <div style={{ font: "13px var(--sans)" }}>
+              Delete the organization <b>{w.org}</b>. Every repository, Work
+              Item, Engineering Run, CI run and artifact, agent, Agent Run,
+              index entry and secret it holds is removed by the services that
+              hold them. This cannot be undone.
+            </div>
+            <label
+              style={{
+                font: "12px var(--sans)",
+                color: "var(--fg-dim)",
+                display: "grid",
+                gap: 6,
+              }}
+            >
+              Type the organization&apos;s name to confirm
+              <input
+                value={confirmName}
+                onChange={(e) => setConfirmName(e.target.value)}
+                placeholder={w.org}
+                aria-label="Organization name to confirm deletion"
+                style={{
+                  font: "13px var(--mono)",
+                  padding: "7px 9px",
+                  borderRadius: 6,
+                  border: "1px solid var(--line)",
+                  background: "transparent",
+                  color: "inherit",
+                }}
+              />
+            </label>
+            {deleteOrg.error ? <Failed error={deleteOrg.error} /> : null}
+            <div>
+              <button
+                type="button"
+                disabled={confirmName !== w.org || deleteOrg.isPending}
+                onClick={() => deleteOrg.mutate(w.org!)}
+                style={{
+                  font: "600 12px var(--sans)",
+                  padding: "7px 12px",
+                  borderRadius: 6,
+                  border: "1px solid var(--bad)",
+                  background:
+                    confirmName === w.org ? "var(--bad)" : "transparent",
+                  color: confirmName === w.org ? "#fff" : "var(--bad)",
+                  cursor:
+                    confirmName === w.org && !deleteOrg.isPending
+                      ? "pointer"
+                      : "not-allowed",
+                }}
+              >
+                {deleteOrg.isPending ? "Deleting…" : "Delete organization"}
+              </button>
+            </div>
+          </div>
+        </Panel>
+      ) : null}
     </Page>
   );
 }

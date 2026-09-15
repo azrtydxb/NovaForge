@@ -3,11 +3,13 @@ package agentrun
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/azrtydxb/go-ai-sdk/provider"
 
@@ -166,6 +168,12 @@ func (l *Loop) cancelled(ctx context.Context, run agents.Run) bool {
 		current, err := l.Runs.GetRun(context.WithoutCancel(ctx), run.ID)
 		if err == nil {
 			return current.State == "cancelled"
+		}
+		// A run whose row is gone was purged with its repository or its
+		// organization. Treating that as a transient failure would let the
+		// loop go on calling tools for something that no longer exists.
+		if errors.Is(err, pgx.ErrNoRows) {
+			return true
 		}
 		// A transient read failure must not end a healthy run; the context
 		// is still consulted and the next step boundary checks again.

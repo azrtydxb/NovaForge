@@ -31,6 +31,7 @@ const (
 	IdentityService_GetCurrentUser_FullMethodName     = "/novaforge.identity.v1.IdentityService/GetCurrentUser"
 	IdentityService_ListOrgs_FullMethodName           = "/novaforge.identity.v1.IdentityService/ListOrgs"
 	IdentityService_GetOrg_FullMethodName             = "/novaforge.identity.v1.IdentityService/GetOrg"
+	IdentityService_DeleteOrg_FullMethodName          = "/novaforge.identity.v1.IdentityService/DeleteOrg"
 	IdentityService_ListOrgMembers_FullMethodName     = "/novaforge.identity.v1.IdentityService/ListOrgMembers"
 	IdentityService_AddSSHKey_FullMethodName          = "/novaforge.identity.v1.IdentityService/AddSSHKey"
 	IdentityService_ListSSHKeys_FullMethodName        = "/novaforge.identity.v1.IdentityService/ListSSHKeys"
@@ -62,6 +63,10 @@ type IdentityServiceClient interface {
 	GetCurrentUser(ctx context.Context, in *GetCurrentUserRequest, opts ...grpc.CallOption) (*GetCurrentUserResponse, error)
 	ListOrgs(ctx context.Context, in *ListOrgsRequest, opts ...grpc.CallOption) (*ListOrgsResponse, error)
 	GetOrg(ctx context.Context, in *GetOrgRequest, opts ...grpc.CallOption) (*GetOrgResponse, error)
+	// DeleteOrg deletes an organization. Only an owner may, and only by naming
+	// it twice: confirm_name must equal the organization's name. The deletion
+	// is announced first, and every service removes that organization's data.
+	DeleteOrg(ctx context.Context, in *DeleteOrgRequest, opts ...grpc.CallOption) (*DeleteOrgResponse, error)
 	ListOrgMembers(ctx context.Context, in *ListOrgMembersRequest, opts ...grpc.CallOption) (*ListOrgMembersResponse, error)
 	AddSSHKey(ctx context.Context, in *AddSSHKeyRequest, opts ...grpc.CallOption) (*AddSSHKeyResponse, error)
 	ListSSHKeys(ctx context.Context, in *ListSSHKeysRequest, opts ...grpc.CallOption) (*ListSSHKeysResponse, error)
@@ -201,6 +206,16 @@ func (c *identityServiceClient) GetOrg(ctx context.Context, in *GetOrgRequest, o
 	return out, nil
 }
 
+func (c *identityServiceClient) DeleteOrg(ctx context.Context, in *DeleteOrgRequest, opts ...grpc.CallOption) (*DeleteOrgResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteOrgResponse)
+	err := c.cc.Invoke(ctx, IdentityService_DeleteOrg_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *identityServiceClient) ListOrgMembers(ctx context.Context, in *ListOrgMembersRequest, opts ...grpc.CallOption) (*ListOrgMembersResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListOrgMembersResponse)
@@ -311,6 +326,10 @@ type IdentityServiceServer interface {
 	GetCurrentUser(context.Context, *GetCurrentUserRequest) (*GetCurrentUserResponse, error)
 	ListOrgs(context.Context, *ListOrgsRequest) (*ListOrgsResponse, error)
 	GetOrg(context.Context, *GetOrgRequest) (*GetOrgResponse, error)
+	// DeleteOrg deletes an organization. Only an owner may, and only by naming
+	// it twice: confirm_name must equal the organization's name. The deletion
+	// is announced first, and every service removes that organization's data.
+	DeleteOrg(context.Context, *DeleteOrgRequest) (*DeleteOrgResponse, error)
 	ListOrgMembers(context.Context, *ListOrgMembersRequest) (*ListOrgMembersResponse, error)
 	AddSSHKey(context.Context, *AddSSHKeyRequest) (*AddSSHKeyResponse, error)
 	ListSSHKeys(context.Context, *ListSSHKeysRequest) (*ListSSHKeysResponse, error)
@@ -364,6 +383,9 @@ func (UnimplementedIdentityServiceServer) ListOrgs(context.Context, *ListOrgsReq
 }
 func (UnimplementedIdentityServiceServer) GetOrg(context.Context, *GetOrgRequest) (*GetOrgResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetOrg not implemented")
+}
+func (UnimplementedIdentityServiceServer) DeleteOrg(context.Context, *DeleteOrgRequest) (*DeleteOrgResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteOrg not implemented")
 }
 func (UnimplementedIdentityServiceServer) ListOrgMembers(context.Context, *ListOrgMembersRequest) (*ListOrgMembersResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListOrgMembers not implemented")
@@ -628,6 +650,24 @@ func _IdentityService_GetOrg_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IdentityService_DeleteOrg_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteOrgRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).DeleteOrg(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_DeleteOrg_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).DeleteOrg(ctx, req.(*DeleteOrgRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _IdentityService_ListOrgMembers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListOrgMembersRequest)
 	if err := dec(in); err != nil {
@@ -844,6 +884,10 @@ var IdentityService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetOrg",
 			Handler:    _IdentityService_GetOrg_Handler,
+		},
+		{
+			MethodName: "DeleteOrg",
+			Handler:    _IdentityService_DeleteOrg_Handler,
 		},
 		{
 			MethodName: "ListOrgMembers",

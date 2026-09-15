@@ -4,13 +4,17 @@
 # in every service schema, its bare repositories, its CI logs and artifacts,
 # and the users who belonged to nothing else.
 #
-# This exists because every e2e run creates a fresh organization (so runs
-# cannot see each other's data) and nothing ever removed them: the cluster had
-# fifty-eight test organizations beside the one real one. The platform has no
-# DeleteOrganization RPC — deleting an organization is an operator action, not
-# something a member can do — so this works at the storage layer, which is the
-# only place every service's data meets. It is one transaction: a failure
-# part-way leaves the database untouched.
+# BREAK-GLASS ONLY. An organization is deleted through the platform: its owner
+# calls DELETE /api/v1/orgs/{org} (the Orgs screen's danger zone, or
+# hack/delete-org.sh, which the e2e scripts use on exit), identity announces the
+# deletion, and every service removes its own share from its own schema,
+# object storage and disk. This script reaches into every service's schema at
+# once — the one thing no service may do — and exists for what the API cannot
+# reach: an organization whose owner's credential is gone, organizations left
+# over from before the API existed, or a deployment whose event bus is down. It
+# also removes users who belonged to nothing else, which the API deliberately
+# never does. It is one transaction: a failure part-way leaves the database
+# untouched. A schema added after this script was last edited is not in it.
 #
 # Without --yes it prints what would be removed and exits.
 set -euo pipefail

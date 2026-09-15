@@ -7,10 +7,12 @@ package main
 import (
 	"context"
 	"fmt"
-	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
-	"github.com/novaforge/novaforge/internal/svcauth"
 	"log"
 	"os"
+
+	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
+	"github.com/novaforge/novaforge/internal/cleanup"
+	"github.com/novaforge/novaforge/internal/svcauth"
 
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
@@ -142,6 +144,9 @@ func main() {
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	svc.Run(runCtx)
+	// A deleted repository's or organization's CI — rows, artifact objects and
+	// logs — is removed when the deletion is announced.
+	cleanup.CI(&ci.Purger{Pool: pool, Logs: svc.Logs, Blobs: blobs}).Run(runCtx, rdb, "ci-runner")
 	agentJobs := &ci.AgentJobs{
 		Store:      svc.Store,
 		Agents:     agentsv1.NewAgentServiceClient(agentsConn),

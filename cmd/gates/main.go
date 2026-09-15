@@ -25,6 +25,7 @@ import (
 	"github.com/novaforge/novaforge/internal/approvals"
 	"github.com/novaforge/novaforge/internal/authz"
 	"github.com/novaforge/novaforge/internal/capability"
+	"github.com/novaforge/novaforge/internal/cleanup"
 	"github.com/novaforge/novaforge/internal/database"
 	"github.com/novaforge/novaforge/internal/gates"
 	"github.com/novaforge/novaforge/internal/secrets"
@@ -111,6 +112,15 @@ func main() {
 	approvalsStore := approvals.NewStore(pool)
 	secretsBroker := secrets.NewBroker(pool, []byte(cfg.SecretsKEK))
 	grants := capability.NewStore(pool)
+
+	// A deleted run's evaluations, approvals and leases, and a deleted
+	// organization's secrets, are removed when their deletion is announced.
+	eventBus, err := cleanup.Redis(cfg.RedisURL)
+	if err != nil {
+		log.Fatalf("gates: %v", err)
+	}
+	defer eventBus.Close()
+	cleanup.Gates(&gates.Purger{Pool: pool}).Run(ctx, eventBus, "gates")
 
 	controller := &gates.Controller{
 		Store:      gatesStore,

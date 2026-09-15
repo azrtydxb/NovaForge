@@ -114,6 +114,24 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
   /api/v1/orgs/{org}:
+    delete:
+      operationId: deleteOrg
+      summary: Delete an organization and everything held for it (owner only, name confirmed)
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
     get:
       operationId: getOrg
       summary: One organization

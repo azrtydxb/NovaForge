@@ -64,6 +64,9 @@ func main() {
 	grants := capability.NewStore(pool)
 
 	grpcServer := identity.NewGRPCServer(store, sessions, tokens, sshKeys, grants)
+	// An organization's deletion is announced here and every service removes
+	// its own share; without the publisher DeleteOrg refuses to delete.
+	grpcServer.SetOrgDeletedPublisher(identity.RedisOrgDeletedPublisher(rdb))
 
 	srv := grpc.NewServer(grpc.UnaryInterceptor(identity.UnaryAuthInterceptor(grpcServer)))
 	identityv1.RegisterIdentityServiceServer(srv, grpcServer)

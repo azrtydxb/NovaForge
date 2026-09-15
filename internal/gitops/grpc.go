@@ -18,6 +18,7 @@ import (
 
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	"github.com/novaforge/novaforge/internal/authz"
+	"github.com/novaforge/novaforge/internal/events"
 )
 
 // defaultCommitLimit caps ListCommits when the caller does not specify one.
@@ -46,6 +47,8 @@ type Server struct {
 
 	pool *pgxpool.Pool
 	root string
+
+	repoDeleted RepoDeletedPublisher
 }
 
 // NewGRPCServer returns a Server storing repository metadata in pool and
@@ -154,10 +157,16 @@ func (s *Server) ListRepos(ctx context.Context, req *gitv1.ListReposRequest) (*g
 // the renamed directory is removed. A failure before the row is gone renames
 // the directory back, so the repository is either fully present or fully
 // gone — never a record pointing at a missing directory, or a leftover
-// directory that makes re-creating the name fail. Nothing is published: no
-// consumer subscribes to a repository's deletion, and the rows other
-// services key on this repository's id are unreachable once its name no
-// longer resolves.
+// directory that makes re-creating the name fail.
+//
+// The deletion is announced on events.StreamRepoDeleted before anything is
+// removed, and every service holding rows keyed on the repository deletes its
+// own. Nothing used to be published, so Work Items, CI runs and artifacts,
+// reviews, the code index and agent runs all stayed behind. Announcing first
+// means a failure after it leaves a repository whose dependent data is going
+// or gone — which its owner asked for — rather than a repository gone with its
+// data left behind; a retry of the deletion announces again, and every
+// consumer's delete is idempotent.
 func (s *Server) DeleteRepo(ctx context.Context, req *gitv1.DeleteRepoRequest) (*gitv1.DeleteRepoResponse, error) {
 	scope, err := scopeFromContext(ctx)
 	if err != nil {
@@ -169,6 +178,14 @@ func (s *Server) DeleteRepo(ctx context.Context, req *gitv1.DeleteRepoRequest) (
 	row, err := s.repoByName(ctx, scope.OrgID, req.GetName())
 	if err != nil {
 		return nil, err
+	}
+	if s.repoDeleted == nil {
+		return nil, status.Error(codes.FailedPrecondition, "this deployment cannot announce a repository's deletion, so nothing was deleted")
+	}
+	if err := s.repoDeleted(ctx, events.RepoDeletedEvent{
+		OrgID: scope.OrgID, RepoID: row.ID, RepoName: row.Name, At: time.Now().UTC(),
+	}); err != nil {
+		return nil, status.Errorf(codes.Unavailable, "announce the deletion to the services that hold its data: %v; nothing was deleted", err)
 	}
 	repo, err := Open(s.root, scope.OrgID, row.Name)
 	if err != nil {

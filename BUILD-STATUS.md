@@ -261,6 +261,38 @@ org-scoped token per organization. `factory_test.sh` step 5 pushes a
 vulnerable `go.mod`, scans on demand and asserts the proposal; it is written
 but not yet run against the cluster.
 
+## Deleting a repository or an organization (2026-09-15)
+
+Deleting a repository used to publish nothing, so its Work Items, CI runs and
+artifacts, reviews, index and Agent Runs stayed behind, unreachable; an
+organization could be deleted only by `hack/purge-orgs.sh` writing across every
+schema. Now:
+
+- git-platform's `DeleteRepo` announces `stream:git:repo-deleted` before
+  removing anything, and refuses to delete what it cannot announce.
+- identity's owner-only `DeleteOrg` (the name must be typed again) announces
+  `stream:identity:org-deleted`, then removes the organization and its
+  memberships; accounts are kept. `DELETE /api/v1/orgs/{org}` and a danger
+  zone on the Orgs screen call it.
+- Every service consumes the announcements and deletes only its own share
+  (`internal/cleanup`): work-reviews (Work Items, proposals, comments,
+  Engineering Runs), ci-runner (runs, jobs, artifact rows **and objects**,
+  sealed and live logs, runners, retention policy), engineering-graph (graph,
+  code chunks, knowledge), agent-runtime (cancels, then removes Agent Runs and
+  tool calls; agents), gates (evaluations, approvals, leases, secrets), mcp-server
+  (registered servers) and git-platform (repositories on disk, grants). Runs a
+  service cannot trace to a repository reach gates as `stream:runs:deleted`.
+- Messages are acknowledged only once handled, so a failed deletion is retried;
+  every purge is idempotent. The consumers are proven against the real
+  datastores; the deploy e2e step that deletes a repository and an
+  organization on the cluster is written but not yet run.
+- `hack/purge-orgs.sh` is now break-glass; the e2e scripts delete their
+  organizations through the API (`hack/delete-org.sh`) and fall back to it.
+
+Not covered: a schema added on another branch after this change
+(`graph.file_references` exists in the shared dev database) is not purged
+until its owner's purge learns it.
+
 ## The GUI
 
 `web/` implements "NovaForge GUI.dc.html" from the claude.ai/design project
@@ -355,10 +387,6 @@ These are real and are not worked around:
   nothing offers an external MCP server to an agent: `internal/mcp.Client` is
   called only by its tests. Approving a server changes nothing an agent can do
   until that consumer is written, and it must read the approved list when it is.
-- **Deleting a repository leaves other services' rows behind.** Work Items, CI
-  runs and reviews keyed on it stay in their schemas and become unreachable.
-  Deleting an organization is an operator action (`hack/purge-orgs.sh`); there
-  is no API for it.
 
 ## Spec traceability
 

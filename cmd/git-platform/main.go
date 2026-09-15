@@ -7,7 +7,6 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"fmt"
-	"github.com/novaforge/novaforge/internal/svcauth"
 	"log"
 	"net"
 	"net/http"
@@ -15,6 +14,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/novaforge/novaforge/internal/cleanup"
+	"github.com/novaforge/novaforge/internal/svcauth"
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
@@ -118,6 +120,15 @@ func main() {
 
 	// --- gRPC ---
 	grpcServer := gitops.NewGRPCServer(pool, cfg.GitDataDir)
+	// A repository's deletion is announced so every service removes its share,
+	// and this service removes its own share of an organization's deletion.
+	// Without Redis there is nobody to announce to, and DeleteRepo refuses.
+	if rdb != nil {
+		grpcServer.SetRepoDeletedPublisher(gitops.RedisRepoDeletedPublisher(rdb))
+		cleanup.GitPlatform(grpcServer).Run(ctx, rdb, "git-platform")
+	} else {
+		log.Println("git-platform: REDIS_URL is unset; repositories cannot be deleted and organization deletions are not consumed")
+	}
 	srv := grpc.NewServer(grpc.UnaryInterceptor(gitopsAuthInterceptor(identityClient)))
 	gitv1.RegisterGitServiceServer(srv, grpcServer)
 
