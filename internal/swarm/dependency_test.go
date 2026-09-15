@@ -73,14 +73,13 @@ func TestSwarmDependencyOrder(t *testing.T) {
 		_, ok := startedWith[byKey[key].ID]
 		return ok
 	}
+	// finish makes a subtask's run succeed, and nothing more: the scheduler
+	// itself must finish the subtask, or its dependents wait forever.
 	finish := func(key string) {
 		t.Helper()
 		mu.Lock()
 		runState[byKey[key].ID] = "succeeded"
 		mu.Unlock()
-		if err := store.SetState(ctx, byKey[key].ID, "done"); err != nil {
-			t.Fatalf("SetState %s done: %v", key, err)
-		}
 	}
 
 	// Only the dependency-free subtask starts, and a run still going leaves it
@@ -93,6 +92,9 @@ func TestSwarmDependencyOrder(t *testing.T) {
 
 	finish("db")
 	tick()
+	if got := state("db"); got != "done" {
+		t.Fatalf("db state = %q after its run succeeded, want done", got)
+	}
 	finish("oauth-backend")
 	tick()
 	if !started("admin-config") || !started("frontend") {

@@ -92,16 +92,31 @@ func (sch *Scheduler) Tick(ctx context.Context, epicID uuid.UUID) (started int, 
 	inProgress := 0
 	anyBlocked := false
 	for _, c := range children {
-		if c.State == "in_progress" && sch.runFailed(ctx, c, &errs) {
-			// Its Agent Run ended without succeeding. Blocked is what keeps
-			// every dependent out of Ready (which waits for "done") and what
-			// surfaces the failure on the epic below; in_progress would leave
-			// the dependents waiting on work nobody is doing.
-			moved, err := sch.Work.TransitionState(ctx, c.ID, "in_progress", "blocked")
-			if err != nil {
-				errs = append(errs, fmt.Errorf("block subtask %s: %w", c.Key, err))
-			} else if moved {
-				c.State = "blocked"
+		if c.State == "in_progress" {
+			switch outcome := sch.runOutcome(ctx, c, &errs); {
+			case failedRunStates[outcome]:
+				// Its Agent Run ended without succeeding. Blocked is what keeps
+				// every dependent out of Ready (which waits for "done") and what
+				// surfaces the failure on the epic below; in_progress would
+				// leave the dependents waiting on work nobody is doing.
+				moved, err := sch.Work.TransitionState(ctx, c.ID, "in_progress", "blocked")
+				if err != nil {
+					errs = append(errs, fmt.Errorf("block subtask %s: %w", c.Key, err))
+				} else if moved {
+					c.State = "blocked"
+				}
+			case outcome == "succeeded":
+				// A run only succeeds once it has been verified against the
+				// subtask's acceptance criteria (agentrun's verification step),
+				// so its success is what finishes the subtask. Nothing did this,
+				// and every dependent of a successful subtask waited forever
+				// for someone to close it by hand.
+				moved, err := sch.Work.TransitionState(ctx, c.ID, "in_progress", "done")
+				if err != nil {
+					errs = append(errs, fmt.Errorf("finish subtask %s: %w", c.Key, err))
+				} else if moved {
+					c.State = "done"
+				}
 			}
 		}
 		switch c.State {
@@ -175,20 +190,20 @@ func (sch *Scheduler) Tick(ctx context.Context, epicID uuid.UUID) (started int, 
 // failedRunStates are the ways an Agent Run ends without doing its subtask.
 var failedRunStates = map[string]bool{"failed": true, "over_budget": true, "cancelled": true}
 
-// runFailed reports whether subtask's Agent Run ended without succeeding.
-// An unanswerable question is recorded and answered "no": a subtask is only
-// blocked on evidence that its run failed, never because agent-runtime was
-// briefly unreachable.
-func (sch *Scheduler) runFailed(ctx context.Context, subtask work.Item, errs *[]error) bool {
+// runOutcome reports the state of subtask's Agent Run. An unanswerable
+// question is recorded and answered "": a subtask is only blocked or finished
+// on evidence of how its run ended, never because agent-runtime was briefly
+// unreachable.
+func (sch *Scheduler) runOutcome(ctx context.Context, subtask work.Item, errs *[]error) string {
 	if sch.RunOutcome == nil {
-		return false
+		return ""
 	}
 	state, err := sch.RunOutcome(ctx, subtask)
 	if err != nil {
 		*errs = append(*errs, fmt.Errorf("read run outcome of subtask %s: %w", subtask.Key, err))
-		return false
+		return ""
 	}
-	return failedRunStates[state]
+	return state
 }
 
 // EpicLister returns every epic (a top-level Work Item that has at least
