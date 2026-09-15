@@ -28,17 +28,30 @@ GATEWAY="$($KC get deploy "$REL-agent-runtime" -o jsonpath='{.spec.template.spec
 [ -n "$GATEWAY" ] || fail "agent-runtime has no AI_ENDPOINT"
 
 # probe URL prints the HTTP status the pod's network gets for URL, 000 when the
-# connection never completes.
+# connection never completes. Each probe is its own named ephemeral container,
+# read back through its log once it has exited: attaching to a command that
+# finishes in milliseconds loses its output, and an empty answer would read as
+# neither refused nor reached.
 probe() {
-	$KC debug "$POD" --image="$PROBE_IMAGE" --target=agent-runtime --profile=general --quiet -i --attach=true -- \
-		sh -c "curl -sk -m 8 -o /dev/null -w '%{http_code}' '$1' || true" 2>/dev/null | tr -d '\r' | tail -c 3
+	local name="probe-$RANDOM$RANDOM"
+	$KC debug "$POD" --image="$PROBE_IMAGE" --target=agent-runtime --profile=general --container="$name" --quiet -- \
+		sh -c "curl -sk -m 8 -o /dev/null -w '%{http_code}' '$1' || true" >/dev/null
+	local state=""
+	for _ in $(seq 1 60); do
+		state="$($KC get pod "$POD" -o jsonpath="{.status.ephemeralContainerStatuses[?(@.name==\"$name\")].state.terminated.reason}")"
+		[ -n "$state" ] && break
+		sleep 2
+	done
+	[ -n "$state" ] || fail "probe container $name never finished"
+	local out
+	out="$($KC logs "$POD" -c "$name" | tr -d '\r' | tail -c 3)"
+	[ -n "$out" ] || fail "probe container $name printed nothing"
+	echo "$out"
 }
 
 echo "== 1. agent-runtime reaches the in-cluster model gateway =="
 code="$(probe "${GATEWAY%/}/models")"
-case "$code" in
-000 | "") fail "agent-runtime could not reach its model gateway $GATEWAY" ;;
-esac
+[ "$code" = "000" ] && fail "agent-runtime could not reach its model gateway $GATEWAY"
 ok "the gateway answered ($code)"
 
 echo "== 2. agent-runtime reaches nothing outside the cluster =="

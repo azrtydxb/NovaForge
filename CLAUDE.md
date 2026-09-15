@@ -69,8 +69,11 @@ bash tests/e2e/airgap_test.sh     # agent-runtime reaches its model gateway and 
 clone must create it: `deploy.sh` refuses to run without the model-gateway credential,
 because a deployment that cannot reach a model looks configured and is not.
 
-The e2e scripts reach the edge at its load balancer address. From a network that filters
-it, set `NF_EDGE_IP` and `NF_EDGE_PORT` (e.g. a node's IP and the edge NodePort).
+The e2e scripts reach the edge at its load balancer address. `hack/e2e-in-cluster.sh
+[suite...]` runs them from a pod inside the cluster instead — prefer it: the workstation's
+VPN gateway drops connections to a single address:port under the suites' connection bursts,
+which looks exactly like the platform going down. `NF_EDGE_IP`/`NF_EDGE_PORT` point the
+scripts at another edge address.
 
 Images are tagged with the commit sha, never a mutable tag — a mutable `dev` tag with
 `IfNotPresent` silently served stale code for a whole session. **Never `kubectl set image`
