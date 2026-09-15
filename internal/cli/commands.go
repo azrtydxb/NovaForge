@@ -135,7 +135,7 @@ func cmdWhoami(args []string, stdout, stderr io.Writer) error {
 
 func cmdOrg(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: nf org <create|list|use> [name]")
+		return fmt.Errorf("usage: nf org <create|list|use|add-member> [name]")
 	}
 	c, cfg, err := session()
 	if err != nil && args[0] != "use" {
@@ -165,6 +165,8 @@ func cmdOrg(args []string, stdout, stderr io.Writer) error {
 			fmt.Fprintln(stdout, o.Name)
 		}
 		return nil
+	case "add-member":
+		return orgAddMember(c, cfg, args[1:], stdout, stderr)
 	case "use":
 		if len(args) < 2 {
 			return fmt.Errorf("usage: nf org use <name>")
@@ -182,7 +184,7 @@ func cmdOrg(args []string, stdout, stderr io.Writer) error {
 
 func cmdRepo(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: nf repo <create|list|branches|log> [name]")
+		return fmt.Errorf("usage: nf repo <create|list|clone|branches|log> [name]")
 	}
 	c, cfg, err := session()
 	if err != nil {
@@ -195,6 +197,8 @@ func cmdRepo(args []string, stdout, stderr io.Writer) error {
 	base := "/api/v1/orgs/" + org + "/repos"
 
 	switch args[0] {
+	case "clone":
+		return repoClone(c, cfg, org, args[1:], stdout, stderr)
 	case "create":
 		if len(args) < 2 {
 			return fmt.Errorf("usage: nf repo create <name>")
@@ -300,6 +304,10 @@ func cmdWork(args []string, stdout, stderr io.Writer) error {
 		fs.SetOutput(stderr)
 		typ := fs.String("type", "feature", "Work Item type")
 		goal := fs.String("goal", "", "what the change must achieve")
+		var acceptance, constraints, gates stringList
+		fs.Var(&acceptance, "acceptance", "an acceptance criterion (repeatable)")
+		fs.Var(&constraints, "constraint", "a constraint (repeatable)")
+		fs.Var(&gates, "gate", "a gate the change must pass (repeatable)")
 		if err := fs.Parse(args[2:]); err != nil {
 			return err
 		}
@@ -307,7 +315,9 @@ func cmdWork(args []string, stdout, stderr io.Writer) error {
 			return fmt.Errorf("--goal is required")
 		}
 		var out map[string]any
-		if err := c.Do("POST", base, map[string]any{"type": *typ, "goal": *goal}, &out); err != nil {
+		body := map[string]any{"type": *typ, "goal": *goal,
+			"acceptance": []string(acceptance), "constraints": []string(constraints), "required_gates": []string(gates)}
+		if err := c.Do("POST", base, body, &out); err != nil {
 			return err
 		}
 		fmt.Fprintf(stdout, "created %v\n", out["key"])
@@ -357,59 +367,6 @@ func cmdWork(args []string, stdout, stderr io.Writer) error {
 		return nil
 	}
 	return fmt.Errorf("unknown work subcommand %q", args[0])
-}
-
-func cmdRun(args []string, stdout, stderr io.Writer) error {
-	if len(args) < 2 {
-		return fmt.Errorf("usage: nf run <list|get|gates|merge> <repo> [number]")
-	}
-	c, cfg, err := session()
-	if err != nil {
-		return err
-	}
-	org, err := requireOrg(cfg)
-	if err != nil {
-		return err
-	}
-	base := fmt.Sprintf("/api/v1/orgs/%s/repos/%s/runs", org, args[1])
-
-	switch args[0] {
-	case "list":
-		var out struct {
-			Runs []struct {
-				Number int    `json:"number"`
-				Title  string `json:"title"`
-				State  string `json:"state"`
-			} `json:"runs"`
-		}
-		if err := c.Do("GET", base, nil, &out); err != nil {
-			return err
-		}
-		for _, r := range out.Runs {
-			fmt.Fprintf(stdout, "#%d\t%s\t%s\n", r.Number, r.State, r.Title)
-		}
-		return nil
-	case "get", "gates", "merge":
-		if len(args) < 3 {
-			return fmt.Errorf("usage: nf run %s <repo> <number>", args[0])
-		}
-		path := base + "/" + args[2]
-		method := "GET"
-		switch args[0] {
-		case "gates":
-			path += "/proof"
-		case "merge":
-			path += "/merge"
-			method = "POST"
-		}
-		var out map[string]any
-		if err := c.Do(method, path, nil, &out); err != nil {
-			return err
-		}
-		fmt.Fprintf(stdout, "%v\n", out)
-		return nil
-	}
-	return fmt.Errorf("unknown run subcommand %q", args[0])
 }
 
 func cmdCI(args []string, stdout, stderr io.Writer) error {
