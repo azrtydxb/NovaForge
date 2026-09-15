@@ -79,7 +79,9 @@ against that item's acceptance criteria, and the job reports the run's outcome.
 indexed with `bge-m3` embeddings through the gateway, and "tax calculation on
 a bill" — sharing no word with the code — ranks `invoicing/invoice.go` first.
 
-MERGE_TEST_RESULT
+`bash tests/e2e/merge_test.sh` passes: an author opens an Engineering Run, is
+refused approving it themselves and refused merging it unapproved, a second
+member approves, and the merge lands on `main` with the run marked merged.
 
 ## Defects found by running it, not by reading it
 
