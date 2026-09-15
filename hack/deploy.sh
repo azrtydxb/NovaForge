@@ -44,3 +44,6 @@ helm --kube-context "$KUBE_CONTEXT" upgrade --install "$REL" deploy/helm/novafor
 	--wait --timeout 15m "$@"
 
 kubectl --context "$KUBE_CONTEXT" -n "$NS" get pods
+
+# The addresses the platform is reached at must actually answer (see lb-check.sh).
+./hack/lb-check.sh
