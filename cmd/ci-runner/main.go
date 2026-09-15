@@ -18,6 +18,7 @@ import (
 
 	agentsv1 "github.com/novaforge/novaforge/gen/novaforge/agents/v1"
 	civ1 "github.com/novaforge/novaforge/gen/novaforge/ci/v1"
+	gatesv1 "github.com/novaforge/novaforge/gen/novaforge/gates/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
 	"github.com/novaforge/novaforge/internal/blobstore"
@@ -50,6 +51,13 @@ func main() {
 	// agent jobs never running at all — so their absence is fatal instead.
 	if cfg.AgentsAddr == "" || cfg.WorkAddr == "" {
 		log.Fatal("ci-runner: AGENTS_ADDR and WORK_ADDR are required to execute agent jobs")
+	}
+	// A job that declares a secret is brokered its credentials by the gates
+	// service at dispatch. Without the broker such a job could only fail, so
+	// a deployment missing it is refused at start rather than discovered job
+	// by job.
+	if cfg.GatesAddr == "" {
+		log.Fatal("ci-runner: GATES_ADDR is required to broker job credentials")
 	}
 	if cfg.S3Endpoint == "" {
 		log.Fatal("ci-runner: S3_ENDPOINT is required")
@@ -131,6 +139,16 @@ func main() {
 		log.Fatalf("ci-runner: dial work-reviews: %v", err)
 	}
 	defer workConn.Close()
+
+	gatesConn, err := grpc.NewClient(cfg.GatesAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatalf("ci-runner: dial gates: %v", err)
+	}
+	defer gatesConn.Close()
+	svc.Pump.Credentials = &ci.GatesBroker{
+		Gates:      gatesv1.NewGatesServiceClient(gatesConn),
+		HMACSecret: cfg.HMACSecret,
+	}
 
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()

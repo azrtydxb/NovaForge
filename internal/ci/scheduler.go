@@ -302,6 +302,8 @@ func (s *Scheduler) ScheduleRun(ctx context.Context, orgID, repoID uuid.UUID, re
 			// Only declared paths are kept: collecting everything a job wrote
 			// would ship its whole working tree, credentials included.
 			ArtifactPaths: job.Artifacts,
+			Secrets:       job.Secrets,
+			Environment:   job.Environment,
 		}); err != nil {
 			return Run{}, fmt.Errorf("create job %q: %w", name, err)
 		}

@@ -4,33 +4,29 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/novaforge/novaforge/internal/capability"
 	"github.com/novaforge/novaforge/internal/ci"
-	"github.com/novaforge/novaforge/internal/secrets"
 )
 
-// downBroker simulates a secret broker that cannot be reached: every call
-// fails with a gRPC Unavailable error.
-type downBroker struct{}
+// downBroker answers every call the way a gRPC client to an unreachable
+// broker does. The deployed path is exercised by TestBrokerDownFailsClosed
+// against a real stopped server; this pins the classification alone.
+type downBroker struct{ code codes.Code }
 
-func (downBroker) Issue(context.Context, uuid.UUID, capability.Grant, string, time.Duration) (secrets.Lease, error) {
-	return secrets.Lease{}, status.Error(codes.Unavailable, "secret broker unreachable")
+func (d downBroker) IssueJobLease(context.Context, ci.LeaseRequest) (string, error) {
+	return "", status.Error(d.code, "secret broker says no")
 }
 
-func (downBroker) Redeem(context.Context, string) (string, error) {
-	return "", status.Error(codes.Unavailable, "secret broker unreachable")
+func (d downBroker) RedeemJobLease(context.Context, uuid.UUID, uuid.UUID, string) (string, error) {
+	return "", status.Error(d.code, "secret broker says no")
 }
 
 func TestCredentialFreeJobRunsWhenBrokerDown(t *testing.T) {
-	job := ci.Job{Run: "echo hi"} // declares no secrets
-
-	creds, err := ci.ResolveJobCredentials(context.Background(), downBroker{}, job, capability.Grant{})
+	creds, err := ci.ResolveJobCredentials(context.Background(), downBroker{codes.Unavailable}, ci.JobCredentials{})
 	if err != nil {
 		t.Fatalf("want nil error for a credential-free job even with the broker down, got %v", err)
 	}
@@ -40,33 +36,35 @@ func TestCredentialFreeJobRunsWhenBrokerDown(t *testing.T) {
 }
 
 func TestCredentialJobBlocksWhenBrokerDown(t *testing.T) {
-	job := ci.Job{Run: "deploy.sh", Secrets: []string{"DEPLOY_KEY"}}
-
-	_, err := ci.ResolveJobCredentials(context.Background(), downBroker{}, job, capability.Grant{})
-	if err == nil {
-		t.Fatal("want an error when a credential-needing job's broker is unreachable")
-	}
+	job := ci.JobCredentials{Secrets: []string{"DEPLOY_KEY"}}
+	_, err := ci.ResolveJobCredentials(context.Background(), downBroker{codes.Unavailable}, job)
 	if !errors.Is(err, ci.ErrCredentialsUnavailable) {
-		t.Fatalf("want error satisfying errors.Is(err, ci.ErrCredentialsUnavailable), got %v", err)
+		t.Fatalf("want ErrCredentialsUnavailable, got %v", err)
 	}
 }
 
+// TestJobStaysQueuedNotFailed pins the split between a broker that could not
+// be asked (the job waits) and one that refused (the job fails): treating a
+// refusal as an outage would retry a production secret for a staging job
+// forever, and treating an outage as a refusal would fail good jobs.
 func TestJobStaysQueuedNotFailed(t *testing.T) {
-	job := ci.Job{Run: "deploy.sh", Secrets: []string{"DEPLOY_KEY"}}
+	job := ci.JobCredentials{Secrets: []string{"DEPLOY_KEY"}}
 
-	_, err := ci.ResolveJobCredentials(context.Background(), downBroker{}, job, capability.Grant{})
-	if err == nil {
-		t.Fatal("want an error to determine job state from")
-	}
-
-	state := ci.StateAfterCredentialResolution(err)
-	if state != "pending" {
+	_, err := ci.ResolveJobCredentials(context.Background(), downBroker{codes.Unavailable}, job)
+	if state := ci.StateAfterCredentialResolution(err); state != "pending" {
 		t.Fatalf("want a broker-down job to stay 'pending', got %q", state)
 	}
 
-	// A genuine (non-broker) failure is reported as failure, not pending.
-	otherState := ci.StateAfterCredentialResolution(errors.New("some other error"))
-	if otherState != "failure" {
-		t.Fatalf("want a non-broker error to report 'failure', got %q", otherState)
+	_, err = ci.ResolveJobCredentials(context.Background(), downBroker{codes.PermissionDenied}, job)
+	if !errors.Is(err, ci.ErrCredentialsDenied) {
+		t.Fatalf("want a refusal to be ErrCredentialsDenied, got %v", err)
+	}
+	if state := ci.StateAfterCredentialResolution(err); state != "failure" {
+		t.Fatalf("want a refused job to report 'failure', got %q", state)
+	}
+
+	_, err = ci.ResolveJobCredentials(context.Background(), nil, job)
+	if state := ci.StateAfterCredentialResolution(err); state != "failure" {
+		t.Fatalf("want a job needing a secret on a deployment with no broker to fail, got %q (%v)", state, err)
 	}
 }

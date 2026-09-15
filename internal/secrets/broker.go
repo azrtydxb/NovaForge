@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
 	"time"
 
 	"github.com/google/uuid"
@@ -31,6 +32,9 @@ type Lease struct {
 	Token     string
 	Name      string
 	ExpiresAt time.Time
+	// Environment is the environment the lease was issued for, or empty for
+	// a lease issued by Issue, which does not scope by environment.
+	Environment string
 }
 
 // Broker issues, redeems, and revokes short-lived secret leases. Values are
@@ -68,16 +72,6 @@ func runIDFromContext(ctx context.Context) (uuid.UUID, bool) {
 func RunIDFromContext(ctx context.Context) (uuid.UUID, bool) {
 	v, ok := ctx.Value(runCtxKey{}).(uuid.UUID)
 	return v, ok
-}
-
-// BrokerClient is the interface consumers such as internal/ci use to
-// request and redeem credentials without depending on Broker's storage
-// internals. In production this is backed by a gRPC client to the secrets
-// service (or, in-process, directly by *Broker, which satisfies it);
-// tests stub it directly.
-type BrokerClient interface {
-	Issue(ctx context.Context, runID uuid.UUID, g capability.Grant, name string, ttl time.Duration) (Lease, error)
-	Redeem(ctx context.Context, token string) (string, error)
 }
 
 func (b *Broker) encrypt(plaintext string) ([]byte, error) {
@@ -183,7 +177,50 @@ func (b *Broker) Issue(ctx context.Context, runID uuid.UUID, g capability.Grant,
 	if stored.environment == "production" && !g.SecretsProd {
 		return Lease{}, fmt.Errorf("secret %q is production-scoped; not permitted for this grant", name)
 	}
+	return b.insertLease(ctx, runID, g.OrgID, name, "", ttl)
+}
 
+// Environments are the two places a secret can be scoped to.
+const (
+	EnvironmentStaging    = "staging"
+	EnvironmentProduction = "production"
+)
+
+// ErrProductionScoped reports a request for production material that the
+// grant does not allow.
+var ErrProductionScoped = errors.New("production-scoped secret not permitted")
+
+// IssueFor issues a lease for name as it exists in environment. A staging
+// request never falls back to a production value of the same name — that
+// fallback is precisely how a staging-scoped job would read a production
+// credential — and a production request needs a grant with SecretsProd.
+func (b *Broker) IssueFor(ctx context.Context, runID uuid.UUID, g capability.Grant, name, environment string, ttl time.Duration) (Lease, error) {
+	switch environment {
+	case EnvironmentStaging:
+	case EnvironmentProduction:
+		if !g.SecretsProd {
+			return Lease{}, fmt.Errorf("%w: secret %q in production is not permitted for this grant", ErrProductionScoped, name)
+		}
+	default:
+		return Lease{}, fmt.Errorf("unknown environment %q", environment)
+	}
+	if _, err := lookupEnvValue(ctx, b.pool, g.OrgID, name, environment); err != nil {
+		if environment == EnvironmentStaging {
+			if _, perr := lookupEnvValue(ctx, b.pool, g.OrgID, name, EnvironmentProduction); perr == nil {
+				return Lease{}, fmt.Errorf("%w: secret %q exists only in production; a staging job may not have it", ErrProductionScoped, name)
+			}
+		}
+		return Lease{}, err
+	}
+	lease, err := b.insertLease(ctx, runID, g.OrgID, name, environment, ttl)
+	if err != nil {
+		return Lease{}, err
+	}
+	lease.Environment = environment
+	return lease, nil
+}
+
+func (b *Broker) insertLease(ctx context.Context, runID, orgID uuid.UUID, name, environment string, ttl time.Duration) (Lease, error) {
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {
 		return Lease{}, fmt.Errorf("generate lease token: %w", err)
@@ -197,15 +234,32 @@ func (b *Broker) Issue(ctx context.Context, runID uuid.UUID, g capability.Grant,
 		Name:      name,
 		ExpiresAt: time.Now().Add(ttl),
 	}
-	_, err = b.pool.Exec(ctx, `
-		INSERT INTO secrets.secret_leases (id, org_id, run_id, name, token_hash, expires_at)
-		VALUES ($1, $2, $3, $4, $5, $6)`,
-		lease.ID, g.OrgID, runID, name, hash[:], lease.ExpiresAt,
+	_, err := b.pool.Exec(ctx, `
+		INSERT INTO secrets.secret_leases (id, org_id, run_id, name, token_hash, expires_at, environment)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		lease.ID, orgID, runID, name, hash[:], lease.ExpiresAt, environment,
 	)
 	if err != nil {
 		return Lease{}, fmt.Errorf("issue lease for %q: %w", name, err)
 	}
 	return lease, nil
+}
+
+// lookupEnvValue finds the value of name in exactly one environment.
+func lookupEnvValue(ctx context.Context, q queryRower, orgID uuid.UUID, name, environment string) (storedSecret, error) {
+	s := storedSecret{environment: environment}
+	err := q.QueryRow(ctx, `
+		SELECT ciphertext FROM secrets.secret_values
+		WHERE org_id = $1 AND name = $2 AND environment = $3`,
+		orgID, name, environment,
+	).Scan(&s.ciphertext)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return storedSecret{}, fmt.Errorf("secret %q not found in %s", name, environment)
+		}
+		return storedSecret{}, fmt.Errorf("lookup secret %q: %w", name, err)
+	}
+	return s, nil
 }
 
 type leaseRow struct {
@@ -216,6 +270,7 @@ type leaseRow struct {
 	expiresAt     time.Time
 	revokedAt     *time.Time
 	redeemedCount int
+	environment   string
 }
 
 // Redeem consumes token once, returning the decrypted secret value. A lease
@@ -233,12 +288,12 @@ func (b *Broker) Redeem(ctx context.Context, token string) (string, error) {
 
 	var row leaseRow
 	err = tx.QueryRow(ctx, `
-		SELECT id, org_id, run_id, name, expires_at, revoked_at, redeemed_count
+		SELECT id, org_id, run_id, name, expires_at, revoked_at, redeemed_count, environment
 		FROM secrets.secret_leases
 		WHERE token_hash = $1
 		FOR UPDATE`,
 		hash[:],
-	).Scan(&row.id, &row.orgID, &row.runID, &row.name, &row.expiresAt, &row.revokedAt, &row.redeemedCount)
+	).Scan(&row.id, &row.orgID, &row.runID, &row.name, &row.expiresAt, &row.revokedAt, &row.redeemedCount, &row.environment)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", errors.New("lease not found")
@@ -259,7 +314,12 @@ func (b *Broker) Redeem(ctx context.Context, token string) (string, error) {
 		return "", fmt.Errorf("lease %s has already been redeemed", row.id)
 	}
 
-	stored, err := lookupValue(ctx, tx, row.orgID, row.name)
+	var stored storedSecret
+	if row.environment != "" {
+		stored, err = lookupEnvValue(ctx, tx, row.orgID, row.name, row.environment)
+	} else {
+		stored, err = lookupValue(ctx, tx, row.orgID, row.name)
+	}
 	if err != nil {
 		return "", err
 	}
@@ -386,3 +446,30 @@ func (b *Broker) ListLeases(ctx context.Context, orgID uuid.UUID) ([]LeaseRecord
 	}
 	return out, rows.Err()
 }
+
+// nameRe is the shape of a secret's name. A job reads a secret as an
+// environment variable of the same name, so a name must be a valid one.
+var nameRe = regexp.MustCompile(`^[A-Z_][A-Z0-9_]{0,127}$`)
+
+// maxValueBytes bounds a stored value: credentials, not files.
+const maxValueBytes = 64 << 10
+
+// ValidateSecret reports why name, environment and value cannot be stored.
+func ValidateSecret(name, environment, value string) error {
+	if !nameRe.MatchString(name) {
+		return fmt.Errorf("secret name %q must be upper-case letters, digits and underscores, starting with a letter or underscore", name)
+	}
+	if environment != EnvironmentStaging && environment != EnvironmentProduction {
+		return fmt.Errorf("environment %q must be staging or production", environment)
+	}
+	if value == "" {
+		return errors.New("a secret needs a value")
+	}
+	if len(value) > maxValueBytes {
+		return fmt.Errorf("secret value is %d bytes, over the %d byte limit", len(value), maxValueBytes)
+	}
+	return nil
+}
+
+// ValidName reports whether name can be a secret's name.
+func ValidName(name string) bool { return nameRe.MatchString(name) }

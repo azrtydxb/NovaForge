@@ -125,6 +125,9 @@ func main() {
 
 	grpcServer := gates.NewGRPCServer(controller, approvalsStore, secretsBroker, grants)
 	grpcServer.Proposals = &gates.Proposer{Git: gitClient, Reviews: reviewsClient}
+	// Production credentials are brokered only to jobs on a repository's
+	// default branch, which git-platform owns.
+	grpcServer.DefaultBranch = gates.DefaultBranchFromGit(gitClient)
 
 	// Callers are resolved the same way every service resolves them: a
 	// person's credential through identity, or a platform service token

@@ -21,6 +21,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	civ1 "github.com/novaforge/novaforge/gen/novaforge/ci/v1"
+	"github.com/novaforge/novaforge/internal/redact"
 	"github.com/novaforge/novaforge/internal/runner"
 )
 
@@ -178,11 +179,18 @@ func runConnection(ctx context.Context, client civ1.RunnerServiceClient, runnerI
 func runJob(ctx context.Context, client civ1.RunnerServiceClient, send func(*civ1.ConnectRequest) error, runnerID, workdir string, job *civ1.ConnectResponse) {
 	log.Printf("runner: starting job %s", job.GetJobId())
 
+	// The job's brokered credentials are masked before a line leaves this
+	// host. ci-runner masks them again before storing the line, so a runner
+	// that does not is caught there — but the fewer places the value travels,
+	// the fewer places it can leak from.
+	mask := redact.New(redact.Values(job.GetSecretEnv()))
+
 	logs := make(chan string, 256)
 	logsDone := make(chan struct{})
 	go func() {
 		defer close(logsDone)
 		for line := range logs {
+			line = mask.Line(line)
 			if err := send(&civ1.ConnectRequest{
 				RunnerId: runnerID,
 				Payload:  &civ1.ConnectRequest_LogChunk{LogChunk: &civ1.LogChunk{JobId: job.GetJobId(), Line: line}},
@@ -224,7 +232,7 @@ func runJob(ctx context.Context, client civ1.RunnerServiceClient, send func(*civ
 		JobId:    job.GetJobId(),
 		Status:   status,
 		ExitCode: int32(exitCode),
-		Detail:   detail,
+		Detail:   mask.Line(detail),
 	}); err != nil {
 		log.Printf("runner: report status for job %s: %v", job.GetJobId(), err)
 	}

@@ -51,6 +51,8 @@ func NewService(pool *pgxpool.Pool, rdb *redis.Client, blobs *blobstore.Client, 
 	server := NewServer(store, dispatcher)
 	server.SetLogSink(logs)
 	server.SetArtifactStore(artifacts)
+	redactions := NewRedactions()
+	server.SetRedactions(redactions)
 
 	scheduler := NewScheduler(rdb, store, git, SchedulerConfig{HMACSecret: hmacSecret})
 	// The query server schedules on demand through the same scheduler the
@@ -58,6 +60,7 @@ func NewService(pool *pgxpool.Pool, rdb *redis.Client, blobs *blobstore.Client, 
 	// identically.
 	query.SetScheduler(scheduler, git)
 	pump := NewPump(store, dispatcher, cloneBase, hmacSecret)
+	pump.Redactions = redactions
 	sweeper := retention.NewSweeper(pool, blobs)
 
 	return &Service{

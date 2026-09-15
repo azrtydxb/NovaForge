@@ -33,6 +33,10 @@ type GRPCServer struct {
 	// server was built without git and reviews clients, and those RPCs answer
 	// Unimplemented rather than pretending a repository has no gates.
 	Proposals *Proposer
+	// DefaultBranch resolves a repository's default branch. A production
+	// credential is brokered only to a job on it; nil means no production
+	// credential is brokered at all.
+	DefaultBranch func(ctx context.Context, repoID uuid.UUID) (string, error)
 }
 
 // NewGRPCServer wraps the given dependencies as a gatesv1.GatesServiceServer.

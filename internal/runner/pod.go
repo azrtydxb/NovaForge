@@ -11,6 +11,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
@@ -80,8 +81,10 @@ func (p *PodExecutor) Run(ctx context.Context, job *civ1.ConnectResponse, logs c
 		image = defaultJobImage()
 	}
 	name := "nf-job-" + strings.ToLower(job.GetJobId())
-	if len(name) > 63 {
-		name = name[:63]
+	// 57 leaves room for the credentials Secret's "-creds" suffix inside
+	// the 63 characters a name may have.
+	if len(name) > 57 {
+		name = name[:57]
 	}
 
 	script := job.GetRunCmd() + artifactCaptureScript(job.GetArtifactPaths())
@@ -97,6 +100,39 @@ func (p *PodExecutor) Run(ctx context.Context, job *civ1.ConnectResponse, logs c
 	env := make([]corev1.EnvVar, 0, len(job.GetEnv()))
 	for k, v := range job.GetEnv() {
 		env = append(env, corev1.EnvVar{Name: k, Value: v})
+	}
+
+	// Brokered credentials reach the job through a Secret the pod reads as
+	// environment. Set as literal env they would sit in the pod spec, readable
+	// by anyone who can get pods in this namespace and printed by every
+	// describe. The Secret lives exactly as long as the pod.
+	var envFrom []corev1.EnvFromSource
+	if secretEnv := job.GetSecretEnv(); len(secretEnv) > 0 {
+		for k := range secretEnv {
+			if errs := validation.IsEnvVarName(k); len(errs) > 0 {
+				return 0, fmt.Errorf("credential %q is not a valid environment variable name: %s", k, strings.Join(errs, "; "))
+			}
+		}
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name + "-creds",
+				Namespace: p.Namespace,
+				Labels:    map[string]string{"novaforge.io/job-id": strings.ToLower(job.GetJobId())},
+			},
+			Type:       corev1.SecretTypeOpaque,
+			StringData: secretEnv,
+		}
+		if _, err := p.Client.CoreV1().Secrets(p.Namespace).Create(ctx, secret, metav1.CreateOptions{}); err != nil {
+			return 0, fmt.Errorf("create job credentials: %w", err)
+		}
+		defer func() {
+			delCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			_ = p.Client.CoreV1().Secrets(p.Namespace).Delete(delCtx, secret.Name, metav1.DeleteOptions{})
+		}()
+		envFrom = []corev1.EnvFromSource{{SecretRef: &corev1.SecretEnvSource{
+			LocalObjectReference: corev1.LocalObjectReference{Name: secret.Name},
+		}}}
 	}
 
 	pod := &corev1.Pod{
@@ -116,6 +152,7 @@ func (p *PodExecutor) Run(ctx context.Context, job *civ1.ConnectResponse, logs c
 				Command:    []string{"/bin/sh", "-c"},
 				Args:       []string{script},
 				Env:        env,
+				EnvFrom:    envFrom,
 				WorkingDir: "/workspace",
 				VolumeMounts: []corev1.VolumeMount{
 					{Name: "workspace", MountPath: "/workspace"},

@@ -23,6 +23,11 @@ rules:
   - apiGroups: [""]
     resources: [pods, pods/log]
     verbs: [create, get, list, watch, delete]
+  # A job's brokered credentials reach its pod through a Secret that lives
+  # exactly as long as the pod; a literal env value would sit in the pod spec.
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [create, delete]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
