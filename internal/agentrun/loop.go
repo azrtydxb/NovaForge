@@ -181,7 +181,7 @@ func buildToolDefs(reg *tools.Registry) []provider.ToolDef {
 	names := reg.Names()
 	defs := make([]provider.ToolDef, 0, len(names))
 	for _, name := range names {
-		spec := tools.SpecFor(name)
+		spec := reg.Spec(name)
 		defs = append(defs, provider.ToolDef{
 			Name:        name,
 			Description: spec.Description,

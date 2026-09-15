@@ -25,6 +25,7 @@ import (
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	graphv1 "github.com/novaforge/novaforge/gen/novaforge/graph/v1"
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
+	mcpv1 "github.com/novaforge/novaforge/gen/novaforge/mcp/v1"
 	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
 	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
 	"github.com/novaforge/novaforge/internal/agentrun"
@@ -154,6 +155,21 @@ func main() {
 	}
 	reviewsClient := reviewsv1.NewReviewsServiceClient(workConn)
 
+	// mcp-server keeps the organization's register of approved external MCP
+	// servers. The run's own credential is already on its context, so this
+	// connection forwards nothing of its own.
+	var mcpClient mcpv1.McpServiceClient
+	if cfg.MCPAddr != "" {
+		mcpConn, err := grpc.NewClient(cfg.MCPAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			log.Fatalf("agent-runtime: dial mcp-server: %v", err)
+		}
+		defer mcpConn.Close()
+		mcpClient = mcpv1.NewMcpServiceClient(mcpConn)
+	} else {
+		log.Println("agent-runtime: MCP_ADDR is unset; no external MCP server is offered to agents")
+	}
+
 	store := agents.NewStore(pool)
 	grants := capability.NewStore(pool)
 	audit := agents.NewAuditLog(pool)
@@ -174,7 +190,7 @@ func main() {
 		log.Printf("agent-runtime: no in-cluster Kubernetes config available (%v); workspace provisioning and the reaper are disabled", err)
 	}
 
-	execute := newExecuteFunc(store, grants, audit, provisioner, gitClient, graphClient, workClient, reviewsClient, ciClient, cfg)
+	execute := newExecuteFunc(store, grants, audit, provisioner, gitClient, graphClient, workClient, reviewsClient, ciClient, mcpClient, cfg)
 	grpcServer := agents.NewGRPCServer(store, grants, rdb, workClient, execute)
 	grpcServer.Audit = audit
 
@@ -237,7 +253,7 @@ func runReaper(ctx context.Context, provisioner *workspace.Provisioner) {
 // runs the model/tool loop, persists the resulting terminal state, and
 // tears the workspace down. When provisioner is nil (no Kubernetes API
 // reachable), it returns nil so StartRun's degrade path applies instead.
-func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents.AuditLog, provisioner *workspace.Provisioner, gitClient gitv1.GitServiceClient, graphClient graphv1.GraphServiceClient, workClient workv1.WorkServiceClient, reviewsClient reviewsv1.ReviewsServiceClient, ciClient civ1.CIServiceClient, cfg service.Config) agents.ExecuteFunc {
+func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents.AuditLog, provisioner *workspace.Provisioner, gitClient gitv1.GitServiceClient, graphClient graphv1.GraphServiceClient, workClient workv1.WorkServiceClient, reviewsClient reviewsv1.ReviewsServiceClient, ciClient civ1.CIServiceClient, mcpClient mcpv1.McpServiceClient, cfg service.Config) agents.ExecuteFunc {
 	if provisioner == nil {
 		return nil
 	}
@@ -318,6 +334,18 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 			Reviews:   newReviewsAdapter(reviewsClient),
 			CI:        newCIAdapter(ciClient),
 		}, audit)
+
+		// The organization's approved external MCP servers are offered to
+		// the model alongside the built-in tools, read with the run's own
+		// credential. A register nobody read made approval meaningless.
+		if mcpClient != nil {
+			offered, err := tools.OfferApprovedMCPServers(ctx, reg, mcpClient)
+			if err != nil {
+				log.Printf("agent-runtime: run %s: external MCP servers unavailable: %v", run.ID, err)
+			} else if len(offered.Tools) > 0 {
+				log.Printf("agent-runtime: run %s offered %d external MCP tool(s)", run.ID, len(offered.Tools))
+			}
+		}
 
 		loop := agentrun.NewLoop(model, budget, audit)
 		loop.Runs = store
