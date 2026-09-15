@@ -40,6 +40,7 @@ import (
 	civ1 "github.com/novaforge/novaforge/gen/novaforge/ci/v1"
 	gatesv1 "github.com/novaforge/novaforge/gen/novaforge/gates/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
+	graphv1 "github.com/novaforge/novaforge/gen/novaforge/graph/v1"
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
 	mcpv1 "github.com/novaforge/novaforge/gen/novaforge/mcp/v1"
 	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
@@ -51,9 +52,13 @@ import (
 	"github.com/novaforge/novaforge/internal/ci"
 	"github.com/novaforge/novaforge/internal/database"
 	"github.com/novaforge/novaforge/internal/edge"
+	"github.com/novaforge/novaforge/internal/events"
 	"github.com/novaforge/novaforge/internal/gates"
 	"github.com/novaforge/novaforge/internal/gitops"
+	"github.com/novaforge/novaforge/internal/graph"
 	"github.com/novaforge/novaforge/internal/identity"
+	"github.com/novaforge/novaforge/internal/indexing"
+	"github.com/novaforge/novaforge/internal/knowledge"
 	"github.com/novaforge/novaforge/internal/mcp"
 	"github.com/novaforge/novaforge/internal/reviews"
 	"github.com/novaforge/novaforge/internal/secrets"
@@ -96,8 +101,48 @@ type Platform struct {
 	// CI is nil unless TEST_S3_ENDPOINT is set; RequireCI skips without it.
 	CI civ1.CIServiceClient
 
+	Graph     graphv1.GraphServiceClient
+	GraphAddr string
+
 	AgentStore *agents.Store
 	CIStore    *ci.Store
+
+	indexer *indexing.Indexer
+}
+
+// fixedEmbedder stands in for the embedding model: every text gets the same
+// unit vector of the width the schema stores.
+type fixedEmbedder struct{}
+
+func (fixedEmbedder) Embed(_ context.Context, texts []string) ([][]float32, error) {
+	out := make([][]float32, len(texts))
+	for i := range texts {
+		v := make([]float32, graph.EmbeddingDim)
+		v[0] = 1
+		out[i] = v
+	}
+	return out, nil
+}
+
+// MCPClients are the plain service clients mcp-server's backend is built on,
+// exactly as cmd/mcp-server dials them: no credential of their own.
+func (p *Platform) MCPClients() mcp.PlatformClients {
+	return mcp.PlatformClients{
+		Identity: p.Identity, Git: p.Git, Work: p.Work, Reviews: p.Reviews, Gates: p.Gates, CI: p.CI, Graph: p.Graph,
+	}
+}
+
+// Index indexes repo's main branch from its first commit to head, as the
+// indexer does for a push event, through the real git service.
+func (p *Platform) Index(t testing.TB, org Org, repo Repo, head string) {
+	t.Helper()
+	err := p.indexer.HandlePush(context.Background(), events.PushEvent{
+		OrgID: uuid.MustParse(org.ID), RepoID: uuid.MustParse(repo.ID), RepoName: repo.Name,
+		Ref: "refs/heads/main", OldSHA: strings.Repeat("0", 40), NewSHA: head,
+	})
+	if err != nil {
+		t.Fatalf("platformtest: index %s: %v", repo.Name, err)
+	}
 }
 
 // Start brings the platform up for t and tears it down when t ends.
@@ -221,9 +266,20 @@ func Start(t testing.TB) *Platform {
 		ciEdge = civ1.NewCIServiceClient(dial(t, p.CIAddr, edge.ForwardCredential))
 	}
 
-	p.MCPServer = mcp.NewServer(mcp.NewPlatformBackend(mcp.PlatformClients{
-		Identity: p.Identity, Git: p.Git, Work: p.Work, Reviews: p.Reviews, Gates: p.Gates, CI: p.CI,
-	}))
+	// engineering-graph, answering lexically: there is no embedding model in a
+	// test process, and the service's own fallback is what it runs without one.
+	graphStore := graph.NewStore(pool)
+	graphSrv := graph.NewGRPCServer(graphStore, graph.NewVectorStore(pool), knowledge.NewStore(pool), workStore, nil, nil)
+	p.GraphAddr = serve(t, func(s *grpc.Server) { graphv1.RegisterGraphServiceServer(s, graphSrv) }, interceptor)
+	p.Graph = graphv1.NewGraphServiceClient(dial(t, p.GraphAddr, nil))
+	// The indexer stores every chunk with an embedding (the column is NOT
+	// NULL), so it is given the one double this package carries: a
+	// deterministic stand-in for the embedding model, which a test process
+	// cannot reach. Search is then answered lexically by the real service.
+	p.indexer = &indexing.Indexer{Git: p.Git, Graph: graphStore, Vectors: graph.NewVectorStore(pool),
+		Embedder: fixedEmbedder{}, HMACSecret: HMACSecret}
+
+	p.MCPServer = mcp.NewServer(mcp.NewPlatformBackend(p.MCPClients()))
 	mcpHTTP := httptest.NewServer(p.MCPServer)
 	t.Cleanup(mcpHTTP.Close)
 	p.MCPURL = mcpHTTP.URL
@@ -286,6 +342,8 @@ func migrateAll(t testing.TB, url string) {
 		{"agents", func() error { return database.Migrate(url, "agents", agents.MigrationsFS) }},
 		{"ci", func() error { return database.Migrate(url, "ci", ci.MigrationsFS) }},
 		{"mcp", func() error { return database.Migrate(url, "mcp", mcp.MigrationsFS) }},
+		{"graph", func() error { return database.Migrate(url, "graph", graph.MigrationsFS) }},
+		{"knowledge", func() error { return database.Migrate(url, "knowledge", knowledge.MigrationsFS) }},
 	} {
 		if err := step.apply(); err != nil {
 			// The dev database is shared by every branch under development. A
