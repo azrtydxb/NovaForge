@@ -181,11 +181,11 @@ criteria:
       - ./internal/runner TestArtifactsRoundTripThroughOutput
     e2e:
       - script: tests/e2e/work_ci_test.sh
-        step: "4. pushing a workflow schedules a CI run"
+        step: "5. pushing a workflow schedules a CI run"
       - script: tests/e2e/work_ci_test.sh
-        step: "5. the run reaches a terminal state"
+        step: "6. the run reaches a terminal state"
       - script: tests/e2e/work_ci_test.sh
-        step: "6. the job log and artifact are retrievable"
+        step: "7. the job log and artifact are retrievable"
 
   S-6/TestAgentCIJob:
     status: covered
@@ -276,13 +276,18 @@ criteria:
         step: "7. the agent actually did the work"
 
   S-10/TestGateBlocksMerge:
-    status: partial
+    status: covered
     note: >-
-      The controller refuses a failing, missing or stale gate and the merger
-      refuses when a stubbed checker says no, but no test joins the two through
-      work-reviews' real gate client, no run is authored by an agent that
-      declared completion, and no e2e step attempts a merge.
+      TestGateBlocksMerge runs the merge path as deployed — identity,
+      git-platform, reviews and gates as real gRPC servers behind the real
+      svcauth interceptor — and merges through reviews.MergeRun and the
+      production GatesClient. An agent-authored run whose change fails its
+      required tests gate (real go test on the change's head) is refused with
+      an independent approval present, main does not move, and the same run
+      merges once the change is fixed. Writing it exposed that gates evaluated
+      the target branch, not the change. Not run on the cluster in this change.
     go_tests:
+      - ./internal/gates TestGateBlocksMerge
       - ./internal/reviews TestMergeBlockedByFailingGate
       - ./internal/gates TestMayMergeFalseWhenGateFails
       - ./internal/gates TestMayMergeFalseWhenGateMissing
@@ -290,14 +295,20 @@ criteria:
       - ./internal/reviews TestAllApprovalsStillRequireGates
 
   S-10/TestGateConfigSelfEditRejected:
-    status: partial
+    status: covered
     note: >-
-      Asserted at the controller only, and only for a source branch that
-      deletes its gates; weakening a gate (e.g. required false) is not tested
-      and no self-editing change is sent through Merger.Merge.
+      Definitions are read from the target ref, so a change cannot weaken the
+      gates judging itself; and any change touching .novaforge/gates (weakening
+      required, deleting a file, or proposed through ProposeGateChange) raises
+      a change_gate_config approval that MayMerge enforces through
+      Merger.Merge until an owner or admin who is not the author approves it
+      for the change's current head. Author, member and agent decisions are
+      refused. Not run on the cluster in this change.
     go_tests:
+      - ./internal/gates TestGateConfigSelfEditRejected
       - ./internal/gates TestGateConfigEditedInSourceIgnored
       - ./internal/gates TestResolveReadsFromTargetRefNotSource
+      - ./internal/gates TestChangedPathsReadsHeadersNotContent
 
   S-10/TestGateControllerUnreachableBlocks:
     status: covered
@@ -308,39 +319,68 @@ criteria:
       - ./internal/reviews TestMergeBlockedWhenControllerUnreachable
 
   S-11/TestApprovalPaths:
-    status: uncovered
+    status: covered
     note: >-
-      approvals.Decide is tested (schema change and production deploy paths,
-      and that model output is not an input) but nothing in production calls
-      it, so no real dependency addition, schema change or deploy follows an
-      approval path; adding a dependency has no test stating its decision.
+      The gate controller classifies each run's diff (merge-base) and decides
+      each governed action with approvals.Decide, whose inputs are the policy,
+      the action found in repository content and a capability-free grant —
+      never run titles, plans or other model output (a misleading title is
+      part of the test). Adding a dependency follows the policy path (no
+      person asked, dependencies gate made required, decision recorded as
+      proof); a schema change needs an owner/admin approval bound to the head,
+      denial blocks, a later push needs a new approval. Deploying to staging
+      or production has no action in this platform, so only Decide's rule is
+      asserted for it (TestDeployProductionForbiddenWithoutGrant). The
+      approvals inbox is exercised by gui_test.sh only as an endpoint that
+      answers. Not run on the cluster in this change.
     go_tests:
+      - ./internal/gates TestApprovalPaths
+      - ./internal/gates TestManifestParsersFindEveryDeclaredDependency
+      - ./internal/gates TestSchemaPaths
       - ./internal/approvals TestChangeDBSchemaRequiresArchitectureApproval
       - ./internal/approvals TestDeployProductionForbiddenWithoutGrant
       - ./internal/approvals TestPolicyIsNotDerivedFromModelOutput
       - ./internal/approvals TestRulesMatchDecide
+      - ./internal/gates TestResolveApprovalRequiresOrgScope
 
   S-12/TestShortLivedCredential:
-    status: partial
+    status: covered
     note: >-
-      Expiry and the production-secret denial are asserted on the real broker,
-      but "a job receives a credential" is not: ci.ResolveJobCredentials and
-      the gates IssueLease/Redeem RPCs have no production caller, and the
-      denial is a grant flag rather than a staging-scoped run.
+      The ci-runner pump asks the gates broker over real gRPC, as a service,
+      for a single-use lease per declared secret at dispatch; the job receives
+      the value in secret_env (a Kubernetes Secret in its pod), the lease is
+      spent and expires within 15 minutes, a staging job asking for a
+      production-only secret fails naming production, and a production job
+      gets production material only on the default branch. The value is
+      masked in the stored log. The underlying secret value is static: the
+      lease is short-lived, the credential it hands out is not rotated.
+      work_ci_test.sh step 8 proves a job reads a secret registered through
+      the API; it has not been run on the cluster in this change.
     go_tests:
+      - ./internal/ci TestShortLivedCredential
+      - ./internal/ci TestJobLogNeverCarriesItsCredential
+      - ./internal/runner TestPodReceivesCredentialsFromASecret
+      - ./internal/gates TestSecretsAreWriteOnlyAndBrokeredOnlyToCI
       - ./internal/secrets TestLeaseExpires
       - ./internal/secrets TestProductionSecretDeniedToStagingGrant
       - ./internal/secrets TestRedeemedTokenIsSingleUse
       - ./internal/secrets TestCrossRunRedeemDenied
+    e2e:
+      - script: tests/e2e/work_ci_test.sh
+        step: "4. a secret is registered through the API, and no read returns it"
+      - script: tests/e2e/work_ci_test.sh
+        step: "8. the secret job read its brokered credential, and its log never shows it"
 
   S-12/TestBrokerDownFailsClosed:
-    status: uncovered
+    status: covered
     note: >-
-      ResolveJobCredentials and StateAfterCredentialResolution are tested
-      against a stub broker but neither is called by the scheduler, dispatcher
-      or runner, so on the deployed platform a credential-needing job is not
-      blocked when the broker is down.
+      With the gates server stopped, the production pump leaves a
+      credential-needing job pending and undispatched, blocked with a reason
+      naming the broker and held back from re-claim for a while, and still
+      dispatches a credential-free job to the same runner. A refusal (as
+      opposed to an outage) fails the job.
     go_tests:
+      - ./internal/ci TestBrokerDownFailsClosed
       - ./internal/ci TestCredentialFreeJobRunsWhenBrokerDown
       - ./internal/ci TestCredentialJobBlocksWhenBrokerDown
       - ./internal/ci TestJobStaysQueuedNotFailed

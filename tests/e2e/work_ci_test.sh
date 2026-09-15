@@ -92,13 +92,30 @@ trap 'kubectl --context "$KUBE_CONTEXT" -n "$NS" delete deploy e2e-runner --igno
 kubectl --context "$KUBE_CONTEXT" -n "$NS" rollout status deploy/e2e-runner --timeout=180s >/dev/null || fail "the runner did not become ready"
 ok "runner registered into $ORG_ID"
 
-echo "== 4. pushing a workflow schedules a CI run =="
+echo "== 4. a secret is registered through the API, and no read returns it =="
 TOKEN="$(python3 -c "import json,os;print(json.load(open(os.environ['XDG_CONFIG_HOME']+'/novaforge/config.json'))['token'])")"
+# The value is made up at run time, so nothing credential-shaped is committed,
+# and only its hash is written into the workflow: the job proves it received
+# the value without the repository ever containing it.
+SECRET_VALUE="nfe2e-$(python3 -c 'import secrets;print(secrets.token_hex(16))')"
+SECRET_SHA="$(printf %s "$SECRET_VALUE" | shasum -a 256 | awk '{print $1}')"
+PUT="$(curl -fsS -X POST "http://$EDGE_IP:8080/api/v1/orgs/$ORG/secrets" \
+	-H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+	-d "{\"name\":\"NF_E2E_TOKEN\",\"environment\":\"staging\",\"value\":\"$SECRET_VALUE\"}")" ||
+	fail "registering a secret failed"
+printf '%s' "$PUT" | grep -q "$SECRET_VALUE" && fail "registering a secret echoed its value: $PUT"
+LISTED="$(curl -fsS "http://$EDGE_IP:8080/api/v1/orgs/$ORG/secrets" -H "Authorization: Bearer $TOKEN")" ||
+	fail "listing secrets failed"
+printf '%s' "$LISTED" | grep -q NF_E2E_TOKEN || fail "the registered secret is not listed: $LISTED"
+printf '%s' "$LISTED" | grep -q "$SECRET_VALUE" && fail "listing secrets returned a value"
+ok "secret NF_E2E_TOKEN registered; no read returns its value"
+
+echo "== 5. pushing a workflow schedules a CI run =="
 WORK="$(mktemp -d)"
 git clone "http://$USER:$TOKEN@$GIT_IP:8081/$ORG/$REPO.git" "$WORK/repo" 2>/dev/null || fail "clone failed"
 cd "$WORK/repo"
 mkdir -p .novaforge
-cat >.novaforge/workflow.yaml <<'YAML'
+cat >.novaforge/workflow.yaml <<YAML
 jobs:
   build:
     run: |
@@ -106,6 +123,12 @@ jobs:
       mkdir -p out && echo "artifact body" > out/report.txt
     artifacts:
       - out/report.txt
+  secret:
+    secrets: [NF_E2E_TOKEN]
+    run: |
+      got="\$(printf %s "\$NF_E2E_TOKEN" | sha256sum | cut -d' ' -f1)"
+      if [ "\$got" = "$SECRET_SHA" ]; then echo "credential received"; else echo "credential missing or wrong"; exit 1; fi
+      echo "careless print: \$NF_E2E_TOKEN"
 YAML
 git config user.email ci@example.com
 git config user.name "CI E2E"
@@ -116,7 +139,7 @@ PUSHED="$(git rev-parse HEAD)"
 cd - >/dev/null
 ok "pushed $PUSHED with a workflow"
 
-echo "== 5. the run reaches a terminal state =="
+echo "== 6. the run reaches a terminal state =="
 STATE=""
 for _ in $(seq 1 60); do
 	STATE="$(/tmp/nf ci runs "$REPO" 2>/dev/null | head -1 | awk '{print $2}' || true)"
@@ -129,10 +152,25 @@ done
 ok "run reached state: $STATE"
 [ "$STATE" = "success" ] || fail "the run did not succeed"
 
-echo "== 6. the job log and artifact are retrievable =="
+echo "== 7. the job log and artifact are retrievable =="
 /tmp/nf ci logs "$REPO" | grep -q "hello from novaforge ci" || fail "the job log does not contain the command's output"
 /tmp/nf ci artifacts "$REPO" | grep -q "report.txt" || fail "the artifact is not listed"
 ok "log and artifact retrievable"
+
+echo "== 8. the secret job read its brokered credential, and its log never shows it =="
+API="http://$EDGE_IP:8080/api/v1/orgs/$ORG/repos/$REPO/ci"
+RUN_ID="$(curl -fsS "$API/runs" -H "Authorization: Bearer $TOKEN" |
+	python3 -c 'import json,sys;print(json.load(sys.stdin)["runs"][0]["id"])')" || fail "listing CI runs failed"
+JOB_ID="$(curl -fsS "$API/runs/$RUN_ID" -H "Authorization: Bearer $TOKEN" |
+	python3 -c 'import json,sys;print(next(j["id"] for j in json.load(sys.stdin)["jobs"] if j["name"]=="secret"))')" ||
+	fail "the secret job is not part of the run"
+SECRET_LOG="$(curl -fsS "$API/jobs/$JOB_ID/logs" -H "Authorization: Bearer $TOKEN")" || fail "reading the secret job's log failed"
+printf '%s' "$SECRET_LOG" | grep -q "credential received" || fail "the job did not receive its credential: $SECRET_LOG"
+printf '%s' "$SECRET_LOG" | grep -q "$SECRET_VALUE" && fail "the credential appears in the job log"
+printf '%s' "$SECRET_LOG" | grep -q 'careless print: \*\*\*' || fail "the careless print was not masked: $SECRET_LOG"
+LEASES="$(curl -fsS "http://$EDGE_IP:8080/api/v1/orgs/$ORG/leases" -H "Authorization: Bearer $TOKEN")" || fail "listing leases failed"
+printf '%s' "$LEASES" | grep -q "$JOB_ID" || fail "no lease was recorded for the job: $LEASES"
+ok "credential brokered to the job, masked in its log, lease recorded"
 
 echo
 echo "PASS: Work Items and CI work end to end on the kw cluster."
