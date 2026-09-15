@@ -102,7 +102,7 @@ git checkout -qb feature/b
 echo "more" >>SECRET.md
 git commit -qam "B's feature"
 git push -q origin feature/b || fail "B's feature push failed"
-B_HEAD="$(git rev-parse main)"
+B_HEAD="$(git rev-parse HEAD)"
 cd - >/dev/null
 res="$(call POST "/orgs/$ORG_B/repos/$REPO_B/work" "$B_TOKEN" '{"type":"feature","goal":"B only","acceptance":["x"]}')"
 case "$res" in 2*) ;; *) fail "B's work item: $res" ;; esac

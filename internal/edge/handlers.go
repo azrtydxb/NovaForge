@@ -29,7 +29,7 @@ func Handlers(cfg Config) map[string]http.HandlerFunc {
 		addRunToolHandlers(h, cfg.Git, cfg.Reviews, cfg.Agents)
 		addWorkItemRunHandlers(h, cfg.Work, cfg.Agents)
 		addMaintenanceDecisionHandlers(h, cfg.Git, cfg.Work, cfg.Agents)
-		addWriteHandlers(h, cfg.Git, cfg.Work, cfg.CI)
+		addWriteHandlers(h, cfg.Git, cfg.Work, cfg.CI, cfg.Identity, cfg.Agents)
 	}
 	if cfg.Gates != nil {
 		addGateConfigHandlers(h, cfg.Gates)

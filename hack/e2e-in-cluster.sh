@@ -102,9 +102,46 @@ git config --global user.email e2e@novaforge.local
 git config --global user.name e2e
 "
 
+# The suites run detached inside the pod and this side polls with short calls.
+# One long exec per suite died whenever the workstation's link to the API
+# server dropped, taking the suite down with it even though it was running
+# fine in the cluster; a dropped poll is simply retried.
+# retry runs an in-pod command until it succeeds, riding out a dropped link.
+retry() {
+	local i
+	for i in $(seq 1 20); do
+		if k -n "$RUNNER_NS" exec e2e -- sh -c "$1" 2>/dev/null; then
+			return 0
+		fi
+		sleep 10
+	done
+	return 1
+}
+
+list="${suites[*]}"
+retry "cd /src && rm -rf /tmp/e2e && mkdir -p /tmp/e2e && nohup sh -c '
+for s in $list; do
+	if ${NF_KEEP_TEST_DATA:+NF_KEEP_TEST_DATA=1} GOFLAGS=-buildvcs=false bash tests/e2e/\${s}_test.sh >/tmp/e2e/\$s.log 2>&1; then
+		echo \"\$s PASS\" >>/tmp/e2e/results
+	else
+		echo \"\$s FAIL\" >>/tmp/e2e/results
+	fi
+done
+echo DONE >>/tmp/e2e/results
+' >/dev/null 2>&1 &" || { echo "could not start the suites in the pod" >&2; exit 1; }
+
+# A poll that reaches the pod and finds the suites unfinished is not a failure
+# to retry; only a poll that could not reach the pod is.
+while :; do
+	results="$(retry "cat /tmp/e2e/results 2>/dev/null || true")" || results=""
+	printf '%s\n' "$results" | grep -q '^DONE' && break
+	sleep 30
+done
+
 failed=0
 for s in "${suites[@]}"; do
-	if k -n "$RUNNER_NS" exec e2e -- sh -c "cd /src && GOFLAGS=-buildvcs=false bash tests/e2e/${s}_test.sh" >"/tmp/e2e.$s.log" 2>&1; then
+	retry "cat /tmp/e2e/$s.log" >"/tmp/e2e.$s.log" || true
+	if printf '%s\n' "$results" | grep -qx "$s PASS"; then
 		echo "$s: PASS — $(tail -1 "/tmp/e2e.$s.log")"
 	else
 		echo "$s: FAIL — $(grep -m1 '^FAIL' "/tmp/e2e.$s.log" || tail -1 "/tmp/e2e.$s.log")"

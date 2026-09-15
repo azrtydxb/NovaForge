@@ -15,7 +15,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	agentsv1 "github.com/novaforge/novaforge/gen/novaforge/agents/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
+	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
 	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
 	"github.com/novaforge/novaforge/internal/authz"
 	"github.com/novaforge/novaforge/internal/database"
@@ -104,7 +106,9 @@ func TestWorkItemLifecycle(t *testing.T) {
 		workv1.RegisterWorkServiceServer(s, work.NewGRPCServer(work.NewStore(pool)))
 	})
 	git := &gitDouble{repos: map[string]*gitv1.Repo{"platform": {Id: repoID.String(), Name: "platform", DefaultBranch: "main"}}}
-	h := edge.Handlers(edge.Config{Git: git, Work: workv1.NewWorkServiceClient(conn)})
+	members := &membersDouble{members: []*identityv1.OrgMember{{UserId: person.String(), Username: "pat", Role: "owner"}}}
+	agentsSvc := &agentsDouble{agents: []*agentsv1.Agent{{Id: agent.String(), Name: "builder", Role: "implementer", Enabled: true}}}
+	h := edge.Handlers(edge.Config{Git: git, Work: workv1.NewWorkServiceClient(conn), Identity: members, Agents: agentsSvc})
 	params := map[string]string{"org": "acme", "repo": "platform"}
 
 	rec := call(t, h, "createWorkItem", http.MethodPost, `{
@@ -179,4 +183,29 @@ func TestWorkItemLifecycle(t *testing.T) {
 	if got := read(); got.AssigneeID != agent.String() || got.AssigneeKind != "agent" {
 		t.Fatalf("after assigning an agent: %s %s", got.AssigneeKind, got.AssigneeID)
 	}
+
+	// Someone outside the organization, and another organization's agent, are
+	// refused: the work service would store any id it was given.
+	for _, bad := range []struct{ id, kind string }{
+		{uuid.NewString(), "user"}, {uuid.NewString(), "agent"}, {person.String(), "robot"},
+	} {
+		rec := call(t, h, "assignWorkItem", http.MethodPost,
+			`{"assignee_id":"`+bad.id+`","assignee_kind":"`+bad.kind+`"}`,
+			map[string]string{"org": "acme", "repo": "platform", "key": created.Key})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("assigning %s %s outside the organization: status %d, want 400", bad.kind, bad.id, rec.Code)
+		}
+	}
+	if got := read(); got.AssigneeID != agent.String() {
+		t.Fatalf("a refused assignment changed the assignee to %s", got.AssigneeID)
+	}
+}
+
+type membersDouble struct {
+	identityv1.IdentityServiceClient
+	members []*identityv1.OrgMember
+}
+
+func (m *membersDouble) ListOrgMembers(_ context.Context, _ *identityv1.ListOrgMembersRequest, _ ...grpc.CallOption) (*identityv1.ListOrgMembersResponse, error) {
+	return &identityv1.ListOrgMembersResponse{Members: m.members}, nil
 }

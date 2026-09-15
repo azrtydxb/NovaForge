@@ -1,12 +1,16 @@
 package edge
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 
+	agentsv1 "github.com/novaforge/novaforge/gen/novaforge/agents/v1"
 	civ1 "github.com/novaforge/novaforge/gen/novaforge/ci/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
+	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
 	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
 )
 
@@ -22,6 +26,8 @@ func addWriteHandlers(
 	g gitv1.GitServiceClient,
 	w workv1.WorkServiceClient,
 	ci civ1.CIServiceClient,
+	idc identityv1.IdentityServiceClient,
+	ag agentsv1.AgentServiceClient,
 ) {
 	repoID := func(r *http.Request) (string, error) {
 		resp, err := g.GetRepo(r.Context(), &gitv1.GetRepoRequest{Name: chi.URLParam(r, "repo")})
@@ -89,6 +95,14 @@ func addWriteHandlers(
 				AssigneeKind string `json:"assignee_kind"`
 			}
 			if err := decode(r, &req); err != nil {
+				WriteError(wr, http.StatusBadRequest, err)
+				return
+			}
+			// The assignee must belong to this organization. The work service
+			// stores whatever id it is given, so an item could be assigned to
+			// another organization's agent or to a stranger, who would then
+			// appear to hold work they cannot see.
+			if err := assigneeInOrg(r, idc, ag, req.AssigneeID, req.AssigneeKind); err != nil {
 				WriteError(wr, http.StatusBadRequest, err)
 				return
 			}
@@ -167,5 +181,40 @@ func commentJSON(c *workv1.Comment) map[string]any {
 		"author_kind": c.GetAuthorKind(),
 		"body":        c.GetBody(),
 		"created_at":  c.GetCreatedAt(),
+	}
+}
+
+// assigneeInOrg refuses an assignee who is not a member (a person) or an agent
+// of the organization the request is scoped to.
+func assigneeInOrg(r *http.Request, idc identityv1.IdentityServiceClient, ag agentsv1.AgentServiceClient, id, kind string) error {
+	switch kind {
+	case "user":
+		if idc == nil {
+			return errors.New("this deployment cannot check organization membership, so a person cannot be assigned")
+		}
+		members, err := idc.ListOrgMembers(r.Context(), &identityv1.ListOrgMembersRequest{Org: chi.URLParam(r, "org")})
+		if err != nil {
+			return fmt.Errorf("check membership: %w", err)
+		}
+		for _, m := range members.GetMembers() {
+			if m.GetUserId() == id {
+				return nil
+			}
+		}
+		return fmt.Errorf("user %q is not a member of this organization", id)
+	case "agent":
+		if ag == nil {
+			return errors.New("this deployment has no agent runtime to assign an agent from")
+		}
+		agents, err := ag.ListAgents(r.Context(), &agentsv1.ListAgentsRequest{})
+		if err != nil {
+			return fmt.Errorf("check agents: %w", err)
+		}
+		if !hasAgent(agents.GetAgents(), id) {
+			return fmt.Errorf("agent %q is not an agent of this organization", id)
+		}
+		return nil
+	default:
+		return fmt.Errorf("assignee_kind %q is not user or agent", kind)
 	}
 }
