@@ -7,12 +7,15 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	gatesv1 "github.com/novaforge/novaforge/gen/novaforge/gates/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	graphv1 "github.com/novaforge/novaforge/gen/novaforge/graph/v1"
 	"github.com/novaforge/novaforge/internal/approvals"
 	"github.com/novaforge/novaforge/internal/mcp"
+	"github.com/novaforge/novaforge/internal/tools"
 )
 
 // knowledgeLimit bounds a knowledge search. The screen showing these is a
@@ -144,15 +147,87 @@ func addPlatformHandlers(
 		out := make([]map[string]any, 0, len(resp.GetEntries()))
 		for _, e := range resp.GetEntries() {
 			out = append(out, map[string]any{
-				"id":         e.GetId(),
-				"key":        e.GetKey(),
-				"kind":       e.GetKind(),
-				"title":      e.GetTitle(),
-				"body":       e.GetBody(),
-				"created_at": e.GetCreatedAt(),
+				"id":            e.GetId(),
+				"key":           e.GetKey(),
+				"kind":          e.GetKind(),
+				"title":         e.GetTitle(),
+				"body":          e.GetBody(),
+				"created_at":    e.GetCreatedAt(),
+				"source_run_id": e.GetSourceRunId(),
 			})
 		}
-		WriteJSON(wr, http.StatusOK, map[string]any{"entries": out})
+		WriteJSON(wr, http.StatusOK, map[string]any{"entries": out, "mode": resp.GetMode()})
+	}
+
+	// recordKnowledge is how a person records a decision or a correction.
+	// The Knowledge screen told people they record knowledge "when they
+	// correct an agent", and offered no way to: only agents could write.
+	h["recordKnowledge"] = func(wr http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Kind  string `json:"kind"`
+			Title string `json:"title"`
+			Body  string `json:"body"`
+		}
+		if err := decode(r, &req); err != nil {
+			WriteError(wr, http.StatusBadRequest, err)
+			return
+		}
+		req.Title, req.Body = strings.TrimSpace(req.Title), strings.TrimSpace(req.Body)
+		if req.Title == "" || req.Body == "" {
+			WriteError(wr, http.StatusBadRequest, errKnowledgeFields)
+			return
+		}
+		rid, err := repoID(r)
+		if err != nil {
+			WriteError(wr, StatusFromGRPC(err), err)
+			return
+		}
+		key := tools.KnowledgeKey(req.Kind, req.Title)
+		resp, err := graph.RecordKnowledge(r.Context(), &graphv1.RecordKnowledgeRequest{
+			RepoId: rid, Key: key, Kind: req.Kind, Title: req.Title, Body: req.Body,
+		})
+		if err != nil {
+			WriteError(wr, StatusFromGRPC(err), err)
+			return
+		}
+		WriteJSON(wr, http.StatusCreated, map[string]any{"id": resp.GetId(), "key": key})
+	}
+
+	// getFileRelations is the Graph screen's question about a whole file.
+	h["getFileRelations"] = func(wr http.ResponseWriter, r *http.Request) {
+		path := strings.TrimSpace(r.URL.Query().Get("path"))
+		if path == "" {
+			WriteError(wr, http.StatusBadRequest, errMissingPath)
+			return
+		}
+		rid, err := repoID(r)
+		if err != nil {
+			WriteError(wr, StatusFromGRPC(err), err)
+			return
+		}
+		resp, err := graph.FileRelations(r.Context(), &graphv1.FileRelationsRequest{RepoId: rid, Path: path})
+		if status.Code(err) == codes.NotFound {
+			WriteJSON(wr, http.StatusOK, map[string]any{"indexed": false, "path": path})
+			return
+		}
+		if err != nil {
+			WriteError(wr, StatusFromGRPC(err), err)
+			return
+		}
+		symbols := make([]map[string]any, 0, len(resp.GetSymbols()))
+		for _, s := range resp.GetSymbols() {
+			symbols = append(symbols, symbolJSON(s))
+		}
+		WriteJSON(wr, http.StatusOK, map[string]any{
+			"indexed":     true,
+			"path":        path,
+			"symbols":     symbols,
+			"imports":     nodesJSON(resp.GetImports()),
+			"imported_by": nodesJSON(resp.GetImportedBy()),
+			"dependents":  nodesJSON(resp.GetDependents()),
+			"tests":       nodesJSON(resp.GetTests()),
+			"history":     nodesJSON(resp.GetHistory()),
+		})
 	}
 
 	// searchCode is the code index's only door for a person. The SearchCode
@@ -208,6 +283,10 @@ func addPlatformHandlers(
 		ctx := r.Context()
 
 		sym, err := graph.GetSymbol(ctx, &graphv1.GetSymbolRequest{RepoId: rid, Name: name})
+		if status.Code(err) == codes.NotFound {
+			// "Nothing by that name is indexed" is an answer, not a failure.
+			sym, err = &graphv1.GetSymbolResponse{}, nil
+		}
 		if err != nil {
 			WriteError(wr, StatusFromGRPC(err), err)
 			return
@@ -216,8 +295,10 @@ func addPlatformHandlers(
 			"symbol":          symbolJSON(sym.GetSymbol()),
 			"dependencies":    []map[string]any{},
 			"dependents":      []map[string]any{},
-			"tests":           []string{},
+			"tests":           []map[string]any{},
 			"last_changed_by": "",
+			"last_change":     nil,
+			"history":         []map[string]any{},
 		}
 		if sym.GetSymbol() == nil || sym.GetSymbol().GetName() == "" {
 			body["symbol"] = nil
@@ -235,10 +316,18 @@ func addPlatformHandlers(
 			body["dependents"] = nodesJSON(dep.GetNodes())
 		}
 		if tests, err := graph.TestsCovering(ctx, &graphv1.TestsCoveringRequest{RepoId: rid, Symbol: name}); err == nil {
-			body["tests"] = tests.GetTests()
+			body["tests"] = nodesJSON(tests.GetNodes())
 		}
 		if last, err := graph.LastChangedBy(ctx, &graphv1.LastChangedByRequest{RepoId: rid, Symbol: name}); err == nil {
 			body["last_changed_by"] = last.GetWorkItemKey()
+			body["last_change"] = map[string]any{
+				"work_item_key": last.GetWorkItemKey(),
+				"commit_sha":    last.GetCommitSha(),
+				"author":        last.GetAuthor(),
+				"changed_at":    last.GetChangedAt(),
+				"message":       last.GetMessage(),
+			}
+			body["history"] = nodesJSON(last.GetHistory())
 		}
 		WriteJSON(wr, http.StatusOK, body)
 	}
@@ -261,10 +350,33 @@ func symbolJSON(s *graphv1.Symbol) map[string]any {
 func nodesJSON(nodes []*graphv1.Node) []map[string]any {
 	out := make([]map[string]any, 0, len(nodes))
 	for _, n := range nodes {
-		out = append(out, map[string]any{"key": n.GetKey(), "kind": n.GetKind()})
+		// A node's key is an internal identifier. What a reader can use is
+		// in its attributes: where a symbol or file is, which package an
+		// import names, which commit and Work Item a change was.
+		attrs := n.GetAttrs()
+		out = append(out, map[string]any{
+			"key":           n.GetKey(),
+			"kind":          n.GetKind(),
+			"name":          attrs["name"],
+			"path":          attrs["path"],
+			"symbol_kind":   attrs["kind"],
+			"start_line":    attrs["start_line"],
+			"import_path":   attrs["import_path"],
+			"external":      attrs["external"] == "true",
+			"sha":           attrs["sha"],
+			"author":        attrs["author"],
+			"message":       attrs["message"],
+			"changed_at":    attrs["changed_at"],
+			"work_item_key": attrs["work_item_key"],
+		})
 	}
 	return out
 }
+
+var (
+	errMissingPath     = errors.New("path is required")
+	errKnowledgeFields = errors.New("title and body are required")
+)
 
 // humanAction renders an Action for a reader. The enum's values are wire
 // identifiers; a settings screen shows people what they mean.

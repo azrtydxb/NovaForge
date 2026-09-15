@@ -362,7 +362,7 @@ func (s *Server) Merge(ctx context.Context, req *gitv1.MergeRequest) (*gitv1.Mer
 		return nil, status.Error(codes.InvalidArgument, "source_ref and target_ref are required")
 	}
 
-	sha, err := mergeRefs(repo.Path(), req.GetSourceRef(), req.GetTargetRef(), req.GetMethod(), req.GetMessage())
+	old, sha, err := mergeRefs(repo.Path(), req.GetSourceRef(), req.GetTargetRef(), req.GetMethod(), req.GetMessage())
 	if err != nil {
 		if isGitNotFound(err) {
 			return nil, status.Errorf(codes.NotFound, "unknown ref %q or %q", req.GetSourceRef(), req.GetTargetRef())
@@ -371,6 +371,13 @@ func (s *Server) Merge(ctx context.Context, req *gitv1.MergeRequest) (*gitv1.Mer
 			return nil, status.Errorf(codes.FailedPrecondition, "merge conflict: %v", err)
 		}
 		return nil, status.Errorf(codes.Internal, "merge: %v", err)
+	}
+	// A fast-forward onto a branch already at the source's head moves
+	// nothing, and a push that moves nothing publishes nothing either.
+	if old != sha {
+		s.publishRefUpdate(ctx, scope, row.Name, RefUpdate{
+			Ref: refHeadsPrefix + strings.TrimPrefix(req.GetTargetRef(), refHeadsPrefix), OldSHA: old, NewSHA: sha,
+		})
 	}
 	return &gitv1.MergeResponse{MergeSha: sha}, nil
 }
@@ -521,15 +528,18 @@ func isMergeConflict(err error) bool {
 // then discarded: 1) clone repoPath to a temp dir, 2) check out targetRef,
 // 3) merge sourceRef using the requested method, 4) push the result back
 // onto targetRef in repoPath, 5) resolve the resulting sha.
-func mergeRefs(repoPath, sourceRef, targetRef, method, message string) (string, error) {
+//
+// It returns targetRef's head before the merge alongside the merge result,
+// so the merge can be published as the push of targetRef it is.
+func mergeRefs(repoPath, sourceRef, targetRef, method, message string) (oldSHA, newSHA string, err error) {
 	tmpDir, err := os.MkdirTemp("", "novaforge-merge-*")
 	if err != nil {
-		return "", fmt.Errorf("create temp clone dir: %w", err)
+		return "", "", fmt.Errorf("create temp clone dir: %w", err)
 	}
 	defer os.RemoveAll(tmpDir)
 
 	if _, err := run("", "clone", "--no-hardlinks", repoPath, tmpDir); err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	// A fresh clone only creates a local branch for the default branch
@@ -540,8 +550,13 @@ func mergeRefs(repoPath, sourceRef, targetRef, method, message string) (string, 
 	targetBranch := strings.TrimPrefix(targetRef, refHeadsPrefix)
 	sourceBranch := strings.TrimPrefix(sourceRef, refHeadsPrefix)
 	if _, err := run(tmpDir, "checkout", "-B", targetBranch, "origin/"+targetBranch); err != nil {
-		return "", err
+		return "", "", err
 	}
+	out, err := run(tmpDir, "rev-parse", "HEAD")
+	if err != nil {
+		return "", "", err
+	}
+	oldSHA = strings.TrimSpace(string(out))
 
 	if message == "" {
 		message = fmt.Sprintf("Merge %s into %s", sourceRef, targetRef)
@@ -552,30 +567,30 @@ func mergeRefs(repoPath, sourceRef, targetRef, method, message string) (string, 
 	switch method {
 	case "squash":
 		if _, err := runEnv(tmpDir, env, "merge", "--squash", sourceRemoteRef); err != nil {
-			return "", err
+			return "", "", err
 		}
 		if _, err := runEnv(tmpDir, env, "commit", "-m", message); err != nil {
-			return "", err
+			return "", "", err
 		}
 	case "ff-only":
 		if _, err := runEnv(tmpDir, env, "merge", "--ff-only", sourceRemoteRef); err != nil {
-			return "", err
+			return "", "", err
 		}
 	default: // "merge" or unset: an ordinary merge commit.
 		if _, err := runEnv(tmpDir, env, "merge", "--no-ff", "-m", message, sourceRemoteRef); err != nil {
-			return "", err
+			return "", "", err
 		}
 	}
 	targetRef = targetBranch
 
-	if _, err := run(tmpDir, "push", "origin", "HEAD:"+targetRef); err != nil {
-		return "", err
+	if _, err := run(tmpDir, "push", leaseFor(targetRef, oldSHA), "origin", "HEAD:"+refHeadsPrefix+targetRef); err != nil {
+		return "", "", err
 	}
-	out, err := run(tmpDir, "rev-parse", "HEAD")
+	out, err = run(tmpDir, "rev-parse", "HEAD")
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	return strings.TrimSpace(string(out)), nil
+	return oldSHA, strings.TrimSpace(string(out)), nil
 }
 
 // runEnv is run with extra leading git arguments (such as -c config

@@ -55,6 +55,10 @@ type Loop struct {
 	// may end "succeeded" (see verify.go). Production always sets it.
 	Criteria CriteriaSource
 
+	// Brief is the opening user message: the run's ids and everything
+	// Prepare assembled for it. Empty, the loop opens with the ids alone.
+	Brief string
+
 	// Price is the token price of the model this loop calls, when the
 	// deployment configures one. Without it no cost accrues, and StartRun has
 	// already refused any run that asked for a cost limit.
@@ -81,14 +85,19 @@ func (l *Loop) Execute(ctx context.Context, run agents.Run, reg *tools.Registry)
 	// repository, no branch — so it could not call work.get (which needs the
 	// work item's id) or any repo.* tool (which needs the repository), and
 	// had nothing to do but guess.
+	brief := l.Brief
+	if brief == "" {
+		brief = OpeningBrief(run)
+	}
 	messages := []provider.Message{
 		provider.SystemText("You are an autonomous NovaForge engineering agent. Use the " +
 			"provided tools to accomplish the assigned work item; call no tool that isn't offered. " +
-			"Start by reading the work item to learn what is being asked of you. " +
+			"The brief below carries the work item, the repository's own configuration and context, " +
+			"project knowledge recorded by earlier work, and code assembled for this work item. " +
 			"You may write only to the branch named below. When you stop calling tools, the run is " +
 			"verified against the work item's acceptance criteria using only the tool calls you made: " +
 			"anything you claim but did not do through a tool counts as not done."),
-		provider.UserText(OpeningBrief(run)),
+		provider.UserText(brief),
 	}
 
 	// The wall-clock limit is a deadline on every model and tool call, not

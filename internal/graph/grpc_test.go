@@ -262,14 +262,43 @@ func TestRecordAndSearchKnowledgeWithoutEmbedderDegrades(t *testing.T) {
 		t.Fatalf("expected a non-empty id")
 	}
 
-	// SearchKnowledge without an Embedder degrades to an empty result
-	// rather than failing the call.
+	// This test used to pin that SearchKnowledge answers nothing without an
+	// Embedder — which meant that on a deployment with no embedding model
+	// every recorded decision was invisible to people and agents alike. A
+	// query that shares no word with the entry still finds nothing.
 	searchResp, err := srv.SearchKnowledge(ctx, &graphv1.SearchKnowledgeRequest{RepoId: repoID.String(), Query: "anything"})
 	if err != nil {
 		t.Fatalf("SearchKnowledge: %v", err)
 	}
-	if len(searchResp.GetEntries()) != 0 {
-		t.Fatalf("expected SearchKnowledge to degrade to empty without an Embedder, got %+v", searchResp.GetEntries())
+	if len(searchResp.GetEntries()) != 0 || searchResp.GetMode() != "text" {
+		t.Fatalf("an unrelated query found %+v (mode %q), want nothing by text", searchResp.GetEntries(), searchResp.GetMode())
+	}
+
+	// With no query the newest entries are listed, and a query sharing the
+	// entry's words finds it by text.
+	listed, err := srv.SearchKnowledge(ctx, &graphv1.SearchKnowledgeRequest{RepoId: repoID.String()})
+	if err != nil {
+		t.Fatalf("SearchKnowledge (no query): %v", err)
+	}
+	if len(listed.GetEntries()) != 1 || listed.GetEntries()[0].GetId() != rec.GetId() || listed.GetMode() != "recent" {
+		t.Fatalf("listing = %+v (mode %q), want the recorded entry", listed.GetEntries(), listed.GetMode())
+	}
+	runID := uuid.New()
+	if _, err := srv.RecordKnowledge(ctx, &graphv1.RecordKnowledgeRequest{
+		RepoId: repoID.String(), Key: "decision/retries", Kind: "decision",
+		Title: "Webhook deliveries retry with backoff", Body: "Retries back off exponentially, capped at one hour.", SourceRunId: runID.String(),
+	}); err != nil {
+		t.Fatalf("RecordKnowledge with a source run: %v", err)
+	}
+	found, err := srv.SearchKnowledge(ctx, &graphv1.SearchKnowledgeRequest{RepoId: repoID.String(), Query: "how do webhook retries work"})
+	if err != nil {
+		t.Fatalf("SearchKnowledge (text): %v", err)
+	}
+	if len(found.GetEntries()) != 1 || found.GetEntries()[0].GetSourceRunId() != runID.String() {
+		t.Fatalf("text search = %+v, want the webhook decision recorded by run %s", found.GetEntries(), runID)
+	}
+	if _, err := srv.RecordKnowledge(ctx, &graphv1.RecordKnowledgeRequest{RepoId: repoID.String(), Key: "x", Kind: "musing", Title: "t", Body: "b"}); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("an unknown kind = %v, want InvalidArgument", err)
 	}
 }
 

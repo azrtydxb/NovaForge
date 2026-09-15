@@ -13,10 +13,14 @@
 package repoconfig
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 
 	"github.com/google/uuid"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"gopkg.in/yaml.v3"
@@ -35,7 +39,10 @@ const (
 // Project is the repository-wide configuration read from
 // .novaforge/project.yaml.
 type Project struct {
-	Name         string   `yaml:"name"`
+	Name string `yaml:"name"`
+	// Description is what every agent working on the repository is told
+	// about it before its first turn.
+	Description  string   `yaml:"description"`
 	DefaultAgent string   `yaml:"default_agent"`
 	Gates        []string `yaml:"gates"`
 }
@@ -43,10 +50,78 @@ type Project struct {
 // AgentDef is one agent definition read from a file under
 // .novaforge/agents/.
 type AgentDef struct {
-	Name  string   `yaml:"name"`
-	Role  string   `yaml:"role"`
-	Model string   `yaml:"model"`
-	Tools []string `yaml:"tools"`
+	// Path is the file the definition was read from; it is not a YAML field.
+	Path string `yaml:"-"`
+
+	Name  string `yaml:"name"`
+	Role  string `yaml:"role"`
+	Model string `yaml:"model"`
+	// Tools, when present, is the complete set of tools the agent is
+	// offered. A definition that omits the key leaves the agent every tool;
+	// one that lists none ("tools: []") leaves it none.
+	Tools        []string `yaml:"tools"`
+	Instructions string   `yaml:"instructions"`
+	Budget       Budget   `yaml:"budget"`
+}
+
+// Budget is a repository's limits for an agent's runs. A zero field sets no
+// limit of its own.
+type Budget struct {
+	WallclockSeconds int64 `yaml:"wallclock_seconds"`
+	Tokens           int64 `yaml:"tokens"`
+	CostMicros       int64 `yaml:"cost_micros"`
+}
+
+// decodeStrict parses YAML refusing keys the target does not declare. A
+// governance file with a misspelt key ("tool:" for "tools:") used to parse
+// cleanly into a definition that restricted nothing — the silent disabling of
+// enforcement a malformed configuration must never cause.
+func decodeStrict(content []byte, v any) error {
+	dec := yaml.NewDecoder(bytes.NewReader(content))
+	dec.KnownFields(true)
+	if err := dec.Decode(v); err != nil && !errors.Is(err, io.EOF) {
+		return err
+	}
+	return nil
+}
+
+// GitReader is the part of the git service Load reads through.
+type GitReader interface {
+	GetBlob(ctx context.Context, in *gitv1.GetBlobRequest, opts ...grpc.CallOption) (*gitv1.GetBlobResponse, error)
+	GetTree(ctx context.Context, in *gitv1.GetTreeRequest, opts ...grpc.CallOption) (*gitv1.GetTreeResponse, error)
+}
+
+// ReadContextDoc reads one context document at ref.
+func ReadContextDoc(ctx context.Context, git GitReader, repoID uuid.UUID, ref, path string) (string, error) {
+	blob, err := git.GetBlob(ctx, &gitv1.GetBlobRequest{Repo: repoID.String(), Ref: ref, Path: path})
+	if err != nil {
+		return "", fmt.Errorf("novaforge config: read %s: %w", path, err)
+	}
+	return string(blob.GetContent()), nil
+}
+
+// AgentFor picks the definition that governs an agent: the one naming it,
+// else the one for its role, else the project's default agent. It returns
+// nil when the repository defines none of those.
+func (c Config) AgentFor(name, role string) *AgentDef {
+	for i := range c.Agents {
+		if c.Agents[i].Name != "" && c.Agents[i].Name == name {
+			return &c.Agents[i]
+		}
+	}
+	for i := range c.Agents {
+		if c.Agents[i].Role != "" && c.Agents[i].Role == role {
+			return &c.Agents[i]
+		}
+	}
+	if c.Project.DefaultAgent != "" {
+		for i := range c.Agents {
+			if c.Agents[i].Name == c.Project.DefaultAgent {
+				return &c.Agents[i]
+			}
+		}
+	}
+	return nil
 }
 
 // GateDef is one gate definition read from a file under .novaforge/gates/.
@@ -75,22 +150,25 @@ type Config struct {
 //
 // A YAML parse failure anywhere returns a wrapped error containing
 // "novaforge config" and the zero Config: never a partially populated one.
-// A repository with no .novaforge/project.yaml returns the zero Config and
-// a nil error.
-func Load(ctx context.Context, git gitv1.GitServiceClient, orgID, repoID uuid.UUID, ref string) (Config, error) {
+// So does a key the file's shape does not declare. A repository with no
+// .novaforge directory returns the zero Config and a nil error.
+func Load(ctx context.Context, git GitReader, orgID, repoID uuid.UUID, ref string) (Config, error) {
 	repo := repoID.String()
 
-	projectBlob, err := git.GetBlob(ctx, &gitv1.GetBlobRequest{Repo: repo, Ref: ref, Path: projectPath})
-	if isNotFound(err) {
-		return Config{}, nil
-	}
-	if err != nil {
-		return Config{}, fmt.Errorf("novaforge config: read %s: %w", projectPath, err)
-	}
-
+	// A repository without project.yaml is still governed by whatever agent,
+	// gate and context files it does have. Returning the empty configuration
+	// whenever project.yaml was missing meant deleting that one file lifted
+	// every agent's tool restriction.
 	var project Project
-	if err := yaml.Unmarshal(projectBlob.Content, &project); err != nil {
-		return Config{}, fmt.Errorf("novaforge config: parse %s: %w", projectPath, err)
+	projectBlob, err := git.GetBlob(ctx, &gitv1.GetBlobRequest{Repo: repo, Ref: ref, Path: projectPath})
+	switch {
+	case isNotFound(err):
+	case err != nil:
+		return Config{}, fmt.Errorf("novaforge config: read %s: %w", projectPath, err)
+	default:
+		if err := decodeStrict(projectBlob.Content, &project); err != nil {
+			return Config{}, fmt.Errorf("novaforge config: parse %s: %w", projectPath, err)
+		}
 	}
 
 	agentDefs, err := loadAgents(ctx, git, repo, ref)
@@ -116,7 +194,7 @@ func Load(ctx context.Context, git gitv1.GitServiceClient, orgID, repoID uuid.UU
 	}, nil
 }
 
-func loadAgents(ctx context.Context, git gitv1.GitServiceClient, repo, ref string) ([]AgentDef, error) {
+func loadAgents(ctx context.Context, git GitReader, repo, ref string) ([]AgentDef, error) {
 	tree, err := git.GetTree(ctx, &gitv1.GetTreeRequest{Repo: repo, Ref: ref, Path: agentsDir})
 	if isNotFound(err) {
 		return nil, nil
@@ -137,9 +215,10 @@ func loadAgents(ctx context.Context, git gitv1.GitServiceClient, repo, ref strin
 			return nil, fmt.Errorf("novaforge config: read %s: %w", path, err)
 		}
 		var def AgentDef
-		if err := yaml.Unmarshal(blob.Content, &def); err != nil {
+		if err := decodeStrict(blob.Content, &def); err != nil {
 			return nil, fmt.Errorf("novaforge config: parse %s: %w", path, err)
 		}
+		def.Path = path
 		for _, tool := range def.Tools {
 			if !known[tool] {
 				return nil, fmt.Errorf("novaforge config: %s: agent %q names unknown tool %q", path, def.Name, tool)
@@ -150,7 +229,7 @@ func loadAgents(ctx context.Context, git gitv1.GitServiceClient, repo, ref strin
 	return defs, nil
 }
 
-func loadGates(ctx context.Context, git gitv1.GitServiceClient, repo, ref string) ([]GateDef, error) {
+func loadGates(ctx context.Context, git GitReader, repo, ref string) ([]GateDef, error) {
 	tree, err := git.GetTree(ctx, &gitv1.GetTreeRequest{Repo: repo, Ref: ref, Path: gatesDir})
 	if isNotFound(err) {
 		return nil, nil
@@ -178,7 +257,7 @@ func loadGates(ctx context.Context, git gitv1.GitServiceClient, repo, ref string
 	return defs, nil
 }
 
-func listContextDocs(ctx context.Context, git gitv1.GitServiceClient, repo, ref string) ([]string, error) {
+func listContextDocs(ctx context.Context, git GitReader, repo, ref string) ([]string, error) {
 	tree, err := git.GetTree(ctx, &gitv1.GetTreeRequest{Repo: repo, Ref: ref, Path: contextDir})
 	if isNotFound(err) {
 		return nil, nil

@@ -102,6 +102,7 @@ func TestRegistryHasExactlyThirteenTools(t *testing.T) {
 		"gate.status",
 		"git.commit",
 		"git.diff",
+		"knowledge.record",
 		"repo.get_dependencies",
 		"repo.get_symbol",
 		"repo.read_file",
@@ -115,6 +116,27 @@ func TestRegistryHasExactlyThirteenTools(t *testing.T) {
 	got := reg.Names()
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Names() = %v, want %v", got, want)
+	}
+}
+
+// TestRestrictRemovesUnlistedTools pins what a repository's agent definition
+// relies on: a tool it does not list is neither offered nor callable.
+func TestRestrictRemovesUnlistedTools(t *testing.T) {
+	reg := tools.NewRegistry(tools.Runtime{}, agents.NewAuditLog(nil))
+	reg.Restrict([]string{"work.get", "knowledge.record"})
+	if got := reg.Names(); !reflect.DeepEqual(got, []string{"knowledge.record", "work.get"}) {
+		t.Fatalf("Names() after Restrict = %v, want [knowledge.record work.get]", got)
+	}
+	// A removed tool's call is refused (and, since refusals are audited, the
+	// unscoped context here makes that audit write the error); what matters is
+	// that no handler runs and nothing succeeds.
+	if _, err := reg.Call(context.Background(), uuid.New(), "git.commit", []byte(`{}`)); err == nil {
+		t.Fatal("calling a removed tool succeeded")
+	}
+	unrestricted := tools.NewRegistry(tools.Runtime{}, agents.NewAuditLog(nil))
+	unrestricted.Restrict(nil)
+	if len(unrestricted.Names()) != len(tools.KnownToolNames()) {
+		t.Fatal("Restrict(nil) removed tools; a repository with no agent definition must not lose any")
 	}
 }
 

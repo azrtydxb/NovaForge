@@ -10,7 +10,6 @@ import (
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	graphv1 "github.com/novaforge/novaforge/gen/novaforge/graph/v1"
 	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
-	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
 	"github.com/novaforge/novaforge/internal/tools"
 )
 
@@ -94,13 +93,35 @@ func (a *gitAdapter) GetDependencies(ctx context.Context, repo, ref, path string
 	if a.graph == nil {
 		return nil, fmt.Errorf("repo.get_dependencies needs the engineering-graph service, which this deployment has not configured")
 	}
+	// The tool takes "a file path or symbol name", and the symbol query
+	// resolves only names: a path used to answer NotFound for every file.
+	if strings.Contains(path, "/") || strings.Contains(path, ".") {
+		rel, err := a.graph.FileRelations(ctx, &graphv1.FileRelationsRequest{RepoId: repo, Path: path})
+		if err != nil {
+			return nil, fmt.Errorf("dependencies of file %s in %s: %w", path, repo, err)
+		}
+		deps := make([]string, 0, len(rel.GetImports()))
+		for _, n := range rel.GetImports() {
+			deps = append(deps, "imports "+n.GetAttrs()["import_path"])
+		}
+		return deps, nil
+	}
 	resp, err := a.graph.Dependencies(ctx, &graphv1.DependenciesRequest{RepoId: repo, Symbol: path})
 	if err != nil {
 		return nil, fmt.Errorf("dependencies of %s in %s: %w", path, repo, err)
 	}
 	deps := make([]string, 0, len(resp.GetNodes()))
 	for _, n := range resp.GetNodes() {
-		deps = append(deps, n.GetKey())
+		// A node's key is an internal identifier; a reader wants where the
+		// dependency is.
+		label := n.GetAttrs()["path"]
+		if name := n.GetAttrs()["name"]; name != "" {
+			label += "#" + name
+		}
+		if label == "" {
+			label = n.GetKey()
+		}
+		deps = append(deps, label)
 	}
 	return deps, nil
 }
@@ -142,42 +163,6 @@ func (a *gitAdapter) Commit(ctx context.Context, repo, branch, message string, f
 		return "", fmt.Errorf("commit to %s on %s: %w", repo, branch, err)
 	}
 	return resp.GetSha(), nil
-}
-
-// workAdapter satisfies tools.WorkClient over the work-reviews gRPC client.
-// Both tools it backs — work.get and work.comment — are answered by
-// WorkService RPCs; a comment an agent writes lands on the Work Item's own
-// thread, attributed to the agent, which is where a reader looks for it.
-type workAdapter struct {
-	work workv1.WorkServiceClient
-}
-
-func newWorkAdapter(work workv1.WorkServiceClient) tools.WorkClient {
-	return &workAdapter{work: work}
-}
-
-func (a *workAdapter) Get(ctx context.Context, workItemID string) (tools.WorkItemSummary, error) {
-	resp, err := a.work.GetItem(ctx, &workv1.GetItemRequest{Id: workItemID})
-	if err != nil {
-		return tools.WorkItemSummary{}, fmt.Errorf("get work item %s: %w", workItemID, err)
-	}
-	item := resp.GetItem()
-	return tools.WorkItemSummary{
-		ID:          item.GetId(),
-		Key:         item.GetKey(),
-		Type:        item.GetType(),
-		Goal:        item.GetGoal(),
-		State:       item.GetState(),
-		Acceptance:  item.GetAcceptance(),
-		Constraints: item.GetConstraints(),
-	}, nil
-}
-
-func (a *workAdapter) Comment(ctx context.Context, workItemID, body string) error {
-	if _, err := a.work.AddComment(ctx, &workv1.AddCommentRequest{WorkItemId: workItemID, Body: body}); err != nil {
-		return fmt.Errorf("comment on work item %s: %w", workItemID, err)
-	}
-	return nil
 }
 
 // graphAdapter satisfies tools.GraphClient over the engineering-graph gRPC

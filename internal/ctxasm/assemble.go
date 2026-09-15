@@ -67,6 +67,11 @@ type Input struct {
 	Vectors     *graph.VectorStore
 	Knowledge   *knowledge.Store
 	Reranker    Reranker
+	// Embedder, when set, embeds the Work Item itself for the knowledge
+	// signal. Without it knowledge was found only through the embedding of
+	// a code chunk that happened to share a keyword with the goal — so a
+	// decision about something the index had no code for was never found.
+	Embedder graph.Embedder
 }
 
 // Assemble gathers candidates from six independent signals, reranks them
@@ -444,19 +449,58 @@ func historyCandidates(ctx context.Context, in Input) []Snippet {
 	return out
 }
 
+// maxKnowledge bounds how many knowledge entries one bundle carries.
+const maxKnowledge = 10
+
 // knowledgeCandidates searches persistent project knowledge for entries
-// near anchor, so a relevant prior decision or incident is included in the
-// bundle rather than left for the agent to rediscover the hard way.
+// related to the Work Item, so a relevant prior decision or incident is
+// included in the bundle rather than left for the agent to rediscover the
+// hard way.
+//
+// Two searches are merged. The semantic one finds entries near the Work
+// Item's own embedding (or, with no embedder, near a matching code chunk's).
+// The text one finds entries sharing the Work Item's words, stemmed — it is
+// the only search that can find an entry recorded without an embedding,
+// which is every entry on a deployment with no embedding model, and every
+// entry recorded while that model was unreachable. With only the semantic
+// search, such a decision was stored and never recalled.
 func knowledgeCandidates(ctx context.Context, in Input, anchor []float32) []knowledge.Entry {
-	if len(anchor) == 0 || in.Knowledge == nil {
+	if in.Knowledge == nil {
 		return nil
 	}
-	entries, err := in.Knowledge.Search(ctx, in.OrgID, in.RepoID, anchor, 10)
-	if err != nil {
-		log.Printf("ctxasm: knowledge signal: %v", err)
-		return nil
+	text := strings.TrimSpace(in.WorkItem.Goal + "\n" + strings.Join(in.WorkItem.Acceptance, "\n"))
+	if in.Embedder != nil && text != "" {
+		if vecs, err := in.Embedder.Embed(ctx, []string{text}); err == nil && len(vecs) == 1 {
+			anchor = vecs[0]
+		} else if err != nil {
+			log.Printf("ctxasm: embed work item for knowledge: %v", err)
+		}
 	}
-	return entries
+
+	var out []knowledge.Entry
+	seen := map[uuid.UUID]bool{}
+	add := func(entries []knowledge.Entry) {
+		for _, e := range entries {
+			if !seen[e.ID] && len(out) < maxKnowledge {
+				seen[e.ID] = true
+				out = append(out, e)
+			}
+		}
+	}
+	if matched, err := in.Knowledge.SearchText(ctx, in.OrgID, in.RepoID, text, maxKnowledge); err != nil {
+		log.Printf("ctxasm: knowledge text signal: %v", err)
+	} else {
+		add(matched)
+	}
+	if len(anchor) > 0 {
+		entries, err := in.Knowledge.SearchSimilar(ctx, in.OrgID, in.RepoID, anchor, maxKnowledge, semanticSimilarityFloor)
+		if err != nil {
+			log.Printf("ctxasm: knowledge signal: %v", err)
+		} else {
+			add(entries)
+		}
+	}
+	return out
 }
 
 func dedupeSnippets(in []Snippet) []Snippet {

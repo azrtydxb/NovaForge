@@ -120,6 +120,14 @@ var Specs = map[string]Spec{
 			`"work_item_id":{"type":"string"},"body":{"type":"string"}`,
 			`"work_item_id","body"`),
 	},
+	"knowledge.record": {
+		Description: "Record project knowledge that later runs on this repository will be given: a decision and why it was made, a pattern to follow, an incident, a correction, or an operational note. Record a decision when you choose between approaches; a work.comment is only seen on this one Work Item. Recording again with the same title revises the entry.",
+		Schema: obj(
+			`"kind":{"type":"string","enum":["decision","pattern","incident","correction","operational"]},`+
+				`"title":{"type":"string","description":"one line naming what was decided or learned"},`+
+				`"body":{"type":"string","description":"the decision or lesson and the reason for it, stated so a later reader without this run's context can apply it"}`,
+			`"kind","title","body"`),
+	},
 	"gate.status": {
 		Description: "Report the gate outcomes recorded for an Engineering Run.",
 		Schema:      obj(`"run_id":{"type":"string"}`, `"run_id"`),

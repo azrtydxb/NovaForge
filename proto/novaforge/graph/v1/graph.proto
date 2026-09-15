@@ -17,6 +17,11 @@ service GraphService {
   rpc AssembleContext(AssembleContextRequest) returns (AssembleContextResponse);
   rpc RecordKnowledge(RecordKnowledgeRequest) returns (RecordKnowledgeResponse);
   rpc SearchKnowledge(SearchKnowledgeRequest) returns (SearchKnowledgeResponse);
+  // FileRelations answers for a whole file what the four symbol queries
+  // answer for one symbol: what it imports, who imports its package, which
+  // code outside it depends on its symbols, which tests cover them, and the
+  // commits that changed it.
+  rpc FileRelations(FileRelationsRequest) returns (FileRelationsResponse);
 }
 
 message Symbol {
@@ -51,6 +56,8 @@ message KnowledgeEntry {
   string title = 4;
   string body = 5;
   string created_at = 6;
+  // The Agent Run that recorded the entry; empty when a person did.
+  string source_run_id = 7;
 }
 
 message ContextSnippet {
@@ -98,6 +105,9 @@ message TestsCoveringRequest {
 }
 message TestsCoveringResponse {
   repeated string tests = 1;
+  // The covering test functions themselves (name and path in attrs), where
+  // tests carries only their files.
+  repeated Node nodes = 2;
 }
 
 message LastChangedByRequest {
@@ -105,7 +115,28 @@ message LastChangedByRequest {
   string symbol = 2;
 }
 message LastChangedByResponse {
+  // Empty when the most recent change names no Work Item: a commit pushed
+  // straight to the default branch has none, and none is invented for it.
   string work_item_key = 1;
+  string commit_sha = 2;
+  string author = 3;
+  string changed_at = 4;
+  string message = 5;
+  // Every recorded change, most recent first (commit nodes).
+  repeated Node history = 6;
+}
+
+message FileRelationsRequest {
+  string repo_id = 1;
+  string path = 2;
+}
+message FileRelationsResponse {
+  repeated Symbol symbols = 1;
+  repeated Node imports = 2;
+  repeated Node imported_by = 3;
+  repeated Node dependents = 4;
+  repeated Node tests = 5;
+  repeated Node history = 6;
 }
 
 message SearchCodeRequest {
@@ -136,6 +167,9 @@ message RecordKnowledgeRequest {
   string kind = 3;
   string title = 4;
   string body = 5;
+  // Set by agent-runtime for an entry an Agent Run recorded, so the entry
+  // says which run's evidence it came from.
+  string source_run_id = 6;
 }
 message RecordKnowledgeResponse {
   string id = 1;
@@ -148,4 +182,7 @@ message SearchKnowledgeRequest {
 }
 message SearchKnowledgeResponse {
   repeated KnowledgeEntry entries = 1;
+  // "recent" (no query: newest first), "semantic" (nearest embeddings) or
+  // "text" (full-text match, used when no embedding model answered).
+  string mode = 2;
 }

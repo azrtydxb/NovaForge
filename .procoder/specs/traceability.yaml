@@ -381,66 +381,100 @@ criteria:
       - ./internal/mcp TestCallToolIsOrgScoped
 
   S-14/TestGraphQueries:
-    status: uncovered
+    status: covered
     note: >-
-      The three query RPCs work against edges a test inserts by hand, but no
-      production code writes depends_on, tested_by or changed_by edges (the
-      indexer passes nil edges), so on a real repository every query answers
-      empty.
+      A push through the real git service is indexed into real Postgres and the
+      graph's own RPCs answer, for a symbol, what depends on it, which test
+      functions cover it and which Work Item last changed it (named by the
+      commit message or merged agent branch), and those edges stay correct as
+      either end is re-indexed. "Which services depend on it" is answered at
+      the resolution the index has: the depending symbols and files, and the
+      files importing its package. Edges are extracted for Go only; Python,
+      Java and TypeScript files get symbols and chunks but no edges.
+      graph_test.sh has not yet been run against the cluster.
     go_tests:
+      - ./internal/indexing TestPushWritesDependencyTestAndChangeEdges
       - ./internal/graph TestDependentsAnswersForSymbol
       - ./internal/graph TestTestsCoveringAnswersForSymbol
       - ./internal/graph TestLastChangedByReturnsWorkItem
+    e2e:
+      - script: tests/e2e/graph_test.sh
+        step: "3. the symbol's dependents, tests and last change come from the push"
+      - script: tests/e2e/graph_test.sh
+        step: "4. a file's imports and importers"
 
   S-15/TestIndexUpdatedOnPush:
-    status: partial
+    status: covered
     note: >-
-      A push publishes its event and the indexer, reading through the real git
-      service with a service credential, replaces the symbols and chunks of
-      exactly the changed files. The dependency index is not implemented: the
-      indexer discards Parse's references and writes no edges. search_test.sh
-      has not yet been run against the cluster.
+      A push publishes its event (merges, commits and branch creations made
+      through git-platform publish the same event), and the indexer, reading
+      through the real git service with a service credential, replaces the
+      symbols, chunks and dependency edges of exactly the changed files of the
+      repository's default branch; a push to any other branch leaves the index
+      alone. search_test.sh and graph_test.sh have not yet been run against
+      the cluster.
     go_tests:
       - ./internal/gitops TestPushOverHTTPPublishesEvent
+      - ./internal/gitops TestMergeRPCPublishesPushEvent
+      - ./internal/gitops TestCreateCommitAndBranchRPCsPublishPushEvents
       - ./internal/indexing TestRunConsumesPushEventsAndAcks
       - ./internal/indexing TestFirstPushIsIndexedThroughTheRealGitService
       - ./internal/indexing TestIndexesOnlyChangedPaths
       - ./internal/indexing TestDeletedFileRemovesSymbols
       - ./internal/indexing TestParseRecordsReferences
+      - ./internal/indexing TestPushWritesDependencyTestAndChangeEdges
+      - ./internal/indexing TestIndexFollowsTheDefaultBranchOnly
     e2e:
       - script: tests/e2e/search_test.sh
         step: "3. the push is indexed with embeddings"
+      - script: tests/e2e/graph_test.sh
+        step: "5. a feature branch does not rewrite the default branch's index"
 
   S-16/TestContextBounded:
     status: covered
     note: >-
-      Proven at the component against real Postgres with a fake git client;
-      the production adapter in cmd/engineering-graph is untested and nothing
-      calls the AssembleContext RPC (see S-17).
+      Proven at the component against real Postgres with a fake git client.
+      The production adapter (ctxasm.NewAssembleFunc) is driven through the
+      AssembleContext RPC by agentrun's TestKnowledgeRecall, which also bounds
+      the brief it lands in.
     go_tests:
       - ./internal/ctxasm TestBundleRespectsTokenBudget
       - ./internal/ctxasm TestBundleExcludesUnrelatedFiles
       - ./internal/ctxasm TestStaleIndexDegradesNotFails
+      - ./internal/agentrun TestKnowledgeRecall
 
   S-17/TestKnowledgeRecall:
-    status: uncovered
+    status: covered
     note: >-
-      Knowledge appears in a ctxasm bundle, but agent runs never assemble
-      context — the AssembleContext RPC has no caller and the opening brief
-      carries only ids — so a recorded decision does not reach a later agent
-      run's context.
+      One run records a decision with knowledge.record through the real graph
+      service; a later related run's opening brief — prepared by the Runner
+      agent-runtime calls, through AssembleContext over gRPC on real Postgres —
+      carries it, and an unrelated run's does not. The model is an in-process
+      double that records what it was sent. Knowledge is recalled by text and,
+      where an embedding model answers, by meaning; the cluster run is not yet
+      proven.
     go_tests:
+      - ./internal/agentrun TestKnowledgeRecall
       - ./internal/ctxasm TestKnowledgeIsIncluded
       - ./internal/knowledge TestRecordAndSearch
+      - ./internal/graph TestRecordAndSearchKnowledgeWithoutEmbedderDegrades
+    e2e:
+      - script: tests/e2e/graph_test.sh
+        step: "6. recorded knowledge is listed and found"
 
   S-18/TestRepoConfigGoverns:
-    status: partial
+    status: covered
     note: >-
       Gates are governed by .novaforge/gates from the target ref and malformed
-      gate config fails closed, in production. Agent behaviour is not:
-      repoconfig.Load has no production caller, so .novaforge/agents and
-      project.yaml govern nothing and their loud failure is never seen.
+      gate config fails closed. Agent runs are governed by .novaforge at the
+      default branch's head, through the real git service: the agent
+      definition's tools are the only ones offered or callable, its model is
+      requested and its budget applied, project.yaml and context documents are
+      in the brief, and a malformed definition fails the run before any model
+      call with the parse error as its recorded summary.
     go_tests:
+      - ./internal/agentrun TestRepoConfigGoverns
+      - ./internal/tools TestRestrictRemovesUnlistedTools
       - ./internal/gates TestResolveReadsFromTargetRefNotSource
       - ./internal/gates TestMalformedGateConfigFailsClosed
       - ./internal/gates TestUnknownGateNameRejected

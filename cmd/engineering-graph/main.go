@@ -122,7 +122,7 @@ func main() {
 		cancelProbe()
 	}
 
-	assemble := newAssembleFunc(gitClient, graphStore, vectors, knowledgeStore, workStore)
+	assemble := ctxasm.NewAssembleFunc(gitClient, graphStore, vectors, knowledgeStore, workStore, embedder, cfg.HMACSecret)
 
 	grpcServer := graph.NewGRPCServer(graphStore, vectors, knowledgeStore, workStore, embedder, assemble)
 
@@ -167,44 +167,6 @@ func main() {
 	if err := service.Serve(ctx, cfg, srv, check); err != nil {
 		log.Fatalf("engineering-graph: serve: %v", err)
 	}
-}
-
-// newAssembleFunc adapts ctxasm.Assemble into a graph.AssembleContextFunc:
-// it resolves the named Work Item, runs the six-signal assembly, and
-// converts the result into graph's gRPC-boundary shapes.
-func newAssembleFunc(gitClient gitv1.GitServiceClient, graphStore *graph.Store, vectors *graph.VectorStore, knowledgeStore *knowledge.Store, workStore *work.Store) graph.AssembleContextFunc {
-	return func(ctx context.Context, orgID, repoID uuid.UUID, workItemKey string, tokenBudget int) (graph.ContextBundle, error) {
-		item, err := workStore.GetByKey(ctx, orgID, workItemKey)
-		if err != nil {
-			return graph.ContextBundle{}, fmt.Errorf("resolve work item %q: %w", workItemKey, err)
-		}
-		bundle, err := ctxasm.Assemble(ctx, ctxasm.Input{
-			OrgID:       orgID,
-			RepoID:      repoID,
-			WorkItem:    item,
-			TokenBudget: tokenBudget,
-			Git:         gitClient,
-			Graph:       graphStore,
-			Vectors:     vectors,
-			Knowledge:   knowledgeStore,
-		})
-		if err != nil {
-			return graph.ContextBundle{}, err
-		}
-		return toGraphBundle(bundle), nil
-	}
-}
-
-func toGraphBundle(b ctxasm.Bundle) graph.ContextBundle {
-	files := make([]graph.ContextSnippet, len(b.Files))
-	for i, f := range b.Files {
-		files[i] = graph.ContextSnippet{Path: f.Path, StartLine: f.StartLine, EndLine: f.EndLine, Text: f.Text, Signal: f.Signal}
-	}
-	entries := make([]graph.KnowledgeSummary, len(b.Knowledge))
-	for i, e := range b.Knowledge {
-		entries[i] = graph.KnowledgeSummary{ID: e.ID.String(), Key: e.Key, Kind: e.Kind, Title: e.Title, Body: e.Body, CreatedAt: e.CreatedAt}
-	}
-	return graph.ContextBundle{Files: files, Knowledge: entries, Tests: b.Tests, TokensEstimated: b.TokensEstimated}
 }
 
 // authInterceptor resolves the caller from the request's "authorization"

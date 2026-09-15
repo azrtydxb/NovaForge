@@ -2,8 +2,9 @@ package graph
 
 import (
 	"context"
+	"errors"
 	"log"
-	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -44,6 +45,8 @@ type KnowledgeSummary struct {
 	Title     string
 	Body      string
 	CreatedAt time.Time
+	// SourceRunID is the Agent Run that recorded the entry, "" for a person.
+	SourceRunID string
 }
 
 // ContextBundle mirrors ctxasm.Bundle's shape for the gRPC boundary.
@@ -159,7 +162,10 @@ func (s *GRPCServer) resolveSymbol(ctx context.Context, orgID, repoID uuid.UUID,
 		SELECT id, org_id, kind, key, attrs
 		FROM graph.graph_nodes
 		WHERE org_id = $1 AND repo_id = $2 AND kind = 'symbol' AND attrs->>'name' = $3
-		ORDER BY id
+		-- A name defined both in code and in a test helper means the code:
+		-- that is the symbol whose dependents and tests a caller is asking
+		-- about.
+		ORDER BY right(attrs->>'path', 8) = '_test.go', attrs->>'path', id
 		LIMIT 1
 	`, orgID, repoID, name)
 	n, err := scanNode(row)
@@ -277,14 +283,62 @@ func (s *GRPCServer) TestsCovering(ctx context.Context, req *graphv1.TestsCoveri
 		return nil, status.Errorf(codes.Internal, "tests covering: %v", err)
 	}
 	resp := &graphv1.TestsCoveringResponse{Tests: make([]string, 0, len(neighbours))}
+	seen := map[string]bool{}
 	for _, n := range neighbours {
+		resp.Nodes = append(resp.Nodes, toProtoNode(n))
 		path := n.Attrs["path"]
 		if path == "" {
 			path = n.Key
 		}
-		resp.Tests = append(resp.Tests, path)
+		// Two test functions in one file cover the symbol once, as a file.
+		if !seen[path] {
+			seen[path] = true
+			resp.Tests = append(resp.Tests, path)
+		}
 	}
 	return resp, nil
+}
+
+// FileRelations answers for a file what the symbol queries answer for one
+// symbol.
+func (s *GRPCServer) FileRelations(ctx context.Context, req *graphv1.FileRelationsRequest) (*graphv1.FileRelationsResponse, error) {
+	orgID, err := callerOrg(ctx)
+	if err != nil {
+		return nil, err
+	}
+	repoID, err := parseRepoID(req.GetRepoId())
+	if err != nil {
+		return nil, err
+	}
+	if req.GetPath() == "" {
+		return nil, status.Error(codes.InvalidArgument, "path is required")
+	}
+	ctx = authz.WithScope(ctx, authz.Scope{OrgID: orgID, ActorKind: "service"})
+	rel, err := s.Store.FileRelationsFor(ctx, orgID, repoID, req.GetPath())
+	if errors.Is(err, ErrFileNotIndexed) {
+		return nil, status.Errorf(codes.NotFound, "no file %q is indexed in this repository", req.GetPath())
+	}
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "file relations: %v", err)
+	}
+	resp := &graphv1.FileRelationsResponse{}
+	for _, n := range rel.Symbols {
+		resp.Symbols = append(resp.Symbols, toProtoSymbol(n))
+	}
+	resp.Imports = toProtoNodes(rel.Imports)
+	resp.ImportedBy = toProtoNodes(rel.ImportedBy)
+	resp.Dependents = toProtoNodes(rel.Dependents)
+	resp.Tests = toProtoNodes(rel.Tests)
+	resp.History = toProtoNodes(rel.History)
+	return resp, nil
+}
+
+func toProtoNodes(nodes []Node) []*graphv1.Node {
+	out := make([]*graphv1.Node, 0, len(nodes))
+	for _, n := range nodes {
+		out = append(out, toProtoNode(n))
+	}
+	return out
 }
 
 // LastChangedBy returns the key of the Work Item whose changed_by edge to
@@ -310,14 +364,25 @@ func (s *GRPCServer) LastChangedBy(ctx context.Context, req *graphv1.LastChanged
 	if len(neighbours) == 0 {
 		return nil, status.Errorf(codes.NotFound, "no changed_by edges for symbol %q", req.GetSymbol())
 	}
-	sort.Slice(neighbours, func(i, j int) bool {
-		return neighbours[i].Attrs["changed_at"] > neighbours[j].Attrs["changed_at"]
-	})
-	key := neighbours[0].Attrs["key"]
-	if key == "" {
-		key = neighbours[0].Key
+	SortHistory(neighbours)
+	latest := neighbours[0]
+	resp := &graphv1.LastChangedByResponse{History: toProtoNodes(neighbours)}
+	switch latest.Kind {
+	case "commit":
+		// The indexer's edges point at commits; the Work Item is whatever
+		// the commit names, and nothing when it names none.
+		resp.WorkItemKey = latest.Attrs["work_item_key"]
+		resp.CommitSha = latest.Attrs["sha"]
+		resp.Author = latest.Attrs["author"]
+		resp.Message = latest.Attrs["message"]
+	default:
+		resp.WorkItemKey = latest.Attrs["key"]
+		if resp.WorkItemKey == "" {
+			resp.WorkItemKey = latest.Key
+		}
 	}
-	return &graphv1.LastChangedByResponse{WorkItemKey: key}, nil
+	resp.ChangedAt = latest.Attrs["changed_at"]
+	return resp, nil
 }
 
 // SearchCode answers a code search: semantically when an Embedder is
@@ -423,13 +488,23 @@ func toProtoBundle(b ContextBundle) *graphv1.ContextBundle {
 	for _, k := range b.Knowledge {
 		out.Knowledge = append(out.Knowledge, &graphv1.KnowledgeEntry{
 			Id: k.ID, Key: k.Key, Kind: k.Kind, Title: k.Title, Body: k.Body, CreatedAt: k.CreatedAt.Format(time.RFC3339),
+			SourceRunId: k.SourceRunID,
 		})
 	}
 	return out
 }
 
-// RecordKnowledge records a new project knowledge entry, embedding it when
-// an Embedder is configured so it can later be found by SearchKnowledge.
+// knowledgeKinds are the kinds the knowledge schema's CHECK constraint
+// accepts; anything else is the caller's error, not an internal one.
+var knowledgeKinds = map[string]bool{
+	"decision": true, "pattern": true, "incident": true, "correction": true, "operational": true,
+}
+
+// RecordKnowledge records a project knowledge entry, embedding it when an
+// Embedder is configured so it can also be found by meaning. An entry is
+// recorded without a vector when the embedder is absent or fails: text
+// search still finds it, and losing a decision because a model was down
+// would be the wrong trade.
 func (s *GRPCServer) RecordKnowledge(ctx context.Context, req *graphv1.RecordKnowledgeRequest) (*graphv1.RecordKnowledgeResponse, error) {
 	orgID, err := callerOrg(ctx)
 	if err != nil {
@@ -439,6 +514,20 @@ func (s *GRPCServer) RecordKnowledge(ctx context.Context, req *graphv1.RecordKno
 	if err != nil {
 		return nil, err
 	}
+	if !knowledgeKinds[req.GetKind()] {
+		return nil, status.Errorf(codes.InvalidArgument, "kind %q is not one of decision, pattern, incident, correction, operational", req.GetKind())
+	}
+	if req.GetKey() == "" || req.GetTitle() == "" || req.GetBody() == "" {
+		return nil, status.Error(codes.InvalidArgument, "key, title and body are required")
+	}
+	var sourceRun *uuid.UUID
+	if raw := req.GetSourceRunId(); raw != "" {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "invalid source_run_id %q: %v", raw, err)
+		}
+		sourceRun = &id
+	}
 	ctx = authz.WithScope(ctx, authz.Scope{OrgID: orgID, ActorKind: "service"})
 
 	var embedding []float32
@@ -446,16 +535,19 @@ func (s *GRPCServer) RecordKnowledge(ctx context.Context, req *graphv1.RecordKno
 		vecs, err := s.Embedder.Embed(ctx, []string{req.GetTitle() + "\n" + req.GetBody()})
 		if err == nil && len(vecs) == 1 {
 			embedding = vecs[0]
+		} else if err != nil {
+			log.Printf("graph: knowledge %q recorded without an embedding: %v", req.GetKey(), err)
 		}
 	}
 
 	entry, err := s.Knowledge.Record(ctx, knowledge.Entry{
-		OrgID:  orgID,
-		RepoID: repoID,
-		Key:    req.GetKey(),
-		Kind:   req.GetKind(),
-		Title:  req.GetTitle(),
-		Body:   req.GetBody(),
+		OrgID:       orgID,
+		RepoID:      repoID,
+		Key:         req.GetKey(),
+		Kind:        req.GetKind(),
+		Title:       req.GetTitle(),
+		Body:        req.GetBody(),
+		SourceRunID: sourceRun,
 	}, embedding)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "record knowledge: %v", err)
@@ -463,10 +555,20 @@ func (s *GRPCServer) RecordKnowledge(ctx context.Context, req *graphv1.RecordKno
 	return &graphv1.RecordKnowledgeResponse{Id: entry.ID.String()}, nil
 }
 
-// SearchKnowledge searches project knowledge semantically. It requires an
-// Embedder to turn req.Query into a vector; without one it returns no
-// results rather than failing, since text-only knowledge search is not
-// supported.
+// knowledgeSimilarityFloor is the cosine similarity below which an entry is
+// not offered as a match for a person's query. A top-k with no floor always
+// answers, with whatever happens to be least far away.
+const knowledgeSimilarityFloor = 0.3
+
+// SearchKnowledge answers a person's or an agent's question of project
+// knowledge. With no query it lists the newest entries — the Knowledge
+// screen's first view, which answered nothing at all before, because an
+// empty query has no meaning to embed. With a query it merges entries near it
+// by meaning (when an embedding model answers) with entries sharing its
+// words, and says in mode which search produced the answer.
+//
+// It used to answer nothing without an embedder, so on a deployment with no
+// embedding model every recorded decision was invisible to everyone.
 func (s *GRPCServer) SearchKnowledge(ctx context.Context, req *graphv1.SearchKnowledgeRequest) (*graphv1.SearchKnowledgeResponse, error) {
 	orgID, err := callerOrg(ctx)
 	if err != nil {
@@ -476,27 +578,60 @@ func (s *GRPCServer) SearchKnowledge(ctx context.Context, req *graphv1.SearchKno
 	if err != nil {
 		return nil, err
 	}
-	if s.Embedder == nil {
-		return &graphv1.SearchKnowledgeResponse{}, nil
-	}
 	k := int(req.GetK())
 	if k <= 0 {
 		k = defaultSearchLimit
 	}
-	vecs, err := s.Embedder.Embed(ctx, []string{req.GetQuery()})
-	if err != nil || len(vecs) != 1 {
-		return &graphv1.SearchKnowledgeResponse{}, nil
-	}
-	ctx = authz.WithScope(ctx, authz.Scope{OrgID: orgID, ActorKind: "service"})
-	entries, err := s.Knowledge.Search(ctx, orgID, repoID, vecs[0], k)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "search knowledge: %v", err)
-	}
+	query := strings.TrimSpace(req.GetQuery())
+	scoped := authz.WithScope(ctx, authz.Scope{OrgID: orgID, ActorKind: "service"})
 	resp := &graphv1.SearchKnowledgeResponse{}
+
+	var entries []knowledge.Entry
+	if query == "" {
+		resp.Mode = "recent"
+		entries, err = s.Knowledge.List(scoped, orgID, repoID, k)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "list knowledge: %v", err)
+		}
+	} else {
+		resp.Mode = "text"
+		seen := map[uuid.UUID]bool{}
+		if s.Embedder != nil {
+			vecs, embedErr := s.Embedder.Embed(ctx, []string{query})
+			if embedErr == nil && len(vecs) == 1 {
+				near, err := s.Knowledge.SearchSimilar(scoped, orgID, repoID, vecs[0], k, knowledgeSimilarityFloor)
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "search knowledge: %v", err)
+				}
+				resp.Mode = "semantic"
+				for _, e := range near {
+					seen[e.ID] = true
+					entries = append(entries, e)
+				}
+			} else if embedErr != nil {
+				log.Printf("graph: semantic knowledge search unavailable, answering by text: %v", embedErr)
+			}
+		}
+		matched, err := s.Knowledge.SearchText(scoped, orgID, repoID, query, k)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "search knowledge: %v", err)
+		}
+		for _, e := range matched {
+			if !seen[e.ID] && len(entries) < k {
+				seen[e.ID] = true
+				entries = append(entries, e)
+			}
+		}
+	}
+
 	for _, e := range entries {
-		resp.Entries = append(resp.Entries, &graphv1.KnowledgeEntry{
+		entry := &graphv1.KnowledgeEntry{
 			Id: e.ID.String(), Key: e.Key, Kind: e.Kind, Title: e.Title, Body: e.Body, CreatedAt: e.CreatedAt.Format(time.RFC3339),
-		})
+		}
+		if e.SourceRunID != nil {
+			entry.SourceRunId = e.SourceRunID.String()
+		}
+		resp.Entries = append(resp.Entries, entry)
 	}
 	return resp, nil
 }
