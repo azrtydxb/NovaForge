@@ -8,6 +8,7 @@ package knowledge
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -160,6 +161,93 @@ func (s *Store) Search(ctx context.Context, orgID, repoID uuid.UUID, query []flo
 		return nil, err
 	}
 	return out, nil
+}
+
+// SearchSimilar is Search restricted to entries whose cosine similarity to
+// query is at least minSimilarity. Search's top-k always returns the k
+// least-distant entries, however far they are; handing those to an agent as
+// "relevant knowledge" would present an unrelated decision as a related one.
+func (s *Store) SearchSimilar(ctx context.Context, orgID, repoID uuid.UUID, query []float32, k int, minSimilarity float64) ([]Entry, error) {
+	if err := authz.RequireOrg(ctx, orgID); err != nil {
+		return nil, err
+	}
+	return s.queryEntries(ctx, `
+		SELECT id, org_id, repo_id, key, kind, title, body, source_run_id, superseded_by, created_at
+		FROM knowledge.knowledge_entries
+		WHERE org_id = $2 AND repo_id = $3 AND superseded_by IS NULL AND embedding IS NOT NULL
+		  AND 1 - (embedding <=> $1::vector) >= $5
+		ORDER BY embedding <=> $1::vector
+		LIMIT $4
+	`, vectorLiteral(query), orgID, repoID, k, minSimilarity)
+}
+
+var textWordRe = regexp.MustCompile(`[A-Za-z0-9]{4,}`)
+
+// SearchText returns up to k current entries sharing words with text, best
+// match first, using PostgreSQL's English full-text search so "invoices"
+// finds "invoice". It is the knowledge search that needs no embedding model:
+// an entry recorded on a deployment without one — or while it was down — has
+// no vector, and only this search can ever find it.
+func (s *Store) SearchText(ctx context.Context, orgID, repoID uuid.UUID, text string, k int) ([]Entry, error) {
+	if err := authz.RequireOrg(ctx, orgID); err != nil {
+		return nil, err
+	}
+	// Words are reduced to [A-Za-z0-9] before they reach to_tsquery, so no
+	// input can form query syntax; they are ORed, and ranking puts entries
+	// sharing more of them first.
+	seen := map[string]bool{}
+	var terms []string
+	for _, w := range textWordRe.FindAllString(text, -1) {
+		w = strings.ToLower(w)
+		if !seen[w] && len(terms) < 32 {
+			seen[w] = true
+			terms = append(terms, w)
+		}
+	}
+	if len(terms) == 0 {
+		return nil, nil
+	}
+	return s.queryEntries(ctx, `
+		SELECT id, org_id, repo_id, key, kind, title, body, source_run_id, superseded_by, created_at
+		FROM knowledge.knowledge_entries,
+		     to_tsquery('english', $1) q
+		WHERE org_id = $2 AND repo_id = $3 AND superseded_by IS NULL
+		  AND to_tsvector('english', title || ' ' || body) @@ q
+		ORDER BY ts_rank(to_tsvector('english', title || ' ' || body), q) DESC, created_at DESC
+		LIMIT $4
+	`, strings.Join(terms, " | "), orgID, repoID, k)
+}
+
+// List returns up to k current entries of repoID, newest first — what a
+// person sees before searching for anything.
+func (s *Store) List(ctx context.Context, orgID, repoID uuid.UUID, k int) ([]Entry, error) {
+	if err := authz.RequireOrg(ctx, orgID); err != nil {
+		return nil, err
+	}
+	return s.queryEntries(ctx, `
+		SELECT id, org_id, repo_id, key, kind, title, body, source_run_id, superseded_by, created_at
+		FROM knowledge.knowledge_entries
+		WHERE org_id = $1 AND repo_id = $2 AND superseded_by IS NULL
+		ORDER BY created_at DESC
+		LIMIT $3
+	`, orgID, repoID, k)
+}
+
+func (s *Store) queryEntries(ctx context.Context, sql string, args ...any) ([]Entry, error) {
+	rows, err := s.pool.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, fmt.Errorf("knowledge query: %w", err)
+	}
+	defer rows.Close()
+	var out []Entry
+	for rows.Next() {
+		e, err := scanEntry(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan entry: %w", err)
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
 }
 
 // Supersede marks oldID as superseded by newID: it stops appearing in

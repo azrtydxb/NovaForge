@@ -182,4 +182,7 @@ message SearchKnowledgeRequest {
 }
 message SearchKnowledgeResponse {
   repeated KnowledgeEntry entries = 1;
+  // "recent" (no query: newest first), "semantic" (nearest embeddings) or
+  // "text" (full-text match, used when no embedding model answered).
+  string mode = 2;
 }

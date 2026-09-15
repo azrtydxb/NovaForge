@@ -1573,8 +1573,11 @@ func (x *SearchKnowledgeRequest) GetK() int32 {
 }
 
 type SearchKnowledgeResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Entries       []*KnowledgeEntry      `protobuf:"bytes,1,rep,name=entries,proto3" json:"entries,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Entries []*KnowledgeEntry      `protobuf:"bytes,1,rep,name=entries,proto3" json:"entries,omitempty"`
+	// "recent" (no query: newest first), "semantic" (nearest embeddings) or
+	// "text" (full-text match, used when no embedding model answered).
+	Mode          string `protobuf:"bytes,2,opt,name=mode,proto3" json:"mode,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1614,6 +1617,13 @@ func (x *SearchKnowledgeResponse) GetEntries() []*KnowledgeEntry {
 		return x.Entries
 	}
 	return nil
+}
+
+func (x *SearchKnowledgeResponse) GetMode() string {
+	if x != nil {
+		return x.Mode
+	}
+	return ""
 }
 
 var File_novaforge_graph_v1_graph_proto protoreflect.FileDescriptor
@@ -1738,9 +1748,10 @@ const file_novaforge_graph_v1_graph_proto_rawDesc = "" +
 	"\x16SearchKnowledgeRequest\x12\x17\n" +
 	"\arepo_id\x18\x01 \x01(\tR\x06repoId\x12\x14\n" +
 	"\x05query\x18\x02 \x01(\tR\x05query\x12\f\n" +
-	"\x01k\x18\x03 \x01(\x05R\x01k\"W\n" +
+	"\x01k\x18\x03 \x01(\x05R\x01k\"k\n" +
 	"\x17SearchKnowledgeResponse\x12<\n" +
-	"\aentries\x18\x01 \x03(\v2\".novaforge.graph.v1.KnowledgeEntryR\aentries2\xfb\a\n" +
+	"\aentries\x18\x01 \x03(\v2\".novaforge.graph.v1.KnowledgeEntryR\aentries\x12\x12\n" +
+	"\x04mode\x18\x02 \x01(\tR\x04mode2\xfb\a\n" +
 	"\fGraphService\x12X\n" +
 	"\tGetSymbol\x12$.novaforge.graph.v1.GetSymbolRequest\x1a%.novaforge.graph.v1.GetSymbolResponse\x12[\n" +
 	"\n" +

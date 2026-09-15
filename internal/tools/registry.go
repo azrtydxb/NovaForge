@@ -1,4 +1,4 @@
-// Package tools implements the fifteen typed agent tools: the audited
+// Package tools implements the sixteen typed agent tools: the audited
 // surface agents call instead of shell access. Every call is bounded by the
 // run's budget, recorded in the append-only audit log before it executes,
 // and authorized against the run's capability grant.
@@ -90,6 +90,8 @@ type Runtime struct {
 	CI      CIClient
 	Reviews ReviewsClient
 	Graph   GraphClient
+	// Knowledge records what a run concluded as project knowledge.
+	Knowledge KnowledgeClient
 }
 
 type toolEntry struct {
@@ -107,7 +109,7 @@ type Registry struct {
 }
 
 // NewRegistry builds a Registry bound to rt and audit, and registers the
-// fifteen built-in tools.
+// sixteen built-in tools.
 func NewRegistry(rt Runtime, audit *agents.AuditLog) *Registry {
 	rt.staged = &stagedFiles{paths: make(map[string]struct{})}
 	r := &Registry{rt: rt, audit: audit, tools: make(map[string]toolEntry)}
@@ -116,7 +118,31 @@ func NewRegistry(rt Runtime, audit *agents.AuditLog) *Registry {
 	registerGitTools(r)
 	registerCITools(r)
 	registerWorkTools(r)
+	registerKnowledgeTools(r)
 	return r
+}
+
+// Restrict removes every tool not named in allowed, so it is neither offered
+// to the model nor dispatchable: a call to a removed tool is refused as an
+// unknown tool before anything is audited or executed. A nil allowed leaves
+// the registry unrestricted; an empty, non-nil one removes every tool.
+//
+// This is how a repository's .novaforge/agents definition governs what an
+// agent may do. Offering a tool the definition leaves out, even one whose
+// call would later be refused, invites the model to plan around it.
+func (r *Registry) Restrict(allowed []string) {
+	if allowed == nil {
+		return
+	}
+	keep := make(map[string]bool, len(allowed))
+	for _, name := range allowed {
+		keep[name] = true
+	}
+	for name := range r.tools {
+		if !keep[name] {
+			delete(r.tools, name)
+		}
+	}
 }
 
 // Register adds a tool with no capability restriction beyond the generic
@@ -134,7 +160,7 @@ func (r *Registry) registerWithCap(name string, capCheck CapCheck, h Handler) {
 	r.tools[name] = toolEntry{handler: h, capCheck: capCheck}
 }
 
-// KnownToolNames returns the fifteen registered tool names, sorted,
+// KnownToolNames returns the sixteen registered tool names, sorted,
 // without requiring a live Runtime or audit log. It exists for validating
 // configuration — see internal/repoconfig, which checks a repository's
 // .novaforge/agents/*.yaml tool lists against it — against the tools the
