@@ -97,6 +97,8 @@ spec:
               value: {{ $.Values.ai.embedModel | quote }}
             - name: AI_PROVIDER_OPTIONS
               value: {{ $.Values.ai.providerOptions | toJson | quote }}
+            - name: AI_MODEL_PRICES
+              value: {{ $.Values.ai.modelPrices | default dict | toJson | quote }}
             - name: AUTO_MERGE_ENABLED
               value: {{ $.Values.factory.autoMerge.enabled | quote }}
             - name: AUTO_MERGE_MAX_FILES_CHANGED

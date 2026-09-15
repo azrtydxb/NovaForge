@@ -57,6 +57,47 @@ RUN="$(/tmp/nf agent start "$REPO" "$KEY" | awk '{print $1}')"
 [ -n "$RUN" ] || fail "no run id came back"
 ok "started run $RUN"
 
+echo "== 4a. a person's push to the agent's branch is refused while the run holds it =="
+# The run holds its grant's prefix (agents/<key>/) from the moment it starts
+# running until it ends. BranchLock existed and nothing acquired it, so a
+# person could push into an agent's branch in the middle of its run. The
+# workspace takes several seconds to provision, which is the window this step
+# pushes in; a run that ended before it was ever seen running cannot show the
+# lock either way, and says so rather than passing.
+SEEN_RUNNING=""
+for _ in $(seq 1 60); do
+	case "$(/tmp/nf agent get "$RUN" | awk '{print $2}')" in
+	running)
+		SEEN_RUNNING=1
+		break
+		;;
+	succeeded | failed | over_budget | cancelled) break ;;
+	esac
+	sleep 1
+done
+[ -n "$SEEN_RUNNING" ] || fail "run $RUN was never observed running, so the branch lock could not be exercised"
+GIT_IP="$($KC get svc "$REL-git-platform" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
+[ -n "$GIT_IP" ] || fail "git-platform has no LoadBalancer IP"
+TOKEN="$(python3 -c "import json,os;print(json.load(open(os.environ['XDG_CONFIG_HOME']+'/novaforge/config.json'))['token'])")"
+LOCKWORK="$(mktemp -d)"
+git clone -q "http://$USER:$TOKEN@$GIT_IP:8081/$ORG/$REPO.git" "$LOCKWORK/repo" 2>/dev/null ||
+	fail "a person could not clone $REPO to attempt the push"
+(
+	cd "$LOCKWORK/repo"
+	git config user.email person@example.com
+	git config user.name "Person"
+	echo "a person's change in the middle of an agent's run" >PERSON.md
+	git add PERSON.md
+	git commit -q -m "a person's commit"
+)
+if PUSH_OUT="$(git -C "$LOCKWORK/repo" push origin "HEAD:refs/heads/agents/$KEY/work" 2>&1)"; then
+	AFTER="$(/tmp/nf agent get "$RUN" | awk '{print $2}')"
+	fail "a person's push to agents/$KEY/work was accepted (run state now: $AFTER): $PUSH_OUT"
+fi
+echo "$PUSH_OUT" | grep -q "locked by Agent Run" ||
+	fail "the push was refused, but not by the branch lock: $PUSH_OUT"
+ok "a person's push to agents/$KEY/work was refused while run $RUN held it"
+
 echo "== 5. the run reaches a terminal state =="
 # A run that stays queued forever is the failure this test exists to catch:
 # it is what every unwired seam in this platform looked like from outside.

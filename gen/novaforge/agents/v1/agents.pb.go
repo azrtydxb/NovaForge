@@ -312,8 +312,14 @@ type Run struct {
 	WallclockLimitSeconds int64                  `protobuf:"varint,11,opt,name=wallclock_limit_seconds,json=wallclockLimitSeconds,proto3" json:"wallclock_limit_seconds,omitempty"`
 	TokenLimit            int64                  `protobuf:"varint,12,opt,name=token_limit,json=tokenLimit,proto3" json:"token_limit,omitempty"`
 	CostLimitMicros       int64                  `protobuf:"varint,13,opt,name=cost_limit_micros,json=costLimitMicros,proto3" json:"cost_limit_micros,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// What the run spent, recorded when it ends.
+	TokensUsed     int64 `protobuf:"varint,14,opt,name=tokens_used,json=tokensUsed,proto3" json:"tokens_used,omitempty"`
+	CostUsedMicros int64 `protobuf:"varint,15,opt,name=cost_used_micros,json=costUsedMicros,proto3" json:"cost_used_micros,omitempty"`
+	// Why a run that did not succeed ended: which budget limit stopped it, or
+	// what failed. Empty for a run still going or one that succeeded.
+	EndReason     string `protobuf:"bytes,16,opt,name=end_reason,json=endReason,proto3" json:"end_reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Run) Reset() {
@@ -435,6 +441,27 @@ func (x *Run) GetCostLimitMicros() int64 {
 		return x.CostLimitMicros
 	}
 	return 0
+}
+
+func (x *Run) GetTokensUsed() int64 {
+	if x != nil {
+		return x.TokensUsed
+	}
+	return 0
+}
+
+func (x *Run) GetCostUsedMicros() int64 {
+	if x != nil {
+		return x.CostUsedMicros
+	}
+	return 0
+}
+
+func (x *Run) GetEndReason() string {
+	if x != nil {
+		return x.EndReason
+	}
+	return ""
 }
 
 // StartRunRequest starts a new agent run against a Work Item, identified by
@@ -1397,6 +1424,133 @@ func (x *ListRunsForWorkItemResponse) GetRuns() []*Run {
 	return nil
 }
 
+// CheckBranchLockRequest asks whether a ref in a repository of the caller's
+// organization is held by a running Agent Run. The git transports ask before
+// accepting a push: the lock is the run being "running", and that state lives
+// in this service's schema, which no other service may read.
+type CheckBranchLockRequest struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	RepoId string                 `protobuf:"bytes,1,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	// ref is a branch name, with or without "refs/heads/".
+	Ref           string `protobuf:"bytes,2,opt,name=ref,proto3" json:"ref,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CheckBranchLockRequest) Reset() {
+	*x = CheckBranchLockRequest{}
+	mi := &file_novaforge_agents_v1_agents_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CheckBranchLockRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckBranchLockRequest) ProtoMessage() {}
+
+func (x *CheckBranchLockRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_agents_v1_agents_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckBranchLockRequest.ProtoReflect.Descriptor instead.
+func (*CheckBranchLockRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_agents_v1_agents_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *CheckBranchLockRequest) GetRepoId() string {
+	if x != nil {
+		return x.RepoId
+	}
+	return ""
+}
+
+func (x *CheckBranchLockRequest) GetRef() string {
+	if x != nil {
+		return x.Ref
+	}
+	return ""
+}
+
+type CheckBranchLockResponse struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Locked bool                   `protobuf:"varint,1,opt,name=locked,proto3" json:"locked,omitempty"`
+	// The holding run, its agent, and the branch prefix the lock covers (the
+	// run's capability grant prefix, e.g. "agents/NF-1/"). Empty when unlocked.
+	RunId         string `protobuf:"bytes,2,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	AgentId       string `protobuf:"bytes,3,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	Prefix        string `protobuf:"bytes,4,opt,name=prefix,proto3" json:"prefix,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CheckBranchLockResponse) Reset() {
+	*x = CheckBranchLockResponse{}
+	mi := &file_novaforge_agents_v1_agents_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CheckBranchLockResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckBranchLockResponse) ProtoMessage() {}
+
+func (x *CheckBranchLockResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_agents_v1_agents_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckBranchLockResponse.ProtoReflect.Descriptor instead.
+func (*CheckBranchLockResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_agents_v1_agents_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *CheckBranchLockResponse) GetLocked() bool {
+	if x != nil {
+		return x.Locked
+	}
+	return false
+}
+
+func (x *CheckBranchLockResponse) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *CheckBranchLockResponse) GetAgentId() string {
+	if x != nil {
+		return x.AgentId
+	}
+	return ""
+}
+
+func (x *CheckBranchLockResponse) GetPrefix() string {
+	if x != nil {
+		return x.Prefix
+	}
+	return ""
+}
+
 var File_novaforge_agents_v1_agents_proto protoreflect.FileDescriptor
 
 const file_novaforge_agents_v1_agents_proto_rawDesc = "" +
@@ -1418,7 +1572,7 @@ const file_novaforge_agents_v1_agents_proto_rawDesc = "" +
 	"\x05agent\x18\x01 \x01(\v2\x1a.novaforge.agents.v1.AgentR\x05agent\"\x13\n" +
 	"\x11ListAgentsRequest\"H\n" +
 	"\x12ListAgentsResponse\x122\n" +
-	"\x06agents\x18\x01 \x03(\v2\x1a.novaforge.agents.v1.AgentR\x06agents\"\x90\x03\n" +
+	"\x06agents\x18\x01 \x03(\v2\x1a.novaforge.agents.v1.AgentR\x06agents\"\xfa\x03\n" +
 	"\x03Run\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x15\n" +
 	"\x06org_id\x18\x02 \x01(\tR\x05orgId\x12\x19\n" +
@@ -1437,7 +1591,12 @@ const file_novaforge_agents_v1_agents_proto_rawDesc = "" +
 	"\x17wallclock_limit_seconds\x18\v \x01(\x03R\x15wallclockLimitSeconds\x12\x1f\n" +
 	"\vtoken_limit\x18\f \x01(\x03R\n" +
 	"tokenLimit\x12*\n" +
-	"\x11cost_limit_micros\x18\r \x01(\x03R\x0fcostLimitMicros\"\x8d\x02\n" +
+	"\x11cost_limit_micros\x18\r \x01(\x03R\x0fcostLimitMicros\x12\x1f\n" +
+	"\vtokens_used\x18\x0e \x01(\x03R\n" +
+	"tokensUsed\x12(\n" +
+	"\x10cost_used_micros\x18\x0f \x01(\x03R\x0ecostUsedMicros\x12\x1d\n" +
+	"\n" +
+	"end_reason\x18\x10 \x01(\tR\tendReason\"\x8d\x02\n" +
 	"\x0fStartRunRequest\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x17\n" +
 	"\arepo_id\x18\x02 \x01(\tR\x06repoId\x12\"\n" +
@@ -1502,7 +1661,15 @@ const file_novaforge_agents_v1_agents_proto_rawDesc = "" +
 	"workItemId\"d\n" +
 	"\x1bListRunsForWorkItemResponse\x12\x17\n" +
 	"\arun_ids\x18\x01 \x03(\tR\x06runIds\x12,\n" +
-	"\x04runs\x18\x02 \x03(\v2\x18.novaforge.agents.v1.RunR\x04runs2\x85\a\n" +
+	"\x04runs\x18\x02 \x03(\v2\x18.novaforge.agents.v1.RunR\x04runs\"C\n" +
+	"\x16CheckBranchLockRequest\x12\x17\n" +
+	"\arepo_id\x18\x01 \x01(\tR\x06repoId\x12\x10\n" +
+	"\x03ref\x18\x02 \x01(\tR\x03ref\"{\n" +
+	"\x17CheckBranchLockResponse\x12\x16\n" +
+	"\x06locked\x18\x01 \x01(\bR\x06locked\x12\x15\n" +
+	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x19\n" +
+	"\bagent_id\x18\x03 \x01(\tR\aagentId\x12\x16\n" +
+	"\x06prefix\x18\x04 \x01(\tR\x06prefix2\xf3\a\n" +
 	"\fAgentService\x12`\n" +
 	"\vCreateAgent\x12'.novaforge.agents.v1.CreateAgentRequest\x1a(.novaforge.agents.v1.CreateAgentResponse\x12]\n" +
 	"\n" +
@@ -1513,7 +1680,8 @@ const file_novaforge_agents_v1_agents_proto_rawDesc = "" +
 	"\x0fStreamRunEvents\x12+.novaforge.agents.v1.StreamRunEventsRequest\x1a,.novaforge.agents.v1.StreamRunEventsResponse0\x01\x12Z\n" +
 	"\tListStats\x12%.novaforge.agents.v1.ListStatsRequest\x1a&.novaforge.agents.v1.ListStatsResponse\x12f\n" +
 	"\rListToolCalls\x12).novaforge.agents.v1.ListToolCallsRequest\x1a*.novaforge.agents.v1.ListToolCallsResponse\x12x\n" +
-	"\x13ListRunsForWorkItem\x12/.novaforge.agents.v1.ListRunsForWorkItemRequest\x1a0.novaforge.agents.v1.ListRunsForWorkItemResponseB\xd5\x01\n" +
+	"\x13ListRunsForWorkItem\x12/.novaforge.agents.v1.ListRunsForWorkItemRequest\x1a0.novaforge.agents.v1.ListRunsForWorkItemResponse\x12l\n" +
+	"\x0fCheckBranchLock\x12+.novaforge.agents.v1.CheckBranchLockRequest\x1a,.novaforge.agents.v1.CheckBranchLockResponseB\xd5\x01\n" +
 	"\x17com.novaforge.agents.v1B\vAgentsProtoP\x01Z?github.com/novaforge/novaforge/gen/novaforge/agents/v1;agentsv1\xa2\x02\x03NAX\xaa\x02\x13Novaforge.Agents.V1\xca\x02\x13Novaforge\\Agents\\V1\xe2\x02\x1fNovaforge\\Agents\\V1\\GPBMetadata\xea\x02\x15Novaforge::Agents::V1b\x06proto3"
 
 var (
@@ -1528,7 +1696,7 @@ func file_novaforge_agents_v1_agents_proto_rawDescGZIP() []byte {
 	return file_novaforge_agents_v1_agents_proto_rawDescData
 }
 
-var file_novaforge_agents_v1_agents_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
+var file_novaforge_agents_v1_agents_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
 var file_novaforge_agents_v1_agents_proto_goTypes = []any{
 	(*Agent)(nil),                       // 0: novaforge.agents.v1.Agent
 	(*CreateAgentRequest)(nil),          // 1: novaforge.agents.v1.CreateAgentRequest
@@ -1553,6 +1721,8 @@ var file_novaforge_agents_v1_agents_proto_goTypes = []any{
 	(*ListToolCallsResponse)(nil),       // 20: novaforge.agents.v1.ListToolCallsResponse
 	(*ListRunsForWorkItemRequest)(nil),  // 21: novaforge.agents.v1.ListRunsForWorkItemRequest
 	(*ListRunsForWorkItemResponse)(nil), // 22: novaforge.agents.v1.ListRunsForWorkItemResponse
+	(*CheckBranchLockRequest)(nil),      // 23: novaforge.agents.v1.CheckBranchLockRequest
+	(*CheckBranchLockResponse)(nil),     // 24: novaforge.agents.v1.CheckBranchLockResponse
 }
 var file_novaforge_agents_v1_agents_proto_depIdxs = []int32{
 	0,  // 0: novaforge.agents.v1.CreateAgentResponse.agent:type_name -> novaforge.agents.v1.Agent
@@ -1573,17 +1743,19 @@ var file_novaforge_agents_v1_agents_proto_depIdxs = []int32{
 	17, // 15: novaforge.agents.v1.AgentService.ListStats:input_type -> novaforge.agents.v1.ListStatsRequest
 	19, // 16: novaforge.agents.v1.AgentService.ListToolCalls:input_type -> novaforge.agents.v1.ListToolCallsRequest
 	21, // 17: novaforge.agents.v1.AgentService.ListRunsForWorkItem:input_type -> novaforge.agents.v1.ListRunsForWorkItemRequest
-	2,  // 18: novaforge.agents.v1.AgentService.CreateAgent:output_type -> novaforge.agents.v1.CreateAgentResponse
-	4,  // 19: novaforge.agents.v1.AgentService.ListAgents:output_type -> novaforge.agents.v1.ListAgentsResponse
-	7,  // 20: novaforge.agents.v1.AgentService.StartRun:output_type -> novaforge.agents.v1.StartRunResponse
-	9,  // 21: novaforge.agents.v1.AgentService.GetRun:output_type -> novaforge.agents.v1.GetRunResponse
-	11, // 22: novaforge.agents.v1.AgentService.CancelRun:output_type -> novaforge.agents.v1.CancelRunResponse
-	13, // 23: novaforge.agents.v1.AgentService.StreamRunEvents:output_type -> novaforge.agents.v1.StreamRunEventsResponse
-	18, // 24: novaforge.agents.v1.AgentService.ListStats:output_type -> novaforge.agents.v1.ListStatsResponse
-	20, // 25: novaforge.agents.v1.AgentService.ListToolCalls:output_type -> novaforge.agents.v1.ListToolCallsResponse
-	22, // 26: novaforge.agents.v1.AgentService.ListRunsForWorkItem:output_type -> novaforge.agents.v1.ListRunsForWorkItemResponse
-	18, // [18:27] is the sub-list for method output_type
-	9,  // [9:18] is the sub-list for method input_type
+	23, // 18: novaforge.agents.v1.AgentService.CheckBranchLock:input_type -> novaforge.agents.v1.CheckBranchLockRequest
+	2,  // 19: novaforge.agents.v1.AgentService.CreateAgent:output_type -> novaforge.agents.v1.CreateAgentResponse
+	4,  // 20: novaforge.agents.v1.AgentService.ListAgents:output_type -> novaforge.agents.v1.ListAgentsResponse
+	7,  // 21: novaforge.agents.v1.AgentService.StartRun:output_type -> novaforge.agents.v1.StartRunResponse
+	9,  // 22: novaforge.agents.v1.AgentService.GetRun:output_type -> novaforge.agents.v1.GetRunResponse
+	11, // 23: novaforge.agents.v1.AgentService.CancelRun:output_type -> novaforge.agents.v1.CancelRunResponse
+	13, // 24: novaforge.agents.v1.AgentService.StreamRunEvents:output_type -> novaforge.agents.v1.StreamRunEventsResponse
+	18, // 25: novaforge.agents.v1.AgentService.ListStats:output_type -> novaforge.agents.v1.ListStatsResponse
+	20, // 26: novaforge.agents.v1.AgentService.ListToolCalls:output_type -> novaforge.agents.v1.ListToolCallsResponse
+	22, // 27: novaforge.agents.v1.AgentService.ListRunsForWorkItem:output_type -> novaforge.agents.v1.ListRunsForWorkItemResponse
+	24, // 28: novaforge.agents.v1.AgentService.CheckBranchLock:output_type -> novaforge.agents.v1.CheckBranchLockResponse
+	19, // [19:29] is the sub-list for method output_type
+	9,  // [9:19] is the sub-list for method input_type
 	9,  // [9:9] is the sub-list for extension type_name
 	9,  // [9:9] is the sub-list for extension extendee
 	0,  // [0:9] is the sub-list for field type_name
@@ -1604,7 +1776,7 @@ func file_novaforge_agents_v1_agents_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_novaforge_agents_v1_agents_proto_rawDesc), len(file_novaforge_agents_v1_agents_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   23,
+			NumMessages:   25,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

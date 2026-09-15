@@ -38,6 +38,8 @@ type Runner struct {
 	NewModel func(model string) (provider.LanguageModel, error)
 	// ProviderOptions carries deployment-configured wire parameters.
 	ProviderOptions map[string]any
+	// Price, when the deployment configures one, accrues the run's cost.
+	Price *agents.TokenPrice
 }
 
 // Run executes run with rt's clients and workspace, returning its outcome.
@@ -50,7 +52,7 @@ func (r *Runner) Run(ctx context.Context, run agents.Run, rt tools.Runtime) Resu
 	loop.Runs = r.Runs
 	fail := func(summary string) Result {
 		log.Printf("agentrun: run %s: %s", run.ID, summary)
-		res, _ := loop.finish(ctx, run, "failed", 0, 0, summary)
+		res, _ := loop.finish(ctx, run, "failed", 0, spend{}, summary)
 		return res
 	}
 
@@ -77,6 +79,7 @@ func (r *Runner) Run(ctx context.Context, run agents.Run, rt tools.Runtime) Resu
 	loop.Model = model
 	loop.Budget = budget
 	loop.ProviderOptions = r.ProviderOptions
+	loop.Price = r.Price
 	loop.Brief = plan.Brief
 	loop.Criteria = func(ctx context.Context, workItemID uuid.UUID) (Criteria, error) {
 		resp, err := r.Work.GetItem(ctx, &workv1.GetItemRequest{Id: workItemID.String()})

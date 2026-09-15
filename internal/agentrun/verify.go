@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/azrtydxb/go-ai-sdk/ai"
+	"github.com/azrtydxb/go-ai-sdk/provider"
 	"github.com/google/uuid"
 
 	"github.com/novaforge/novaforge/internal/agents"
@@ -66,17 +67,17 @@ step(s) relied on, or says what is missing.`
 // an agent that read the work item and replied "done" succeeded exactly like
 // one that did the work. The criteria were never consulted — work.get did not
 // even return them to the agent.
-func (l *Loop) verify(ctx context.Context, run agents.Run, steps []evidenceStep, claim string) (state, summary string, tokens int64) {
+func (l *Loop) verify(ctx context.Context, run agents.Run, steps []evidenceStep, claim string) (state, summary string, usage provider.Usage) {
 	crit, err := l.Criteria(ctx, run.WorkItemID)
 	if err != nil {
-		return "failed", fmt.Sprintf("could not read the work item's acceptance criteria to verify the run: %v", err), 0
+		return "failed", fmt.Sprintf("could not read the work item's acceptance criteria to verify the run: %v", err), usage
 	}
 	if len(crit.Acceptance) == 0 {
 		// Nothing to judge against is recorded as such rather than invented:
 		// the run succeeds on the agent's own account, and the record says
 		// that is all it rests on.
 		l.recordVerification(ctx, run, verification{}, "the work item declares no acceptance criteria; the run was not verified")
-		return "succeeded", claim, 0
+		return "succeeded", claim, usage
 	}
 
 	result, err := ai.GenerateText(ctx, ai.GenerateTextOpts{
@@ -87,15 +88,15 @@ func (l *Loop) verify(ctx context.Context, run agents.Run, steps []evidenceStep,
 		ProviderOptions: l.ProviderOptions,
 	})
 	if err != nil {
-		return "failed", fmt.Sprintf("verification against the acceptance criteria failed: %v", err), 0
+		return "failed", fmt.Sprintf("verification against the acceptance criteria failed: %v", err), usage
 	}
-	tokens = int64(result.Usage.TotalTokens)
+	usage = result.Usage
 	v, err := ai.OutputAs[verification](result)
 	if err != nil {
-		return "failed", fmt.Sprintf("verification returned no decodable verdict: %v", err), tokens
+		return "failed", fmt.Sprintf("verification returned no decodable verdict: %v", err), usage
 	}
 	if len(v.Verdicts) != len(crit.Acceptance) {
-		return "failed", fmt.Sprintf("verification returned %d verdicts for %d acceptance criteria", len(v.Verdicts), len(crit.Acceptance)), tokens
+		return "failed", fmt.Sprintf("verification returned %d verdicts for %d acceptance criteria", len(v.Verdicts), len(crit.Acceptance)), usage
 	}
 	// The criterion text is taken from the Work Item, not from the model's
 	// echo of it, so the record cannot drift from what was actually asked.
@@ -108,9 +109,9 @@ func (l *Loop) verify(ctx context.Context, run agents.Run, steps []evidenceStep,
 	}
 	l.recordVerification(ctx, run, v, "")
 	if len(unmet) > 0 {
-		return "failed", "acceptance criteria not met: " + strings.Join(unmet, "; "), tokens
+		return "failed", "acceptance criteria not met: " + strings.Join(unmet, "; "), usage
 	}
-	return "succeeded", claim, tokens
+	return "succeeded", claim, usage
 }
 
 func (l *Loop) recordVerification(ctx context.Context, run agents.Run, v verification, note string) {

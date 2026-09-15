@@ -50,6 +50,11 @@ type Scheduler struct {
 	// StartRun makes Tick fail every claim it makes — it is a required
 	// dependency, not an optional one.
 	StartRun func(ctx context.Context, subtask work.Item, agent agents.Agent) (agents.Run, error)
+
+	// RunOutcome reports the state of the Agent Run behind an in-progress
+	// subtask. Tick uses it to block a subtask whose run ended without
+	// succeeding. Production wiring asks agent-runtime.
+	RunOutcome func(ctx context.Context, subtask work.Item) (string, error)
 }
 
 // concurrencyCap resolves sch.MaxConcurrentRuns, defaulting to
@@ -83,9 +88,22 @@ func (sch *Scheduler) Tick(ctx context.Context, epicID uuid.UUID) (started int, 
 		return 0, fmt.Errorf("swarm: tick epic %s: %w", epicID, err)
 	}
 
+	var errs []error
 	inProgress := 0
 	anyBlocked := false
 	for _, c := range children {
+		if c.State == "in_progress" && sch.runFailed(ctx, c, &errs) {
+			// Its Agent Run ended without succeeding. Blocked is what keeps
+			// every dependent out of Ready (which waits for "done") and what
+			// surfaces the failure on the epic below; in_progress would leave
+			// the dependents waiting on work nobody is doing.
+			moved, err := sch.Work.TransitionState(ctx, c.ID, "in_progress", "blocked")
+			if err != nil {
+				errs = append(errs, fmt.Errorf("block subtask %s: %w", c.Key, err))
+			} else if moved {
+				c.State = "blocked"
+			}
+		}
 		switch c.State {
 		case "in_progress":
 			inProgress++
@@ -105,7 +123,6 @@ func (sch *Scheduler) Tick(ctx context.Context, epicID uuid.UUID) (started int, 
 	}
 
 	maxRuns := sch.concurrencyCap()
-	var errs []error
 	for _, item := range ready {
 		if inProgress+started >= maxRuns {
 			break
@@ -153,6 +170,25 @@ func (sch *Scheduler) Tick(ctx context.Context, epicID uuid.UUID) (started int, 
 	}
 
 	return started, errors.Join(errs...)
+}
+
+// failedRunStates are the ways an Agent Run ends without doing its subtask.
+var failedRunStates = map[string]bool{"failed": true, "over_budget": true, "cancelled": true}
+
+// runFailed reports whether subtask's Agent Run ended without succeeding.
+// An unanswerable question is recorded and answered "no": a subtask is only
+// blocked on evidence that its run failed, never because agent-runtime was
+// briefly unreachable.
+func (sch *Scheduler) runFailed(ctx context.Context, subtask work.Item, errs *[]error) bool {
+	if sch.RunOutcome == nil {
+		return false
+	}
+	state, err := sch.RunOutcome(ctx, subtask)
+	if err != nil {
+		*errs = append(*errs, fmt.Errorf("read run outcome of subtask %s: %w", subtask.Key, err))
+		return false
+	}
+	return failedRunStates[state]
 }
 
 // EpicLister returns every epic (a top-level Work Item that has at least

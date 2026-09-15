@@ -428,8 +428,10 @@ func TestRepoConfigGoverns(t *testing.T) {
 	}
 	refused := false
 	for _, e := range entries {
-		if e.Tool == "git.commit" {
-			t.Fatalf("git.commit reached the audit log as a dispatched call: %+v", e)
+		// The refusal is audited, as every refused call is; it must never
+		// have been dispatched.
+		if e.Tool == "git.commit" && (e.Outcome != "refused" || !strings.Contains(e.Error, "unknown tool")) {
+			t.Fatalf("git.commit was audited as %q (%s), want refused as a tool this run does not have", e.Outcome, e.Error)
 		}
 	}
 	for _, m := range model.calls[1].Messages {

@@ -3,6 +3,7 @@ package agents
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -56,6 +57,11 @@ type GRPCServer struct {
 	// than answering with an empty list, which would read as "it did nothing".
 	Audit *AuditLog
 
+	// Price is the token price of the model runs execute on, from
+	// AI_MODEL_PRICES; nil when the deployment prices none, in which case
+	// StartRun refuses a cost limit it could never enforce.
+	Price *TokenPrice
+
 	// executing holds the cancel function of every run this process is
 	// executing, so CancelRun can abort an in-flight model or tool call
 	// rather than only writing a state the loop would not see until its next
@@ -108,6 +114,9 @@ func toProtoRun(r Run) *agentsv1.Run {
 		WallclockLimitSeconds: int64(r.WallclockLimit / time.Second),
 		TokenLimit:            r.TokenLimit,
 		CostLimitMicros:       r.CostLimitMicros,
+		TokensUsed:            r.TokensUsed,
+		CostUsedMicros:        r.CostUsedMicros,
+		EndReason:             r.EndReason,
 	}
 	if r.WorkItemID != uuid.Nil {
 		out.WorkItemId = r.WorkItemID.String()
@@ -210,6 +219,16 @@ func (g *GRPCServer) StartRun(ctx context.Context, req *agentsv1.StartRunRequest
 	// This is the one place every run starts — a person's click, the swarm,
 	// a CI agent job — so refusing here holds for all of them, before any
 	// grant is issued.
+	if req.GetCostLimitMicros() < 0 || req.GetTokenLimit() < 0 || req.GetWallclockLimitSeconds() < 0 {
+		return nil, status.Error(codes.InvalidArgument, "a run's limits may not be negative")
+	}
+	// A cost limit is enforced only against a token price. With none
+	// configured no cost ever accrues, so accepting the limit would record a
+	// bound that can never be reached; refusing says so to the person asking.
+	if req.GetCostLimitMicros() > 0 && g.Price == nil {
+		return nil, status.Error(codes.InvalidArgument, "this deployment prices no model tokens, so a cost limit could never be reached; "+
+			"start the run without cost_limit_micros, or have the operator set the model's price in AI_MODEL_PRICES")
+	}
 	if itemResp.GetItem().GetAwaitingApproval() {
 		return nil, status.Errorf(codes.FailedPrecondition, "work item %q is a maintenance proposal awaiting approval; approve it before starting an agent on it", req.GetWorkItemKey())
 	}
@@ -219,7 +238,7 @@ func (g *GRPCServer) StartRun(ctx context.Context, req *agentsv1.StartRunRequest
 		SubjectID:     agentID,
 		SubjectKind:   "agent",
 		RepoRead:      true,
-		WriteBranch:   "agents/" + req.GetWorkItemKey() + "/",
+		WriteBranch:   BranchNamespace + req.GetWorkItemKey() + "/",
 		SecretsProd:   false,
 		DeployStaging: false,
 		DeployProd:    false,
@@ -257,9 +276,31 @@ func (g *GRPCServer) StartRun(ctx context.Context, req *agentsv1.StartRunRequest
 // and publishes that change, then hands off to Execute if one is
 // configured. It runs in the background, detached from the StartRun
 // request's context, since an agent run outlives the RPC that started it.
+//
+// Moving to running is taking the branch lock (BranchLock.Acquire): the run
+// holds its grant's prefix from this moment until it reaches any terminal
+// state, and the git transports refuse everyone else a push there meanwhile.
+// BranchLock existed, was tested, and nothing acquired it — every person
+// could push to an agent's branch in the middle of its run.
 func (g *GRPCServer) driveToRunning(run Run) {
 	ctx := authz.WithScope(context.Background(), authz.Scope{OrgID: run.OrgID, ActorID: run.AgentID, ActorKind: "agent"})
-	if err := g.Store.SetRunState(ctx, run.ID, "running"); err != nil {
+	if err := NewBranchLock(g.Store.Pool()).Acquire(ctx, run.OrgID, run.RepoID, run.Branch, run.ID); err != nil {
+		// A run that cannot take its branch — another run on the same Work
+		// Item still holds it — fails saying so. It used to return silently
+		// and leave the run queued forever, which reads as a platform that
+		// decided not to start it.
+		current, getErr := g.Store.GetRun(ctx, run.ID)
+		if getErr != nil || current.State != "queued" {
+			return // cancelled before it could start; nothing to settle
+		}
+		if spendErr := g.Store.RecordSpend(ctx, run.ID, Spend{Reason: "could not start: " + err.Error()}); spendErr != nil {
+			log.Printf("agents: record why run %s could not start: %v", run.ID, spendErr)
+		}
+		if stateErr := g.Store.SetRunState(ctx, run.ID, "failed"); stateErr != nil {
+			log.Printf("agents: fail run %s that could not take its branch: %v", run.ID, stateErr)
+			return
+		}
+		g.publishStateChange(run.ID, "queued", "failed")
 		return
 	}
 	g.publishStateChange(run.ID, "queued", "running")
@@ -300,12 +341,7 @@ func (g *GRPCServer) abort(id uuid.UUID) {
 }
 
 func (g *GRPCServer) publishStateChange(runID uuid.UUID, from, to string) {
-	if g.RDB == nil {
-		return
-	}
-	_ = events.Publish(context.Background(), g.RDB, events.StreamAgentEvents, events.AgentEvent{
-		RunID: runID, At: time.Now(), Type: "state_change", FromState: from, ToState: to,
-	})
+	publishStateChange(g.RDB, runID, from, to)
 }
 
 // GetRun looks up a run by id within the caller's organization.

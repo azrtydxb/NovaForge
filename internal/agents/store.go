@@ -63,6 +63,13 @@ type Run struct {
 	TokenLimit      int64
 	CostLimitMicros int64
 
+	// TokensUsed and CostUsedMicros are what the run spent, recorded when it
+	// ends; EndReason says why a run that did not succeed ended (which limit
+	// stopped it, or what failed). All three are zero until the run ends.
+	TokensUsed     int64
+	CostUsedMicros int64
+	EndReason      string
+
 	// Provenance is populated by GetRun when a run_provenance row exists for
 	// this run; it is nil until RecordProvenance has been called.
 	Provenance *Provenance
@@ -100,6 +107,8 @@ var validTransitions = map[string]map[string]bool{
 	"queued": {
 		"running":   true,
 		"cancelled": true,
+		// A run that could not take its branch lock never ran.
+		"failed": true,
 	},
 	"running": {
 		"succeeded":   true,
@@ -204,9 +213,12 @@ func (s *Store) CreateRun(ctx context.Context, r Run) (Run, error) {
 	if tokenLimit <= 0 {
 		tokenLimit = 1_000_000
 	}
+	// No cost limit unless one was asked for. A default used to apply, and
+	// with no token ever priced it could never be reached: every run appeared
+	// bounded by cost and none was.
 	costLimit := r.CostLimitMicros
-	if costLimit <= 0 {
-		costLimit = 5_000_000
+	if costLimit < 0 {
+		costLimit = 0
 	}
 
 	_, err := s.pool.Exec(ctx,
@@ -241,11 +253,13 @@ func (s *Store) GetRun(ctx context.Context, id uuid.UUID) (Run, error) {
 	err = s.pool.QueryRow(ctx,
 		`SELECT id, org_id, repo_id, agent_id, COALESCE(work_item_id, '00000000-0000-0000-0000-000000000000'),
 		        sponsor_id, grant_id, branch, state, started_at, ended_at,
-		        wallclock_limit_seconds, token_limit, cost_limit_micros
+		        wallclock_limit_seconds, token_limit, cost_limit_micros,
+		        tokens_used, cost_used_micros, end_reason
 		 FROM agents.agent_runs WHERE id = $1 AND org_id = $2`,
 		id, scope.OrgID,
 	).Scan(&r.ID, &r.OrgID, &r.RepoID, &r.AgentID, &workItemID, &sponsorID, &grantID, &r.Branch,
-		&r.State, &startedAt, &endedAt, &wallclockSeconds, &r.TokenLimit, &r.CostLimitMicros)
+		&r.State, &startedAt, &endedAt, &wallclockSeconds, &r.TokenLimit, &r.CostLimitMicros,
+		&r.TokensUsed, &r.CostUsedMicros, &r.EndReason)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return Run{}, fmt.Errorf("run %s not found: %w", id, err)
@@ -450,17 +464,26 @@ func (s *Store) RunsForWorkItem(ctx context.Context, workItemID uuid.UUID) ([]uu
 	return out, rows.Err()
 }
 
+// Spend is what a finished run consumed, and why it ended when it did not
+// succeed.
+type Spend struct {
+	Tokens     int64
+	CostMicros int64
+	Reason     string
+}
+
 // RecordSpend persists what a finished run actually consumed. The budget is
-// enforced while the run is alive; this is what makes the spend answerable
-// afterwards.
-func (s *Store) RecordSpend(ctx context.Context, runID uuid.UUID, tokensUsed int64) error {
+// enforced while the run is alive; this is what makes the spend — and, for a
+// run stopped over budget, the limit that stopped it — answerable afterwards.
+func (s *Store) RecordSpend(ctx context.Context, runID uuid.UUID, spend Spend) error {
 	scope, err := authz.FromContext(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := s.pool.Exec(ctx,
-		`UPDATE agents.agent_runs SET tokens_used = $1 WHERE id = $2 AND org_id = $3`,
-		tokensUsed, runID, scope.OrgID,
+		`UPDATE agents.agent_runs SET tokens_used = $1, cost_used_micros = $2, end_reason = $3
+		 WHERE id = $4 AND org_id = $5`,
+		spend.Tokens, spend.CostMicros, spend.Reason, runID, scope.OrgID,
 	); err != nil {
 		return fmt.Errorf("record spend for run %s: %w", runID, err)
 	}

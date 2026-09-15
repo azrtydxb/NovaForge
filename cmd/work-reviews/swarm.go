@@ -121,6 +121,7 @@ func tickEpic(ctx context.Context, workStore *work.Store, client agentsv1.AgentS
 			}
 			return agents.Run{ID: id, OrgID: e.OrgID, AgentID: agent.ID, WorkItemID: subtask.ID}, nil
 		},
+		RunOutcome: agentRunOutcome(client, callCtx),
 	}
 
 	started, err := sch.Tick(orgCtx, e.ID)
@@ -130,6 +131,38 @@ func tickEpic(ctx context.Context, workStore *work.Store, client agentsv1.AgentS
 	}
 	if started > 0 {
 		log.Printf("work-reviews: swarm: started %d run(s) for epic %s", started, epic.Key)
+	}
+}
+
+// agentRunOutcome answers Scheduler.RunOutcome from agent-runtime: the runs
+// started against a subtask, read through ListRunsForWorkItem, since the run
+// rows live in a schema this service may not read.
+//
+// Nothing used to ask. A subtask's run could fail, go over budget or be
+// cancelled and the subtask stayed in_progress, its dependents waiting for a
+// "done" that no one was working towards — silence, from outside.
+//
+// A subtask can have more than one run (a retry after a failure). It is taken
+// as failed only when none of its runs is still going or has succeeded, so an
+// old failure never blocks a subtask a later run is working on.
+func agentRunOutcome(client agentsv1.AgentServiceClient, callCtx context.Context) func(context.Context, work.Item) (string, error) {
+	return func(_ context.Context, subtask work.Item) (string, error) {
+		resp, err := client.ListRunsForWorkItem(callCtx, &agentsv1.ListRunsForWorkItemRequest{WorkItemId: subtask.ID.String()})
+		if err != nil {
+			return "", fmt.Errorf("list runs for %s: %w", subtask.Key, err)
+		}
+		outcome := ""
+		for _, r := range resp.GetRuns() {
+			switch r.GetState() {
+			case "queued", "running", "succeeded":
+				return r.GetState(), nil
+			default:
+				if outcome == "" {
+					outcome = r.GetState()
+				}
+			}
+		}
+		return outcome, nil
 	}
 }
 

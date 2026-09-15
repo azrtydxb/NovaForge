@@ -19,6 +19,57 @@ import {
 } from "../components/CancelAgentRun";
 import type { Agent, AgentRun, Subtask, WorkItem as Item } from "../lib/types";
 
+/** RunSpend shows what a finished run used against what it was allowed, and
+ * for a run that did not succeed, why it ended. An over-budget run names the
+ * limit that stopped it; the spend is recorded when a run ends, so a run still
+ * going shows its limits only. */
+function RunSpend({ run }: { run: AgentRun }) {
+  const ended = !ACTIVE_RUN_STATES.has(run.state);
+  const parts = [
+    ended
+      ? `${run.tokens_used.toLocaleString()} / ${run.token_limit.toLocaleString()} tokens`
+      : `limit ${run.token_limit.toLocaleString()} tokens`,
+    `${Math.round(run.wallclock_limit_seconds / 60)} min wall clock`,
+    run.cost_limit_micros > 0
+      ? ended
+        ? `${run.cost_used_micros.toLocaleString()} / ${run.cost_limit_micros.toLocaleString()} µ cost`
+        : `limit ${run.cost_limit_micros.toLocaleString()} µ cost`
+      : "no cost limit",
+  ];
+  const color =
+    run.state === "over_budget"
+      ? "var(--warn)"
+      : run.state === "failed"
+        ? "var(--bad)"
+        : "var(--fg-faint)";
+  return (
+    <>
+      <div
+        style={{
+          font: "11px var(--mono)",
+          color: "var(--fg-faint)",
+          marginTop: 2,
+        }}
+      >
+        {parts.join(" · ")}
+      </div>
+      {run.end_reason ? (
+        <div
+          style={{
+            font: "11px var(--sans)",
+            color,
+            marginTop: 3,
+            lineHeight: 1.4,
+          }}
+        >
+          {run.state === "over_budget" ? "Stopped over budget: " : "Ended: "}
+          {run.end_reason}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 interface Comment {
   id: string;
   author_id: string;
@@ -98,9 +149,29 @@ export function WorkItemDetail() {
     mutationFn: (v: Record<string, string>) => {
       const agent = enabledAgents.find((a) => a.name === v.agent);
       if (!agent) throw new Error("pick an agent");
+      // An empty limit is left to the platform's default; a cost limit is
+      // refused by a deployment that prices no tokens, and that refusal is
+      // shown rather than a limit that could never be reached.
+      const limit = (field: string, scale = 1) => {
+        const raw = (v[field] ?? "").trim();
+        if (raw === "") return 0;
+        const n = Number(raw);
+        if (!Number.isFinite(n) || n <= 0) {
+          throw new Error(
+            `${field.replace(/_/g, " ")} must be a positive number`,
+          );
+        }
+        return Math.round(n * scale);
+      };
       return api.post(
         `/api/v1/orgs/${enc(w.org!)}/repos/${enc(repo)}/agent-runs`,
-        { agent_id: agent.id, work_item_key: key },
+        {
+          agent_id: agent.id,
+          work_item_key: key,
+          wallclock_limit_seconds: limit("wallclock_minutes", 60),
+          token_limit: limit("token_limit"),
+          cost_limit_micros: limit("cost_limit_micros"),
+        },
       );
     },
     onSuccess: () => {
@@ -153,6 +224,22 @@ export function WorkItemDetail() {
               options: enabledAgents.map((a) => a.name),
               required: true,
               help: "The run is sponsored by you: an agent always has a human answerable for it.",
+            },
+            {
+              name: "wallclock_minutes",
+              label: "Wall-clock limit (minutes)",
+              placeholder: "60",
+            },
+            {
+              name: "token_limit",
+              label: "Token limit",
+              placeholder: "1000000",
+            },
+            {
+              name: "cost_limit_micros",
+              label: "Cost limit (micro-units)",
+              placeholder: "none",
+              help: "Only a deployment that prices its model's tokens can enforce a cost limit.",
             },
           ]}
           busy={startRun.isPending}
@@ -233,6 +320,7 @@ export function WorkItemDetail() {
                               ? ` · ${r.started_at.replace("T", " ").slice(0, 19)}`
                               : ""}
                           </div>
+                          <RunSpend run={r} />
                         </span>
                         {ACTIVE_RUN_STATES.has(r.state) && w.org ? (
                           <CancelAgentRun org={w.org} runId={r.id} />

@@ -46,6 +46,26 @@ type Server struct {
 
 	pool *pgxpool.Pool
 	root string
+
+	// RefGuard, when set, authorizes the refs CreateBranch and CreateCommit
+	// write, for callers acting as a person or an agent — the same CapFunc the
+	// git transports apply to a push, so writing through the API is not a way
+	// around what a push would be refused. Platform workers (service tokens:
+	// an agent run's tool calls, the gate proposer) are not subject to it;
+	// an agent run's writes are bounded by its capability grant where its
+	// tools execute.
+	RefGuard CapFunc
+}
+
+// guardRef applies RefGuard to one branch write.
+func (s *Server) guardRef(ctx context.Context, scope authz.Scope, repo, branch string) error {
+	if s.RefGuard == nil || scope.ActorKind == "service" {
+		return nil
+	}
+	if err := s.RefGuard(ctx, scope, scope.OrgID, repo, []string{refHeadsPrefix + branch}); err != nil {
+		return status.Error(codes.PermissionDenied, err.Error())
+	}
+	return nil
 }
 
 // NewGRPCServer returns a Server storing repository metadata in pool and

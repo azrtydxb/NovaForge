@@ -44,10 +44,13 @@ func (l *BranchLock) Acquire(ctx context.Context, orgID, repoID uuid.UUID, branc
 		return err
 	}
 
+	// Only a queued run may take the lock. A run cancelled between StartRun
+	// returning and this update must stay cancelled, not be revived into
+	// "running" — and holding the branch — by a start that lost the race.
 	tag, err := l.pool.Exec(ctx,
 		`UPDATE agents.agent_runs
 		 SET repo_id = $1, branch = $2, state = 'running', started_at = now()
-		 WHERE id = $3 AND org_id = $4`,
+		 WHERE id = $3 AND org_id = $4 AND state = 'queued'`,
 		repoID, branch, runID, orgID,
 	)
 	if err != nil {
@@ -62,9 +65,69 @@ func (l *BranchLock) Acquire(ctx context.Context, orgID, repoID uuid.UUID, branc
 		return fmt.Errorf("acquire branch lock: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("run %s not found", runID)
+		return fmt.Errorf("run %s not found, or no longer queued", runID)
 	}
 	return nil
+}
+
+// BranchNamespace is where every agent branch lives: StartRun issues each
+// run a grant for BranchNamespace + "<work item key>/". The git transports
+// consult agent-runtime about a push only for refs in this namespace, so a
+// push anywhere else never depends on agent-runtime being reachable.
+const BranchNamespace = "agents/"
+
+// LockPrefix is the part of the branch namespace a run holding branch locks:
+// its grant's prefix ("agents/NF-1/" for "agents/NF-1/work"), not just the one
+// branch. The agent may write anywhere under its prefix, so a person pushing
+// to "agents/NF-1/other" is interfering with the same work.
+func LockPrefix(branch string) string {
+	if strings.HasSuffix(branch, "/"+runBranchLeaf) {
+		return strings.TrimSuffix(branch, runBranchLeaf)
+	}
+	return branch + "/"
+}
+
+// Holding describes the run that holds a ref.
+type Holding struct {
+	RunID   uuid.UUID
+	AgentID uuid.UUID
+	Prefix  string
+}
+
+// Check reports the running run, in the caller's organization, whose lock
+// covers ref in repoID. ref may carry "refs/heads/". A run holds its lock
+// exactly while it is "running", so a run that has ended — however it ended —
+// holds nothing, with no separate release to forget.
+func (l *BranchLock) Check(ctx context.Context, repoID uuid.UUID, ref string) (Holding, bool, error) {
+	scope, err := authz.FromContext(ctx)
+	if err != nil {
+		return Holding{}, false, err
+	}
+	branch := strings.TrimPrefix(ref, "refs/heads/")
+	rows, err := l.pool.Query(ctx,
+		`SELECT id, agent_id, branch FROM agents.agent_runs
+		 WHERE org_id = $1 AND repo_id = $2 AND state = 'running'`,
+		scope.OrgID, repoID,
+	)
+	if err != nil {
+		return Holding{}, false, fmt.Errorf("check branch lock: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var h Holding
+		var held string
+		if err := rows.Scan(&h.RunID, &h.AgentID, &held); err != nil {
+			return Holding{}, false, fmt.Errorf("scan branch lock: %w", err)
+		}
+		if held == "" {
+			continue
+		}
+		h.Prefix = LockPrefix(held)
+		if branch == held || strings.HasPrefix(branch, h.Prefix) {
+			return h, true, nil
+		}
+	}
+	return Holding{}, false, rows.Err()
 }
 
 // Release ends the (orgID, repoID, branch) lock by moving its current
@@ -110,28 +173,38 @@ func (l *BranchLock) Holder(ctx context.Context, orgID, repoID uuid.UUID, branch
 	return id, true, nil
 }
 
-// CapFunc wraps next so that a ref update targeting a branch a running
-// agent run holds is refused before next is even consulted — the same
-// gitops.CapFunc type both the git HTTP and SSH transports call, so pushes
-// over either transport are rejected identically while a run holds the
-// branch. repoID identifies, in this service's own terms, the repository
-// next's repo name resolves to; agent-runtime service composition (outside
-// this package) is responsible for supplying that resolution.
+// RefuseWrite decides whether actor may write ref while h holds it. Only the
+// holding run's own agent may: a person, a service, or any other agent is
+// refused, whatever write access they would otherwise have. It is the one
+// rule both git transports (through git-platform) and CapFunc apply, so they
+// cannot disagree about who a lock admits.
+func RefuseWrite(actor authz.Scope, ref string, h Holding) error {
+	if actor.ActorKind == "agent" && actor.ActorID == h.AgentID {
+		return nil
+	}
+	return fmt.Errorf("branch %q is locked by Agent Run %s, which is working under %s; it can be written again when that run ends",
+		strings.TrimPrefix(ref, "refs/heads/"), h.RunID, h.Prefix)
+}
+
+// CapFunc wraps next so that a ref update under a prefix a running agent run
+// holds is refused before next is even consulted — the same gitops.CapFunc
+// type both the git HTTP and SSH transports call. It serves a caller that can
+// read this schema directly; git-platform cannot, and asks agent-runtime
+// through the CheckBranchLock RPC, which answers from Check.
 func (l *BranchLock) CapFunc(repoID uuid.UUID, next gitops.CapFunc) gitops.CapFunc {
 	return func(ctx context.Context, s authz.Scope, orgID uuid.UUID, repo string, refs []string) error {
+		if err := authz.RequireOrg(ctx, orgID); err != nil {
+			return err
+		}
 		for _, ref := range refs {
-			branch := strings.TrimPrefix(ref, "refs/heads/")
-			holderRunID, holderAgentID, locked, err := l.holderAgent(ctx, orgID, repoID, branch)
+			h, locked, err := l.Check(ctx, repoID, ref)
 			if err != nil {
-				return fmt.Errorf("check branch lock: %w", err)
+				return err
 			}
-			// The branch is free to push, over any transport, unless it is
-			// held and the pusher isn't the very agent identity the
-			// holding run belongs to — a human push, or a push from a
-			// different agent, is rejected identically to any other
-			// out-of-scope push.
-			if locked && !(s.ActorKind == "agent" && s.ActorID == holderAgentID) {
-				return fmt.Errorf("branch %q is locked by run %s", branch, holderRunID)
+			if locked {
+				if err := RefuseWrite(s, ref, h); err != nil {
+					return err
+				}
 			}
 		}
 		if next == nil {
@@ -139,22 +212,4 @@ func (l *BranchLock) CapFunc(repoID uuid.UUID, next gitops.CapFunc) gitops.CapFu
 		}
 		return next(ctx, s, orgID, repo, refs)
 	}
-}
-
-// holderAgent is Holder plus the agent identity the holding run belongs
-// to, which CapFunc needs to tell "this run's own agent pushing its own
-// commits" apart from any other actor.
-func (l *BranchLock) holderAgent(ctx context.Context, orgID, repoID uuid.UUID, branch string) (runID, agentID uuid.UUID, locked bool, err error) {
-	err = l.pool.QueryRow(ctx,
-		`SELECT id, agent_id FROM agents.agent_runs
-		 WHERE org_id = $1 AND repo_id = $2 AND branch = $3 AND state = 'running'`,
-		orgID, repoID, branch,
-	).Scan(&runID, &agentID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return uuid.Nil, uuid.Nil, false, nil
-		}
-		return uuid.Nil, uuid.Nil, false, fmt.Errorf("branch lock holder: %w", err)
-	}
-	return runID, agentID, true, nil
 }

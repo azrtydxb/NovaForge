@@ -198,6 +198,15 @@ func agentRunJSON(r *agentsv1.Run) map[string]any {
 		"state":        r.GetState(),
 		"started_at":   r.GetStartedAt(),
 		"ended_at":     r.GetEndedAt(),
+		// The limits and the spend beside them: an over-budget run is only
+		// legible next to what it was allowed and what it used. A cost limit
+		// of zero means the run has none.
+		"wallclock_limit_seconds": r.GetWallclockLimitSeconds(),
+		"token_limit":             r.GetTokenLimit(),
+		"cost_limit_micros":       r.GetCostLimitMicros(),
+		"tokens_used":             r.GetTokensUsed(),
+		"cost_used_micros":        r.GetCostUsedMicros(),
+		"end_reason":              r.GetEndReason(),
 	}
 }
 
