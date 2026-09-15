@@ -203,13 +203,17 @@ criteria:
         step: "5. the review is on the record"
 
   S-7/TestAgentRunIsolationAndEvidence:
-    status: partial
+    status: covered
     note: >-
-      The per-run namespace and its destruction are asserted only against
-      client-go's fake clientset; no test observes a real namespace during a
-      run and gone after it, and no test reads a run's audit entries and
-      events after its namespace is destroyed.
+      The spec-named test runs against the real cluster (KUBE_CONTEXT) and
+      skips without it: it observes the run's namespace and network policy,
+      works inside the pod, destroys the namespace and observes it gone, then
+      reads back the commit, audit entry, stored state and terminal state
+      event. The run is driven by the test, not by agent-runtime's
+      ExecuteFunc, whose provision/destroy wiring is exercised only by
+      agent_test.sh.
     go_tests:
+      - ./internal/workspace TestAgentRunIsolationAndEvidence
       - ./internal/workspace TestCreateMakesNamespacedPod
       - ./internal/workspace TestCreateAppliesDenyAllNetworkPolicy
       - ./internal/workspace TestDestroyRemovesNamespace
@@ -222,13 +226,18 @@ criteria:
         step: "7. the agent actually did the work"
 
   S-7/TestRunBudgetHardStop:
-    status: partial
+    status: covered
     note: >-
-      Only the token limit is shown stopping a run; wall-clock and cost are
-      asserted as Budget.Check errors only. The stored over_budget state is
-      never read back from the store, and evidence after the stop is not
-      asserted beyond provenance.
+      Each of wall-clock (a model call that never returns), tokens and cost
+      (accrued from a configured token price) stops Loop.Execute; the run is
+      settled through agents.SettleRun, the path agent-runtime uses, and its
+      over_budget state, end reason, spend, tool call and summary are read
+      back from the real store and audit log. A cost limit is refused at
+      StartRun when no price is configured. Not run on the cluster: the
+      deployed chart prices no model, so no e2e step exercises cost.
     go_tests:
+      - ./internal/agentrun TestRunBudgetHardStop
+      - ./internal/agents TestStartRunRefusesCostLimitWithoutPrice
       - ./internal/agentrun TestLoopStopsOnBudget
       - ./internal/agents TestWallclockExceeded
       - ./internal/agents TestTokenLimitExceeded
@@ -236,25 +245,37 @@ criteria:
       - ./internal/tools TestBudgetCheckedBeforeCall
 
   S-7/TestAgentBranchLockedDuringRun:
-    status: uncovered
+    status: covered
     note: >-
-      agents.BranchLock is tested but has no production caller: nothing
-      acquires the lock when a run starts and git-platform's capability check
-      lets every user push, so a human push to an agent branch during a run is
-      accepted on the deployed platform.
+      StartRun's background start takes the lock (BranchLock.Acquire); the
+      spec-named test drives it, then pushes with unmodified git clients over
+      HTTPS and SSH through git-platform's real newCapFunc, which asks a real
+      agent-runtime gRPC server over a service token. A person is refused
+      under the run's prefix, the run's agent is not, CreateBranch and
+      CreateCommit are refused too, and pushes are accepted after CancelRun.
+      Orphaned runs are settled and released. The e2e step is written but has
+      not yet been run against the cluster.
     go_tests:
+      - ./cmd/git-platform TestAgentBranchLockedDuringRun
+      - ./cmd/git-platform TestBranchLockFailsClosed
+      - ./internal/agents TestOrphanedRunIsSettledAndReleasesItsLock
       - ./internal/agents TestHumanPushRejectedWhileLocked
       - ./internal/agents TestAcquireThenSecondAcquireFails
+    e2e:
+      - script: tests/e2e/agent_test.sh
+        step: "4a. a person's push to the agent's branch is refused while the run holds it"
 
   S-8/TestToolCallAudited:
-    status: partial
+    status: covered
     note: >-
-      The registry test proves one work.get call is recorded by tool name but
-      not its arguments or outcome; arguments and outcome are asserted only by
-      calling AuditLog directly. No test covers the outcome the registry writes
-      for a failed call, "every" is proven for one tool, and no e2e step reads
-      the audit log.
+      Asserted through Registry.Call against the real audit log: arguments
+      and outcome for a successful call, a failing handler (error), a
+      capability refusal (denied), an unknown tool and a call over budget
+      (refused), and a call cancelled mid-flight is still completed. No e2e
+      step reads the audit log.
     go_tests:
+      - ./internal/tools TestToolCallAudited
+      - ./internal/tools TestCancelledCallStillRecordsItsOutcome
       - ./internal/tools TestEveryCallIsAudited
       - ./internal/agents TestRecordThenComplete
       - ./internal/agents TestArgsAreStoredVerbatim
@@ -427,13 +448,17 @@ criteria:
       - ./internal/repoconfig TestUnknownAgentToolRejected
 
   S-19/TestSwarmDependencyOrder:
-    status: partial
+    status: covered
     note: >-
-      Ordered decomposition, materialisation and ready-only starts are proven,
-      on the cluster too. No test asserts a subtask goes to the agent for its
-      role, and the failed prerequisite is simulated with SetState — no
-      production code marks a subtask blocked when its Agent Run fails.
+      The spec-named test asserts every started subtask got the agent for its
+      role, and that a subtask whose run ended over budget is blocked by the
+      scheduler (from Scheduler.RunOutcome, not a test SetState), blocking the
+      epic and keeping its dependents from starting. work-reviews' RunOutcome
+      is tested against a real agent-runtime gRPC server. The failure path has
+      not been exercised on the cluster.
     go_tests:
+      - ./internal/swarm TestSwarmDependencyOrder
+      - ./cmd/work-reviews TestSwarmReadsRunOutcomeFromAgentRuntime
       - ./internal/swarm TestDecomposeProducesOrderedSubtasks
       - ./internal/swarm TestMaterialiseCreatesChildWorkItems
       - ./internal/swarm TestTickStartsOnlyReadySubtasks

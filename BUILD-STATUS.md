@@ -321,6 +321,24 @@ These are real and are not worked around:
   runs and reviews keyed on it stay in their schemas and become unreachable.
   Deleting an organization is an operator action (`hack/purge-orgs.sh`); there
   is no API for it.
+- **A push to an agent branch depends on agent-runtime.** git-platform asks
+  agent-runtime whether a run holds a ref under `agents/` before accepting a
+  push (or a CreateBranch/CreateCommit) there, and refuses when it cannot get
+  an answer. Pushes anywhere else never ask. git-platform now requires
+  `AGENTS_ADDR`.
+- **No cost limit can be set on this cluster.** The chart prices no model
+  (`ai.modelPrices` is empty: a self-hosted model has no list price, and none
+  is invented), so StartRun refuses `cost_limit_micros`. Runs are bounded by
+  wall clock and tokens.
+- **An orphaned run holds its branch for up to its wall-clock limit plus 15
+  minutes.** A run whose replica died is only recognisable once no loop could
+  still be executing it.
+- **A subtask whose run succeeded is not marked done.** The swarm blocks a
+  subtask whose run failed, but nothing moves a succeeded one to `done`, so
+  its dependents still wait for a person (or a merge) to finish it.
+- **The workspace reaper destroys namespaces older than one hour** regardless
+  of the run's own wall-clock limit, so a run allowed longer than that loses
+  its workspace mid-run.
 
 ## Spec traceability
 
@@ -332,13 +350,11 @@ by reading test bodies, not by matching names.
 from the map, when the map names a criterion the spec lacks, when a cited Go
 test is renamed or deleted, or when a cited e2e script or step no longer exists.
 
-**7 covered, 21 partial, 5 uncovered.**
+**12 covered, 17 partial, 4 uncovered.**
 
 Uncovered: the component is tested, but nothing in production calls it, so the
 behaviour cannot be seen on the deployed platform:
 
-- S-7 `TestAgentBranchLockedDuringRun`: nothing acquires `agents.BranchLock`,
-  and git-platform lets every user push to an agent branch mid-run.
 - S-11 `TestApprovalPaths`: nothing calls `approvals.Decide`.
 - S-12 `TestBrokerDownFailsClosed`: nothing calls `ResolveJobCredentials`, so a
   job that needs credentials is not blocked when the broker is down.
@@ -362,12 +378,6 @@ Partial (the map's `note` says exactly what is missing):
   agent/model are never exposed by a run in any test.
 - S-6 `TestRunnerJobStreamAndArtifact`: logs are never read while a job runs,
   and artifact content has no download route.
-- S-7 `TestAgentRunIsolationAndEvidence`: namespaces are only checked against
-  the fake clientset, and evidence is never read after teardown.
-- S-7 `TestRunBudgetHardStop`: only the token limit stops a run; the stored
-  over_budget state is never read back.
-- S-8 `TestToolCallAudited`: the registry's audit entry is not checked for
-  arguments or outcome.
 - S-9 `TestAirGappedAgentRun`: "no egress to a hosted provider" is asserted
   nowhere.
 - S-10 `TestGateBlocksMerge`: the controller and the merger are never joined
@@ -381,8 +391,6 @@ Partial (the map's `note` says exactly what is missing):
   the search e2e has not been run.
 - S-18 `TestRepoConfigGoverns`: `.novaforge` agent configuration governs nothing
   (`repoconfig.Load` has no caller).
-- S-19 `TestSwarmDependencyOrder`: role-to-agent assignment is not asserted, and
-  nothing marks a subtask blocked when its run fails.
 - S-20 `TestMaintenanceProposesWorkItem`: the production sweep from scanner to
   proposal is untested.
 - S-21 `TestCLIFullLifecycle`: `nf run gates` and `nf run merge` are never
