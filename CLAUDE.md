@@ -62,11 +62,15 @@ bash tests/e2e/search_test.sh     # a push is indexed and found by meaning, not 
 bash tests/e2e/graph_test.sh      # graph edges from the default branch, and knowledge recorded and found
 bash tests/e2e/cli_test.sh        # nf alone: repo, push, Work Item, Agent Run, gates, review, merge
 bash tests/e2e/crossorg_test.sh   # one organization's credentials reach nothing in another
+bash tests/e2e/airgap_test.sh     # agent-runtime reaches its model gateway and nothing outside the cluster
 ```
 
 `hack/env.local.sh` is untracked and holds `REGISTRY_PASSWORD` and `AI_API_KEY`. A fresh
 clone must create it: `deploy.sh` refuses to run without the model-gateway credential,
 because a deployment that cannot reach a model looks configured and is not.
+
+The e2e scripts reach the edge at its load balancer address. From a network that filters
+it, set `NF_EDGE_IP` and `NF_EDGE_PORT` (e.g. a node's IP and the edge NodePort).
 
 Images are tagged with the commit sha, never a mutable tag — a mutable `dev` tag with
 `IfNotPresent` silently served stale code for a whole session. **Never `kubectl set image`

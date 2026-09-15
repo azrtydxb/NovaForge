@@ -332,19 +332,27 @@ criteria:
       - ./internal/agents TestFailedCallRetainsError
 
   S-9/TestAirGappedAgentRun:
-    status: partial
+    status: covered
     note: >-
       Runs complete against the cluster's FastLLM-served model (agent_test,
-      agent_ci_test), but "no network egress to any hosted provider" is
-      asserted nowhere: the chart has no egress NetworkPolicy for the services
-      and nothing checks the proxy does not forward upstream.
+      agent_ci_test). TestAirGappedAgentRun renders the chart and requires the
+      model and embedding endpoints to be in-cluster service addresses and every
+      service but gates and work-reviews (whose scanners fetch vulnerability and
+      module data) to carry a CiliumNetworkPolicy admitting only the cluster and
+      the Kubernetes API. airgap_test.sh proves it from inside the running
+      agent-runtime pod's network: the gateway answers, api.openai.com,
+      api.anthropic.com and 1.1.1.1 do not. The gateway's own upstream
+      configuration is FastLLM's, outside this repository.
     go_tests:
       - ./internal/agentrun TestNewModelClientPassesProviderThrough
+      - ./internal/service TestAirGappedAgentRun
     e2e:
       - script: tests/e2e/agent_test.sh
         step: "5. the run reaches a terminal state"
-      - script: tests/e2e/agent_test.sh
-        step: "7. the agent actually did the work"
+      - script: tests/e2e/airgap_test.sh
+        step: "1. agent-runtime reaches the in-cluster model gateway"
+      - script: tests/e2e/airgap_test.sh
+        step: "2. agent-runtime reaches nothing outside the cluster"
 
   S-10/TestGateBlocksMerge:
     status: covered

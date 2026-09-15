@@ -63,6 +63,19 @@ ai:
   # rather than accepted and never reached.
   modelPrices: {}
 
+# Egress for the services that have no business outside the cluster (see
+# templates/networkpolicy.tpl). Requires Cilium.
+networkPolicy:
+  enabled: true
+  airGapped:
+    - identity
+    - git-platform
+    - ci-runner
+    - agent-runtime
+    - engineering-graph
+    - mcp-server
+    - edge
+
 # The software-factory layer: what the platform does on its own.
 factory:
   autoMerge:

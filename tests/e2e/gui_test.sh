@@ -15,9 +15,12 @@ fail() {
 }
 ok() { echo "ok: $*"; }
 
-EDGE_IP="$($KC get svc "$REL-edge" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
+# NF_EDGE_IP/NF_EDGE_PORT reach the edge another way (e.g. its NodePort) from a
+# network that filters the load balancer address; by default the VIP is used.
+EDGE_IP="${NF_EDGE_IP:-$($KC get svc "$REL-edge" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')}"
+EDGE_PORT="${NF_EDGE_PORT:-8080}"
 [ -n "$EDGE_IP" ] || fail "edge has no LoadBalancer IP"
-BASE="http://$EDGE_IP:8080"
+BASE="http://$EDGE_IP:$EDGE_PORT"
 
 echo "== 1. the application is served =="
 curl -fsS --max-time 20 "$BASE/" | grep -q "<title>NovaForge</title>" ||
@@ -46,7 +49,7 @@ ORG="guiorg$RANDOM$$"
 # Every run creates its own organization so runs cannot see each other's
 # data; remove it on exit, pass or fail, or the cluster fills with them.
 # NF_KEEP_TEST_DATA=1 keeps it for debugging a failure.
-cleanup_org() { [ -n "${NF_KEEP_TEST_DATA:-}" ] || ./hack/delete-org.sh "$ORG" "http://${EDGE_IP:-}:8080" "${XDG_CONFIG_HOME:-}" >/dev/null 2>&1 || true; }
+cleanup_org() { [ -n "${NF_KEEP_TEST_DATA:-}" ] || ./hack/delete-org.sh "$ORG" "http://${EDGE_IP:-}:${EDGE_PORT:-8080}" "${XDG_CONFIG_HOME:-}" >/dev/null 2>&1 || true; }
 trap cleanup_org EXIT
 REPO="app$RANDOM"
 curl -fsS -X POST "$BASE/api/v1/auth/register" \

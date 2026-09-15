@@ -16,7 +16,10 @@ fail() {
 }
 ok() { echo "ok: $*"; }
 
-EDGE_IP="$($KC get svc "$REL-edge" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
+# NF_EDGE_IP/NF_EDGE_PORT reach the edge another way (e.g. its NodePort) from a
+# network that filters the load balancer address; by default the VIP is used.
+EDGE_IP="${NF_EDGE_IP:-$($KC get svc "$REL-edge" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')}"
+EDGE_PORT="${NF_EDGE_PORT:-8080}"
 GIT_IP="$($KC get svc "$REL-git-platform" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
 [ -n "$EDGE_IP" ] && [ -n "$GIT_IP" ] || fail "edge or git-platform has no LoadBalancer IP"
 
@@ -26,17 +29,17 @@ ORG="ciorg$RANDOM$$"
 # Every run creates its own organization so runs cannot see each other's
 # data; remove it on exit, pass or fail, or the cluster fills with them.
 # NF_KEEP_TEST_DATA=1 keeps it for debugging a failure.
-cleanup_org() { [ -n "${NF_KEEP_TEST_DATA:-}" ] || ./hack/delete-org.sh "$ORG" "http://${EDGE_IP:-}:8080" "${XDG_CONFIG_HOME:-}" >/dev/null 2>&1 || true; }
+cleanup_org() { [ -n "${NF_KEEP_TEST_DATA:-}" ] || ./hack/delete-org.sh "$ORG" "http://${EDGE_IP:-}:${EDGE_PORT:-8080}" "${XDG_CONFIG_HOME:-}" >/dev/null 2>&1 || true; }
 trap cleanup_org EXIT
 REPO="pipeline$RANDOM"
 go build -o /tmp/nf ./cmd/nf
 
 echo "== 1. account, organization and repository =="
-curl -fsS -X POST "http://$EDGE_IP:8080/api/v1/auth/register" \
+curl -fsS -X POST "http://$EDGE_IP:$EDGE_PORT/api/v1/auth/register" \
 	-H 'Content-Type: application/json' \
 	-d "{\"email\":\"$USER@example.com\",\"username\":\"$USER\",\"password\":\"correct horse battery staple\"}" \
 	>/dev/null || fail "register failed"
-/tmp/nf login --server "http://$EDGE_IP:8080" --username "$USER" --password "correct horse battery staple" >/dev/null || fail "login failed"
+/tmp/nf login --server "http://$EDGE_IP:$EDGE_PORT" --username "$USER" --password "correct horse battery staple" >/dev/null || fail "login failed"
 /tmp/nf org create "$ORG" >/dev/null || fail "org create failed"
 /tmp/nf org use "$ORG" >/dev/null
 /tmp/nf repo create "$REPO" >/dev/null || fail "repo create failed"
@@ -51,7 +54,7 @@ echo "== 3. a runner is registered into this organization =="
 # Runners register into one organization, because organizations are a hard
 # security boundary. The test therefore provisions its own rather than relying
 # on a platform-wide runner, which would be a way across that boundary.
-ORG_ID="$(curl -fsS "http://$EDGE_IP:8080/api/v1/orgs/$ORG" \
+ORG_ID="$(curl -fsS "http://$EDGE_IP:$EDGE_PORT/api/v1/orgs/$ORG" \
 	-H "Authorization: Bearer $(python3 -c "import json,os;print(json.load(open(os.environ['XDG_CONFIG_HOME']+'/novaforge/config.json'))['token'])")" |
 	python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')"
 [ -n "$ORG_ID" ] || fail "could not resolve the organization id"
@@ -99,12 +102,12 @@ TOKEN="$(python3 -c "import json,os;print(json.load(open(os.environ['XDG_CONFIG_
 # the value without the repository ever containing it.
 SECRET_VALUE="nfe2e-$(python3 -c 'import secrets;print(secrets.token_hex(16))')"
 SECRET_SHA="$(printf %s "$SECRET_VALUE" | shasum -a 256 | awk '{print $1}')"
-PUT="$(curl -fsS -X POST "http://$EDGE_IP:8080/api/v1/orgs/$ORG/secrets" \
+PUT="$(curl -fsS -X POST "http://$EDGE_IP:$EDGE_PORT/api/v1/orgs/$ORG/secrets" \
 	-H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
 	-d "{\"name\":\"NF_E2E_TOKEN\",\"environment\":\"staging\",\"value\":\"$SECRET_VALUE\"}")" ||
 	fail "registering a secret failed"
 printf '%s' "$PUT" | grep -q "$SECRET_VALUE" && fail "registering a secret echoed its value: $PUT"
-LISTED="$(curl -fsS "http://$EDGE_IP:8080/api/v1/orgs/$ORG/secrets" -H "Authorization: Bearer $TOKEN")" ||
+LISTED="$(curl -fsS "http://$EDGE_IP:$EDGE_PORT/api/v1/orgs/$ORG/secrets" -H "Authorization: Bearer $TOKEN")" ||
 	fail "listing secrets failed"
 printf '%s' "$LISTED" | grep -q NF_E2E_TOKEN || fail "the registered secret is not listed: $LISTED"
 printf '%s' "$LISTED" | grep -q "$SECRET_VALUE" && fail "listing secrets returned a value"
@@ -141,7 +144,7 @@ PUSHED="$(git rev-parse HEAD)"
 cd - >/dev/null
 ok "pushed $PUSHED with a workflow"
 
-API="http://$EDGE_IP:8080/api/v1/orgs/$ORG/repos/$REPO/ci"
+API="http://$EDGE_IP:$EDGE_PORT/api/v1/orgs/$ORG/repos/$REPO/ci"
 AUTH="Authorization: Bearer $TOKEN"
 
 echo "== 6. the job log is readable while the job runs =="
@@ -198,7 +201,7 @@ grep -qi '^content-disposition: attachment' "$HEADERS" || fail "the artifact is 
 ok "downloaded report.txt intact"
 
 echo "== 10. the secret job read its brokered credential, and its log never shows it =="
-API="http://$EDGE_IP:8080/api/v1/orgs/$ORG/repos/$REPO/ci"
+API="http://$EDGE_IP:$EDGE_PORT/api/v1/orgs/$ORG/repos/$REPO/ci"
 RUN_ID="$(curl -fsS "$API/runs" -H "Authorization: Bearer $TOKEN" |
 	python3 -c 'import json,sys;print(json.load(sys.stdin)["runs"][0]["id"])')" || fail "listing CI runs failed"
 JOB_ID="$(curl -fsS "$API/runs/$RUN_ID" -H "Authorization: Bearer $TOKEN" |
@@ -208,7 +211,7 @@ SECRET_LOG="$(curl -fsS "$API/jobs/$JOB_ID/logs" -H "Authorization: Bearer $TOKE
 printf '%s' "$SECRET_LOG" | grep -q "credential received" || fail "the job did not receive its credential: $SECRET_LOG"
 printf '%s' "$SECRET_LOG" | grep -q "$SECRET_VALUE" && fail "the credential appears in the job log"
 printf '%s' "$SECRET_LOG" | grep -q 'careless print: \*\*\*' || fail "the careless print was not masked: $SECRET_LOG"
-LEASES="$(curl -fsS "http://$EDGE_IP:8080/api/v1/orgs/$ORG/leases" -H "Authorization: Bearer $TOKEN")" || fail "listing leases failed"
+LEASES="$(curl -fsS "http://$EDGE_IP:$EDGE_PORT/api/v1/orgs/$ORG/leases" -H "Authorization: Bearer $TOKEN")" || fail "listing leases failed"
 printf '%s' "$LEASES" | grep -q "$JOB_ID" || fail "no lease was recorded for the job: $LEASES"
 ok "credential brokered to the job, masked in its log, lease recorded"
 

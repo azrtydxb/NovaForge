@@ -20,10 +20,13 @@ fail() {
 }
 ok() { echo "ok: $*"; }
 
-EDGE_IP="$($KC get svc "$REL-edge" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
+# NF_EDGE_IP/NF_EDGE_PORT reach the edge another way (e.g. its NodePort) from a
+# network that filters the load balancer address; by default the VIP is used.
+EDGE_IP="${NF_EDGE_IP:-$($KC get svc "$REL-edge" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')}"
+EDGE_PORT="${NF_EDGE_PORT:-8080}"
 GIT_IP="$($KC get svc "$REL-git-platform" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
 [ -n "$EDGE_IP" ] && [ -n "$GIT_IP" ] || fail "edge or git-platform has no LoadBalancer IP"
-BASE="http://$EDGE_IP:8080"
+BASE="http://$EDGE_IP:$EDGE_PORT"
 
 XDG_CONFIG_HOME="$(mktemp -d)"
 export XDG_CONFIG_HOME

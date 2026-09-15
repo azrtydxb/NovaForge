@@ -20,10 +20,13 @@ fail() {
 }
 ok() { echo "ok: $*"; }
 
-EDGE_IP="$($KC get svc "$REL-edge" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
+# NF_EDGE_IP/NF_EDGE_PORT reach the edge another way (e.g. its NodePort) from a
+# network that filters the load balancer address; by default the VIP is used.
+EDGE_IP="${NF_EDGE_IP:-$($KC get svc "$REL-edge" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')}"
+EDGE_PORT="${NF_EDGE_PORT:-8080}"
 GIT_IP="$($KC get svc "$REL-git-platform" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
 [ -n "$EDGE_IP" ] && [ -n "$GIT_IP" ] || fail "edge or git-platform has no LoadBalancer IP"
-API="http://$EDGE_IP:8080/api/v1"
+API="http://$EDGE_IP:$EDGE_PORT/api/v1"
 
 AUTHOR="mra$RANDOM$$"
 REVIEWER="mrb$RANDOM$$"
@@ -31,7 +34,7 @@ ORG="mrgorg$RANDOM$$"
 # Every run creates its own organization so runs cannot see each other's
 # data; remove it on exit, pass or fail, or the cluster fills with them.
 # NF_KEEP_TEST_DATA=1 keeps it for debugging a failure.
-cleanup_org() { [ -n "${NF_KEEP_TEST_DATA:-}" ] || ./hack/delete-org.sh "$ORG" "http://${EDGE_IP:-}:8080" "${XDG_CONFIG_HOME:-}" >/dev/null 2>&1 || true; }
+cleanup_org() { [ -n "${NF_KEEP_TEST_DATA:-}" ] || ./hack/delete-org.sh "$ORG" "http://${EDGE_IP:-}:${EDGE_PORT:-8080}" "${XDG_CONFIG_HOME:-}" >/dev/null 2>&1 || true; }
 trap cleanup_org EXIT
 REPO="ledger$RANDOM"
 PASSWORD="correct horse battery staple"

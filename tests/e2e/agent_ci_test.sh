@@ -17,7 +17,10 @@ fail() {
 }
 ok() { echo "ok: $*"; }
 
-EDGE_IP="$($KC get svc "$REL-edge" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
+# NF_EDGE_IP/NF_EDGE_PORT reach the edge another way (e.g. its NodePort) from a
+# network that filters the load balancer address; by default the VIP is used.
+EDGE_IP="${NF_EDGE_IP:-$($KC get svc "$REL-edge" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')}"
+EDGE_PORT="${NF_EDGE_PORT:-8080}"
 GIT_IP="$($KC get svc "$REL-git-platform" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
 [ -n "$EDGE_IP" ] && [ -n "$GIT_IP" ] || fail "edge or git-platform has no LoadBalancer IP"
 
@@ -28,17 +31,17 @@ ORG="aciorg$RANDOM$$"
 # Every run creates its own organization so runs cannot see each other's
 # data; remove it on exit, pass or fail, or the cluster fills with them.
 # NF_KEEP_TEST_DATA=1 keeps it for debugging a failure.
-cleanup_org() { [ -n "${NF_KEEP_TEST_DATA:-}" ] || ./hack/delete-org.sh "$ORG" "http://${EDGE_IP:-}:8080" "${XDG_CONFIG_HOME:-}" >/dev/null 2>&1 || true; }
+cleanup_org() { [ -n "${NF_KEEP_TEST_DATA:-}" ] || ./hack/delete-org.sh "$ORG" "http://${EDGE_IP:-}:${EDGE_PORT:-8080}" "${XDG_CONFIG_HOME:-}" >/dev/null 2>&1 || true; }
 trap cleanup_org EXIT
 REPO="review$RANDOM"
 go build -o /tmp/nf ./cmd/nf
 
 echo "== 1. account, organization, repository and a security agent =="
-curl -fsS -X POST "http://$EDGE_IP:8080/api/v1/auth/register" \
+curl -fsS -X POST "http://$EDGE_IP:$EDGE_PORT/api/v1/auth/register" \
 	-H 'Content-Type: application/json' \
 	-d "{\"email\":\"$USER@example.com\",\"username\":\"$USER\",\"password\":\"correct horse battery staple\"}" \
 	>/dev/null || fail "register failed"
-/tmp/nf login --server "http://$EDGE_IP:8080" --username "$USER" --password "correct horse battery staple" >/dev/null || fail "login failed"
+/tmp/nf login --server "http://$EDGE_IP:$EDGE_PORT" --username "$USER" --password "correct horse battery staple" >/dev/null || fail "login failed"
 /tmp/nf org create "$ORG" >/dev/null || fail "org create failed"
 /tmp/nf org use "$ORG" >/dev/null
 /tmp/nf repo create "$REPO" >/dev/null || fail "repo create failed"
@@ -79,7 +82,7 @@ git push -q origin HEAD:main || fail "push failed"
 cd - >/dev/null
 ok "pushed a workflow with an agent job"
 
-API="http://$EDGE_IP:8080/api/v1/orgs/$ORG/repos/$REPO/ci"
+API="http://$EDGE_IP:$EDGE_PORT/api/v1/orgs/$ORG/repos/$REPO/ci"
 AUTH="Authorization: Bearer $TOKEN"
 
 echo "== 3. the agent job starts an Agent Run =="
@@ -123,7 +126,7 @@ echo "== 5. the review is on the record =="
 # A review that passed must have said something: the brief's first acceptance
 # criterion is a comment stating the conclusion.
 if [ "$JOB_STATUS" = "success" ]; then
-	COMMENTS="$(curl -fsS -H "$AUTH" "http://$EDGE_IP:8080/api/v1/orgs/$ORG/repos/$REPO/work/$KEY/comments" |
+	COMMENTS="$(curl -fsS -H "$AUTH" "http://$EDGE_IP:$EDGE_PORT/api/v1/orgs/$ORG/repos/$REPO/work/$KEY/comments" |
 		python3 -c 'import json,sys; print(sum(1 for c in json.load(sys.stdin)["comments"] if c.get("author_kind")=="agent"))')"
 	[ "$COMMENTS" -gt 0 ] || fail "the review succeeded but the agent left no comment on $KEY"
 	ok "the agent recorded its conclusion on $KEY"

@@ -80,9 +80,12 @@ if bad:
 ok "all deployments ready"
 
 echo "== 2. edge answers readiness =="
-EDGE_IP="$($KC get svc "$REL-edge" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
+# NF_EDGE_IP/NF_EDGE_PORT reach the edge another way (e.g. its NodePort) from a
+# network that filters the load balancer address; by default the VIP is used.
+EDGE_IP="${NF_EDGE_IP:-$($KC get svc "$REL-edge" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')}"
+EDGE_PORT="${NF_EDGE_PORT:-8080}"
 [ -n "$EDGE_IP" ] || fail "edge has no LoadBalancer IP"
-curl -fsS "http://$EDGE_IP:8080/healthz" >/dev/null || fail "edge /healthz did not answer 200"
+curl -fsS "http://$EDGE_IP:$EDGE_PORT/healthz" >/dev/null || fail "edge /healthz did not answer 200"
 ok "edge healthy at $EDGE_IP"
 
 echo "== 3. register, log in, create an org and a repo through the API =="
@@ -94,15 +97,15 @@ ORG="e2eorg$RANDOM$$"
 # Every run creates its own organization so runs cannot see each other's
 # data; remove it on exit, pass or fail, or the cluster fills with them.
 # NF_KEEP_TEST_DATA=1 keeps it for debugging a failure.
-cleanup_org() { [ -n "${NF_KEEP_TEST_DATA:-}" ] || ./hack/delete-org.sh "$ORG" "http://${EDGE_IP:-}:8080" "${XDG_CONFIG_HOME:-}" >/dev/null 2>&1 || true; }
+cleanup_org() { [ -n "${NF_KEEP_TEST_DATA:-}" ] || ./hack/delete-org.sh "$ORG" "http://${EDGE_IP:-}:${EDGE_PORT:-8080}" "${XDG_CONFIG_HOME:-}" >/dev/null 2>&1 || true; }
 trap cleanup_org EXIT
 REPO="widgets$RANDOM"
 go build -o /tmp/nf ./cmd/nf
-curl -fsS -X POST "http://$EDGE_IP:8080/api/v1/auth/register" \
+curl -fsS -X POST "http://$EDGE_IP:$EDGE_PORT/api/v1/auth/register" \
 	-H 'Content-Type: application/json' \
 	-d "{\"email\":\"$USER@example.com\",\"username\":\"$USER\",\"password\":\"correct horse battery staple\"}" \
 	>/dev/null || fail "register failed"
-/tmp/nf login --server "http://$EDGE_IP:8080" --username "$USER" --password "correct horse battery staple" || fail "login failed"
+/tmp/nf login --server "http://$EDGE_IP:$EDGE_PORT" --username "$USER" --password "correct horse battery staple" || fail "login failed"
 /tmp/nf org create "$ORG" || fail "org create failed"
 /tmp/nf org use "$ORG"
 /tmp/nf repo create "$REPO" || fail "repo create failed"
@@ -131,7 +134,7 @@ SSH_IP="$GIT_IP"
 KEYDIR="$(mktemp -d)"
 ssh-keygen -t ed25519 -N "" -f "$KEYDIR/id" -q
 PUBKEY="$(cat "$KEYDIR/id.pub")"
-curl -fsS -X POST "http://$EDGE_IP:8080/api/v1/user/ssh-keys" \
+curl -fsS -X POST "http://$EDGE_IP:$EDGE_PORT/api/v1/user/ssh-keys" \
 	-H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
 	-d "{\"title\":\"e2e\",\"key\":\"$PUBKEY\"}" >/dev/null || fail "adding the ssh key failed"
 
@@ -162,7 +165,7 @@ echo "== 7. deleting a repository and an organization removes what other service
 # deleted first and its Work Item must go with it (work-reviews consumes the
 # announcement), then the organization, which must stop resolving.
 DOOMED="e2edoomed$RANDOM$$"
-API="http://$EDGE_IP:8080/api/v1"
+API="http://$EDGE_IP:$EDGE_PORT/api/v1"
 AUTH="Authorization: Bearer $TOKEN"
 curl -fsS -X POST "$API/orgs" -H "$AUTH" -H 'Content-Type: application/json' -d "{\"name\":\"$DOOMED\"}" >/dev/null || fail "creating the throwaway organization failed"
 curl -fsS -X POST "$API/orgs/$DOOMED/repos" -H "$AUTH" -H 'Content-Type: application/json' -d '{"name":"gone"}' >/dev/null || fail "creating the throwaway repository failed"
