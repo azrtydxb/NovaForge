@@ -98,17 +98,20 @@ func addWriteHandlers(
 				WriteError(wr, http.StatusBadRequest, err)
 				return
 			}
+			// The item is resolved first, in the caller's organization, so a
+			// request for another organization's item is refused as that before
+			// anything about the assignee is looked at.
+			id, err := workItemID(r)
+			if err != nil {
+				WriteError(wr, StatusFromGRPC(err), err)
+				return
+			}
 			// The assignee must belong to this organization. The work service
 			// stores whatever id it is given, so an item could be assigned to
 			// another organization's agent or to a stranger, who would then
 			// appear to hold work they cannot see.
 			if err := assigneeInOrg(r, idc, ag, req.AssigneeID, req.AssigneeKind); err != nil {
 				WriteError(wr, http.StatusBadRequest, err)
-				return
-			}
-			id, err := workItemID(r)
-			if err != nil {
-				WriteError(wr, StatusFromGRPC(err), err)
 				return
 			}
 			resp, err := w.AssignItem(r.Context(), &workv1.AssignItemRequest{
