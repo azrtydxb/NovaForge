@@ -304,11 +304,22 @@ These are real and are not worked around:
 - **The workspace has no network.** `workspace.run` can build and test code
   whose dependencies are vendored or in the standard library; anything that
   downloads modules fails inside the workspace, by design of its network policy.
-- **The code index follows every branch and misses merges.** A push to any
-  branch replaces the indexed content of the files it touches, so a feature
-  branch overwrites what the default branch says. Merges made through the API
-  and commits made by the `git.commit` tool publish no push event, so neither
-  the indexer nor CI sees them.
+- **The code index describes the default branch only, and edges only for Go.**
+  A push to any other branch is not indexed, so search, the graph and agent
+  context answer for the default branch. Python, Java and TypeScript files get
+  symbols and chunks but no dependency, test or history edges. Go references
+  resolve by package directory and name, so a method call resolves to every
+  method of that name in the caller's and its imports' packages. A push of
+  more than 50 commits attributes changed files only to the 50 newest; a file
+  none of them touched gets no history rather than an invented one.
+  `graph_test.sh` has not been run on the cluster.
+- **Recorded knowledge reaches a run by relevance to its Work Item.** Entries
+  are found by English full-text match and, where an embedding model answers,
+  by meaning (similarity at least 0.5). A decision sharing none of the Work
+  Item's words and carrying no embedding is not recalled. The recall path is
+  proven against real services with a model double, not on the cluster.
+- **A repository's agent cost budget cannot trip on this cluster**, since no
+  model is priced; its token and wall-clock budgets apply.
 - **Approved external MCP servers are recorded, not yet consumed.** mcp-server
   keeps each organization's register and the MCP screen operates it, but
   nothing offers an external MCP server to an agent: `internal/mcp.Client` is
@@ -340,6 +351,37 @@ These are real and are not worked around:
   of the run's own wall-clock limit, so a run allowed longer than that loses
   its workspace mid-run.
 
+## Graph edges, knowledge recall and repository configuration (2026-09-15)
+
+Four gaps, each a seam with a tested component on either side:
+
+- **The indexer wrote no edges.** Parse's references were discarded, so
+  dependents, covering tests and change history answered empty on every real
+  repository. Go imports, calls and qualified types now become `depends_on`
+  and `tested_by` edges, and each changed symbol gains a `changed_by` edge to
+  the newest commit that touched its lines, naming the Work Item its message
+  or merged agent branch carries. References are kept by name, so re-indexing
+  either end re-derives the edge and a stale one cannot survive.
+  `ReplaceFileSubgraph` also deleted same-path symbols in every repository of
+  the organization.
+- **The index followed every branch and missed merges.** It now follows only
+  the default branch, and Merge, CreateCommit and CreateBranch publish the
+  same push event a transport push does.
+- **No run received context, and no agent could record a decision.** Every run
+  now goes through `agentrun.Runner`, which assembles context for the Work
+  Item before the first turn; `knowledge.record` stores a decision that a
+  later related run's brief carries. Context assembly's history signal called
+  git-platform with no credential and was refused on every call.
+- **`.novaforge/agents` governed nothing.** The agent definition now decides
+  the tools offered and callable, the model and the budget; project.yaml and
+  `.novaforge/context` are in the brief; a definition that does not parse, or
+  carries an undeclared key, fails the run with the error as its summary.
+  Deleting project.yaml used to discard every agent definition as well.
+
+The Graph screen answers for a symbol or a file from these edges; the
+Knowledge screen lists entries, says who recorded them, and lets a person
+record one.
+
 ## Spec traceability
 
 `.procoder/specs/traceability.yaml` maps each of the spec's 33 acceptance
@@ -350,7 +392,7 @@ by reading test bodies, not by matching names.
 from the map, when the map names a criterion the spec lacks, when a cited Go
 test is renamed or deleted, or when a cited e2e script or step no longer exists.
 
-**12 covered, 17 partial, 4 uncovered.**
+**16 covered, 15 partial, 2 uncovered.**
 
 Uncovered: the component is tested, but nothing in production calls it, so the
 behaviour cannot be seen on the deployed platform:
@@ -358,10 +400,6 @@ behaviour cannot be seen on the deployed platform:
 - S-11 `TestApprovalPaths`: nothing calls `approvals.Decide`.
 - S-12 `TestBrokerDownFailsClosed`: nothing calls `ResolveJobCredentials`, so a
   job that needs credentials is not blocked when the broker is down.
-- S-14 `TestGraphQueries`: no production code writes `depends_on`, `tested_by`
-  or `changed_by` edges, so every graph query returns empty.
-- S-17 `TestKnowledgeRecall`: agent runs never assemble context, and the
-  `AssembleContext` RPC has no caller.
 
 Partial (the map's `note` says exactly what is missing):
 
@@ -387,10 +425,6 @@ Partial (the map's `note` says exactly what is missing):
 - S-12 `TestShortLivedCredential`: no job ever receives a brokered credential.
 - S-13 `TestMCPServerOperations`: none of the four operations succeeds over
   either transport.
-- S-15 `TestIndexUpdatedOnPush`: the dependency index is not implemented, and
-  the search e2e has not been run.
-- S-18 `TestRepoConfigGoverns`: `.novaforge` agent configuration governs nothing
-  (`repoconfig.Load` has no caller).
 - S-20 `TestMaintenanceProposesWorkItem`: the production sweep from scanner to
   proposal is untested.
 - S-21 `TestCLIFullLifecycle`: `nf run gates` and `nf run merge` are never
