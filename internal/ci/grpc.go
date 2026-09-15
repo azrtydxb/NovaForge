@@ -49,13 +49,25 @@ func (s *Server) SetLogSink(logs logAppender) {
 
 // Register enrolls a new runner, returning the id and bearer token it must
 // present (as runner_id on every ConnectRequest) on its Connect stream.
+//
+// A runner is enrolled into the organization of whoever registers it: an
+// owner or admin of that organization, or a platform credential minted for it
+// (the runner deployment holds the platform secret and mints one naming its
+// configured organization). This RPC used to take the organization from the
+// request and check nobody, so anyone who could reach the port could enrol a
+// runner into any organization, be dispatched that organization's jobs, and
+// receive the 30-minute clone credential sent with each one.
 func (s *Server) Register(ctx context.Context, req *civ1.RegisterRequest) (*civ1.RegisterResponse, error) {
-	orgID, err := uuid.Parse(req.GetOrgId())
+	scope, err := registrationScope(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("invalid org_id: %w", err)
+		return nil, err
+	}
+	orgID := scope.OrgID
+	if raw := req.GetOrgId(); raw != "" && raw != orgID.String() {
+		return nil, status.Error(codes.PermissionDenied, "a runner is registered into the caller's organization, not one named in the request")
 	}
 	if req.GetName() == "" {
-		return nil, fmt.Errorf("name is required")
+		return nil, status.Error(codes.InvalidArgument, "name is required")
 	}
 
 	tokenBytes := make([]byte, 32)
@@ -95,6 +107,7 @@ func (s *Server) Connect(stream civ1.RunnerService_ConnectServer) error {
 	defer close(send)
 
 	var runnerID uuid.UUID
+	var runnerToken string
 	for {
 		req, err := stream.Recv()
 		if err != nil {
@@ -112,12 +125,23 @@ func (s *Server) Connect(stream civ1.RunnerService_ConnectServer) error {
 			continue
 		}
 		if runnerID == uuid.Nil {
+			// The stream is the runner only once it proves it holds the token
+			// Register returned; before this, a runner id — which is in job
+			// records and logs — was all it took to be dispatched another
+			// runner's jobs and to write into their logs.
+			if err := s.authenticateRunner(ctx, id, req.GetToken()); err != nil {
+				return err
+			}
+			runnerToken = req.GetToken()
 			runnerID = id
 			labels, lerr := s.store.RunnerLabels(ctx, runnerID)
 			if lerr != nil {
 				return lerr
 			}
 			s.dispatcher.Register(runnerID, labels, send)
+		} else if id != runnerID || req.GetToken() != runnerToken {
+			s.dispatcher.Unregister(context.Background(), runnerID)
+			return status.Error(codes.PermissionDenied, "a Connect stream speaks for one runner")
 		}
 
 		switch req.GetPayload().(type) {
@@ -129,7 +153,8 @@ func (s *Server) Connect(stream civ1.RunnerService_ConnectServer) error {
 			if jerr != nil {
 				continue
 			}
-			if s.logs != nil {
+			// Only the runner a job was dispatched to writes its log.
+			if s.logs != nil && s.jobIsRunners(ctx, jobID, runnerID) == nil {
 				_ = s.logs.Append(ctx, jobID, chunk.GetLine())
 			}
 		}
@@ -150,7 +175,18 @@ func (s *Server) Connect(stream civ1.RunnerService_ConnectServer) error {
 func (s *Server) ReportStatus(ctx context.Context, req *civ1.ReportStatusRequest) (*civ1.ReportStatusResponse, error) {
 	jobID, err := uuid.Parse(req.GetJobId())
 	if err != nil {
-		return nil, fmt.Errorf("invalid job_id: %w", err)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid job_id: %v", err)
+	}
+	runnerID, err := uuid.Parse(req.GetRunnerId())
+	if err != nil {
+		return nil, status.Error(codes.PermissionDenied, "a status report must name its runner")
+	}
+	// Anyone could set any job's status, and so any run's outcome, before this.
+	if err := s.authenticateRunner(ctx, runnerID, req.GetToken()); err != nil {
+		return nil, err
+	}
+	if err := s.jobIsRunners(ctx, jobID, runnerID); err != nil {
+		return nil, err
 	}
 	if err := s.store.SetJobStatus(ctx, jobID, req.GetStatus(), req.GetDetail()); err != nil {
 		return nil, err
@@ -193,6 +229,9 @@ func (s *Server) UploadArtifact(ctx context.Context, req *civ1.UploadArtifactReq
 	runnerID, err := uuid.Parse(req.GetRunnerId())
 	if err != nil || job.RunnerID == nil || *job.RunnerID != runnerID {
 		return nil, status.Error(codes.PermissionDenied, "this job is not assigned to that runner")
+	}
+	if err := s.authenticateRunner(ctx, runnerID, req.GetToken()); err != nil {
+		return nil, err
 	}
 
 	art, err := s.artifacts.Upload(ctx, jobID, req.GetName(),

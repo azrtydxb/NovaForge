@@ -248,6 +248,14 @@ func Start(t testing.TB) *Platform {
 	return p
 }
 
+// DialCI returns a plain connection to ci-runner's gRPC listener, for tests
+// that speak the runner protocol.
+func (p *Platform) DialCI(t testing.TB) *grpc.ClientConn {
+	t.Helper()
+	p.RequireCI(t)
+	return dial(t, p.CIAddr, nil)
+}
+
 // RequireCI skips t when this platform has no CI service.
 func (p *Platform) RequireCI(t testing.TB) {
 	t.Helper()
