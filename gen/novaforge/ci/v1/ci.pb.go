@@ -242,7 +242,10 @@ type ConnectRequest struct {
 	//
 	//	*ConnectRequest_Heartbeat
 	//	*ConnectRequest_LogChunk
-	Payload       isConnectRequest_Payload `protobuf_oneof:"payload"`
+	Payload isConnectRequest_Payload `protobuf_oneof:"payload"`
+	// token is the secret Register returned for runner_id. A runner id is not
+	// a secret — it appears in job records and logs — so it proves nothing.
+	Token         string `protobuf:"bytes,4,opt,name=token,proto3" json:"token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -307,6 +310,13 @@ func (x *ConnectRequest) GetLogChunk() *LogChunk {
 		}
 	}
 	return nil
+}
+
+func (x *ConnectRequest) GetToken() string {
+	if x != nil {
+		return x.Token
+	}
+	return ""
 }
 
 type isConnectRequest_Payload interface {
@@ -446,12 +456,14 @@ func (x *ConnectResponse) GetSecretEnv() map[string]string {
 }
 
 type ReportStatusRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RunnerId      string                 `protobuf:"bytes,1,opt,name=runner_id,json=runnerId,proto3" json:"runner_id,omitempty"`
-	JobId         string                 `protobuf:"bytes,2,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
-	Status        string                 `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
-	ExitCode      int32                  `protobuf:"varint,4,opt,name=exit_code,json=exitCode,proto3" json:"exit_code,omitempty"`
-	Detail        string                 `protobuf:"bytes,5,opt,name=detail,proto3" json:"detail,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	RunnerId string                 `protobuf:"bytes,1,opt,name=runner_id,json=runnerId,proto3" json:"runner_id,omitempty"`
+	JobId    string                 `protobuf:"bytes,2,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
+	Status   string                 `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
+	ExitCode int32                  `protobuf:"varint,4,opt,name=exit_code,json=exitCode,proto3" json:"exit_code,omitempty"`
+	Detail   string                 `protobuf:"bytes,5,opt,name=detail,proto3" json:"detail,omitempty"`
+	// token is the secret Register returned for runner_id.
+	Token         string `protobuf:"bytes,6,opt,name=token,proto3" json:"token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -517,6 +529,13 @@ func (x *ReportStatusRequest) GetExitCode() int32 {
 func (x *ReportStatusRequest) GetDetail() string {
 	if x != nil {
 		return x.Detail
+	}
+	return ""
+}
+
+func (x *ReportStatusRequest) GetToken() string {
+	if x != nil {
+		return x.Token
 	}
 	return ""
 }
@@ -1197,11 +1216,13 @@ func (x *ListArtifactsResponse) GetArtifacts() []*ArtifactSummary {
 }
 
 type UploadArtifactRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RunnerId      string                 `protobuf:"bytes,1,opt,name=runner_id,json=runnerId,proto3" json:"runner_id,omitempty"`
-	JobId         string                 `protobuf:"bytes,2,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
-	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	Content       []byte                 `protobuf:"bytes,4,opt,name=content,proto3" json:"content,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	RunnerId string                 `protobuf:"bytes,1,opt,name=runner_id,json=runnerId,proto3" json:"runner_id,omitempty"`
+	JobId    string                 `protobuf:"bytes,2,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
+	Name     string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Content  []byte                 `protobuf:"bytes,4,opt,name=content,proto3" json:"content,omitempty"`
+	// token is the secret Register returned for runner_id.
+	Token         string `protobuf:"bytes,5,opt,name=token,proto3" json:"token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1262,6 +1283,13 @@ func (x *UploadArtifactRequest) GetContent() []byte {
 		return x.Content
 	}
 	return nil
+}
+
+func (x *UploadArtifactRequest) GetToken() string {
+	if x != nil {
+		return x.Token
+	}
+	return ""
 }
 
 type UploadArtifactResponse struct {
@@ -1423,11 +1451,12 @@ const file_novaforge_ci_v1_ci_proto_rawDesc = "" +
 	"\x02at\x18\x01 \x01(\tR\x02at\"5\n" +
 	"\bLogChunk\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x12\n" +
-	"\x04line\x18\x02 \x01(\tR\x04line\"\xae\x01\n" +
+	"\x04line\x18\x02 \x01(\tR\x04line\"\xc4\x01\n" +
 	"\x0eConnectRequest\x12\x1b\n" +
 	"\trunner_id\x18\x01 \x01(\tR\brunnerId\x12:\n" +
 	"\theartbeat\x18\x02 \x01(\v2\x1a.novaforge.ci.v1.HeartbeatH\x00R\theartbeat\x128\n" +
-	"\tlog_chunk\x18\x03 \x01(\v2\x19.novaforge.ci.v1.LogChunkH\x00R\blogChunkB\t\n" +
+	"\tlog_chunk\x18\x03 \x01(\v2\x19.novaforge.ci.v1.LogChunkH\x00R\blogChunk\x12\x14\n" +
+	"\x05token\x18\x04 \x01(\tR\x05tokenB\t\n" +
 	"\apayload\"\xfc\x03\n" +
 	"\x0fConnectResponse\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x15\n" +
@@ -1449,13 +1478,14 @@ const file_novaforge_ci_v1_ci_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a<\n" +
 	"\x0eSecretEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x96\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xac\x01\n" +
 	"\x13ReportStatusRequest\x12\x1b\n" +
 	"\trunner_id\x18\x01 \x01(\tR\brunnerId\x12\x15\n" +
 	"\x06job_id\x18\x02 \x01(\tR\x05jobId\x12\x16\n" +
 	"\x06status\x18\x03 \x01(\tR\x06status\x12\x1b\n" +
 	"\texit_code\x18\x04 \x01(\x05R\bexitCode\x12\x16\n" +
-	"\x06detail\x18\x05 \x01(\tR\x06detail\"&\n" +
+	"\x06detail\x18\x05 \x01(\tR\x06detail\x12\x14\n" +
+	"\x05token\x18\x06 \x01(\tR\x05token\"&\n" +
 	"\x14ReportStatusResponse\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\"\xa5\x01\n" +
 	"\x12WorkflowRunSummary\x12\x0e\n" +
@@ -1502,12 +1532,13 @@ const file_novaforge_ci_v1_ci_proto_rawDesc = "" +
 	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x15\n" +
 	"\x06job_id\x18\x02 \x01(\tR\x05jobId\"W\n" +
 	"\x15ListArtifactsResponse\x12>\n" +
-	"\tartifacts\x18\x01 \x03(\v2 .novaforge.ci.v1.ArtifactSummaryR\tartifacts\"y\n" +
+	"\tartifacts\x18\x01 \x03(\v2 .novaforge.ci.v1.ArtifactSummaryR\tartifacts\"\x8f\x01\n" +
 	"\x15UploadArtifactRequest\x12\x1b\n" +
 	"\trunner_id\x18\x01 \x01(\tR\brunnerId\x12\x15\n" +
 	"\x06job_id\x18\x02 \x01(\tR\x05jobId\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x18\n" +
-	"\acontent\x18\x04 \x01(\fR\acontent\"9\n" +
+	"\acontent\x18\x04 \x01(\fR\acontent\x12\x14\n" +
+	"\x05token\x18\x05 \x01(\tR\x05token\"9\n" +
 	"\x16UploadArtifactResponse\x12\x1f\n" +
 	"\vartifact_id\x18\x01 \x01(\tR\n" +
 	"artifactId\">\n" +

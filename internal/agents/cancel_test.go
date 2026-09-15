@@ -41,7 +41,7 @@ func TestCancelRunStopsExecution(t *testing.T) {
 		AgentId:     agent.ID.String(),
 		RepoId:      repoID.String(),
 		WorkItemKey: "NF-9",
-		SponsorId:   uuid.New().String(),
+		SponsorId:   actorOf(ctx),
 	})
 	if err != nil {
 		t.Fatalf("StartRun: %v", err)
@@ -93,7 +93,7 @@ func TestStartRunRefusesUnapprovedProposal(t *testing.T) {
 		AgentId:     agent.ID.String(),
 		RepoId:      repoID.String(),
 		WorkItemKey: "NF-11",
-		SponsorId:   uuid.New().String(),
+		SponsorId:   actorOf(ctx),
 	})
 	if status.Code(err) != codes.FailedPrecondition {
 		t.Fatalf("StartRun on an unapproved proposal: code = %v, want FailedPrecondition", status.Code(err))
@@ -122,7 +122,7 @@ func TestListRunsForWorkItemCarriesRuns(t *testing.T) {
 		AgentId:     agent.ID.String(),
 		RepoId:      repoID.String(),
 		WorkItemKey: "NF-10",
-		SponsorId:   uuid.New().String(),
+		SponsorId:   actorOf(ctx),
 	})
 	if err != nil {
 		t.Fatalf("StartRun: %v", err)

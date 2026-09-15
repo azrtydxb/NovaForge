@@ -60,8 +60,8 @@ func TestJobLogNeverCarriesItsCredential(t *testing.T) {
 	runner := s.runnerID.String()
 	line := "deploying with token " + value + " now"
 	for _, msg := range []*civ1.ConnectRequest{
-		{RunnerId: runner, Payload: &civ1.ConnectRequest_Heartbeat{Heartbeat: &civ1.Heartbeat{}}},
-		{RunnerId: runner, Payload: &civ1.ConnectRequest_LogChunk{LogChunk: &civ1.LogChunk{JobId: jobID.String(), Line: line}}},
+		{RunnerId: runner, Token: s.runnerToken, Payload: &civ1.ConnectRequest_Heartbeat{Heartbeat: &civ1.Heartbeat{}}},
+		{RunnerId: runner, Token: s.runnerToken, Payload: &civ1.ConnectRequest_LogChunk{LogChunk: &civ1.LogChunk{JobId: jobID.String(), Line: line}}},
 	} {
 		if err := stream.Send(msg); err != nil {
 			t.Fatalf("send: %v", err)
@@ -86,7 +86,7 @@ func TestJobLogNeverCarriesItsCredential(t *testing.T) {
 
 	// A terminal status's detail is stored too, and is masked the same way.
 	if _, err := client.ReportStatus(context.Background(), &civ1.ReportStatusRequest{
-		RunnerId: runner, JobId: jobID.String(), Status: "failure", Detail: "exit 1: bad token " + value,
+		RunnerId: runner, Token: s.runnerToken, JobId: jobID.String(), Status: "failure", Detail: "exit 1: bad token " + value,
 	}); err != nil {
 		t.Fatal(err)
 	}

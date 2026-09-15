@@ -15,6 +15,26 @@ import (
 	"github.com/novaforge/novaforge/internal/analysis"
 )
 
+// NewController composes the controller exactly as the gates service runs it:
+// runs are resolved through reviews, work and git-platform, gate inputs are
+// checked out through git-platform, and proof is recorded back on the run. It
+// lives here, not in cmd/gates, so a test can build the controller the
+// deployment runs.
+func NewController(store *Store, gitClient gitv1.GitServiceClient, reviewsClient reviewsv1.ReviewsServiceClient, workClient workv1.WorkServiceClient, semgrepRules string) *Controller {
+	return &Controller{
+		Store:      store,
+		Git:        gitClient,
+		Runs:       NewServiceRunLookup(reviewsClient, workClient, gitClient),
+		BuildInput: NewWorkspaceInputBuilder(gitClient, semgrepRules),
+		Proof: func(ctx context.Context, runID uuid.UUID, gate, status, detail string) error {
+			_, err := reviewsClient.RecordProof(ctx, &reviewsv1.RecordProofRequest{
+				RunId: runID.String(), Gate: gate, Status: status, Detail: detail,
+			})
+			return err
+		},
+	}
+}
+
 // NewServiceRunLookup resolves a RunHead by asking the reviews and work
 // services, and git-platform for the branch heads — the gates schema never
 // reads their tables directly. It lives here rather than in cmd/gates so the

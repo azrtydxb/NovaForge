@@ -17,17 +17,24 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 
 	civ1 "github.com/novaforge/novaforge/gen/novaforge/ci/v1"
 	"github.com/novaforge/novaforge/internal/redact"
 	"github.com/novaforge/novaforge/internal/runner"
+	"github.com/novaforge/novaforge/internal/svcauth"
 )
 
 // podExec is the isolated execution path. It is nil only outside a cluster,
 // where the host fallback applies and must be explicitly enabled.
 var podExec *runner.PodExecutor
+
+// runnerToken is the secret Register returned. Every later call presents it:
+// the runner id alone is not a secret.
+var runnerToken string
 
 const (
 	heartbeatInterval = 15 * time.Second
@@ -67,11 +74,26 @@ func main() {
 	defer conn.Close()
 	client := civ1.NewRunnerServiceClient(conn)
 
-	regResp, err := client.Register(ctx, &civ1.RegisterRequest{OrgId: orgID, Name: name, Labels: labels})
+	// Registering enrols this runner into an organization, which is the
+	// organization's decision: ci-runner refuses a Register that carries no
+	// credential for it. The runner holds the platform secret (the chart gives
+	// it the release's secrets) and presents a platform credential naming the
+	// organization it was configured for.
+	org, err := uuid.Parse(orgID)
+	if err != nil {
+		log.Fatalf("runner: RUNNER_ORG_ID %q is not an organization id: %v", orgID, err)
+	}
+	regTok, err := svcauth.Mint(os.Getenv("HMAC_SECRET"), "runner", org, svcauth.DefaultTTL)
+	if err != nil {
+		log.Fatalf("runner: mint registration credential: %v", err)
+	}
+	regCtx := metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+regTok, "x-novaforge-org", org.String())
+	regResp, err := client.Register(regCtx, &civ1.RegisterRequest{OrgId: orgID, Name: name, Labels: labels})
 	if err != nil {
 		log.Fatalf("runner: register: %v", err)
 	}
 	runnerID := regResp.GetRunnerId()
+	runnerToken = regResp.GetToken()
 
 	// Artifacts go back through the platform, not straight to object storage:
 	// only the platform knows which job an artifact belongs to, and giving
@@ -81,7 +103,7 @@ func main() {
 		podExec.OnArtifacts = func(ctx context.Context, jobID string, arts []runner.Artifact) error {
 			for _, a := range arts {
 				if _, err := client.UploadArtifact(ctx, &civ1.UploadArtifactRequest{
-					RunnerId: runnerID, JobId: jobID,
+					RunnerId: runnerID, Token: runnerToken, JobId: jobID,
 					Name: a.Name, Content: a.Content,
 				}); err != nil {
 					return fmt.Errorf("upload %s: %w", a.Name, err)
@@ -193,6 +215,7 @@ func runJob(ctx context.Context, client civ1.RunnerServiceClient, send func(*civ
 			line = mask.Line(line)
 			if err := send(&civ1.ConnectRequest{
 				RunnerId: runnerID,
+				Token:    runnerToken,
 				Payload:  &civ1.ConnectRequest_LogChunk{LogChunk: &civ1.LogChunk{JobId: job.GetJobId(), Line: line}},
 			}); err != nil {
 				log.Printf("runner: send log chunk for job %s: %v", job.GetJobId(), err)
@@ -229,6 +252,7 @@ func runJob(ctx context.Context, client civ1.RunnerServiceClient, send func(*civ
 	defer cancel()
 	if _, err := client.ReportStatus(reportCtx, &civ1.ReportStatusRequest{
 		RunnerId: runnerID,
+		Token:    runnerToken,
 		JobId:    job.GetJobId(),
 		Status:   status,
 		ExitCode: int32(exitCode),
@@ -242,6 +266,7 @@ func runJob(ctx context.Context, client civ1.RunnerServiceClient, send func(*civ
 func heartbeatMessage(runnerID string) *civ1.ConnectRequest {
 	return &civ1.ConnectRequest{
 		RunnerId: runnerID,
+		Token:    runnerToken,
 		Payload:  &civ1.ConnectRequest_Heartbeat{Heartbeat: &civ1.Heartbeat{At: time.Now().UTC().Format(time.RFC3339)}},
 	}
 }

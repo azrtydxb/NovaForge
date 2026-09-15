@@ -34,9 +34,19 @@ func (g *GRPCServer) AddComment(ctx context.Context, req *workv1.AddCommentReque
 
 // ListComments returns a Work Item's thread, oldest first.
 func (g *GRPCServer) ListComments(ctx context.Context, req *workv1.ListCommentsRequest) (*workv1.ListCommentsResponse, error) {
+	orgID, err := callerOrg(ctx)
+	if err != nil {
+		return nil, err
+	}
 	id, err := parseUUID("work_item_id", req.GetWorkItemId())
 	if err != nil {
 		return nil, err
+	}
+	// An item outside the caller's organization is not found, rather than
+	// found with an empty discussion: an empty answer to an id the caller does
+	// not own says the id exists nowhere they can see only by accident.
+	if _, err := g.Store.get(ctx, orgID, id); err != nil {
+		return nil, status.Errorf(codes.NotFound, "work item %s not found", id)
 	}
 	comments, err := g.Store.ListComments(ctx, id)
 	if err != nil {

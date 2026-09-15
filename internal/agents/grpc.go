@@ -194,6 +194,20 @@ func (g *GRPCServer) StartRun(ctx context.Context, req *agentsv1.StartRunRequest
 	if err != nil {
 		return nil, err
 	}
+	// The agent must be one of this organization's. The id used to be taken
+	// as given, so a member of one organization could issue a capability
+	// grant in their own organization to another organization's agent.
+	if _, err := g.Store.GetAgent(ctx, agentID); err != nil {
+		return nil, status.Errorf(codes.NotFound, "no agent %s in this organization", agentID)
+	}
+	// A person starting a run answers for it themself. Naming someone else as
+	// the sponsor let a caller put any user id — another organization's
+	// person included — on the record as accountable for their run. The
+	// platform's own workers (the swarm scheduler, CI agent jobs) name the
+	// sponsor they derived from the organization's own records.
+	if scope, _ := authz.FromContext(ctx); scope.ActorKind != "service" && scope.ActorID != sponsorID {
+		return nil, status.Error(codes.PermissionDenied, "a person may only sponsor a run they start themself")
+	}
 	repoID, err := parseUUID("repo_id", req.GetRepoId())
 	if err != nil {
 		return nil, err
@@ -399,6 +413,13 @@ func (g *GRPCServer) StreamRunEvents(req *agentsv1.StreamRunEventsRequest, strea
 	runID, err := parseUUID("run_id", req.GetRunId())
 	if err != nil {
 		return err
+	}
+	// The event stream is shared by every organization, so the run is looked
+	// up in the caller's organization first; filtering the stream by run id
+	// alone would hand anyone holding another organization's run id its tool
+	// calls and states.
+	if _, err := g.Store.GetRun(ctx, runID); err != nil {
+		return status.Errorf(codes.NotFound, "no run %s in this organization", runID)
 	}
 	if g.RDB == nil {
 		return status.Error(codes.Unavailable, "event stream is not configured")

@@ -107,6 +107,7 @@ type Registry struct {
 	rt    Runtime
 	audit *agents.AuditLog
 	tools map[string]toolEntry
+	specs map[string]Spec
 }
 
 // NewRegistry builds a Registry bound to rt and audit, and registers the
@@ -161,7 +162,28 @@ func (r *Registry) registerWithCap(name string, capCheck CapCheck, h Handler) {
 	r.tools[name] = toolEntry{handler: h, capCheck: capCheck}
 }
 
-// KnownToolNames returns the sixteen registered tool names, sorted,
+// registerExternal adds a tool whose description and schema come from outside
+// this package — an external MCP server's — so the model is told what that
+// server said the tool takes. It is dispatched by Call like every other tool:
+// budget, audit, handler, audit.
+func (r *Registry) registerExternal(name string, spec Spec, h Handler) {
+	r.tools[name] = toolEntry{handler: h}
+	if r.specs == nil {
+		r.specs = make(map[string]Spec)
+	}
+	r.specs[name] = spec
+}
+
+// Spec is what the model is told about name: an external tool's own
+// description and schema, or the built-in entry in Specs.
+func (r *Registry) Spec(name string) Spec {
+	if s, ok := r.specs[name]; ok {
+		return s
+	}
+	return SpecFor(name)
+}
+
+// KnownToolNames returns the registered registered tool names, sorted,
 // without requiring a live Runtime or audit log. It exists for validating
 // configuration — see internal/repoconfig, which checks a repository's
 // .novaforge/agents/*.yaml tool lists against it — against the tools the

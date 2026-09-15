@@ -53,6 +53,46 @@ func TestUserCredentialIsNotAServiceToken(t *testing.T) {
 	}
 }
 
+// TestAgentRunTokenNamesItsAgent pins what an agent run's credential must say
+// for a capability grant to be applied to it. A grant is held by an agent id;
+// a token that named only the organization gave every transport a caller with
+// no id to look grants up for, so an agent's push was refused inside its own
+// grant and nothing could tell that apart from a push outside it.
+func TestAgentRunTokenNamesItsAgent(t *testing.T) {
+	org, agent := uuid.New(), uuid.New()
+	tok, err := svcauth.MintAgentRun("s3cret", org, agent, time.Minute)
+	if err != nil {
+		t.Fatalf("MintAgentRun: %v", err)
+	}
+	scope, err := svcauth.ScopeFromToken("s3cret", tok)
+	if err != nil {
+		t.Fatalf("ScopeFromToken: %v", err)
+	}
+	if scope.OrgID != org || scope.ActorID != agent || scope.ActorKind != "agent" {
+		t.Fatalf("want agent %s in org %s, got %+v", agent, org, scope)
+	}
+}
+
+// TestPlatformTokenNamesNoActor: a platform worker's token is the platform,
+// and must not be mistaken for an agent that grants apply to.
+func TestPlatformTokenNamesNoActor(t *testing.T) {
+	org := uuid.New()
+	tok, _ := svcauth.Mint("s3cret", "ci-scheduler", org, time.Minute)
+	scope, err := svcauth.ScopeFromToken("s3cret", tok)
+	if err != nil {
+		t.Fatalf("ScopeFromToken: %v", err)
+	}
+	if scope.OrgID != org || scope.ActorID != uuid.Nil || scope.ActorKind != "service" {
+		t.Fatalf("want a service scope with no actor, got %+v", scope)
+	}
+}
+
+func TestAgentRunTokenWithoutAgentRefused(t *testing.T) {
+	if _, err := svcauth.MintAgentRun("s3cret", uuid.New(), uuid.Nil, time.Minute); err == nil {
+		t.Fatal("an agent run credential naming no agent must not be minted")
+	}
+}
+
 func TestNoSecretRefuses(t *testing.T) {
 	if _, err := svcauth.Mint("", "x", uuid.New(), time.Minute); err == nil {
 		t.Fatal("minting without a secret must fail rather than produce an unsigned token")

@@ -32,14 +32,11 @@ func UnaryServerInterceptor(identity identityv1.IdentityServiceClient, hmacSecre
 		org := first(md, "x-novaforge-org")
 
 		if strings.HasPrefix(token, Prefix) {
-			service, orgID, err := Verify(hmacSecret, token)
+			scope, err := ScopeFromToken(hmacSecret, token)
 			if err != nil {
 				return handler(ctx, req)
 			}
-			return handler(authz.WithScope(ctx, authz.Scope{
-				OrgID:     orgID,
-				ActorKind: actorKindFor(service),
-			}), req)
+			return handler(authz.WithScope(ctx, scope), req)
 		}
 
 		if identity == nil {

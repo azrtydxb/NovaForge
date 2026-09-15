@@ -21,6 +21,9 @@ type Config struct {
 	Server string `json:"server"`
 	Token  string `json:"token"`
 	Org    string `json:"org,omitempty"`
+	// GitURL is the git-platform host `nf repo clone` clones from; the edge
+	// does not serve the git transport.
+	GitURL string `json:"git_url,omitempty"`
 }
 
 func configPath() (string, error) {

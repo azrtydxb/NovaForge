@@ -202,8 +202,9 @@ type org struct {
 func (p *platform) newOrg(t *testing.T) org {
 	t.Helper()
 	id := uuid.New()
-	ctx := authz.WithScope(context.Background(), authz.Scope{OrgID: id, ActorID: uuid.New(), ActorKind: "agent"})
-	ctx, err := agentrun.WithRunIdentity(ctx, runnerTestSecret, id)
+	agentID := uuid.New()
+	ctx := authz.WithScope(context.Background(), authz.Scope{OrgID: id, ActorID: agentID, ActorKind: "agent"})
+	ctx, err := agentrun.WithRunIdentity(ctx, runnerTestSecret, id, agentID, time.Hour)
 	if err != nil {
 		t.Fatalf("WithRunIdentity: %v", err)
 	}

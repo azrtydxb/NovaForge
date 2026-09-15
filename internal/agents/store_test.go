@@ -48,6 +48,13 @@ func uniqueName(prefix string) string {
 	return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
 }
 
+// actorOf is the person a scoped context acts as: a person may only sponsor a
+// run they start themself.
+func actorOf(ctx context.Context) string {
+	scope, _ := authz.FromContext(ctx)
+	return scope.ActorID.String()
+}
+
 func scopedCtx(orgID uuid.UUID) context.Context {
 	return authz.WithScope(context.Background(), authz.Scope{
 		OrgID:     orgID,

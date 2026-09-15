@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/azrtydxb/go-ai-sdk/provider"
 	"github.com/google/uuid"
@@ -40,6 +41,9 @@ type Runner struct {
 	ProviderOptions map[string]any
 	// Price, when the deployment configures one, accrues the run's cost.
 	Price *agents.TokenPrice
+	// MCP, when set, lists the organization's approved external MCP servers,
+	// whose tools the run is offered alongside the built-in ones.
+	MCP tools.ApprovedMCPServers
 }
 
 // Run executes run with rt's clients and workspace, returning its outcome.
@@ -74,6 +78,18 @@ func (r *Runner) Run(ctx context.Context, run agents.Run, rt tools.Runtime) Resu
 	rt.RunID = run.ID
 	rt.Budget = budget
 	reg := tools.NewRegistry(rt, r.Audit)
+	// The organization's approved external MCP servers are offered before the
+	// repository's tool list is applied, so an agent whose definition lists
+	// its tools gets only the external tools it names. A register nobody read
+	// made approval meaningless.
+	if r.MCP != nil {
+		offered, err := tools.OfferApprovedMCPServers(ctx, reg, r.MCP)
+		if err != nil {
+			log.Printf("agentrun: run %s: external MCP servers unavailable: %v", run.ID, err)
+		} else if len(offered.Tools) > 0 {
+			log.Printf("agentrun: run %s offered %d external MCP tool(s)", run.ID, len(offered.Tools))
+		}
+	}
 	reg.Restrict(plan.Tools)
 
 	loop.Model = model
@@ -96,18 +112,36 @@ func (r *Runner) Run(ctx context.Context, run agents.Run, rt tools.Runtime) Resu
 	return result
 }
 
-// WithRunIdentity attaches a service token for orgID to every outbound call
-// an agent run makes. An agent run outlives the request that started it, so
-// it cannot borrow that caller's credential; the token names one
-// organization, so a run cannot reach outside the organization it belongs to
-// even if a tool were asked to.
-func WithRunIdentity(ctx context.Context, hmacSecret string, orgID uuid.UUID) (context.Context, error) {
-	tok, err := svcauth.Mint(hmacSecret, svcauth.AgentRunService, orgID, svcauth.DefaultTTL)
+// WithRunIdentity attaches the run's credential to every outbound call an
+// agent run makes. An agent run outlives the request that started it, so it
+// cannot borrow that caller's credential. The credential names one
+// organization, so a run cannot reach outside it, and the run's agent, whose
+// capability grant git-platform applies to every write.
+func WithRunIdentity(ctx context.Context, hmacSecret string, orgID, agentID uuid.UUID, ttl time.Duration) (context.Context, error) {
+	tok, err := svcauth.MintAgentRun(hmacSecret, orgID, agentID, ttl)
 	if err != nil {
-		return ctx, fmt.Errorf("mint service token: %w", err)
+		return ctx, fmt.Errorf("mint run credential: %w", err)
 	}
 	return metadata.AppendToOutgoingContext(ctx,
 		"authorization", "Bearer "+tok,
 		"x-novaforge-org", orgID.String(),
 	), nil
+}
+
+// runCredentialMargin outlasts the run's own wall-clock stop, so the run can
+// still settle and record its evidence after the limit trips.
+const runCredentialMargin = 15 * time.Minute
+
+// unboundedRunCredentialTTL bounds the credential of a run with no wall-clock
+// limit; the orphan reaper settles such a run long before it lapses.
+const unboundedRunCredentialTTL = 12 * time.Hour
+
+// RunCredentialTTL is how long a run's credential lives. It is minted once per
+// run, and was minted with the five-minute worker TTL: every service call a
+// run made after its fifth minute was refused as unauthenticated.
+func RunCredentialTTL(run agents.Run) time.Duration {
+	if run.WallclockLimit > 0 {
+		return run.WallclockLimit + runCredentialMargin
+	}
+	return unboundedRunCredentialTTL
 }

@@ -466,6 +466,18 @@ func (s *Store) RegisterRunner(ctx context.Context, orgID uuid.UUID, name string
 	return id, nil
 }
 
+// RunnerTokenHash returns the organization and token hash recorded for a
+// runner, which is what authenticates every later call it makes.
+func (s *Store) RunnerTokenHash(ctx context.Context, runnerID uuid.UUID) (uuid.UUID, []byte, error) {
+	var orgID uuid.UUID
+	var hash []byte
+	err := s.pool.QueryRow(ctx, `SELECT org_id, token_hash FROM ci.runners WHERE id = $1`, runnerID).Scan(&orgID, &hash)
+	if err != nil {
+		return uuid.Nil, nil, fmt.Errorf("runner %s: %w", runnerID, err)
+	}
+	return orgID, hash, nil
+}
+
 // RunnerLabels returns the labels a registered runner announced at
 // RegisterRunner time.
 func (s *Store) RunnerLabels(ctx context.Context, runnerID uuid.UUID) ([]string, error) {

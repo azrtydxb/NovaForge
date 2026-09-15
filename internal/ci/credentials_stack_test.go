@@ -2,6 +2,8 @@ package ci_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"net"
 	"strings"
 	"testing"
@@ -32,18 +34,21 @@ import (
 // branch through a real git-platform server. Only the runner is a channel,
 // because what is asserted is what a runner is handed.
 type credentialStack struct {
-	t          *testing.T
-	pool       *pgxpool.Pool
-	store      *ci.Store
-	broker     *secrets.Broker
-	gatesSrv   *grpc.Server
-	org, repo  uuid.UUID
-	runnerID   uuid.UUID
-	dispatched chan *civ1.ConnectResponse
-	cancel     context.CancelFunc
-	pump       *ci.Pump
-	dispatcher *ci.Dispatcher
-	redactions *ci.Redactions
+	t         *testing.T
+	pool      *pgxpool.Pool
+	store     *ci.Store
+	broker    *secrets.Broker
+	gatesSrv  *grpc.Server
+	org, repo uuid.UUID
+	runnerID  uuid.UUID
+	// runnerToken is what the runner presents: the platform stores only its
+	// hash, and refuses a stream that cannot show the token.
+	runnerToken string
+	dispatched  chan *civ1.ConnectResponse
+	cancel      context.CancelFunc
+	pump        *ci.Pump
+	dispatcher  *ci.Dispatcher
+	redactions  *ci.Redactions
 }
 
 const stackHMAC = "credential-stack-hmac"
@@ -114,7 +119,10 @@ func newCredentialStack(t *testing.T) *credentialStack {
 	s.pump.Redactions = s.redactions
 	s.pump.Credentials = &ci.GatesBroker{Gates: gatesv1.NewGatesServiceClient(conn), HMACSecret: stackHMAC}
 
-	s.runnerID, err = s.store.RegisterRunner(context.Background(), s.org, "cred-runner", []string{"linux"}, []byte("hash-"+uuid.NewString()))
+	rawToken := []byte(uuid.NewString())
+	tokenHash := sha256.Sum256(rawToken)
+	s.runnerToken = hex.EncodeToString(rawToken)
+	s.runnerID, err = s.store.RegisterRunner(context.Background(), s.org, "cred-runner", []string{"linux"}, tokenHash[:])
 	if err != nil {
 		t.Fatalf("RegisterRunner: %v", err)
 	}

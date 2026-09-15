@@ -79,7 +79,6 @@ func newGRPCServer(t *testing.T, work *stubWorkClient) (*agents.GRPCServer, *age
 func TestStartRunIssuesScopedGrant(t *testing.T) {
 	orgID := uuid.New()
 	repoID := uuid.New()
-	sponsorID := uuid.New()
 
 	work := &stubWorkClient{item: &workv1.WorkItem{
 		Id: uuid.New().String(), Key: "NF-1", RepoId: repoID.String(), State: "open",
@@ -92,7 +91,7 @@ func TestStartRunIssuesScopedGrant(t *testing.T) {
 		AgentId:     agent.ID.String(),
 		RepoId:      repoID.String(),
 		WorkItemKey: "NF-1",
-		SponsorId:   sponsorID.String(),
+		SponsorId:   actorOf(ctx),
 	})
 	if err != nil {
 		t.Fatalf("StartRun: %v", err)
@@ -170,7 +169,7 @@ func TestStreamRunEventsDeliversStateChanges(t *testing.T) {
 		AgentId:     agent.ID.String(),
 		RepoId:      repoID.String(),
 		WorkItemKey: "NF-3",
-		SponsorId:   uuid.New().String(),
+		SponsorId:   actorOf(ctx),
 	})
 	if err != nil {
 		t.Fatalf("StartRun: %v", err)

@@ -1,6 +1,8 @@
 package agents_test
 
 import (
+	"context"
+	"github.com/novaforge/novaforge/internal/authz"
 	"strings"
 	"testing"
 
@@ -28,7 +30,7 @@ func TestStartRunRefusesCostLimitWithoutPrice(t *testing.T) {
 	agent := mustCreateAgent(t, store, ctx, orgID)
 	req := &agentsv1.StartRunRequest{
 		AgentId: agent.ID.String(), RepoId: repoID.String(), WorkItemKey: "NF-7",
-		SponsorId: uuid.New().String(), CostLimitMicros: 1_000_000,
+		SponsorId: sponsorOf(t, ctx), CostLimitMicros: 1_000_000,
 	}
 
 	_, err := srv.StartRun(ctx, req)
@@ -95,4 +97,14 @@ func TestZeroCostLimitMeansNone(t *testing.T) {
 	if err := b.Check(); err != nil {
 		t.Fatalf("a run with no cost limit went over budget on cost: %v", err)
 	}
+}
+
+// sponsorOf is the person ctx acts as: a person may only sponsor their own run.
+func sponsorOf(t *testing.T, ctx context.Context) string {
+	t.Helper()
+	scope, err := authz.FromContext(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return scope.ActorID.String()
 }

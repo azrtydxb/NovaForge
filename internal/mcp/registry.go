@@ -207,6 +207,39 @@ func (r *Registry) ListServers(ctx context.Context, req *mcpv1.ListServersReques
 	return &mcpv1.ListServersResponse{Servers: out, CanDecide: canDecide}, nil
 }
 
+// ListApprovedServers lists the servers an agent in the caller's organization
+// may be offered: approved, and not since revoked. Any scoped caller may ask,
+// including an agent run's own credential, since the host building a run's
+// tool list is acting for that run.
+func (r *Registry) ListApprovedServers(ctx context.Context, _ *mcpv1.ListApprovedServersRequest) (*mcpv1.ListApprovedServersResponse, error) {
+	scope, err := orgScope(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT `+serverColumns+`
+		  FROM mcp.mcp_servers
+		 WHERE org_id = $1 AND status = 'approved'
+		 ORDER BY name`,
+		scope.OrgID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "list approved MCP servers: %v", err)
+	}
+	defer rows.Close()
+	out := []*mcpv1.McpServer{}
+	for rows.Next() {
+		s, err := scanServer(rows)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "read MCP server: %v", err)
+		}
+		out = append(out, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, status.Errorf(codes.Internal, "list approved MCP servers: %v", err)
+	}
+	return &mcpv1.ListApprovedServersResponse{Servers: out}, nil
+}
+
 // DecideServer approves or rejects a pending server.
 func (r *Registry) DecideServer(ctx context.Context, req *mcpv1.DecideServerRequest) (*mcpv1.DecideServerResponse, error) {
 	id, err := uuid.Parse(req.GetId())

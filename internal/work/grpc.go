@@ -168,6 +168,9 @@ func (g *GRPCServer) AssignItem(ctx context.Context, req *workv1.AssignItemReque
 	if err != nil {
 		return nil, err
 	}
+	if _, err := g.Store.get(ctx, orgID, id); err != nil {
+		return nil, status.Errorf(codes.NotFound, "work item %s not found", id)
+	}
 	if err := g.Store.Assign(ctx, id, assigneeID, req.GetAssigneeKind()); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "assign work item: %v", err)
 	}

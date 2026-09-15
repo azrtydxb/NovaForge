@@ -19,10 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	McpService_RequestServer_FullMethodName = "/novaforge.mcp.v1.McpService/RequestServer"
-	McpService_ListServers_FullMethodName   = "/novaforge.mcp.v1.McpService/ListServers"
-	McpService_DecideServer_FullMethodName  = "/novaforge.mcp.v1.McpService/DecideServer"
-	McpService_RevokeServer_FullMethodName  = "/novaforge.mcp.v1.McpService/RevokeServer"
+	McpService_RequestServer_FullMethodName       = "/novaforge.mcp.v1.McpService/RequestServer"
+	McpService_ListServers_FullMethodName         = "/novaforge.mcp.v1.McpService/ListServers"
+	McpService_DecideServer_FullMethodName        = "/novaforge.mcp.v1.McpService/DecideServer"
+	McpService_RevokeServer_FullMethodName        = "/novaforge.mcp.v1.McpService/RevokeServer"
+	McpService_ListApprovedServers_FullMethodName = "/novaforge.mcp.v1.McpService/ListApprovedServers"
 )
 
 // McpServiceClient is the client API for McpService service.
@@ -38,6 +39,11 @@ type McpServiceClient interface {
 	ListServers(ctx context.Context, in *ListServersRequest, opts ...grpc.CallOption) (*ListServersResponse, error)
 	DecideServer(ctx context.Context, in *DecideServerRequest, opts ...grpc.CallOption) (*DecideServerResponse, error)
 	RevokeServer(ctx context.Context, in *RevokeServerRequest, opts ...grpc.CallOption) (*RevokeServerResponse, error)
+	// ListApprovedServers is what an agent's host reads at run start: only
+	// servers an owner or admin approved and nobody has since revoked. It is a
+	// separate RPC from ListServers so the one question that decides what an
+	// agent may be offered cannot be answered with a filter someone forgot.
+	ListApprovedServers(ctx context.Context, in *ListApprovedServersRequest, opts ...grpc.CallOption) (*ListApprovedServersResponse, error)
 }
 
 type mcpServiceClient struct {
@@ -88,6 +94,16 @@ func (c *mcpServiceClient) RevokeServer(ctx context.Context, in *RevokeServerReq
 	return out, nil
 }
 
+func (c *mcpServiceClient) ListApprovedServers(ctx context.Context, in *ListApprovedServersRequest, opts ...grpc.CallOption) (*ListApprovedServersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListApprovedServersResponse)
+	err := c.cc.Invoke(ctx, McpService_ListApprovedServers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // McpServiceServer is the server API for McpService service.
 // All implementations should embed UnimplementedMcpServiceServer
 // for forward compatibility.
@@ -101,6 +117,11 @@ type McpServiceServer interface {
 	ListServers(context.Context, *ListServersRequest) (*ListServersResponse, error)
 	DecideServer(context.Context, *DecideServerRequest) (*DecideServerResponse, error)
 	RevokeServer(context.Context, *RevokeServerRequest) (*RevokeServerResponse, error)
+	// ListApprovedServers is what an agent's host reads at run start: only
+	// servers an owner or admin approved and nobody has since revoked. It is a
+	// separate RPC from ListServers so the one question that decides what an
+	// agent may be offered cannot be answered with a filter someone forgot.
+	ListApprovedServers(context.Context, *ListApprovedServersRequest) (*ListApprovedServersResponse, error)
 }
 
 // UnimplementedMcpServiceServer should be embedded to have
@@ -121,6 +142,9 @@ func (UnimplementedMcpServiceServer) DecideServer(context.Context, *DecideServer
 }
 func (UnimplementedMcpServiceServer) RevokeServer(context.Context, *RevokeServerRequest) (*RevokeServerResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RevokeServer not implemented")
+}
+func (UnimplementedMcpServiceServer) ListApprovedServers(context.Context, *ListApprovedServersRequest) (*ListApprovedServersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListApprovedServers not implemented")
 }
 func (UnimplementedMcpServiceServer) testEmbeddedByValue() {}
 
@@ -214,6 +238,24 @@ func _McpService_RevokeServer_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _McpService_ListApprovedServers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListApprovedServersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(McpServiceServer).ListApprovedServers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: McpService_ListApprovedServers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(McpServiceServer).ListApprovedServers(ctx, req.(*ListApprovedServersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // McpService_ServiceDesc is the grpc.ServiceDesc for McpService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -236,6 +278,10 @@ var McpService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RevokeServer",
 			Handler:    _McpService_RevokeServer_Handler,
+		},
+		{
+			MethodName: "ListApprovedServers",
+			Handler:    _McpService_ListApprovedServers_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

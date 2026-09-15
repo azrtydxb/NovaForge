@@ -8,12 +8,9 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strings"
 
-	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/metadata"
 
 	gatesv1 "github.com/novaforge/novaforge/gen/novaforge/gates/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
@@ -21,7 +18,6 @@ import (
 	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
 	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
 	"github.com/novaforge/novaforge/internal/approvals"
-	"github.com/novaforge/novaforge/internal/authz"
 	"github.com/novaforge/novaforge/internal/capability"
 	"github.com/novaforge/novaforge/internal/database"
 	"github.com/novaforge/novaforge/internal/gates"
@@ -110,24 +106,10 @@ func main() {
 	secretsBroker := secrets.NewBroker(pool, []byte(cfg.SecretsKEK))
 	grants := capability.NewStore(pool)
 
-	controller := &gates.Controller{
-		Store:      gatesStore,
-		Git:        gitClient,
-		Runs:       gates.NewServiceRunLookup(reviewsClient, workClient, gitClient),
-		BuildInput: gates.NewWorkspaceInputBuilder(gitClient, os.Getenv("NOVAFORGE_SEMGREP_RULES")),
-		Proof: func(ctx context.Context, runID uuid.UUID, gate, status, detail string) error {
-			_, err := reviewsClient.RecordProof(ctx, &reviewsv1.RecordProofRequest{
-				RunId: runID.String(), Gate: gate, Status: status, Detail: detail,
-			})
-			return err
-		},
-	}
+	controller := gates.NewController(gatesStore, gitClient, reviewsClient, workClient, os.Getenv("NOVAFORGE_SEMGREP_RULES"))
 
 	grpcServer := gates.NewGRPCServer(controller, approvalsStore, secretsBroker, grants)
 	grpcServer.Proposals = &gates.Proposer{Git: gitClient, Reviews: reviewsClient}
-	// Production credentials are brokered only to jobs on a repository's
-	// default branch, which git-platform owns.
-	grpcServer.DefaultBranch = gates.DefaultBranchFromGit(gitClient)
 
 	// Callers are resolved the same way every service resolves them: a
 	// person's credential through identity, or a platform service token
@@ -149,84 +131,4 @@ func main() {
 	if err := service.Serve(ctx, cfg, srv, check); err != nil {
 		log.Fatalf("gates: serve: %v", err)
 	}
-}
-
-// authInterceptor resolves the caller from the request's "authorization"
-// metadata via the identity service and attaches the resulting authz.Scope
-// to the request context. See cmd/git-platform/main.go, which this mirrors
-// exactly.
-func authInterceptor(identityClient identityv1.IdentityServiceClient) grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		if scope, ok := resolveScopeFromMetadata(ctx, identityClient); ok {
-			ctx = authz.WithScope(ctx, scope)
-		}
-		return handler(ctx, req)
-	}
-}
-
-func resolveScopeFromMetadata(ctx context.Context, identityClient identityv1.IdentityServiceClient) (authz.Scope, bool) {
-	token := bearerTokenFromContext(ctx)
-	if token == "" {
-		return authz.Scope{}, false
-	}
-	org := metadataValue(ctx, "x-novaforge-org")
-	subject, err := resolveSubject(ctx, identityClient, token, org)
-	if err != nil {
-		return authz.Scope{}, false
-	}
-	return subjectToScope(subject), true
-}
-
-func resolveSubject(ctx context.Context, identityClient identityv1.IdentityServiceClient, token, org string) (*identityv1.Subject, error) {
-	if resp, err := identityClient.ResolveToken(ctx, &identityv1.ResolveTokenRequest{Token: token, Org: org}); err == nil {
-		return resp.GetSubject(), nil
-	}
-	resp, err := identityClient.ResolveSession(ctx, &identityv1.ResolveSessionRequest{Token: token, Org: org})
-	if err != nil {
-		return nil, err
-	}
-	return resp.GetSubject(), nil
-}
-
-func metadataValue(ctx context.Context, key string) string {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return ""
-	}
-	if v := md.Get(key); len(v) > 0 {
-		return v[0]
-	}
-	return ""
-}
-
-func subjectToScope(subject *identityv1.Subject) authz.Scope {
-	var scope authz.Scope
-	scope.ActorID = parseUUIDOrNil(subject.GetUserId())
-	scope.OrgID = parseUUIDOrNil(subject.GetOrgId())
-	scope.ActorKind = subject.GetActorKind()
-	scope.Role = subject.GetRole()
-	if scope.ActorKind == "" {
-		scope.ActorKind = "user"
-	}
-	return scope
-}
-
-func parseUUIDOrNil(raw string) uuid.UUID {
-	id, err := uuid.Parse(raw)
-	if err != nil {
-		return uuid.Nil
-	}
-	return id
-}
-
-func bearerTokenFromContext(ctx context.Context) string {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return ""
-	}
-	values := md.Get("authorization")
-	if len(values) == 0 {
-		return ""
-	}
-	return strings.TrimPrefix(values[0], "Bearer ")
 }

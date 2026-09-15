@@ -3,6 +3,7 @@ package workspace_test
 import (
 	"context"
 	"encoding/json"
+	"github.com/novaforge/novaforge/internal/capability"
 	"os"
 	"strings"
 	"testing"
@@ -87,7 +88,16 @@ func TestAgentRunIsolationAndEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateAgent: %v", err)
 	}
-	run, err := store.CreateRun(personCtx, agents.Run{OrgID: orgID, AgentID: agent.ID, SponsorID: uuid.New(), GrantID: uuid.New(),
+	// The run writes through the git API as its agent, so it holds a real
+	// capability grant for its branch, and git-platform checks it.
+	grants := capability.NewStore(pool)
+	gitSrv.Grants = grants
+	grant, err := grants.Issue(personCtx, capability.Grant{OrgID: orgID, SubjectID: agent.ID, SubjectKind: "agent",
+		RepoRead: true, WriteBranch: "agents/NF-1/", ExpiresAt: time.Now().Add(time.Hour)})
+	if err != nil {
+		t.Fatalf("Issue grant: %v", err)
+	}
+	run, err := store.CreateRun(personCtx, agents.Run{OrgID: orgID, AgentID: agent.ID, SponsorID: uuid.New(), GrantID: grant.ID,
 		Branch: "agents/NF-1/work", WallclockLimit: time.Hour})
 	if err != nil {
 		t.Fatalf("CreateRun: %v", err)

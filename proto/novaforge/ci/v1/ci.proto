@@ -56,6 +56,9 @@ message ConnectRequest {
     Heartbeat heartbeat = 2;
     LogChunk log_chunk = 3;
   }
+  // token is the secret Register returned for runner_id. A runner id is not
+  // a secret — it appears in job records and logs — so it proves nothing.
+  string token = 4;
 }
 
 // ConnectResponse is one job pushed down a runner's Connect stream.
@@ -81,6 +84,8 @@ message ReportStatusRequest {
   string status = 3;
   int32 exit_code = 4;
   string detail = 5;
+  // token is the secret Register returned for runner_id.
+  string token = 6;
 }
 
 message ReportStatusResponse {
@@ -153,6 +158,8 @@ message UploadArtifactRequest {
   string job_id = 2;
   string name = 3;
   bytes content = 4;
+  // token is the secret Register returned for runner_id.
+  string token = 5;
 }
 message UploadArtifactResponse {
   string artifact_id = 1;

@@ -356,11 +356,13 @@ These are real and are not worked around:
   proven against real services with a model double, not on the cluster.
 - **A repository's agent cost budget cannot trip on this cluster**, since no
   model is priced; its token and wall-clock budgets apply.
-- **Approved external MCP servers are recorded, not yet consumed.** mcp-server
-  keeps each organization's register and the MCP screen operates it, but
-  nothing offers an external MCP server to an agent: `internal/mcp.Client` is
-  called only by its tests. Approving a server changes nothing an agent can do
-  until that consumer is written, and it must read the approved list when it is.
+- **Only Streamable HTTP external MCP servers reach agents.** agent-runtime
+  offers an organization's approved servers' tools to every run
+  (`mcp.<server>.<tool>`, audited, re-checked against the register on each
+  call). An approved **stdio** server is skipped and logged: it is a command
+  line, and running an organization-supplied command inside agent-runtime would
+  hand it that service's cluster credentials. The register carries no
+  per-server credential, so a server needing a bearer token cannot be used yet.
 - **The maintenance sweep covers organizations that have Work Items.** It finds
   organizations through the work schema, since it may not read identity's; an
   organization with repositories and no Work Item is scanned only on demand.
@@ -443,32 +445,47 @@ by reading test bodies, not by matching names.
 from the map, when the map names a criterion the spec lacks, when a cited Go
 test is renamed or deleted, or when a cited e2e script or step no longer exists.
 
-**21 covered, 12 partial, 0 uncovered.**
+**27 covered, 6 partial, 0 uncovered.**
+
+S-1 `TestPATGitClone`, S-2 `TestRepoBrowseAPI`, S-3 `TestAgentBranchScopeEnforced`
+and `TestCrossOrgAccessDenied`, S-13 `TestMCPServerOperations` and S-21
+`TestCLIFullLifecycle` became covered on 2026-09-15, on `internal/platformtest`:
+every service's real gRPC server behind the real interceptor, on the dev
+datastores, from credentials identity issues. `cli_test.sh` and
+`crossorg_test.sh` were written for them and have **not yet been run on the
+cluster**.
+
+Writing them found, and fixed:
+
+- **SECURITY: the CI runner protocol authenticated nobody.** `Register` took the
+  organization from the request with no credential, so anything that could
+  reach ci-runner (CI job pods can) could enrol a runner into any organization,
+  be dispatched its jobs and receive each job's 30-minute clone credential for
+  that organization. The token `Register` returned was never checked:
+  `ConnectRequest` did not carry it, and `ReportStatus`, log chunks and
+  `UploadArtifact` accepted any job id. Registration now needs an owner/admin
+  or a platform credential for the organization, and every later call the
+  registration token.
+- **SECURITY: `StartRun` trusted `agent_id` and `sponsor_id`.** A member could
+  issue a grant in their organization to another organization's agent, and
+  name anyone as sponsor. `StreamRunEvents` filtered a shared stream by run id
+  alone (unreachable today: agent-runtime has no stream interceptor).
+- **An agent's credential meant different things on different surfaces.**
+  git-platform's own interceptor called an agent run a "service" with no actor:
+  its pushes were refused inside its grant, while `CreateCommit`, `CreateBranch`
+  and `Merge` let the same credential write main. The credential now names the
+  agent and every surface applies its grant.
+- **Every ref was reported as kind "commit"**, and an annotated tag as its
+  tag-object sha, which no tree or history lookup can use.
 
 No criterion is uncovered: every component the spec names now has a production
 caller.
 
 Partial (the map's `note` says exactly what is missing):
 
-- S-1 `TestPATGitClone`: no clone with a PAT; revoked tokens are refused only at
-  token resolution, never at the git transport.
-- S-2 `TestRepoBrowseAPI`: tree, blob, diff and tags are never read through REST.
-- S-3 `TestAgentBranchScopeEnforced`: the transport half runs against a stub
-  capability function, never a real agent grant.
-- S-3 `TestCrossOrgAccessDenied`: most cross-org repo, Work Item write, CI run and
-  Agent Run paths are unasserted.
-- S-4 `TestWorkItemLifecycle`: acceptance criteria, constraints, required gates
-  and assignment to a human are never asserted.
-- S-5 `TestEngineeringRunProof`: plan, change impact and the producing
-  agent/model are never exposed by a run in any test.
-- S-6 `TestRunnerJobStreamAndArtifact`: logs are never read while a job runs,
-  and artifact content has no download route.
-- S-9 `TestAirGappedAgentRun`: "no egress to a hosted provider" is asserted
-  nowhere.
-- S-13 `TestMCPServerOperations`: none of the four operations succeeds over
-  either transport.
-- S-20 `TestMaintenanceProposesWorkItem`: the production sweep from scanner to
-  proposal is untested.
-- S-21 `TestCLIFullLifecycle`: `nf run gates` and `nf run merge` are never
-  exercised.
-- S-22 `TestHelmDeploy`: the expected set of services is never checked.
+- S-4 `TestWorkItemLifecycle`: Only type and goal are asserted on create; acceptance criteria, constraints and required gates are never created and read back. Assignment to an agent is asserted, assignment to a human is not.
+- S-5 `TestEngineeringRunProof`: Per-gate proof is asserted. Change impact is only a pure function over a stubbed diff, plan steps are asserted nowhere, and no test sets or reads the agent and model behind an Engineering Run (the provenance test is for Agent Runs). Nothing reads plan, impact and proof through the API.
+- S-6 `TestRunnerJobStreamAndArtifact`: A real runner runs a job and its log and artifact listing are read after the run ends. "Logs observable while the job runs" is asserted only on the Redis log stream with no job running, artifact content round-trips only at the store (the edge has no artifact download route), and the dispatch tests use in-process channels, not the gRPC stream.
+- S-9 `TestAirGappedAgentRun`: Runs complete against the cluster's FastLLM-served model (agent_test, agent_ci_test), but "no network egress to any hosted provider" is asserted nowhere: the chart has no egress NetworkPolicy for the services and nothing checks the proxy does not forward upstream.
+- S-20 `TestMaintenanceProposesWorkItem`: The real CVE scanner finds a vulnerable module, and Propose turns a hand-built finding into an unassigned Work Item with no agent run; the production sweep joining them (cmd/work-reviews/maintenance.go) is untested and factory_test.sh has no vulnerable-dependency step despite its header.
+- S-22 `TestHelmDeploy`: Every Deployment present must be ready, and readiness is /healthz, but the step never checks the expected set of services exists — a chart that omitted one would pass — and no test renders or installs the chart.

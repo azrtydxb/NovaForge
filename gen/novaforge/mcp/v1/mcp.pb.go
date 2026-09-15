@@ -21,6 +21,86 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type ListApprovedServersRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListApprovedServersRequest) Reset() {
+	*x = ListApprovedServersRequest{}
+	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListApprovedServersRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListApprovedServersRequest) ProtoMessage() {}
+
+func (x *ListApprovedServersRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListApprovedServersRequest.ProtoReflect.Descriptor instead.
+func (*ListApprovedServersRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_mcp_v1_mcp_proto_rawDescGZIP(), []int{0}
+}
+
+type ListApprovedServersResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Servers       []*McpServer           `protobuf:"bytes,1,rep,name=servers,proto3" json:"servers,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListApprovedServersResponse) Reset() {
+	*x = ListApprovedServersResponse{}
+	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListApprovedServersResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListApprovedServersResponse) ProtoMessage() {}
+
+func (x *ListApprovedServersResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListApprovedServersResponse.ProtoReflect.Descriptor instead.
+func (*ListApprovedServersResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_mcp_v1_mcp_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ListApprovedServersResponse) GetServers() []*McpServer {
+	if x != nil {
+		return x.Servers
+	}
+	return nil
+}
+
 // McpServer mirrors a row in the mcp.mcp_servers table.
 type McpServer struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -46,7 +126,7 @@ type McpServer struct {
 
 func (x *McpServer) Reset() {
 	*x = McpServer{}
-	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[0]
+	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -58,7 +138,7 @@ func (x *McpServer) String() string {
 func (*McpServer) ProtoMessage() {}
 
 func (x *McpServer) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[0]
+	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -71,7 +151,7 @@ func (x *McpServer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use McpServer.ProtoReflect.Descriptor instead.
 func (*McpServer) Descriptor() ([]byte, []int) {
-	return file_novaforge_mcp_v1_mcp_proto_rawDescGZIP(), []int{0}
+	return file_novaforge_mcp_v1_mcp_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *McpServer) GetId() string {
@@ -170,7 +250,7 @@ type RequestServerRequest struct {
 
 func (x *RequestServerRequest) Reset() {
 	*x = RequestServerRequest{}
-	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[1]
+	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -182,7 +262,7 @@ func (x *RequestServerRequest) String() string {
 func (*RequestServerRequest) ProtoMessage() {}
 
 func (x *RequestServerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[1]
+	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -195,7 +275,7 @@ func (x *RequestServerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestServerRequest.ProtoReflect.Descriptor instead.
 func (*RequestServerRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_mcp_v1_mcp_proto_rawDescGZIP(), []int{1}
+	return file_novaforge_mcp_v1_mcp_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *RequestServerRequest) GetName() string {
@@ -235,7 +315,7 @@ type RequestServerResponse struct {
 
 func (x *RequestServerResponse) Reset() {
 	*x = RequestServerResponse{}
-	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[2]
+	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -247,7 +327,7 @@ func (x *RequestServerResponse) String() string {
 func (*RequestServerResponse) ProtoMessage() {}
 
 func (x *RequestServerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[2]
+	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -260,7 +340,7 @@ func (x *RequestServerResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestServerResponse.ProtoReflect.Descriptor instead.
 func (*RequestServerResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_mcp_v1_mcp_proto_rawDescGZIP(), []int{2}
+	return file_novaforge_mcp_v1_mcp_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *RequestServerResponse) GetServer() *McpServer {
@@ -280,7 +360,7 @@ type ListServersRequest struct {
 
 func (x *ListServersRequest) Reset() {
 	*x = ListServersRequest{}
-	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[3]
+	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -292,7 +372,7 @@ func (x *ListServersRequest) String() string {
 func (*ListServersRequest) ProtoMessage() {}
 
 func (x *ListServersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[3]
+	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -305,7 +385,7 @@ func (x *ListServersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListServersRequest.ProtoReflect.Descriptor instead.
 func (*ListServersRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_mcp_v1_mcp_proto_rawDescGZIP(), []int{3}
+	return file_novaforge_mcp_v1_mcp_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ListServersRequest) GetStatus() string {
@@ -327,7 +407,7 @@ type ListServersResponse struct {
 
 func (x *ListServersResponse) Reset() {
 	*x = ListServersResponse{}
-	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[4]
+	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -339,7 +419,7 @@ func (x *ListServersResponse) String() string {
 func (*ListServersResponse) ProtoMessage() {}
 
 func (x *ListServersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[4]
+	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -352,7 +432,7 @@ func (x *ListServersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListServersResponse.ProtoReflect.Descriptor instead.
 func (*ListServersResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_mcp_v1_mcp_proto_rawDescGZIP(), []int{4}
+	return file_novaforge_mcp_v1_mcp_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ListServersResponse) GetServers() []*McpServer {
@@ -382,7 +462,7 @@ type DecideServerRequest struct {
 
 func (x *DecideServerRequest) Reset() {
 	*x = DecideServerRequest{}
-	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[5]
+	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -394,7 +474,7 @@ func (x *DecideServerRequest) String() string {
 func (*DecideServerRequest) ProtoMessage() {}
 
 func (x *DecideServerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[5]
+	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -407,7 +487,7 @@ func (x *DecideServerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DecideServerRequest.ProtoReflect.Descriptor instead.
 func (*DecideServerRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_mcp_v1_mcp_proto_rawDescGZIP(), []int{5}
+	return file_novaforge_mcp_v1_mcp_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *DecideServerRequest) GetId() string {
@@ -440,7 +520,7 @@ type DecideServerResponse struct {
 
 func (x *DecideServerResponse) Reset() {
 	*x = DecideServerResponse{}
-	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[6]
+	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -452,7 +532,7 @@ func (x *DecideServerResponse) String() string {
 func (*DecideServerResponse) ProtoMessage() {}
 
 func (x *DecideServerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[6]
+	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -465,7 +545,7 @@ func (x *DecideServerResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DecideServerResponse.ProtoReflect.Descriptor instead.
 func (*DecideServerResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_mcp_v1_mcp_proto_rawDescGZIP(), []int{6}
+	return file_novaforge_mcp_v1_mcp_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *DecideServerResponse) GetServer() *McpServer {
@@ -485,7 +565,7 @@ type RevokeServerRequest struct {
 
 func (x *RevokeServerRequest) Reset() {
 	*x = RevokeServerRequest{}
-	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[7]
+	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -497,7 +577,7 @@ func (x *RevokeServerRequest) String() string {
 func (*RevokeServerRequest) ProtoMessage() {}
 
 func (x *RevokeServerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[7]
+	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -510,7 +590,7 @@ func (x *RevokeServerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeServerRequest.ProtoReflect.Descriptor instead.
 func (*RevokeServerRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_mcp_v1_mcp_proto_rawDescGZIP(), []int{7}
+	return file_novaforge_mcp_v1_mcp_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *RevokeServerRequest) GetId() string {
@@ -536,7 +616,7 @@ type RevokeServerResponse struct {
 
 func (x *RevokeServerResponse) Reset() {
 	*x = RevokeServerResponse{}
-	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[8]
+	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -548,7 +628,7 @@ func (x *RevokeServerResponse) String() string {
 func (*RevokeServerResponse) ProtoMessage() {}
 
 func (x *RevokeServerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[8]
+	mi := &file_novaforge_mcp_v1_mcp_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -561,7 +641,7 @@ func (x *RevokeServerResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeServerResponse.ProtoReflect.Descriptor instead.
 func (*RevokeServerResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_mcp_v1_mcp_proto_rawDescGZIP(), []int{8}
+	return file_novaforge_mcp_v1_mcp_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *RevokeServerResponse) GetServer() *McpServer {
@@ -575,7 +655,10 @@ var File_novaforge_mcp_v1_mcp_proto protoreflect.FileDescriptor
 
 const file_novaforge_mcp_v1_mcp_proto_rawDesc = "" +
 	"\n" +
-	"\x1anovaforge/mcp/v1/mcp.proto\x12\x10novaforge.mcp.v1\"\xc8\x02\n" +
+	"\x1anovaforge/mcp/v1/mcp.proto\x12\x10novaforge.mcp.v1\"\x1c\n" +
+	"\x1aListApprovedServersRequest\"T\n" +
+	"\x1bListApprovedServersResponse\x125\n" +
+	"\aservers\x18\x01 \x03(\v2\x1b.novaforge.mcp.v1.McpServerR\aservers\"\xc8\x02\n" +
 	"\tMcpServer\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x15\n" +
 	"\x06org_id\x18\x02 \x01(\tR\x05orgId\x12\x12\n" +
@@ -616,13 +699,14 @@ const file_novaforge_mcp_v1_mcp_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\"K\n" +
 	"\x14RevokeServerResponse\x123\n" +
-	"\x06server\x18\x01 \x01(\v2\x1b.novaforge.mcp.v1.McpServerR\x06server2\x88\x03\n" +
+	"\x06server\x18\x01 \x01(\v2\x1b.novaforge.mcp.v1.McpServerR\x06server2\xfc\x03\n" +
 	"\n" +
 	"McpService\x12`\n" +
 	"\rRequestServer\x12&.novaforge.mcp.v1.RequestServerRequest\x1a'.novaforge.mcp.v1.RequestServerResponse\x12Z\n" +
 	"\vListServers\x12$.novaforge.mcp.v1.ListServersRequest\x1a%.novaforge.mcp.v1.ListServersResponse\x12]\n" +
 	"\fDecideServer\x12%.novaforge.mcp.v1.DecideServerRequest\x1a&.novaforge.mcp.v1.DecideServerResponse\x12]\n" +
-	"\fRevokeServer\x12%.novaforge.mcp.v1.RevokeServerRequest\x1a&.novaforge.mcp.v1.RevokeServerResponseB\xbd\x01\n" +
+	"\fRevokeServer\x12%.novaforge.mcp.v1.RevokeServerRequest\x1a&.novaforge.mcp.v1.RevokeServerResponse\x12r\n" +
+	"\x13ListApprovedServers\x12,.novaforge.mcp.v1.ListApprovedServersRequest\x1a-.novaforge.mcp.v1.ListApprovedServersResponseB\xbd\x01\n" +
 	"\x14com.novaforge.mcp.v1B\bMcpProtoP\x01Z9github.com/novaforge/novaforge/gen/novaforge/mcp/v1;mcpv1\xa2\x02\x03NMX\xaa\x02\x10Novaforge.Mcp.V1\xca\x02\x10Novaforge\\Mcp\\V1\xe2\x02\x1cNovaforge\\Mcp\\V1\\GPBMetadata\xea\x02\x12Novaforge::Mcp::V1b\x06proto3"
 
 var (
@@ -637,36 +721,41 @@ func file_novaforge_mcp_v1_mcp_proto_rawDescGZIP() []byte {
 	return file_novaforge_mcp_v1_mcp_proto_rawDescData
 }
 
-var file_novaforge_mcp_v1_mcp_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_novaforge_mcp_v1_mcp_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_novaforge_mcp_v1_mcp_proto_goTypes = []any{
-	(*McpServer)(nil),             // 0: novaforge.mcp.v1.McpServer
-	(*RequestServerRequest)(nil),  // 1: novaforge.mcp.v1.RequestServerRequest
-	(*RequestServerResponse)(nil), // 2: novaforge.mcp.v1.RequestServerResponse
-	(*ListServersRequest)(nil),    // 3: novaforge.mcp.v1.ListServersRequest
-	(*ListServersResponse)(nil),   // 4: novaforge.mcp.v1.ListServersResponse
-	(*DecideServerRequest)(nil),   // 5: novaforge.mcp.v1.DecideServerRequest
-	(*DecideServerResponse)(nil),  // 6: novaforge.mcp.v1.DecideServerResponse
-	(*RevokeServerRequest)(nil),   // 7: novaforge.mcp.v1.RevokeServerRequest
-	(*RevokeServerResponse)(nil),  // 8: novaforge.mcp.v1.RevokeServerResponse
+	(*ListApprovedServersRequest)(nil),  // 0: novaforge.mcp.v1.ListApprovedServersRequest
+	(*ListApprovedServersResponse)(nil), // 1: novaforge.mcp.v1.ListApprovedServersResponse
+	(*McpServer)(nil),                   // 2: novaforge.mcp.v1.McpServer
+	(*RequestServerRequest)(nil),        // 3: novaforge.mcp.v1.RequestServerRequest
+	(*RequestServerResponse)(nil),       // 4: novaforge.mcp.v1.RequestServerResponse
+	(*ListServersRequest)(nil),          // 5: novaforge.mcp.v1.ListServersRequest
+	(*ListServersResponse)(nil),         // 6: novaforge.mcp.v1.ListServersResponse
+	(*DecideServerRequest)(nil),         // 7: novaforge.mcp.v1.DecideServerRequest
+	(*DecideServerResponse)(nil),        // 8: novaforge.mcp.v1.DecideServerResponse
+	(*RevokeServerRequest)(nil),         // 9: novaforge.mcp.v1.RevokeServerRequest
+	(*RevokeServerResponse)(nil),        // 10: novaforge.mcp.v1.RevokeServerResponse
 }
 var file_novaforge_mcp_v1_mcp_proto_depIdxs = []int32{
-	0, // 0: novaforge.mcp.v1.RequestServerResponse.server:type_name -> novaforge.mcp.v1.McpServer
-	0, // 1: novaforge.mcp.v1.ListServersResponse.servers:type_name -> novaforge.mcp.v1.McpServer
-	0, // 2: novaforge.mcp.v1.DecideServerResponse.server:type_name -> novaforge.mcp.v1.McpServer
-	0, // 3: novaforge.mcp.v1.RevokeServerResponse.server:type_name -> novaforge.mcp.v1.McpServer
-	1, // 4: novaforge.mcp.v1.McpService.RequestServer:input_type -> novaforge.mcp.v1.RequestServerRequest
-	3, // 5: novaforge.mcp.v1.McpService.ListServers:input_type -> novaforge.mcp.v1.ListServersRequest
-	5, // 6: novaforge.mcp.v1.McpService.DecideServer:input_type -> novaforge.mcp.v1.DecideServerRequest
-	7, // 7: novaforge.mcp.v1.McpService.RevokeServer:input_type -> novaforge.mcp.v1.RevokeServerRequest
-	2, // 8: novaforge.mcp.v1.McpService.RequestServer:output_type -> novaforge.mcp.v1.RequestServerResponse
-	4, // 9: novaforge.mcp.v1.McpService.ListServers:output_type -> novaforge.mcp.v1.ListServersResponse
-	6, // 10: novaforge.mcp.v1.McpService.DecideServer:output_type -> novaforge.mcp.v1.DecideServerResponse
-	8, // 11: novaforge.mcp.v1.McpService.RevokeServer:output_type -> novaforge.mcp.v1.RevokeServerResponse
-	8, // [8:12] is the sub-list for method output_type
-	4, // [4:8] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	2,  // 0: novaforge.mcp.v1.ListApprovedServersResponse.servers:type_name -> novaforge.mcp.v1.McpServer
+	2,  // 1: novaforge.mcp.v1.RequestServerResponse.server:type_name -> novaforge.mcp.v1.McpServer
+	2,  // 2: novaforge.mcp.v1.ListServersResponse.servers:type_name -> novaforge.mcp.v1.McpServer
+	2,  // 3: novaforge.mcp.v1.DecideServerResponse.server:type_name -> novaforge.mcp.v1.McpServer
+	2,  // 4: novaforge.mcp.v1.RevokeServerResponse.server:type_name -> novaforge.mcp.v1.McpServer
+	3,  // 5: novaforge.mcp.v1.McpService.RequestServer:input_type -> novaforge.mcp.v1.RequestServerRequest
+	5,  // 6: novaforge.mcp.v1.McpService.ListServers:input_type -> novaforge.mcp.v1.ListServersRequest
+	7,  // 7: novaforge.mcp.v1.McpService.DecideServer:input_type -> novaforge.mcp.v1.DecideServerRequest
+	9,  // 8: novaforge.mcp.v1.McpService.RevokeServer:input_type -> novaforge.mcp.v1.RevokeServerRequest
+	0,  // 9: novaforge.mcp.v1.McpService.ListApprovedServers:input_type -> novaforge.mcp.v1.ListApprovedServersRequest
+	4,  // 10: novaforge.mcp.v1.McpService.RequestServer:output_type -> novaforge.mcp.v1.RequestServerResponse
+	6,  // 11: novaforge.mcp.v1.McpService.ListServers:output_type -> novaforge.mcp.v1.ListServersResponse
+	8,  // 12: novaforge.mcp.v1.McpService.DecideServer:output_type -> novaforge.mcp.v1.DecideServerResponse
+	10, // 13: novaforge.mcp.v1.McpService.RevokeServer:output_type -> novaforge.mcp.v1.RevokeServerResponse
+	1,  // 14: novaforge.mcp.v1.McpService.ListApprovedServers:output_type -> novaforge.mcp.v1.ListApprovedServersResponse
+	10, // [10:15] is the sub-list for method output_type
+	5,  // [5:10] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_novaforge_mcp_v1_mcp_proto_init() }
@@ -680,7 +769,7 @@ func file_novaforge_mcp_v1_mcp_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_novaforge_mcp_v1_mcp_proto_rawDesc), len(file_novaforge_mcp_v1_mcp_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
