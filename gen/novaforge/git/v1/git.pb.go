@@ -1134,10 +1134,14 @@ func (x *GetBlobResponse) GetContent() []byte {
 }
 
 type GetDiffRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Repo          string                 `protobuf:"bytes,1,opt,name=repo,proto3" json:"repo,omitempty"`
-	From          string                 `protobuf:"bytes,2,opt,name=from,proto3" json:"from,omitempty"`
-	To            string                 `protobuf:"bytes,3,opt,name=to,proto3" json:"to,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Repo  string                 `protobuf:"bytes,1,opt,name=repo,proto3" json:"repo,omitempty"`
+	From  string                 `protobuf:"bytes,2,opt,name=from,proto3" json:"from,omitempty"`
+	To    string                 `protobuf:"bytes,3,opt,name=to,proto3" json:"to,omitempty"`
+	// merge_base diffs `to` against the point it branched from `from`
+	// (git's three-dot form), so the result is only what `to` changed and not
+	// what `from` gained since.
+	MergeBase     bool `protobuf:"varint,4,opt,name=merge_base,json=mergeBase,proto3" json:"merge_base,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1191,6 +1195,13 @@ func (x *GetDiffRequest) GetTo() string {
 		return x.To
 	}
 	return ""
+}
+
+func (x *GetDiffRequest) GetMergeBase() bool {
+	if x != nil {
+		return x.MergeBase
+	}
+	return false
 }
 
 type GetDiffResponse struct {
@@ -1720,11 +1731,13 @@ const file_novaforge_git_v1_git_proto_rawDesc = "" +
 	"\x03ref\x18\x02 \x01(\tR\x03ref\x12\x12\n" +
 	"\x04path\x18\x03 \x01(\tR\x04path\"+\n" +
 	"\x0fGetBlobResponse\x12\x18\n" +
-	"\acontent\x18\x01 \x01(\fR\acontent\"H\n" +
+	"\acontent\x18\x01 \x01(\fR\acontent\"g\n" +
 	"\x0eGetDiffRequest\x12\x12\n" +
 	"\x04repo\x18\x01 \x01(\tR\x04repo\x12\x12\n" +
 	"\x04from\x18\x02 \x01(\tR\x04from\x12\x0e\n" +
-	"\x02to\x18\x03 \x01(\tR\x02to\"+\n" +
+	"\x02to\x18\x03 \x01(\tR\x02to\x12\x1d\n" +
+	"\n" +
+	"merge_base\x18\x04 \x01(\bR\tmergeBase\"+\n" +
 	"\x0fGetDiffResponse\x12\x18\n" +
 	"\aunified\x18\x01 \x01(\tR\aunified\"\x92\x01\n" +
 	"\fMergeRequest\x12\x12\n" +

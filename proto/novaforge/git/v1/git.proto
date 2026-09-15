@@ -121,6 +121,10 @@ message GetDiffRequest {
   string repo = 1;
   string from = 2;
   string to = 3;
+  // merge_base diffs `to` against the point it branched from `from`
+  // (git's three-dot form), so the result is only what `to` changed and not
+  // what `from` gained since.
+  bool merge_base = 4;
 }
 message GetDiffResponse {
   string unified = 1;

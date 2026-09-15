@@ -81,6 +81,7 @@ check() {
 }
 
 check "home (dashboard)" "/api/v1/orgs/$ORG/dashboard" "agents_running"
+check "exceptions (approvals)" "/api/v1/orgs/$ORG/approvals" "can_decide"
 check "work" "/api/v1/orgs/$ORG/repos/$REPO/work" "items"
 check "repositories" "/api/v1/orgs/$ORG/repos" "repos"
 check "ci" "/api/v1/orgs/$ORG/repos/$REPO/ci/runs" "runs"

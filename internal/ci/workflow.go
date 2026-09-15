@@ -6,6 +6,7 @@ package ci
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"sort"
 
 	"gopkg.in/yaml.v3"
@@ -20,6 +21,10 @@ type Job struct {
 	Image   string            `yaml:"image"`
 	Env     map[string]string `yaml:"env"`
 	Secrets []string          `yaml:"secrets"`
+	// Environment scopes the secrets the job may be brokered: staging (the
+	// default) or production. It is a request, not a permission — the
+	// broker decides whether a production job gets production material.
+	Environment string `yaml:"environment"`
 	// Artifacts are paths, relative to the checkout, to keep after the job.
 	// They are declared rather than inferred: collecting everything a job
 	// wrote would ship its whole working tree, including its credentials.
@@ -31,6 +36,10 @@ type Workflow struct {
 	Name string         `yaml:"name"`
 	Jobs map[string]Job `yaml:"jobs"`
 }
+
+// secretNameRe matches secrets.ValidName; it is repeated rather than imported
+// so the workflow parser does not pull the broker's database code in.
+var secretNameRe = regexp.MustCompile(`^[A-Z_][A-Z0-9_]{0,127}$`)
 
 // ParseWorkflow parses data as a workflow document, rejecting a job that
 // declares neither or both of run and agent, and a needs entry naming an
@@ -46,6 +55,24 @@ func ParseWorkflow(data []byte) (Workflow, error) {
 		hasAgent := job.Agent != ""
 		if hasRun == hasAgent {
 			return Workflow{}, fmt.Errorf("job %q must declare exactly one of run or agent", name)
+		}
+	}
+	for name, job := range w.Jobs {
+		switch job.Environment {
+		case "", "staging", "production":
+		default:
+			return Workflow{}, fmt.Errorf("job %q: environment %q must be staging or production", name, job.Environment)
+		}
+		for _, secret := range job.Secrets {
+			// A secret reaches the job as an environment variable of the same
+			// name, so a name that cannot be one is refused here, where the
+			// person who wrote it will see why.
+			if !secretNameRe.MatchString(secret) {
+				return Workflow{}, fmt.Errorf("job %q: secret %q must be upper-case letters, digits and underscores", name, secret)
+			}
+		}
+		if len(job.Secrets) > 0 && job.Agent != "" {
+			return Workflow{}, fmt.Errorf("job %q: an agent job is not brokered secrets", name)
 		}
 	}
 	for name, job := range w.Jobs {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/novaforge/novaforge/internal/redact"
 	"github.com/novaforge/novaforge/internal/svcauth"
 	"log/slog"
 	"net/url"
@@ -32,6 +33,14 @@ type Pump struct {
 	hmacSecret string
 	log        *slog.Logger
 	interval   time.Duration
+
+	// Credentials brokers the secrets a job declares, at dispatch. Nil means
+	// the deployment has no broker: a job declaring a secret then fails
+	// saying so, rather than running without it.
+	Credentials CredentialBroker
+	// Redactions receives each dispatched job's credential values, so the
+	// log path can mask them.
+	Redactions *Redactions
 }
 
 // NewPump builds a Pump. cloneBase is the base URL a runner clones from, e.g.
@@ -63,40 +72,89 @@ func (p *Pump) Run(ctx context.Context) {
 	}
 }
 
-// tick offers work to each connected runner once.
+// maxClaimsPerRunner bounds how many jobs one tick claims for one runner
+// while looking for one it can send. A job whose credentials cannot be
+// brokered is set aside and the next is tried, so it does not starve the jobs
+// behind it; the bound keeps a queue of such jobs from spinning a tick.
+const maxClaimsPerRunner = 8
+
+// credentialRetryAfter is how long a job blocked on an unreachable broker
+// waits before it is claimed again.
+const credentialRetryAfter = 15 * time.Second
+
+// tick offers work to each connected runner: at most one dispatched job per
+// runner per tick.
 func (p *Pump) tick(ctx context.Context) error {
 	for _, r := range p.dispatcher.Connected() {
-		job, orgID, err := p.store.ClaimForDispatch(ctx, r.ID, r.Labels)
-		if errors.Is(err, ErrNoClaimableJob) {
-			// Nothing to do for this runner is the normal case, not an error.
-			continue
-		}
-		if err != nil {
-			// Anything else is a real failure and must be visible: swallowing it
-			// as "no work" is indistinguishable from an idle system, which is
-			// how a broken claim path stays hidden.
-			if ctx.Err() == nil {
-				p.log.Error("ci pump: claim job", "runner", r.ID, "error", err)
+		for i := 0; i < maxClaimsPerRunner; i++ {
+			if p.offer(ctx, r) {
+				break
 			}
-			continue
-		}
-		// ClaimForDispatch hands back the repository NAME here; the pump turns
-		// it into a credentialed URL.
-		job.RepoCloneURL, err = p.cloneURL(orgID, job.RepoCloneURL)
-		if err != nil {
-			p.log.Error("ci pump: build clone url", "job", job.JobID, "error", err)
-			_ = p.store.SetJobStatus(ctx, job.JobID, "failure", err.Error())
-			continue
-		}
-
-		if err := p.dispatcher.DispatchTo(ctx, r.ID, job); err != nil {
-			// The runner vanished between the claim and the send; put the job
-			// back so another runner takes it rather than losing it.
-			p.log.Warn("ci pump: dispatch failed, releasing job", "job", job.JobID, "error", err)
-			_ = p.store.SetJobStatus(ctx, job.JobID, "pending", "")
 		}
 	}
 	return nil
+}
+
+// offer claims one job for r and tries to send it. It reports whether the
+// runner is done for this tick — a job was sent, or there is nothing to claim
+// — rather than whether a job was set aside and another should be tried.
+func (p *Pump) offer(ctx context.Context, r ConnectedRunner) bool {
+	job, orgID, err := p.store.ClaimForDispatch(ctx, r.ID, r.Labels)
+	if errors.Is(err, ErrNoClaimableJob) {
+		// Nothing to do for this runner is the normal case, not an error.
+		return true
+	}
+	if err != nil {
+		// Anything else is a real failure and must be visible: swallowing it
+		// as "no work" is indistinguishable from an idle system, which is
+		// how a broken claim path stays hidden.
+		if ctx.Err() == nil {
+			p.log.Error("ci pump: claim job", "runner", r.ID, "error", err)
+		}
+		return true
+	}
+	// ClaimForDispatch hands back the repository NAME here; the pump turns
+	// it into a credentialed URL.
+	job.RepoCloneURL, err = p.cloneURL(orgID, job.RepoCloneURL)
+	if err != nil {
+		p.log.Error("ci pump: build clone url", "job", job.JobID, "error", err)
+		_ = p.store.SetJobStatus(ctx, job.JobID, "failure", err.Error())
+		return false
+	}
+
+	// Credentials are brokered here, at the last moment before the job is
+	// sent, and never stored: the lease is issued and redeemed for this job
+	// only, and the value lives in memory until the runner has it. A job that
+	// cannot get them does not run — it waits if the broker is unreachable
+	// and fails if the broker refused.
+	if len(job.Secrets) > 0 {
+		creds, cerr := ResolveJobCredentials(ctx, p.Credentials, JobCredentials{
+			OrgID: orgID, JobID: job.JobID, RepoID: job.RepoID, Ref: job.Ref,
+			Environment: job.Environment, Secrets: job.Secrets,
+		})
+		if cerr != nil {
+			if StateAfterCredentialResolution(cerr) == "pending" {
+				p.log.Warn("ci pump: job blocked on credentials", "job", job.JobID, "error", cerr)
+				_ = p.store.BlockJob(ctx, job.JobID, "blocked: "+cerr.Error(), time.Now().Add(credentialRetryAfter))
+			} else {
+				p.log.Warn("ci pump: job credentials refused", "job", job.JobID, "error", cerr)
+				_ = p.store.SetJobStatus(ctx, job.JobID, "failure", cerr.Error())
+			}
+			return false
+		}
+		job.SecretEnv = creds
+		p.Redactions.Register(job.JobID, redact.Values(creds))
+	}
+
+	if err := p.dispatcher.DispatchTo(ctx, r.ID, job); err != nil {
+		// The runner vanished between the claim and the send; put the job
+		// back so another runner takes it rather than losing it. Its lease
+		// is spent, so it is brokered afresh when it is claimed again.
+		p.log.Warn("ci pump: dispatch failed, releasing job", "job", job.JobID, "error", err)
+		p.Redactions.Forget(job.JobID)
+		_ = p.store.SetJobStatus(ctx, job.JobID, "pending", "")
+	}
+	return true
 }
 
 // cloneURL addresses the repository by id — git-platform resolves that the same

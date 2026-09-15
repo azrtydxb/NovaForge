@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/google/uuid"
@@ -21,7 +20,6 @@ import (
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
 	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
 	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
-	"github.com/novaforge/novaforge/internal/analysis"
 	"github.com/novaforge/novaforge/internal/approvals"
 	"github.com/novaforge/novaforge/internal/authz"
 	"github.com/novaforge/novaforge/internal/capability"
@@ -115,8 +113,8 @@ func main() {
 	controller := &gates.Controller{
 		Store:      gatesStore,
 		Git:        gitClient,
-		Runs:       newRunLookup(reviewsClient, workClient, gitClient),
-		BuildInput: newInputBuilder(gitClient),
+		Runs:       gates.NewServiceRunLookup(reviewsClient, workClient, gitClient),
+		BuildInput: gates.NewWorkspaceInputBuilder(gitClient, os.Getenv("NOVAFORGE_SEMGREP_RULES")),
 		Proof: func(ctx context.Context, runID uuid.UUID, gate, status, detail string) error {
 			_, err := reviewsClient.RecordProof(ctx, &reviewsv1.RecordProofRequest{
 				RunId: runID.String(), Gate: gate, Status: status, Detail: detail,
@@ -127,6 +125,9 @@ func main() {
 
 	grpcServer := gates.NewGRPCServer(controller, approvalsStore, secretsBroker, grants)
 	grpcServer.Proposals = &gates.Proposer{Git: gitClient, Reviews: reviewsClient}
+	// Production credentials are brokered only to jobs on a repository's
+	// default branch, which git-platform owns.
+	grpcServer.DefaultBranch = gates.DefaultBranchFromGit(gitClient)
 
 	// Callers are resolved the same way every service resolves them: a
 	// person's credential through identity, or a platform service token
@@ -148,158 +149,6 @@ func main() {
 	if err := service.Serve(ctx, cfg, srv, check); err != nil {
 		log.Fatalf("gates: serve: %v", err)
 	}
-}
-
-// newRunLookup resolves a gates.RunHead by asking the reviews and work
-// services, and the git-platform service for the target branch's current
-// head SHA — the gates schema never reads their tables directly.
-func newRunLookup(reviewsClient reviewsv1.ReviewsServiceClient, workClient workv1.WorkServiceClient, gitClient gitv1.GitServiceClient) gates.RunLookup {
-	return func(ctx context.Context, runID uuid.UUID) (gates.RunHead, error) {
-		runResp, err := reviewsClient.GetRun(ctx, &reviewsv1.GetRunRequest{Id: runID.String()})
-		if err != nil {
-			return gates.RunHead{}, fmt.Errorf("get run %s: %w", runID, err)
-		}
-		run := runResp.GetRun()
-
-		orgID, err := uuid.Parse(run.GetOrgId())
-		if err != nil {
-			return gates.RunHead{}, fmt.Errorf("run %s has invalid org_id: %w", runID, err)
-		}
-		repoID, err := uuid.Parse(run.GetRepoId())
-		if err != nil {
-			return gates.RunHead{}, fmt.Errorf("run %s has invalid repo_id: %w", runID, err)
-		}
-
-		var requiredGates []string
-		if run.GetWorkItemId() != "" {
-			itemResp, err := workClient.GetItem(ctx, &workv1.GetItemRequest{Id: run.GetWorkItemId()})
-			if err != nil {
-				return gates.RunHead{}, fmt.Errorf("get work item %s: %w", run.GetWorkItemId(), err)
-			}
-			requiredGates = itemResp.GetItem().GetRequiredGates()
-		}
-
-		repoName, err := resolveRepoName(ctx, gitClient, repoID)
-		if err != nil {
-			return gates.RunHead{}, err
-		}
-
-		branch := strings.TrimPrefix(run.GetTargetRef(), "refs/heads/")
-		branchesResp, err := gitClient.ListBranches(ctx, &gitv1.ListBranchesRequest{Repo: repoName})
-		if err != nil {
-			return gates.RunHead{}, fmt.Errorf("list branches for %s: %w", repoName, err)
-		}
-		var headSHA string
-		for _, ref := range branchesResp.GetRefs() {
-			if ref.GetName() == branch {
-				headSHA = ref.GetSha()
-				break
-			}
-		}
-		if headSHA == "" {
-			return gates.RunHead{}, fmt.Errorf("branch %q not found in repo %s", branch, repoName)
-		}
-
-		return gates.RunHead{
-			OrgID:         orgID,
-			RepoID:        repoID,
-			TargetRef:     run.GetTargetRef(),
-			HeadSHA:       headSHA,
-			WorkItemGates: requiredGates,
-		}, nil
-	}
-}
-
-// resolveRepoName looks up a repository's name from its id — the git
-// transport RPCs (GetTree, GetBlob, ListBranches) address a repository by
-// name within the caller's organization, not by id.
-func resolveRepoName(ctx context.Context, gitClient gitv1.GitServiceClient, repoID uuid.UUID) (string, error) {
-	reposResp, err := gitClient.ListRepos(ctx, &gitv1.ListReposRequest{})
-	if err != nil {
-		return "", fmt.Errorf("list repos: %w", err)
-	}
-	for _, r := range reposResp.GetRepos() {
-		if r.GetId() == repoID.String() {
-			return r.GetName(), nil
-		}
-	}
-	return "", fmt.Errorf("repo %s not found", repoID)
-}
-
-// newInputBuilder materializes the run's target commit into a fresh
-// temporary workspace by walking GetTree/GetBlob recursively, so a gate
-// runner running analysis tools sees a real checkout on disk. The
-// workspace is removed once ctx (the RPC's own context, which stays live
-// for the whole Evaluate call) is done.
-func newInputBuilder(gitClient gitv1.GitServiceClient) gates.InputBuilder {
-	return func(ctx context.Context, runID uuid.UUID, head gates.RunHead, gate string, params map[string]any) (gates.Input, error) {
-		repoName, err := resolveRepoName(ctx, gitClient, head.RepoID)
-		if err != nil {
-			return gates.Input{}, err
-		}
-
-		workdir, err := os.MkdirTemp("", "nf-gate-"+gate+"-*")
-		if err != nil {
-			return gates.Input{}, fmt.Errorf("create workspace: %w", err)
-		}
-		go func() {
-			<-ctx.Done()
-			_ = os.RemoveAll(workdir)
-		}()
-
-		if err := materializeTree(ctx, gitClient, repoName, head.HeadSHA, "", workdir); err != nil {
-			return gates.Input{}, fmt.Errorf("materialize workspace for %s@%s: %w", repoName, head.HeadSHA, err)
-		}
-
-		return gates.Input{
-			OrgID:     head.OrgID,
-			RepoID:    head.RepoID,
-			RunID:     runID,
-			WorkDir:   workdir,
-			TargetSHA: head.HeadSHA,
-			SourceSHA: head.HeadSHA,
-			Params:    params,
-			Exec:      analysis.DefaultExec,
-			SASTRules: os.Getenv("NOVAFORGE_SEMGREP_RULES"),
-		}, nil
-	}
-}
-
-// materializeTree recursively checks out ref's tree at path into destDir by
-// walking GetTree and fetching each blob's content with GetBlob.
-func materializeTree(ctx context.Context, gitClient gitv1.GitServiceClient, repo, ref, path, destDir string) error {
-	treeResp, err := gitClient.GetTree(ctx, &gitv1.GetTreeRequest{Repo: repo, Ref: ref, Path: path})
-	if err != nil {
-		return fmt.Errorf("get tree %q: %w", path, err)
-	}
-	for _, entry := range treeResp.GetEntries() {
-		entryPath := entry.GetName()
-		if path != "" {
-			entryPath = path + "/" + entry.GetName()
-		}
-		destPath := filepath.Join(destDir, entryPath)
-		switch entry.GetKind() {
-		case "tree":
-			if err := os.MkdirAll(destPath, 0o755); err != nil {
-				return fmt.Errorf("mkdir %q: %w", entryPath, err)
-			}
-			if err := materializeTree(ctx, gitClient, repo, ref, entryPath, destDir); err != nil {
-				return err
-			}
-		case "blob":
-			if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
-				return fmt.Errorf("mkdir parent of %q: %w", entryPath, err)
-			}
-			blobResp, err := gitClient.GetBlob(ctx, &gitv1.GetBlobRequest{Repo: repo, Ref: ref, Path: entryPath})
-			if err != nil {
-				return fmt.Errorf("get blob %q: %w", entryPath, err)
-			}
-			if err := os.WriteFile(destPath, blobResp.GetContent(), 0o644); err != nil {
-				return fmt.Errorf("write %q: %w", entryPath, err)
-			}
-		}
-	}
-	return nil
 }
 
 // authInterceptor resolves the caller from the request's "authorization"

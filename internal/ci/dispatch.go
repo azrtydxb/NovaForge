@@ -28,6 +28,15 @@ type DispatchJob struct {
 	Env          map[string]string
 	// ArtifactPaths are declared by the workflow; the runner keeps only these.
 	ArtifactPaths []string
+	// Secrets and Environment are what the job declared; RepoID and Ref are
+	// what the broker judges a production request by.
+	Secrets     []string
+	Environment string
+	RepoID      uuid.UUID
+	Ref         string
+	// SecretEnv is the brokered credentials, set by the pump just before the
+	// job is sent and never stored.
+	SecretEnv map[string]string
 }
 
 // registeredRunner is one runner currently holding an open Connect stream.
@@ -190,5 +199,6 @@ func toConnectResponse(job DispatchJob) *civ1.ConnectResponse {
 		Image:         job.Image,
 		Env:           job.Env,
 		ArtifactPaths: job.ArtifactPaths,
+		SecretEnv:     job.SecretEnv,
 	}
 }

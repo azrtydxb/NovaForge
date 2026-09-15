@@ -235,6 +235,49 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/orgs/{org}/approvals:
+    get:
+      operationId: listApprovals
+      summary: Approval requests awaiting a decision
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/orgs/{org}/approvals/{id}/decision:
+    post:
+      operationId: decideApproval
+      summary: Approve or deny a request (owner or admin, never the change's author)
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/orgs/{org}/dashboard:
     get:
       operationId: getDashboard
@@ -1173,6 +1216,35 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/orgs/{org}/repos/{repo}/runs/{number}/approvals:
+    get:
+      operationId: listRunApprovals
+      summary: The approvals a run's change raised, in every state
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: number
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/orgs/{org}/repos/{repo}/runs/{number}/gates/evaluate:
     post:
       operationId: evaluateRunGates
@@ -1682,6 +1754,24 @@ paths:
     get:
       operationId: listSecrets
       summary: Secrets registered for an organization, names only
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      operationId: putSecret
+      summary: Register or replace a secret's value (owner or admin); the value is never returned
       parameters:
         - name: org
           in: path

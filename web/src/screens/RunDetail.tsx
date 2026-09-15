@@ -14,7 +14,8 @@ import {
   StatePill,
 } from "../components/ui";
 import { Dialog } from "../components/Dialog";
-import type { EngineeringRun, ProofRecord } from "../lib/types";
+import type { ApprovalList, EngineeringRun, ProofRecord } from "../lib/types";
+import { ApprovalRows } from "../components/Approvals";
 
 interface PlanStep {
   ordinal: number;
@@ -189,6 +190,8 @@ export function RunDetail() {
         </div>
       ) : null}
 
+      {w.org !== null ? <RunApprovals org={w.org} base={base} /> : null}
+
       <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
         {TABS.map((t) => (
           <button
@@ -216,6 +219,45 @@ export function RunDetail() {
       ) : null}
       {tab === "Tool calls" ? <Tools base={base} /> : null}
     </Page>
+  );
+}
+
+/** RunApprovals shows the decisions this run's change needs from a person.
+ * A pending or denied one blocks the merge, and saying so here is what keeps
+ * a refused merge from reading as a platform fault. Superseded requests are
+ * history: the change moved on and was asked again. Requests appear once the
+ * run's gates have been run, or a merge has been attempted. */
+function RunApprovals({ org, base }: { org: string; base: string }) {
+  const approvals = useQuery({
+    queryKey: ["approvals", base],
+    queryFn: () => api.get<ApprovalList>(`${base}/approvals`),
+  });
+  if (approvals.error) {
+    return (
+      <div style={{ marginBottom: 14 }}>
+        <Failed error={approvals.error} />
+      </div>
+    );
+  }
+  const list = approvals.data;
+  if (!list || list.approvals.length === 0) return null;
+  const current = list.approvals.filter((a) => a.decision !== "superseded");
+  const blocking = current.filter((a) => a.decision !== "approved").length;
+  return (
+    <Panel style={{ marginBottom: 14 }}>
+      <PanelHead>
+        APPROVALS
+        <span style={{ color: blocking > 0 ? "var(--warn)" : "var(--ok)" }}>
+          {blocking > 0 ? `${blocking} blocking the merge` : "all approved"}
+        </span>
+      </PanelHead>
+      <ApprovalRows
+        org={org}
+        list={{ ...list, approvals: current }}
+        showRun={false}
+        emptyText="Every approval this change raised was for an earlier commit."
+      />
+    </Panel>
   );
 }
 

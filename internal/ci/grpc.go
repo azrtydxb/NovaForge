@@ -32,7 +32,12 @@ type Server struct {
 	dispatcher *Dispatcher
 	logs       logAppender
 	artifacts  *ArtifactStore
+	redactions *Redactions
 }
+
+// SetRedactions wires the registry of credential values to mask in job logs.
+// It must be the registry the pump registers into.
+func (s *Server) SetRedactions(r *Redactions) { s.redactions = r }
 
 // SetArtifactStore wires artifact storage, which the runner uploads through.
 func (s *Server) SetArtifactStore(a *ArtifactStore) { s.artifacts = a }
@@ -130,7 +135,10 @@ func (s *Server) Connect(stream civ1.RunnerService_ConnectServer) error {
 				continue
 			}
 			if s.logs != nil {
-				_ = s.logs.Append(ctx, jobID, chunk.GetLine())
+				// A brokered value is masked before the line is stored,
+				// whatever the runner did: the log is readable by every member
+				// of the organization and the credential is not.
+				_ = s.logs.Append(ctx, jobID, s.redactions.Line(jobID, chunk.GetLine()))
 			}
 		}
 
@@ -152,8 +160,13 @@ func (s *Server) ReportStatus(ctx context.Context, req *civ1.ReportStatusRequest
 	if err != nil {
 		return nil, fmt.Errorf("invalid job_id: %w", err)
 	}
-	if err := s.store.SetJobStatus(ctx, jobID, req.GetStatus(), req.GetDetail()); err != nil {
+	detail := s.redactions.Line(jobID, req.GetDetail())
+	if err := s.store.SetJobStatus(ctx, jobID, req.GetStatus(), detail); err != nil {
 		return nil, err
+	}
+	switch req.GetStatus() {
+	case "success", "failure", "cancelled":
+		s.redactions.Forget(jobID)
 	}
 	return &civ1.ReportStatusResponse{Ok: true}, nil
 }

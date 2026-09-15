@@ -24,6 +24,12 @@ const (
 	ActionAccessSecret     Action = "access_secret"
 	ActionDeployStaging    Action = "deploy_staging"
 	ActionDeployProduction Action = "deploy_production"
+	// ActionChangeGateConfig is a change to .novaforge/gates: the definitions
+	// that judge every later change. Gates are read from the target branch, so
+	// a change cannot weaken the gates judging itself — but once merged it
+	// would weaken them for everything after it, which is why it needs a
+	// person with authority over the repository.
+	ActionChangeGateConfig Action = "change_gate_config"
 )
 
 // Decision is the outcome of evaluating an Action against a Policy and a
@@ -83,6 +89,11 @@ func Decide(ctx context.Context, p Policy, a Action, g capability.Grant) (Decisi
 		// made at all.
 		return DecisionPolicy, nil
 
+	case ActionChangeGateConfig:
+		// Deleting or weakening a gate is the one change that makes every
+		// later refusal softer, so it is never automatic and never policy.
+		return DecisionHuman, nil
+
 	case ActionDeployStaging:
 		if !g.DeployStaging {
 			return DecisionForbidden, nil
@@ -123,6 +134,7 @@ func Rules() []Rule {
 		{ActionAddDependency, DecisionPolicy, false},
 		{ActionChangeDBSchema, DecisionHuman, false},
 		{ActionAccessSecret, DecisionPolicy, false},
+		{ActionChangeGateConfig, DecisionHuman, false},
 		{ActionDeployStaging, DecisionHuman, true},
 		{ActionDeployProduction, DecisionHuman, true},
 	}

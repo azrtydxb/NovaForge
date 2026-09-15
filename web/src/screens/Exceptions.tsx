@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import { api, enc } from "../lib/api";
 import { useWorkspace } from "../lib/workspace";
 import { Async, Empty, Page, Panel, PanelHead } from "../components/ui";
-import type { Dashboard } from "../lib/types";
+import type { ApprovalList, Dashboard } from "../lib/types";
+import { ApprovalRows } from "../components/Approvals";
 
 /** STATE_TONE colours an exception by the state it is in. */
 const STATE_TONE: Record<string, string> = {
@@ -29,11 +30,51 @@ export function Exceptions() {
     enabled: w.org !== null,
   });
 
+  // Approvals are the decisions only a person may make about a change: what
+  // its diff does (a schema change, a gate edit) decides that one is needed,
+  // and the merge waits for it. They are listed here rather than on each run
+  // alone, because the person who can decide is rarely watching that run.
+  const approvals = useQuery({
+    queryKey: ["approvals", w.org],
+    queryFn: () =>
+      api.get<ApprovalList>(`/api/v1/orgs/${enc(w.org!)}/approvals`),
+    enabled: w.org !== null,
+  });
+
   return (
     <Page
       title="Exceptions"
       subtitle="The platform runs itself until something needs a decision only a person can make"
     >
+      <Panel style={{ marginBottom: 16 }}>
+        <PanelHead>
+          APPROVALS AWAITING A DECISION
+          {approvals.data ? (
+            <span style={{ color: "var(--fg-faint)" }}>
+              {approvals.data.approvals.length}
+            </span>
+          ) : null}
+          <div style={{ flex: 1 }} />
+          {approvals.data && !approvals.data.can_decide ? (
+            <span
+              style={{ font: "10px var(--sans)", color: "var(--fg-faint)" }}
+            >
+              only an owner or admin decides
+            </span>
+          ) : null}
+        </PanelHead>
+        <Async query={approvals}>
+          {(list) => (
+            <ApprovalRows
+              org={w.org!}
+              list={list}
+              showRun
+              emptyText="No change is waiting for an approval."
+            />
+          )}
+        </Async>
+      </Panel>
+
       <Async query={dash}>
         {(d) => (
           <>

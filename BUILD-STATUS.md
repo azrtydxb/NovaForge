@@ -220,6 +220,42 @@ Driving the new screens in a browser found four more defects, each fixed:
   interval from process start, and every deploy restarts the process. It now
   sweeps shortly after start, and a person can scan on demand.
 
+## Approvals, gate edits and brokered credentials (2026-09-15)
+
+S-10, S-11 and S-12 were partial or uncovered because the components had no
+production caller. Joining them found two defects:
+
+- **Every gate judged the target branch, not the change.** The gates service
+  resolved a run's head as its target branch, so the tests gate ran against
+  main as it already was and a change with failing tests passed it. Found by
+  `TestGateBlocksMerge`, which runs identity, git-platform, reviews and gates as
+  real gRPC servers and merges through work-reviews' own gates client.
+- **An approval's decider was whoever the request named**, and the approvals
+  store resolved a request with no organization predicate.
+
+What production now does:
+
+- The gate controller reads each run's diff against its merge base. A change
+  under `.novaforge/gates` (weakening, deleting, or proposed through the gate
+  proposal flow) or to the database schema raises an approval request bound to
+  the change's head; `MayMerge` refuses until an owner or admin who is not the
+  author approves it, and a later push needs a new approval. A change that adds
+  a dependency (go.mod, package.json, requirements*.txt, Cargo.toml) follows the
+  policy path: nobody is asked and the dependencies gate becomes required.
+  Every decision is recorded as the run's proof. The Exceptions screen is the
+  approvals inbox; a run's page shows what is blocking its merge.
+- A CI job's declared `secrets:` are brokered at dispatch: the pump asks the
+  gates broker, as a service, for a single-use lease per secret; the value
+  reaches the job through a Kubernetes Secret, and is masked in its log by the
+  runner and again by ci-runner. A staging job gets staging values only; a
+  production job gets production values only on the default branch. With the
+  broker unreachable such a job stays pending, blocked with the reason, and
+  credential-free jobs keep running. Owners and admins register secrets from
+  the Secrets screen; no read returns a value.
+
+None of this has been built into images or run on the cluster yet;
+`work_ci_test.sh` step 8 is written and not run.
+
 ## The GUI
 
 `web/` implements "NovaForge GUI.dc.html" from the claude.ai/design project
@@ -328,6 +364,21 @@ These are real and are not worked around:
 - **The maintenance sweep covers organizations that have Work Items.** It finds
   organizations through the work schema, since it may not read identity's; an
   organization with repositories and no Work Item is scanned only on demand.
+- **There is no deploy action.** Section 14's deploy-to-staging and
+  deploy-to-production paths exist only as `approvals.Decide` rules; nothing
+  deploys, so nothing follows them.
+- **A brokered credential is short-lived only as a lease.** The lease that
+  hands a job its secret is single-use and expires, but the value it carries is
+  the stored secret itself, not a rotated or scoped credential; a job that
+  leaks it leaks the real thing. Production values go to a production job on
+  the default branch, and any member can push to the default branch directly.
+- **Dependency detection reads four manifest kinds.** go.mod, package.json,
+  requirements*.txt and Cargo.toml; a dependency added any other way is not
+  seen by the approval policy. The dependencies gate runs osv-scanner, which
+  needs network access to its advisory database.
+- **Run proof can be written by any member.** `RecordProof` checks the
+  organization, not the caller, so an `approval/...` proof row is display, not
+  authority: `MayMerge` reads the approvals store, never the proof.
 - **Deleting a repository leaves other services' rows behind.** Work Items, CI
   runs and reviews keyed on it stay in their schemas and become unreachable.
   Deleting an organization is an operator action (`hack/purge-orgs.sh`); there
@@ -392,14 +443,10 @@ by reading test bodies, not by matching names.
 from the map, when the map names a criterion the spec lacks, when a cited Go
 test is renamed or deleted, or when a cited e2e script or step no longer exists.
 
-**16 covered, 15 partial, 2 uncovered.**
+**21 covered, 12 partial, 0 uncovered.**
 
-Uncovered: the component is tested, but nothing in production calls it, so the
-behaviour cannot be seen on the deployed platform:
-
-- S-11 `TestApprovalPaths`: nothing calls `approvals.Decide`.
-- S-12 `TestBrokerDownFailsClosed`: nothing calls `ResolveJobCredentials`, so a
-  job that needs credentials is not blocked when the broker is down.
+No criterion is uncovered: every component the spec names now has a production
+caller.
 
 Partial (the map's `note` says exactly what is missing):
 
@@ -418,11 +465,6 @@ Partial (the map's `note` says exactly what is missing):
   and artifact content has no download route.
 - S-9 `TestAirGappedAgentRun`: "no egress to a hosted provider" is asserted
   nowhere.
-- S-10 `TestGateBlocksMerge`: the controller and the merger are never joined
-  through the real client, and no merge is attempted end to end.
-- S-10 `TestGateConfigSelfEditRejected`: checked at the controller only, and
-  only for deleting gates, not weakening them.
-- S-12 `TestShortLivedCredential`: no job ever receives a brokered credential.
 - S-13 `TestMCPServerOperations`: none of the four operations succeeds over
   either transport.
 - S-20 `TestMaintenanceProposesWorkItem`: the production sweep from scanner to

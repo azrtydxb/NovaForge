@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"strings"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,6 +50,10 @@ func TestPodExecutorCreatesIsolatedPod(t *testing.T) {
 		}
 		if len(list.Items) > 0 {
 			pod = &list.Items[0]
+		} else {
+			// The executor runs in its own goroutine; a loop that never yields
+			// can finish before that goroutine has created anything.
+			time.Sleep(10 * time.Millisecond)
 		}
 	}
 	if pod == nil {
@@ -106,6 +111,10 @@ func TestDefaultJobImageIsConfigurable(t *testing.T) {
 		list, _ := cs.CoreV1().Pods("novaforge").List(context.Background(), metav1.ListOptions{})
 		if len(list.Items) > 0 {
 			pod = &list.Items[0]
+		} else {
+			// The executor runs in its own goroutine; a loop that never yields
+			// can finish before that goroutine has created anything.
+			time.Sleep(10 * time.Millisecond)
 		}
 	}
 	if pod == nil {

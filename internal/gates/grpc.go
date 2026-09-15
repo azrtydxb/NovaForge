@@ -33,10 +33,17 @@ type GRPCServer struct {
 	// server was built without git and reviews clients, and those RPCs answer
 	// Unimplemented rather than pretending a repository has no gates.
 	Proposals *Proposer
+	// DefaultBranch resolves a repository's default branch. A production
+	// credential is brokered only to a job on it; nil means no production
+	// credential is brokered at all.
+	DefaultBranch func(ctx context.Context, repoID uuid.UUID) (string, error)
 }
 
 // NewGRPCServer wraps the given dependencies as a gatesv1.GatesServiceServer.
 func NewGRPCServer(controller *Controller, approvalsStore *approvals.Store, secretsBroker *secrets.Broker, grants *capability.Store) *GRPCServer {
+	if controller != nil && controller.Approvals == nil {
+		controller.Approvals = approvalsStore
+	}
 	return &GRPCServer{Controller: controller, Approvals: approvalsStore, Secrets: secretsBroker, Grants: grants}
 }
 
@@ -137,91 +144,6 @@ func (g *GRPCServer) ListEvaluations(ctx context.Context, req *gatesv1.ListEvalu
 		out[i] = toProtoEvaluation(e)
 	}
 	return &gatesv1.ListEvaluationsResponse{Evaluations: out}, nil
-}
-
-// RequestApproval records a new pending approval request within the
-// caller's organization.
-func (g *GRPCServer) RequestApproval(ctx context.Context, req *gatesv1.RequestApprovalRequest) (*gatesv1.RequestApprovalResponse, error) {
-	orgID, err := callerOrg(ctx)
-	if err != nil {
-		return nil, err
-	}
-	runID, err := parseUUID("run_id", req.GetRunId())
-	if err != nil {
-		return nil, err
-	}
-	created, err := g.Approvals.Request(ctx, approvals.ApprovalRequest{
-		OrgID:  orgID,
-		RunID:  runID,
-		Action: approvals.Action(req.GetAction()),
-		Detail: map[string]any{"raw": req.GetDetailJson()},
-	})
-	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "request approval: %v", err)
-	}
-	return &gatesv1.RequestApprovalResponse{Request: toProtoApprovalRequest(created)}, nil
-}
-
-func toProtoApprovalRequest(r approvals.ApprovalRequest) *gatesv1.ApprovalRequestMsg {
-	out := &gatesv1.ApprovalRequestMsg{
-		Id:        r.ID.String(),
-		OrgId:     r.OrgID.String(),
-		RunId:     r.RunID.String(),
-		Action:    string(r.Action),
-		Decision:  r.Decision,
-		CreatedAt: r.CreatedAt.Format(rfc3339),
-	}
-	if raw, ok := r.Detail["raw"].(string); ok {
-		out.DetailJson = raw
-	}
-	if r.DecidedBy != uuid.Nil {
-		out.DecidedBy = r.DecidedBy.String()
-	}
-	if !r.DecidedAt.IsZero() {
-		out.DecidedAt = r.DecidedAt.Format(rfc3339)
-	}
-	return out
-}
-
-// ResolveApproval records a decision on a pending approval request. The
-// request must currently be pending within the caller's organization: an
-// approval id belonging to another organization, or already decided, is
-// refused rather than silently applied.
-func (g *GRPCServer) ResolveApproval(ctx context.Context, req *gatesv1.ResolveApprovalRequest) (*gatesv1.ResolveApprovalResponse, error) {
-	if _, err := callerOrg(ctx); err != nil {
-		return nil, err
-	}
-	id, err := parseUUID("id", req.GetId())
-	if err != nil {
-		return nil, err
-	}
-	decidedBy, err := parseUUID("decided_by", req.GetDecidedBy())
-	if err != nil {
-		return nil, err
-	}
-	if req.GetDecision() != "approved" && req.GetDecision() != "denied" {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid decision %q", req.GetDecision())
-	}
-
-	pending, err := g.Approvals.Pending(ctx)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "list pending approvals: %v", err)
-	}
-	found := false
-	for _, p := range pending {
-		if p.ID == id {
-			found = true
-			break
-		}
-	}
-	if !found {
-		return nil, status.Errorf(codes.NotFound, "no pending approval %s in this organization", id)
-	}
-
-	if err := g.Approvals.Resolve(ctx, id, decidedBy, req.GetDecision()); err != nil {
-		return nil, status.Errorf(codes.Internal, "resolve approval: %v", err)
-	}
-	return &gatesv1.ResolveApprovalResponse{Ok: true}, nil
 }
 
 // IssueLease issues a short-lived, single-use secret lease for a run, under

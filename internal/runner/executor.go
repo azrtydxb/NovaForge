@@ -58,6 +58,7 @@ func Execute(ctx context.Context, job *civ1.ConnectResponse, workdir string, log
 	cmd := exec.CommandContext(ctx, "sh", "-c", job.GetRunCmd()) // nosemgrep: dangerous-exec-command
 	cmd.Dir = workdir
 	cmd.Env = append(os.Environ(), envSlice(job.GetEnv())...)
+	cmd.Env = append(cmd.Env, envSlice(job.GetSecretEnv())...)
 	cmd.Cancel = func() error {
 		return cmd.Process.Kill()
 	}

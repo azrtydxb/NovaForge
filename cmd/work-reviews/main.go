@@ -139,7 +139,7 @@ func main() {
 		// merging and the platform merging pass the identical gate check.
 		reviewsServer.Merger = &reviews.Merger{
 			Store: reviewsStore,
-			Gates: gateClient{gates: gatesv1.NewGatesServiceClient(gatesConn)},
+			Gates: reviews.GatesClient{Gates: gatesv1.NewGatesServiceClient(gatesConn)},
 			Git:   gitClient,
 		}
 

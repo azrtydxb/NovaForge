@@ -16,6 +16,9 @@ service GatesService {
   rpc RedeemLease(RedeemLeaseRequest) returns (RedeemLeaseResponse);
   rpc ListSecrets(ListSecretsRequest) returns (ListSecretsResponse);
   rpc ListLeases(ListLeasesRequest) returns (ListLeasesResponse);
+  rpc ListApprovals(ListApprovalsRequest) returns (ListApprovalsResponse);
+  rpc PutSecret(PutSecretRequest) returns (PutSecretResponse);
+  rpc IssueJobLease(IssueJobLeaseRequest) returns (IssueJobLeaseResponse);
   rpc RevokeLease(RevokeLeaseRequest) returns (RevokeLeaseResponse);
   rpc ListGateConfig(ListGateConfigRequest) returns (ListGateConfigResponse);
   rpc ProposeGateChange(ProposeGateChangeRequest) returns (ProposeGateChangeResponse);
@@ -63,10 +66,39 @@ message ApprovalRequestMsg {
   string run_id = 3;
   string action = 4;
   string detail_json = 5;
+  // decision is pending, approved, denied, or superseded (the change moved
+  // on after the request was raised, so it no longer describes the head).
   string decision = 6;
   string decided_by = 7;
   string decided_at = 8;
   string created_at = 9;
+  // head_sha is the commit of the change the request is about. An approval
+  // counts only for this head: a later push needs a new decision.
+  string head_sha = 10;
+  // reason says in words why the platform asked, derived from the diff.
+  string reason = 11;
+  // paths are the changed files that made the request necessary.
+  repeated string paths = 12;
+  string comment = 13;
+  string author_id = 14;
+  string author_kind = 15;
+}
+
+message ListApprovalsRequest {
+  // run_id, when set, lists every request for that run in any state;
+  // otherwise the organization's pending requests are listed.
+  string run_id = 1;
+}
+
+message ListApprovalsResponse {
+  repeated ApprovalRequestMsg requests = 1;
+  // can_decide reports whether the caller holds a role that may decide
+  // approvals, so a screen offers the buttons only to someone whose click
+  // would be allowed. The decision itself is checked again when made.
+  bool can_decide = 2;
+  // viewer_id is the caller, so a screen can say "you authored this" rather
+  // than offering a decision the service will refuse.
+  string viewer_id = 3;
 }
 
 message RequestApprovalRequest {
@@ -81,12 +113,53 @@ message RequestApprovalResponse {
 
 message ResolveApprovalRequest {
   string id = 1;
-  string decided_by = 2;
+  // decided_by was taken from the request, so a caller could record a
+  // decision under anyone's name. The decider is the caller.
+  reserved 2;
+  reserved "decided_by";
   string decision = 3;
+  string comment = 4;
 }
 
 message ResolveApprovalResponse {
   bool ok = 1;
+  ApprovalRequestMsg request = 2;
+}
+
+// PutSecretRequest registers or replaces a secret's value. The value is
+// write-only: no RPC returns it to a person.
+message PutSecretRequest {
+  string name = 1;
+  string environment = 2;
+  string value = 3;
+}
+
+message PutSecretResponse {
+  SecretReference secret = 1;
+}
+
+// IssueJobLeaseRequest asks the broker for one secret on behalf of a CI job.
+// Only a platform service may ask. The grant the lease is issued under is
+// derived by the broker from the job's declared environment and its commit's
+// branch, never supplied by the caller.
+message IssueJobLeaseRequest {
+  string job_id = 1;
+  string repo_id = 2;
+  // ref is the ref the CI run was scheduled for.
+  string ref = 3;
+  // environment is the job's declared environment: staging or production.
+  string environment = 4;
+  string name = 5;
+  int64 ttl_seconds = 6;
+}
+
+message IssueJobLeaseResponse {
+  string lease_id = 1;
+  // token is redeemed once, by the same job, through RedeemLease.
+  string token = 2;
+  string name = 3;
+  string expires_at = 4;
+  string environment = 5;
 }
 
 message IssueLeaseRequest {

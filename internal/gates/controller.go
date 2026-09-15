@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
+	"github.com/novaforge/novaforge/internal/approvals"
 )
 
 // RunHead is what the controller needs to know about a run to resolve and
@@ -18,6 +19,13 @@ type RunHead struct {
 	TargetRef     string
 	HeadSHA       string
 	WorkItemGates []string
+	// SourceRef is the branch carrying the change. Approval requirements are
+	// read from what it changes relative to TargetRef.
+	SourceRef string
+	// AuthorID and AuthorKind identify who opened the run, so the person who
+	// made a change can never be the one who approves it.
+	AuthorID   uuid.UUID
+	AuthorKind string
 }
 
 // RunLookup resolves the current RunHead for runID. In production this is
@@ -44,27 +52,49 @@ type Controller struct {
 	// reviews service, which is what a run presents as its evidence. Without
 	// it evaluations were stored here and shown nowhere.
 	Proof ProofRecorder
+	// Approvals holds the approval requests a change raises. With it the
+	// controller reads what each run's change does and holds the merge to the
+	// approval policy; NewGRPCServer sets it from the store the service is
+	// given, so it cannot be left out of a deployed controller.
+	Approvals *approvals.Store
 }
 
 // ProofRecorder records one gate's outcome against a run.
 type ProofRecorder func(ctx context.Context, runID uuid.UUID, gate, status, detail string) error
 
+// resolved is everything the controller works out about one run before it
+// evaluates or judges it.
+type resolved struct {
+	head   RunHead
+	defs   []Definition
+	latest map[string]Evaluation
+	// reqs are the governed actions the change performs, read from its diff.
+	reqs []Requirement
+}
+
 // resolveForRun looks up runID's current head and resolves the gate
-// definitions and latest evaluations that apply to it.
-func (c *Controller) resolveForRun(ctx context.Context, runID uuid.UUID) (RunHead, []Definition, map[string]Evaluation, error) {
+// definitions, latest evaluations and approval requirements that apply to it.
+// A change that adds a dependency has the dependencies gate required on top
+// of whatever the target branch declares.
+func (c *Controller) resolveForRun(ctx context.Context, runID uuid.UUID) (resolved, error) {
 	head, err := c.Runs(ctx, runID)
 	if err != nil {
-		return RunHead{}, nil, nil, fmt.Errorf("resolve run head for %s: %w", runID, err)
+		return resolved{}, fmt.Errorf("resolve run head for %s: %w", runID, err)
 	}
 	defs, err := Resolve(ctx, c.Git, head.OrgID, head.RepoID, head.TargetRef, head.WorkItemGates)
 	if err != nil {
-		return RunHead{}, nil, nil, fmt.Errorf("resolve gate definitions: %w", err)
+		return resolved{}, fmt.Errorf("resolve gate definitions: %w", err)
 	}
+	reqs, err := c.changeRequirements(ctx, head)
+	if err != nil {
+		return resolved{}, err
+	}
+	defs = requireDependencyGate(defs, reqs)
 	latest, err := c.Store.LatestForSHA(ctx, runID, head.HeadSHA)
 	if err != nil {
-		return RunHead{}, nil, nil, fmt.Errorf("load latest evaluations for %s: %w", runID, err)
+		return resolved{}, fmt.Errorf("load latest evaluations for %s: %w", runID, err)
 	}
-	return head, defs, latest, nil
+	return resolved{head: head, defs: defs, latest: latest, reqs: reqs}, nil
 }
 
 // Evaluate runs every gate resolved for runID whose latest evaluation does
@@ -72,9 +102,17 @@ func (c *Controller) resolveForRun(ctx context.Context, runID uuid.UUID) (RunHea
 // A gate already evaluated at the current head is returned as-is rather
 // than re-run, which is what makes re-evaluation idempotent under Redis's
 // at-least-once redelivery.
+//
+// It also raises, and records as proof, the approvals the change needs, so a
+// person asked to decide sees the request as soon as the run is evaluated
+// rather than only once somebody tries to merge.
 func (c *Controller) Evaluate(ctx context.Context, runID uuid.UUID) ([]Evaluation, error) {
-	head, defs, latest, err := c.resolveForRun(ctx, runID)
+	r, err := c.resolveForRun(ctx, runID)
 	if err != nil {
+		return nil, err
+	}
+	head, defs, latest := r.head, r.defs, r.latest
+	if _, err := c.approvalReasons(ctx, runID, head, r.reqs, true); err != nil {
 		return nil, err
 	}
 
@@ -133,13 +171,22 @@ func (c *Controller) recordProof(ctx context.Context, runID uuid.UUID, eval Eval
 // status exactly "pass". Missing, stale (recorded for a different SHA),
 // "fail", "error", and "skipped" all mean not-allowed and each appends a
 // human-readable reason; an unrun gate is never treated as a pass.
+//
+// The same fold covers approvals: every action the change performs that the
+// policy gives to a person must have been approved, for the current head, by
+// someone other than the author. A pending, denied, or stale approval is a
+// reason like a failing gate.
 func (c *Controller) MayMerge(ctx context.Context, runID uuid.UUID) (bool, []string, error) {
-	head, defs, latest, err := c.resolveForRun(ctx, runID)
+	r, err := c.resolveForRun(ctx, runID)
 	if err != nil {
 		return false, nil, err
 	}
+	head, defs, latest := r.head, r.defs, r.latest
 
-	var reasons []string
+	reasons, err := c.approvalReasons(ctx, runID, head, r.reqs, false)
+	if err != nil {
+		return false, nil, err
+	}
 	for _, def := range defs {
 		if !def.Required {
 			continue

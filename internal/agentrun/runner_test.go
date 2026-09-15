@@ -145,7 +145,7 @@ func newPlatform(t *testing.T) *platform {
 	if err := database.Migrate(url, "knowledge", knowledge.MigrationsFS); err != nil {
 		t.Fatalf("migrate knowledge: %v", err)
 	}
-	if err := database.Migrate(url, "agents", agents.MigrationsFS); err != nil && !schemaAheadOfCheckout(err) {
+	if err := database.Migrate(url, "agents", agents.MigrationsFS); err != nil {
 		t.Fatalf("migrate agents: %v", err)
 	}
 	pool, err := database.Connect(context.Background(), url)
@@ -190,14 +190,6 @@ func newPlatform(t *testing.T) *platform {
 		agents: agents.NewStore(pool),
 		audit:  agents.NewAuditLog(pool),
 	}
-}
-
-// schemaAheadOfCheckout reports a migration refused only because the shared
-// development database already carries a later migration of the schema than
-// this checkout has — applied by another branch using the same database. The
-// tables this test uses exist either way; any other migration error fails.
-func schemaAheadOfCheckout(err error) bool {
-	return strings.Contains(err.Error(), "no migration found for version")
 }
 
 // org is one organization on the platform, with the run identity an agent

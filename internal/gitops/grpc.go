@@ -330,7 +330,11 @@ func (s *Server) GetDiff(ctx context.Context, req *gitv1.GetDiffRequest) (*gitv1
 	if err != nil {
 		return nil, err
 	}
-	unified, err := repo.Diff(req.GetFrom(), req.GetTo())
+	diff := repo.Diff
+	if req.GetMergeBase() {
+		diff = repo.DiffMergeBase
+	}
+	unified, err := diff(req.GetFrom(), req.GetTo())
 	if err != nil {
 		if isGitNotFound(err) {
 			return nil, status.Errorf(codes.NotFound, "unknown ref %q or %q", req.GetFrom(), req.GetTo())

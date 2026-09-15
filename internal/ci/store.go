@@ -51,6 +51,10 @@ type WorkflowJob struct {
 	// AgentRunID and WorkItemKey are set once an agent job's run has started.
 	AgentRunID  *uuid.UUID
 	WorkItemKey string
+	// Secrets and Environment are what the job asks the broker for at
+	// dispatch.
+	Secrets     []string
+	Environment string
 }
 
 // ErrNoClaimableJob is returned by ClaimJob when no pending job with
@@ -204,12 +208,18 @@ func (s *Store) CreateJob(ctx context.Context, job WorkflowJob) (WorkflowJob, er
 	if job.ArtifactPaths == nil {
 		job.ArtifactPaths = []string{}
 	}
+	if job.Secrets == nil {
+		job.Secrets = []string{}
+	}
+	if job.Environment == "" {
+		job.Environment = "staging"
+	}
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO ci.workflow_jobs (id, run_id, name, needs, run_cmd, agent_role, image, status, artifact_paths)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		INSERT INTO ci.workflow_jobs (id, run_id, name, needs, run_cmd, agent_role, image, status, artifact_paths, secrets, environment)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
 		job.ID, job.RunID, job.Name, job.Needs,
 		nullString(job.RunCmd), nullString(job.AgentRole), nullString(job.Image), job.Status,
-		job.ArtifactPaths,
+		job.ArtifactPaths, job.Secrets, job.Environment,
 	)
 	if err != nil {
 		return WorkflowJob{}, fmt.Errorf("create job: %w", err)
@@ -516,11 +526,13 @@ func (s *Store) ClaimForDispatch(ctx context.Context, runnerID uuid.UUID, labels
 	// meant to be into a soft one.
 	err = tx.QueryRow(ctx, `
 		SELECT j.id, j.run_id, j.run_cmd, j.agent_role, j.image, j.artifact_paths,
+		       j.secrets, j.environment, r.repo_id, r.ref,
 		       r.org_id, r.repo_name, r.commit_sha
 		FROM ci.workflow_jobs j
 		JOIN ci.workflow_runs r ON r.id = j.run_id
 		JOIN ci.runners rn ON rn.id = $1 AND rn.org_id = r.org_id
 		WHERE j.status = 'pending'
+		  AND (j.not_before IS NULL OR j.not_before <= now())
 		  -- An agent job is executed by the platform as an Agent Run
 		  -- (agentjobs.go), never by a runner: a runner handed one ran
 		  -- "sh -c ''", exited 0, and reported an agent review that never
@@ -536,7 +548,8 @@ func (s *Store) ClaimForDispatch(ctx context.Context, runnerID uuid.UUID, labels
 		ORDER BY j.id
 		FOR UPDATE OF j SKIP LOCKED
 		LIMIT 1`, runnerID,
-	).Scan(&dj.JobID, &dj.RunID, &runCmd, &agent, &image, &dj.ArtifactPaths, &orgID, &repoName, &sha)
+	).Scan(&dj.JobID, &dj.RunID, &runCmd, &agent, &image, &dj.ArtifactPaths,
+		&dj.Secrets, &dj.Environment, &dj.RepoID, &dj.Ref, &orgID, &repoName, &sha)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return DispatchJob{}, uuid.Nil, ErrNoClaimableJob
@@ -572,4 +585,23 @@ func (s *Store) ClaimForDispatch(ctx context.Context, runnerID uuid.UUID, labels
 	// name, and CI must not read git-platform's schema to translate.
 	dj.RepoCloneURL = repoName
 	return dj, orgID, nil
+}
+
+// BlockJob puts a claimed job back to pending with detail as its reason and
+// keeps it from being claimed again until until. It is how a job whose
+// credentials could not be brokered waits: visibly, with the reason, and
+// without the pump re-claiming it every tick ahead of jobs that can run.
+func (s *Store) BlockJob(ctx context.Context, jobID uuid.UUID, detail string, until time.Time) error {
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE ci.workflow_jobs
+		SET status = 'pending', runner_id = NULL, started_at = NULL, detail = $1, not_before = $2
+		WHERE id = $3`,
+		detail, until, jobID)
+	if err != nil {
+		return fmt.Errorf("block job %s: %w", jobID, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("job %s not found", jobID)
+	}
+	return nil
 }
