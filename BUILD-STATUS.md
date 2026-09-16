@@ -3,6 +3,34 @@
 Autonomous build of the backend described in `.procoder/specs/backend-platform.md`,
 executed against the six plans in `.procoder/plans/`.
 
+## Latest verification and completion scope (2026-09-16)
+
+Helm revision **70**, implementation commit **d6e07d1**, passed all twelve
+in-cluster suites in one run: airgap, deploy, work_ci, gui, search, graph,
+factory, agent, agent_ci, merge, cli and crossorg. All service images were
+built before deployment and the normal image preflight was preserved.
+
+The preceding full run failed factory because the model supplied `test` as a
+Work Item type. The structured output schema now enumerates the actual legal
+types; a regression asserts that schema matches `work.SortedTypes()` and was
+seen failing before the change. CI artifact decoding/upload errors now fail
+the job instead of logging evidence loss and reporting success, also proven
+red/green. Speculative gRPC connect-timeout overrides were removed; the bounded
+identity RPC lookup remains and has a deadline/handler-context regression.
+
+The full Go suite passed with `hack/env.sh` sourced and `-count=1`; runner,
+swarm and svcauth also passed under `-race`. Frontend `npm run build` passed
+(including TypeScript). Procoder security and lint reported zero findings.
+The SAST integration test now defaults to the committed ruleset instead of
+requiring an environment override; `procoder test` subsequently passed.
+
+**This is not whole-product completion.** All 67 historical tasks are marked
+closed, but the implementation still needs reconciliation against the broader
+spec and known limitations. `.procoder/plans/completion-audit.md` tracks the
+remaining audit and implementation work. Passing these suites must not be
+used to claim deployment actions, expiring underlying external credentials,
+LSP/SCIP indexing, every graph relationship, or enterprise-scale validation.
+
 ## Environment
 
 Everything runs on the **kw cluster** (k3s 1.34, 8 ARM64 nodes). There is no local
@@ -450,7 +478,7 @@ These are real and are not worked around:
   method of that name in the caller's and its imports' packages. A push of
   more than 50 commits attributes changed files only to the 50 newest; a file
   none of them touched gets no history rather than an invented one.
-  `graph_test.sh` has not been run on the cluster.
+  `graph_test.sh` passed on revision 70 for the implemented Go graph.
 - **Recorded knowledge reaches a run by relevance to its Work Item.** Entries
   are found by English full-text match and, where an embedding model answers,
   by meaning (similarity at least 0.5). A decision sharing none of the Work

@@ -120,7 +120,13 @@ func TestSASTFindsWeakCrypto(t *testing.T) {
 	requireTool(t, "semgrep")
 	rules := os.Getenv("NOVAFORGE_SEMGREP_RULES")
 	if rules == "" {
-		t.Fatal("NOVAFORGE_SEMGREP_RULES must point at the gosec ruleset (hack/fetch-analysis-rules.sh fetches it)")
+		// The rules are committed, not an external test prerequisite. Resolve
+		// them before SAST switches to the temporary probe's working directory.
+		var err error
+		rules, err = filepath.Abs("../../deploy/analysis/semgrep-gosec.yml")
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	dir := probe(t, map[string]string{
 		"go.mod":  goMod,
