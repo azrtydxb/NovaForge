@@ -62,9 +62,15 @@ requirements are implemented, then add missing paths and regression evidence.
 
 ## Evidence location
 
-Latest batch: all twelve suites passed at revision 71 (d0069b2); work_ci and
-agent passed at revision 72 (c4ff7e7). Latest full Go suite with dev datastores:
-/tmp/novaforge-gap-tests.log. Procoder test passed (39 packages).
+Latest deployed batch: architecture-policy wiring at revision 73 (b3c5549)
+passed the expanded factory suite. A subsequent working-tree fix isolates
+malformed policy from unrelated scanners and retains errors in sweep reports;
+its real Git/database regression was red then green under `-race`. It remains
+uncommitted and undeployed. Full Go suite with dev datastores passed:
+/tmp/novaforge-maintenance-isolation-tests.log. Lint/security: zero findings.
+
+Earlier: all twelve suites passed at revision 71 (d0069b2); work_ci and agent
+passed at revision 72 (c4ff7e7). Procoder test passed (39 packages).
 
 Earlier full Go suite: /tmp/novaforge-full-go-test.log.
 Current full cluster suite supervisor: /tmp/novaforge-full-e2e.log and

@@ -2,6 +2,18 @@
 
 All decisions below are answered. No question is waiting on a human.
 
+## Commit and deploy verified completion-audit fixes
+
+Answered 2026-09-16: **Yes**, to the recommended option. The user authorizes
+committing and deploying each verified completion-audit batch to the existing
+kw deployment without asking again for every batch. Review, tests and the
+commit gate precede deployment; image preflight and Helm ownership remain
+mandatory, followed by cluster acceptance.
+
+Destructive changes and new product/security decisions still require separate
+approval. The alternative of holding commits and deployments for per-batch
+approval was not selected.
+
 ## What happens next in the now-empty NovaForge repo
 
 Answered 2026-09-11: **Nothing for now**, later superseded by explicit `/init`,

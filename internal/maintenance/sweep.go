@@ -154,6 +154,9 @@ func (s *Sweeper) Sweep(ctx context.Context) SweepReport {
 				continue
 			}
 			rep.Proposed = append(rep.Proposed, res.ProposedKeys...)
+			for _, scannerErr := range res.ScannerErrors {
+				rep.Errors = append(rep.Errors, fmt.Sprintf("%s: %s", r.GetName(), scannerErr))
+			}
 		}
 	}
 	return rep
@@ -211,21 +214,25 @@ func (s *Sweeper) ScanAndPropose(ctx context.Context, orgID, repoID uuid.UUID, n
 		Exec:      exec,
 		Git:       s.Git,
 	}
+	onError := func(kind string, err error) {
+		log.Printf("maintenance: %s scanner on %s: %v", kind, name, err)
+		res.ScannerErrors = append(res.ScannerErrors, kind+": "+err.Error())
+	}
 	// Maintenance must enforce the same default-branch architecture policy
 	// as merge gates. A scanner with nil parameters silently checks nothing.
 	defs, err := gates.Resolve(ctx, s.Git, orgID, repoID, defaultBranch, nil)
 	if err != nil {
-		return res, fmt.Errorf("read maintenance gate policy: %w", err)
-	}
-	for _, def := range defs {
-		if def.Name == "architecture" {
-			in.ArchParams = def.Params
+		// Bad policy is not a clean architecture result, but it must not
+		// hide a CVE found by an independent scanner in the same repository.
+		onError("architectural_violation", fmt.Errorf("read maintenance gate policy: %w", err))
+	} else {
+		for _, def := range defs {
+			if def.Name == "architecture" {
+				in.ArchParams = def.Params
+			}
 		}
 	}
-	findings := RunAll(ctx, in, func(kind string, err error) {
-		log.Printf("maintenance: %s scanner on %s: %v", kind, name, err)
-		res.ScannerErrors = append(res.ScannerErrors, kind+": "+err.Error())
-	})
+	findings := RunAll(ctx, in, onError)
 	res.Findings = len(findings)
 	if len(findings) == 0 {
 		return res, nil

@@ -55,6 +55,23 @@ failure correction was then deployed at revision 72 (`c4ff7e7`), where
 gate reported no blocking findings. The specific long-duration reaper behavior
 is regression-tested; the agent suite does not run for multiple hours.
 
+## Maintenance architecture policy (2026-09-16)
+
+The interrupted build resumed with a complete image set for `b3c5549`, deployed
+through the normal preflight at Helm revision 73. The expanded factory suite
+passed: default-branch architecture policy produces a proposal that remains
+unassigned and awaits approval. Procoder test passed (39 packages).
+
+Adversarial review found an isolation defect: failure to resolve repository
+gate configuration aborted the whole maintenance scan. A working-tree fix
+reports the architecture error while continuing unrelated scanners, and
+preserves scanner errors in periodic sweep reports. The real Git/database
+regression failed before the fix and passed under `-race` afterwards. The
+full Go suite passed with dev datastores; lint and security found no issues.
+This isolation fix is not yet committed or deployed. CI-history, coverage,
+benchmark and graph input gaps remain open; this is not whole-product
+completion.
+
 ## Environment
 
 Everything runs on the **kw cluster** (k3s 1.34, 8 ARM64 nodes). There is no local

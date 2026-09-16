@@ -18,6 +18,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
+	"github.com/novaforge/novaforge/internal/authz"
 	"github.com/novaforge/novaforge/internal/database"
 	"github.com/novaforge/novaforge/internal/gitops"
 	"github.com/novaforge/novaforge/internal/maintenance"
@@ -165,6 +166,31 @@ func TestMaintenanceProposesWorkItem(t *testing.T) {
 	}
 	if !awaiting {
 		t.Fatal("the proposal is not awaiting approval, so a run could be started on it")
+	}
+
+	// A malformed policy must not hide CVEs or other independent findings.
+	// Exercise both entry points: the person sees ScannerErrors, and the
+	// periodic sweep must retain those errors in its report too.
+	if _, err := git.CreateCommit(asOrg, &gitv1.CreateCommitRequest{
+		Repo: repo.GetRepo().GetName(), Branch: repo.GetRepo().GetDefaultBranch(),
+		Message: "break architecture policy", Files: []*gitv1.FileChange{{
+			Path: ".novaforge/gates/architecture.yaml", Content: []byte("params: ["),
+		}},
+		AuthorName: "Sweep Test", AuthorEmail: "sweep@example.com",
+	}); err != nil {
+		t.Fatalf("CreateCommit malformed policy: %v", err)
+	}
+	scanCtx := authz.WithScope(asOrg, authz.Scope{OrgID: orgID, ActorKind: "service"})
+	result, err := sweeper.Scanner()(scanCtx, orgID, repoID)
+	if err != nil {
+		t.Fatalf("malformed architecture policy aborted unrelated scanners: %v", err)
+	}
+	if result.Findings == 0 || !strings.Contains(strings.Join(result.ScannerErrors, "\n"), "architectural_violation:") {
+		t.Fatalf("want unrelated findings and an architecture error, got %+v", result)
+	}
+	report = sweeper.Sweep(ctx)
+	if !strings.Contains(strings.Join(report.Errors, "\n"), "architectural_violation:") {
+		t.Fatalf("periodic sweep discarded the scanner failure: %+v", report)
 	}
 
 	// The organization list answers only a platform worker.
