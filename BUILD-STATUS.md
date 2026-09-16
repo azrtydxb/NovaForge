@@ -548,6 +548,26 @@ newline would otherwise go out twice, truncated and then whole. The e2e read
 it red on revision 64 before the fix, and pins both sides: a line is readable
 while the job runs, and the last line arrives exactly once.
 
+## Live-log polling correction and deployment recovery (2026-09-16)
+
+Helm revision 67 was left pending after an upgrade bypassed the image
+preflight. Rolling back to revision 66 completed successfully; all pods became
+ready on `b001ca0`. The in-cluster `work_ci` suite still failed its live-log
+assertion on that deployment.
+
+The polling implementation selected the first newline, so only the first log
+line was forwarded while running. It now selects the last complete newline
+and sends only `data[sent:cut]`. The expanded
+`TestJobLogIsReadableWhileTheJobRuns` failed on the missing second live line
+before the fix and passed with `-race` after it. Cluster verification of this
+correction is still pending.
+
+The earlier startup-hang diagnosis was not established: `grpc.NewClient` is
+nonblocking, quiet logs and a futex wait do not prove a hang, and repeated
+SIGQUIT diagnostics caused process exits (confirmed in the previous container
+log). The health endpoint returned HTTP 200. Commits `9b95e02` and `02b87b0`
+therefore must not be treated as proven fixes for this live-log regression.
+
 ## Spec traceability
 
 `.procoder/specs/traceability.yaml` maps each of the spec's 33 acceptance

@@ -47,16 +47,18 @@ func TestJobLogIsReadableWhileTheJobRuns(t *testing.T) {
 		defer mu.Unlock()
 		ga, ok := action.(k8stesting.GenericActionImpl)
 		if !ok || ga.GetSubresource() != "log" {
-			return true, pod, nil
+			return true, pod.DeepCopy(), nil
 		}
 		return true, &runtime.Unknown{Raw: []byte(logBody)}, nil
 	})
 
 	logs := make(chan string, 16)
 	finished := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(func() { cancel(); <-finished })
 	go func() {
 		defer close(finished)
-		_, _ = px.Run(context.Background(), job, logs)
+		_, _ = px.Run(ctx, job, logs)
 	}()
 
 	// The first line must arrive while the job still runs: the pod is still
@@ -70,9 +72,25 @@ func TestJobLogIsReadableWhileTheJobRuns(t *testing.T) {
 		t.Fatal("a line the job printed did not reach the log while the job was running")
 	}
 
-	// The job ends; its last line lands in the log after its previous content.
+	// Later polls must forward only newly completed lines, not stop at the
+	// first newline or resend the prefix. An unfinished line waits for EOF.
 	mu.Lock()
-	logBody = "compiling\nfinishing last line\n"
+	logBody = "compiling\ntesting\npackaging\npartial"
+	mu.Unlock()
+	for _, want := range []string{"testing", "packaging"} {
+		select {
+		case got := <-logs:
+			if got != want {
+				t.Fatalf("live line = %q, want %q", got, want)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("subsequent line %q was not delivered while running", want)
+		}
+	}
+
+	// The job ends with a final line lacking a newline.
+	mu.Lock()
+	logBody = "compiling\ntesting\npackaging\npartial last line"
 	pod.Status.Phase = corev1.PodSucceeded
 	pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
 		State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 0}},
@@ -93,7 +111,10 @@ func TestJobLogIsReadableWhileTheJobRuns(t *testing.T) {
 		}
 	}
 	<-finished
-	if strings.Join(append([]string{"compiling"}, got...), "|") != "compiling|finishing last line" {
-		t.Fatalf("forwarded %q, want the job's two lines in order, each exactly once", got)
+	if len(logs) != 0 {
+		t.Fatalf("unexpected extra lines: %d", len(logs))
+	}
+	if strings.Join(append([]string{"compiling"}, got...), "|") != "compiling|partial last line" {
+		t.Fatalf("forwarded %q, want the first and terminal lines exactly once", got)
 	}
 }

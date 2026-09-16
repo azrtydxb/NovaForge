@@ -253,8 +253,8 @@ func (p *PodExecutor) streamLogs(ctx context.Context, podName string, logs chan<
 	for {
 		data, err := p.logData(ctx, podName)
 		if err == nil {
-			if cut := bytes.IndexByte(data, '\n') + 1; cut > sent {
-				for _, line := range lines(data[:cut]) {
+			if cut := bytes.LastIndexByte(data, '\n') + 1; cut > sent {
+				for _, line := range lines(data[sent:cut]) {
 					select {
 					case logs <- line:
 					case <-ctx.Done():
