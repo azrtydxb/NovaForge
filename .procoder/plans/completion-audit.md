@@ -151,7 +151,8 @@ replacement. Unauthorized replacements roll back rather than destroying the
 previous graph. Findings describe candidates, not proof that deletion is safe.
 Real PostgreSQL regressions were red then green; graph/maintenance/ctxasm race
 suites and the full uncached Go suite passed. Procoder test passed 39 packages;
-lint/security reported zero findings. This correction is not deployed yet.
+lint/security reported zero findings. Commit `f4b52f9` deployed at revision 79;
+all twelve cluster suites passed, with normal immutable-image preflight.
 
 Remaining production work: expose graph-owned evidence through authenticated
 RPCs, wire `Sweeper` without a graph database connection, extract explicit
@@ -162,7 +163,13 @@ and cluster proposals with approval assertions. Graph cleanup also omitted
 `file_references`; both existing purge paths now remove only their scoped
 references. The real PostgreSQL regression failed before the fix and covers
 repository/organization boundaries and repeated cleanup.
-The graph-input criterion remains unchecked; revision 78 remains deployed.
+The graph-input criterion remains unchecked despite the safety corrections.
+A full-suite benchmark fixture failure (measured 48 B/op versus assumed 32)
+also led to exact measurement and CI run-id assertions rather than guessed
+bytes. Removing compatibility matching fails the revised assertion. Full
+uncached Go and affected race suites passed afterward; Procoder test passed
+39 packages. Evidence: /tmp/novaforge-graph-{tests-confirm,race-confirm,
+benchmark-mutation,deploy,e2e}.log.
 
 ## Evidence location
 

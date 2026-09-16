@@ -224,9 +224,13 @@ benchmark-green,benchmark-mutation}.log. These are
 component corrections, not production graph-maintenance completion: authenticated
 RPC evidence, index freshness/completeness and context-reference extraction still
 need wiring and end-to-end acceptance. Findings now say what the index knows,
-not that absent symbols can safely be deleted. This batch is not deployed yet;
-revision 78 remains the last verified deployment. Evidence is in
-/tmp/novaforge-graph-{scanners-red,auth-red,purge-red,green,race,tests}.log.
+not that absent symbols can safely be deleted. Commit `f4b52f9` deployed at
+Helm revision 79 with a complete immutable image set and normal preflight.
+The initial build hit its command timeout after five images; the remaining
+builds completed before deployment began. All twelve cluster suites passed.
+The new ownership/scanner/cleanup cases are proven by real PostgreSQL
+regressions, not newly added cluster assertions. Evidence is in
+/tmp/novaforge-graph-{scanners-red,auth-red,purge-red,green,race,tests,deploy,e2e}.log.
 
 ## Environment
 
