@@ -18,6 +18,21 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 )
 
+func TestFinalLogReadFailureFailsJob(t *testing.T) {
+	cs := fake.NewSimpleClientset()
+	cs.PrependReactor("get", "pods", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		if ga, ok := a.(k8stesting.GenericActionImpl); ok && ga.GetSubresource() == "log" {
+			return true, nil, errors.New("kubelet unavailable")
+		}
+		return true, &corev1.Pod{Status: corev1.PodStatus{Phase: corev1.PodSucceeded}}, nil
+	})
+	px := &runner.PodExecutor{Client: cs, Namespace: "novaforge"}
+	_, err := px.Run(context.Background(), &civ1.ConnectResponse{JobId: "log-failure", RunCmd: "true"}, make(chan string, 16))
+	if err == nil {
+		t.Fatal("a job whose final log could not be read reported success")
+	}
+}
+
 // A successful command is not a successful CI job if its required evidence
 // cannot be retained. Session maps an executor error to a failed job status.
 func TestPodArtifactFailureFailsJob(t *testing.T) {

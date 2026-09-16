@@ -286,14 +286,10 @@ func (p *PodExecutor) streamLogs(ctx context.Context, podName string, logs chan<
 			}
 			data, rerr := p.logData(ctx, podName)
 			if rerr != nil {
-				// The settled read is the one that must not miss the last lines;
-				// if it fails, say so rather than deliver a log that is missing them.
-				select {
-				case logs <- "novaforge: the job's complete log could not be read, so it may be missing its last lines: " + rerr.Error():
-				case <-ctx.Done():
-					return ctx.Err()
-				}
-				return nil
+				// Without the final read neither logs nor artifact completeness
+				// can be established. Session must report failure, not success
+				// accompanied by a warning that a consumer may never read.
+				return fmt.Errorf("read complete job log: %w", rerr)
 			}
 			if len(data) > sent {
 				for _, line := range lines(data[sent:]) {
