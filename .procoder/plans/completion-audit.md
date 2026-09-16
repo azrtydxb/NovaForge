@@ -43,9 +43,11 @@ requirements are implemented, then add missing paths and regression evidence.
 - S-14/S-15: graph relationship coverage and indexing languages/tools are narrower
   than the spec wording (Tree-sitter, LSP, SCIP).
 - S-18: verify every repository configuration directory is consumed.
-- S-20: `maintenance.Sweeper.ScanAndPropose` currently supplies WorkDir,
-  TargetRef and Exec but no CI history, coverage, benchmark or graph input;
-  verify/wire these production inputs rather than trusting scanner unit tests.
+- S-20: the sweep now resolves default-branch gate definitions and supplies
+  architecture parameters; the real Git/database regression was red before
+  wiring and green afterwards. The factory e2e now asserts an unapproved
+  architecture proposal. CI history, coverage, benchmark and graph inputs
+  still need production wiring; scanner unit tests are not sufficient.
 - S-7: workspace expiry now travels from agent-runtime through namespace
   provisioning to the reaper (d0069b2); configured long runs are protected.
   No-limit runs retain the existing 12-hour credential ceiling. Cost budget

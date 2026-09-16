@@ -22,7 +22,8 @@ EDGE_IP="${NF_EDGE_IP:-$($KC get svc "$REL-edge" -o jsonpath='{.status.loadBalan
 EDGE_PORT="${NF_EDGE_PORT:-8080}"
 [ -n "$EDGE_IP" ] || fail "edge has no LoadBalancer IP"
 
-export XDG_CONFIG_HOME="$(mktemp -d)"
+XDG_CONFIG_HOME="$(mktemp -d)"
+export XDG_CONFIG_HOME
 USER="fac$RANDOM$$"
 ORG="facorg$RANDOM$$"
 # Every run creates its own organization so runs cannot see each other's
@@ -89,6 +90,10 @@ git clone -q "http://$USER:$TOKEN@$GIT_IP:8081/$ORG/$VULN.git" "$WORK/repo" 2>/d
 	cd "$WORK/repo"
 	printf 'module example.com/probe\n\ngo 1.22\n\nrequire golang.org/x/text v0.3.0\n' >go.mod
 	printf 'package probe\n\nimport _ "golang.org/x/text/language"\n' >main.go
+	mkdir -p frontend database .novaforge/gates
+	printf 'package frontend\nimport _ "example.com/probe/database"\n' >frontend/frontend.go
+	printf 'package database\n' >database/database.go
+	printf 'name: architecture\nrequired: true\nparams:\n  forbidden_dependencies:\n    - frontend -> database\n' >.novaforge/gates/architecture.yaml
 	go mod tidy >/dev/null 2>&1 || true
 	git add -A
 	git -c user.email=factory@example.com -c user.name="Factory E2E" commit -q -m "add a module with a vulnerable dependency"
@@ -112,6 +117,17 @@ read -r KEY ASSIGNEE DECISION <<<"$PROPOSAL"
 RUNS="$(curl -fsS -H "Authorization: Bearer $TOKEN" "$API/work/$KEY/agent-runs" | python3 -c 'import json,sys;print(len(json.load(sys.stdin).get("runs",[])))')"
 [ "$RUNS" = "0" ] || fail "an Agent Run was started on the unapproved proposal $KEY"
 ok "proposal $KEY awaits approval with no assignee and no run"
+
+ARCH="$(curl -fsS -H "Authorization: Bearer $TOKEN" "$API/maintenance" | python3 -c '
+import json,sys
+for p in json.load(sys.stdin)["proposals"]:
+    if p["work_item_type"]=="architecture" and "forbidden dependency" in p["work_item_goal"]:
+        assert not p["assignee_id"] and not p["decision"], "architecture proposal must await approval"
+        print(p["work_item_key"])
+        break
+')"
+[ -n "$ARCH" ] || fail "the default-branch architecture policy produced no proposal"
+ok "architecture proposal $ARCH follows the repository policy and awaits approval"
 
 echo
 echo "PASS: the software factory layer works end to end on the kw cluster."

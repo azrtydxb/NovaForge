@@ -15,6 +15,7 @@ import (
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	"github.com/novaforge/novaforge/internal/analysis"
 	"github.com/novaforge/novaforge/internal/authz"
+	"github.com/novaforge/novaforge/internal/gates"
 	"github.com/novaforge/novaforge/internal/svcauth"
 	"github.com/novaforge/novaforge/internal/work"
 )
@@ -209,6 +210,17 @@ func (s *Sweeper) ScanAndPropose(ctx context.Context, orgID, repoID uuid.UUID, n
 		TargetRef: defaultBranch,
 		Exec:      exec,
 		Git:       s.Git,
+	}
+	// Maintenance must enforce the same default-branch architecture policy
+	// as merge gates. A scanner with nil parameters silently checks nothing.
+	defs, err := gates.Resolve(ctx, s.Git, orgID, repoID, defaultBranch, nil)
+	if err != nil {
+		return res, fmt.Errorf("read maintenance gate policy: %w", err)
+	}
+	for _, def := range defs {
+		if def.Name == "architecture" {
+			in.ArchParams = def.Params
+		}
 	}
 	findings := RunAll(ctx, in, func(kind string, err error) {
 		log.Printf("maintenance: %s scanner on %s: %v", kind, name, err)

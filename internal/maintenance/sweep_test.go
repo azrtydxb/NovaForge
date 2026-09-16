@@ -91,6 +91,11 @@ func TestMaintenanceProposesWorkItem(t *testing.T) {
 		t.Fatalf("CreateRepo: %v", err)
 	}
 	files := vulnerableModule(t)
+	files = append(files,
+		&gitv1.FileChange{Path: ".novaforge/gates/architecture.yaml", Content: []byte("name: architecture\nrequired: true\nparams:\n  forbidden_dependencies:\n    - frontend -> database\n")},
+		&gitv1.FileChange{Path: "frontend/frontend.go", Content: []byte("package frontend\nimport _ \"example.com/probe/database\"\n")},
+		&gitv1.FileChange{Path: "database/database.go", Content: []byte("package database\n")},
+	)
 	if _, err := git.CreateCommit(asOrg, &gitv1.CreateCommitRequest{
 		Repo: repo.GetRepo().GetName(), Branch: repo.GetRepo().GetDefaultBranch(),
 		Message: "add a module with a vulnerable dependency", Files: files,
@@ -132,6 +137,7 @@ func TestMaintenanceProposesWorkItem(t *testing.T) {
 		t.Fatalf("OpenProposalFingerprints: %v", err)
 	}
 	var cve *work.Item
+	var architecture *work.Item
 	for _, itemID := range open {
 		item, err := store.Get(scoped, itemID)
 		if err != nil {
@@ -140,6 +146,12 @@ func TestMaintenanceProposesWorkItem(t *testing.T) {
 		if item.Type == "security" && strings.Contains(item.Goal, "golang.org/x/text") {
 			cve = &item
 		}
+		if item.Type == "architecture" && strings.Contains(item.Goal, "forbidden dependency") {
+			architecture = &item
+		}
+	}
+	if architecture == nil {
+		t.Fatalf("repository architecture policy never produced a proposal: %+v", report)
 	}
 	if cve == nil {
 		t.Fatalf("no security proposal for golang.org/x/text after the sweep (report %+v)", report)
