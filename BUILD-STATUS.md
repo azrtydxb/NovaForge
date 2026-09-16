@@ -102,6 +102,21 @@ intermittent CI status/retry observation remains an audit follow-up, not a
 proven maintenance-history defect. Coverage, benchmark and graph maintenance
 inputs remain open.
 
+## CI credential reservation correction (in progress)
+
+`ClaimForDispatch` marked a job and run running before credential resolution,
+so each broker retry exposed a false running state. The correction reserves
+with the existing runner_id while keeping the job pending and started_at empty;
+a conditional running transition follows successful credential resolution.
+Disconnect cleanup includes reservations, late responses cannot revive terminal
+jobs, and cancellation releases reservations with a bounded cleanup context.
+
+The deterministic real-credential-stack regression failed before the correction
+and passed afterwards; removing the terminal-state guard independently made
+its disconnect case fail. The unchanged broker-down test passed three repeats.
+The CI package passed under `-race` and the full uncached Go suite passed.
+This batch has not yet been deployed. Broader completion work remains open.
+
 ## Environment
 
 Everything runs on the **kw cluster** (k3s 1.34, 8 ARM64 nodes). There is no local

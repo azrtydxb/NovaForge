@@ -135,7 +135,7 @@ func (p *Pump) offer(ctx context.Context, r ConnectedRunner) bool {
 		if cerr != nil {
 			if StateAfterCredentialResolution(cerr) == "pending" {
 				p.log.Warn("ci pump: job blocked on credentials", "job", job.JobID, "error", cerr)
-				_ = p.store.BlockJob(ctx, job.JobID, "blocked: "+cerr.Error(), time.Now().Add(credentialRetryAfter))
+				p.releaseClaim(ctx, job.JobID, "blocked: "+cerr.Error(), time.Now().Add(credentialRetryAfter))
 			} else {
 				p.log.Warn("ci pump: job credentials refused", "job", job.JobID, "error", cerr)
 				_ = p.store.SetJobStatus(ctx, job.JobID, "failure", cerr.Error())
@@ -146,15 +146,31 @@ func (p *Pump) offer(ctx context.Context, r ConnectedRunner) bool {
 		p.Redactions.Register(job.JobID, redact.Values(creds))
 	}
 
+	if err := p.store.StartClaimedJob(ctx, job.JobID, r.ID); err != nil {
+		p.log.Warn("ci pump: cannot start reserved job", "job", job.JobID, "error", err)
+		p.Redactions.Forget(job.JobID)
+		p.releaseClaim(ctx, job.JobID, "", time.Now())
+		return true
+	}
 	if err := p.dispatcher.DispatchTo(ctx, r.ID, job); err != nil {
 		// The runner vanished between the claim and the send; put the job
 		// back so another runner takes it rather than losing it. Its lease
 		// is spent, so it is brokered afresh when it is claimed again.
 		p.log.Warn("ci pump: dispatch failed, releasing job", "job", job.JobID, "error", err)
 		p.Redactions.Forget(job.JobID)
-		_ = p.store.SetJobStatus(ctx, job.JobID, "pending", "")
+		p.releaseClaim(ctx, job.JobID, "", time.Now())
 	}
 	return true
+}
+
+// releaseClaim must still release the reservation when the pump is cancelled.
+// BlockJob refuses terminal jobs, so disconnect cleanup cannot be undone.
+func (p *Pump) releaseClaim(ctx context.Context, jobID uuid.UUID, detail string, until time.Time) {
+	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if err := p.store.BlockJob(cleanup, jobID, detail, until); err != nil {
+		p.log.Warn("ci pump: reservation not released", "job", jobID, "error", err)
+	}
 }
 
 // cloneURL addresses the repository by id — git-platform resolves that the same

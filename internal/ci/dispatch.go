@@ -76,7 +76,7 @@ func (d *Dispatcher) Register(runnerID uuid.UUID, labels []string, ch chan<- *ci
 }
 
 // Unregister removes runnerID from the dispatch pool and reaps any job still
-// running against it: a runner that disconnects mid-job — dies, loses
+// reserved or running against it: a runner that disconnects mid-job — dies, loses
 // network, is killed — must never leave that job running forever, so its
 // status becomes failure with an explanatory detail instead.
 func (d *Dispatcher) Unregister(ctx context.Context, runnerID uuid.UUID) {
@@ -88,7 +88,7 @@ func (d *Dispatcher) Unregister(ctx context.Context, runnerID uuid.UUID) {
 	if !existed || d.store == nil {
 		return
 	}
-	jobIDs, err := d.store.RunningJobsForRunner(ctx, runnerID)
+	jobIDs, err := d.store.ActiveJobsForRunner(ctx, runnerID)
 	if err != nil {
 		return
 	}

@@ -249,6 +249,7 @@ func (s *Store) ClaimJob(ctx context.Context, runnerID uuid.UUID, labels []strin
 		SELECT j.id, j.run_id, j.name, j.needs, j.run_cmd, j.agent_role, j.image, j.status
 		FROM ci.workflow_jobs j
 		WHERE j.status = 'pending'
+		  AND j.runner_id IS NULL
 		  AND coalesce(j.agent_role, '') = ''
 		  AND NOT EXISTS (
 		    SELECT 1 FROM unnest(j.needs) AS need(name)
@@ -425,12 +426,11 @@ func (s *Store) ListJobsForRun(ctx context.Context, runID uuid.UUID) ([]Workflow
 	return jobs, nil
 }
 
-// RunningJobsForRunner returns the ids of every job currently running
-// against runnerID, used by the dispatch reaper to fail them when the
-// runner's stream breaks.
-func (s *Store) RunningJobsForRunner(ctx context.Context, runnerID uuid.UUID) ([]uuid.UUID, error) {
+// ActiveJobsForRunner includes both executing jobs and pending reservations.
+// A disconnect must reap a reservation too, or no runner can claim it again.
+func (s *Store) ActiveJobsForRunner(ctx context.Context, runnerID uuid.UUID) ([]uuid.UUID, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id FROM ci.workflow_jobs WHERE runner_id = $1 AND status = 'running'`,
+		SELECT id FROM ci.workflow_jobs WHERE runner_id = $1 AND status IN ('pending', 'running')`,
 		runnerID,
 	)
 	if err != nil {
@@ -507,8 +507,9 @@ func nullString(s string) *string {
 	return &s
 }
 
-// ClaimForDispatch claims one job for runnerID and returns everything needed to
-// send it, in a single query.
+// ClaimForDispatch reserves one pending job for runnerID and returns the
+// dispatch payload. runner_id owns the reservation; credentials have not yet
+// been resolved, so neither job nor run may be marked running here.
 //
 // The dispatcher is a background worker with no caller's scope, so it cannot
 // use the org-scoped readers. It does not need them: the row it is allowed to
@@ -544,6 +545,7 @@ func (s *Store) ClaimForDispatch(ctx context.Context, runnerID uuid.UUID, labels
 		JOIN ci.workflow_runs r ON r.id = j.run_id
 		JOIN ci.runners rn ON rn.id = $1 AND rn.org_id = r.org_id
 		WHERE j.status = 'pending'
+		  AND j.runner_id IS NULL
 		  AND (j.not_before IS NULL OR j.not_before <= now())
 		  -- An agent job is executed by the platform as an Agent Run
 		  -- (agentjobs.go), never by a runner: a runner handed one ran
@@ -580,14 +582,9 @@ func (s *Store) ClaimForDispatch(ctx context.Context, runnerID uuid.UUID, labels
 	dj.CommitSHA = sha
 
 	if _, err := tx.Exec(ctx, `
-		UPDATE ci.workflow_jobs SET status = 'running', runner_id = $1, started_at = now()
+		UPDATE ci.workflow_jobs SET runner_id = $1
 		WHERE id = $2`, runnerID, dj.JobID); err != nil {
-		return DispatchJob{}, uuid.Nil, fmt.Errorf("mark job running: %w", err)
-	}
-	if _, err := tx.Exec(ctx, `
-		UPDATE ci.workflow_runs SET status = 'running' WHERE id = $1 AND status = 'queued'`,
-		dj.RunID); err != nil {
-		return DispatchJob{}, uuid.Nil, fmt.Errorf("mark run running: %w", err)
+		return DispatchJob{}, uuid.Nil, fmt.Errorf("reserve job: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return DispatchJob{}, uuid.Nil, fmt.Errorf("commit claim: %w", err)
@@ -607,13 +604,13 @@ func (s *Store) BlockJob(ctx context.Context, jobID uuid.UUID, detail string, un
 	tag, err := s.pool.Exec(ctx, `
 		UPDATE ci.workflow_jobs
 		SET status = 'pending', runner_id = NULL, started_at = NULL, detail = $1, not_before = $2
-		WHERE id = $3`,
+		WHERE id = $3 AND status IN ('pending', 'running') AND runner_id IS NOT NULL`,
 		detail, until, jobID)
 	if err != nil {
 		return fmt.Errorf("block job %s: %w", jobID, err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("job %s not found", jobID)
+		return fmt.Errorf("job %s has no active dispatch claim", jobID)
 	}
 	return nil
 }

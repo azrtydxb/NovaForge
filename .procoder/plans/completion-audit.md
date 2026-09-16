@@ -75,6 +75,16 @@ requirements are implemented, then add missing paths and regression evidence.
 - This input supports Go JSON test output, not arbitrary test report formats;
   coverage, benchmarks and graph inputs remain separate open work.
 
+## CI dispatch reservation correction
+
+The broker-down regression observed a job marked running before credentials
+were resolved. Trace `internal/ci/pump.go`, `store.go` and `dispatch.go`;
+separate pending reservation (existing runner_id) from the running transition.
+Test the broker-call interval deterministically with the real credential stack,
+prevent double claims, preserve disconnect cleanup and terminal states, and
+retain the strict broker-down assertion. No new public job status is needed.
+Then run the real-service suite, review, gate and cluster acceptance.
+
 ## Evidence location
 
 CI history input `bc51378` deployed at revision 75; all twelve suites passed:
