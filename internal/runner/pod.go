@@ -211,13 +211,18 @@ func (p *PodExecutor) Run(ctx context.Context, job *civ1.ConnectResponse, logs c
 
 	// Artifacts are kept only from a job that succeeded: a failed job's outputs
 	// are usually half-written, and keeping them invites trusting them.
-	if code == 0 && p.OnArtifacts != nil {
+	if code == 0 {
+		// Command success is insufficient when its evidence was lost. Returning
+		// an error makes Session report failure rather than an unprovable pass.
 		if aerr != nil {
-			logs <- "novaforge: reading artifacts failed: " + aerr.Error()
-		} else if len(arts) > 0 {
+			return code, fmt.Errorf("reading artifacts: %w", aerr)
+		}
+		if len(arts) > 0 {
+			if p.OnArtifacts == nil {
+				return code, fmt.Errorf("artifact uploader is not configured")
+			}
 			if uerr := p.OnArtifacts(ctx, job.GetJobId(), arts); uerr != nil {
-				// Losing artifacts does not change whether the job passed.
-				logs <- "novaforge: uploading artifacts failed: " + uerr.Error()
+				return code, fmt.Errorf("uploading artifacts: %w", uerr)
 			}
 		}
 	}

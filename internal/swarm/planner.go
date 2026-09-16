@@ -44,7 +44,7 @@ type Subtask struct {
 	Key       string   `json:"key"`
 	Title     string   `json:"title"`
 	Goal      string   `json:"goal"`
-	Type      string   `json:"type"`
+	Type      string   `json:"type" jsonschema:"enum=architecture|bug|documentation|feature|incident|refactor|research|security|tech_debt|upgrade"`
 	AgentRole string   `json:"agentRole"`
 	DependsOn []string `json:"dependsOn"`
 }
@@ -118,7 +118,7 @@ func (p *Planner) Decompose(ctx context.Context, epic work.Item, bundle Bundle) 
 	prompt := buildDecomposePrompt(epic, bundle)
 	result, err := ai.GenerateText(ctx, ai.GenerateTextOpts{
 		Model:           p.Model,
-		System:          decomposeSystemPrompt + "\nThe \"agentRole\" of every subtask must be exactly one of: " + p.allowedRoles() + ".",
+		System:          p.systemPrompt(),
 		Prompt:          prompt,
 		Output:          ai.OutputArray[Subtask](),
 		MaxTokens:       &decomposeMaxTokensValue,

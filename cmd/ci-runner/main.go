@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"time"
 
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
 	"github.com/novaforge/novaforge/internal/cleanup"
@@ -101,15 +100,9 @@ func main() {
 		log.Fatalf("ci-runner: connect object storage: %v", err)
 	}
 
-	// Dial timeouts prevent the ci-runner from hanging on startup if a peer
-	// is unreachable; the gRPC client retries lazily, so a failed dial only
-	// surfaces when the first RPC is sent.
-	const dialTimeout = 5 * time.Second
-	gitConn, err := grpc.NewClient(
-		cfg.GitAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithConnectParams(grpc.ConnectParams{MinConnectTimeout: dialTimeout}),
-	)
+	// NewClient performs no I/O; connection failures surface on RPCs, whose
+	// contexts must carry the appropriate deadline, not a dial-timeout option.
+	gitConn, err := grpc.NewClient(cfg.GitAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("ci-runner: dial git-platform: %v", err)
 	}
@@ -126,11 +119,7 @@ func main() {
 	// binary in this codebase.
 	// The query surface serves people, so it needs the caller's scope; the
 	// runner surface serves runners and resolves them separately.
-	identityConn, err := grpc.NewClient(
-		cfg.IdentityAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithConnectParams(grpc.ConnectParams{MinConnectTimeout: dialTimeout}),
-	)
+	identityConn, err := grpc.NewClient(cfg.IdentityAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("ci-runner: dial identity: %v", err)
 	}
@@ -150,30 +139,18 @@ func main() {
 	civ1.RegisterRunnerServiceServer(srv, svc.Server)
 	civ1.RegisterCIServiceServer(srv, svc.Query)
 
-	agentsConn, err := grpc.NewClient(
-		cfg.AgentsAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithConnectParams(grpc.ConnectParams{MinConnectTimeout: dialTimeout}),
-	)
+	agentsConn, err := grpc.NewClient(cfg.AgentsAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("ci-runner: dial agent-runtime: %v", err)
 	}
 	defer agentsConn.Close()
-	workConn, err := grpc.NewClient(
-		cfg.WorkAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithConnectParams(grpc.ConnectParams{MinConnectTimeout: dialTimeout}),
-	)
+	workConn, err := grpc.NewClient(cfg.WorkAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("ci-runner: dial work-reviews: %v", err)
 	}
 	defer workConn.Close()
 
-	gatesConn, err := grpc.NewClient(
-		cfg.GatesAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithConnectParams(grpc.ConnectParams{MinConnectTimeout: dialTimeout}),
-	)
+	gatesConn, err := grpc.NewClient(cfg.GatesAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("ci-runner: dial gates: %v", err)
 	}
