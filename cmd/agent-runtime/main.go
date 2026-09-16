@@ -276,7 +276,7 @@ func runOrphanRecovery(ctx context.Context, store *agents.Store, rdb *redis.Clie
 	}
 }
 
-// runReaper destroys any workspace older than reapOlderThan every
+// runReaper destroys expired workspaces older than reapOlderThan every
 // reapInterval, until ctx is cancelled.
 func runReaper(ctx context.Context, provisioner *workspace.Provisioner) {
 	ticker := time.NewTicker(reapInterval)
@@ -325,7 +325,12 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 
 		// The per-run namespace carries the run's isolation — its own
 		// network policy and resource quota — and is torn down with the run.
-		if _, err := provisioner.Create(ctx, run.ID, workspace.Spec{Image: workspace.DefaultImage, CPULimit: "2", MemLimit: "4Gi"}); err != nil {
+		if _, err := provisioner.Create(ctx, run.ID, workspace.Spec{
+			Image: workspace.DefaultImage, CPULimit: "2", MemLimit: "4Gi",
+			// The workspace must live at least as long as the run credential,
+			// including the margin reserved for settling evidence on timeout.
+			ExpiresAt: time.Now().Add(agentrun.RunCredentialTTL(run)),
+		}); err != nil {
 			log.Printf("agent-runtime: provision workspace for run %s: %v", run.ID, err)
 			finishRun(ctx, store, rdb, run, "failed", fmt.Sprintf("could not provision the run workspace: %v", err))
 			return

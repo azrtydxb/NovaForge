@@ -35,8 +35,8 @@ const (
 const maxArtifactPayload = 48 << 20
 
 // artifactCaptureScript returns the shell appended to a job's command to emit
-// its declared artifacts. Missing paths are skipped rather than failing the
-// job, which has already succeeded by this point. COPYFILE_DISABLE stops a
+// its declared artifacts. Missing paths or archive errors fail the job rather
+// than silently dropping evidence. COPYFILE_DISABLE stops a
 // BSD tar (a macOS runner host) adding an AppleDouble "._name" entry per file,
 // which arrived as a second, unreadable artifact beside each real one.
 func artifactCaptureScript(paths []string) string {
@@ -47,17 +47,29 @@ func artifactCaptureScript(paths []string) string {
 	for _, p := range paths {
 		quoted = append(quoted, "'"+strings.ReplaceAll(p, "'", `'\''`)+"'")
 	}
+	// Positional parameters preserve spaces and glob characters. Do not pipe
+	// tar into base64: POSIX sh reports only the last pipeline command's status,
+	// hiding a failed archive behind successful encoding of incomplete output.
 	return fmt.Sprintf(`
-__nf_existing=""
-for __nf_p in %s; do
-  if [ -e "$__nf_p" ]; then __nf_existing="$__nf_existing $__nf_p"; fi
-done
-if [ -n "$__nf_existing" ]; then
+__nf_status=$?
+[ "$__nf_status" -eq 0 ] || exit "$__nf_status"
+(
+  set -e
+  set -- %s
+  for __nf_p do
+    if [ ! -e "$__nf_p" ]; then
+      echo "novaforge: missing declared artifact: $__nf_p" >&2
+      exit 1
+    fi
+  done
+  __nf_archive=$(mktemp)
+  trap 'rm -f "$__nf_archive"' EXIT
+  COPYFILE_DISABLE=1 tar cf - -- "$@" > "$__nf_archive"
   echo %q
-  COPYFILE_DISABLE=1 tar cf - $__nf_existing | base64 | tr -d '\n'
+  base64 < "$__nf_archive"
   echo
   echo %q
-fi
+)
 `, strings.Join(quoted, " "), artifactsBegin, artifactsEnd)
 }
 
@@ -84,6 +96,9 @@ func extractArtifacts(lines []string) ([]Artifact, []string, error) {
 		default:
 			clean = append(clean, l)
 		}
+	}
+	if inBlock {
+		return nil, clean, fmt.Errorf("artifact payload ended before its closing marker")
 	}
 	if payload.Len() == 0 {
 		return nil, clean, nil
@@ -173,6 +188,9 @@ func filterOutput(ctx context.Context, raw <-chan string, logs chan<- string) ([
 	}
 	if overflow {
 		return nil, fmt.Errorf("artifact payload exceeds %d bytes", maxArtifactPayload)
+	}
+	if inBlock {
+		return nil, fmt.Errorf("artifact payload ended before its closing marker")
 	}
 	if payload.Len() == 0 {
 		return nil, nil

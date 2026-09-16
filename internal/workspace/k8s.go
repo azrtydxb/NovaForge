@@ -43,6 +43,9 @@ type Spec struct {
 	CPULimit string
 	MemLimit string
 	RepoPVC  string
+	// ExpiresAt protects a live run from the age-based orphan fallback. Only
+	// the controller sets it; workspace pods have no namespace permissions.
+	ExpiresAt time.Time
 }
 
 // Workspace identifies the namespace and pod provisioned for one run.
@@ -84,9 +87,14 @@ func namespaceFor(runID uuid.UUID) string {
 func (p *Provisioner) Create(ctx context.Context, runID uuid.UUID, spec Spec) (Workspace, error) {
 	ns := namespaceFor(runID)
 
+	annotations := map[string]string{}
+	if !spec.ExpiresAt.IsZero() {
+		annotations["novaforge.io/expires-at"] = spec.ExpiresAt.UTC().Format(time.RFC3339)
+	}
 	_, err := p.client.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: ns,
+			Name:        ns,
+			Annotations: annotations,
 			Labels: map[string]string{
 				runIDLabel:     runID.String(),
 				createdAtLabel: strconv.FormatInt(time.Now().UTC().Unix(), 10),
@@ -259,7 +267,8 @@ func (p *Provisioner) Destroy(ctx context.Context, runID uuid.UUID) error {
 }
 
 // Reap deletes every run namespace whose novaforge.io/created-at label is
-// older than olderThan and returns how many were deleted. It exists so a
+// older than olderThan, unless its controller-recorded expiry is still in the
+// future, and returns how many were deleted. It exists so a
 // crashed or restarted controller can never leak workspaces indefinitely:
 // running it on a ticker is the sole cleanup mechanism required.
 func (p *Provisioner) Reap(ctx context.Context, olderThan time.Duration) (int, error) {
@@ -270,9 +279,16 @@ func (p *Provisioner) Reap(ctx context.Context, olderThan time.Duration) (int, e
 		return 0, fmt.Errorf("list run namespaces: %w", err)
 	}
 
-	cutoff := time.Now().Add(-olderThan)
+	now := time.Now()
+	cutoff := now.Add(-olderThan)
 	reaped := 0
 	for _, ns := range list.Items {
+		// Long runs must retain their workspace through their execution and
+		// evidence-settlement allowance. Legacy/malformed annotations still
+		// use the age fallback so a crashed controller cannot leak forever.
+		if expiry, err := time.Parse(time.RFC3339, ns.Annotations["novaforge.io/expires-at"]); err == nil && expiry.After(now) {
+			continue
+		}
 		createdRaw, ok := ns.Labels[createdAtLabel]
 		if !ok {
 			continue

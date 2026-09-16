@@ -31,6 +31,21 @@ remaining audit and implementation work. Passing these suites must not be
 used to claim deployment actions, expiring underlying external credentials,
 LSP/SCIP indexing, every graph relationship, or enterprise-scale validation.
 
+## Workspace and artifact gap corrections (in progress)
+
+The namespace reaper now honors `novaforge.io/expires-at`, set by the real
+agent-runtime provisioning path from `RunCredentialTTL`. A two-hour-old
+namespace with remaining lifetime was deleted by the regression test before
+the fix and preserved afterwards. Expired, legacy and malformed metadata
+still permit orphan cleanup. Provisioning also has a test asserting the expiry
+is actually stored.
+
+CI now rejects an absent artifact set when the job declared artifacts and
+rejects an unterminated artifact block, even when its tar bytes were otherwise
+valid. Both cases previously reported success and were observed red before
+the fix. The workspace, runner and agentrun packages passed with `-race`
+against the configured dev services. These changes are not yet cluster-deployed.
+
 ## Environment
 
 Everything runs on the **kw cluster** (k3s 1.34, 8 ARM64 nodes). There is no local
@@ -520,9 +535,12 @@ These are real and are not worked around:
 - **An orphaned run holds its branch for up to its wall-clock limit plus 15
   minutes.** A run whose replica died is only recognisable once no loop could
   still be executing it.
-- **The workspace reaper destroys namespaces older than one hour** regardless
-  of the run's own wall-clock limit, so a run allowed longer than that loses
-  its workspace mid-run.
+- **Workspace cleanup is bounded by the run credential lifetime.** The
+  controller now records an expiry in the namespace; the age-based reaper
+  preserves it until then (configured wall-clock limit plus 15 minutes, or
+  12 hours when no limit is configured). Legacy namespaces without that
+  annotation still use the one-hour orphan fallback. Regression tests passed;
+  deployment verification of this change is pending.
 
 ## Graph edges, knowledge recall and repository configuration (2026-09-15)
 

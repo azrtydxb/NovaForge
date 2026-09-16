@@ -38,6 +38,8 @@ func TestPodArtifactFailureFailsJob(t *testing.T) {
 		uploadErr          error
 	}{
 		{"upload unavailable", valid, "upload", errors.New("object storage unavailable")},
+		{"missing evidence", "command succeeded\n", "artifact", nil},
+		{"truncated evidence", strings.TrimSuffix(valid, "::novaforge-artifacts-end::\n"), "artifact", nil},
 		{"corrupt evidence", "::novaforge-artifacts-begin::\ninvalid!\n::novaforge-artifacts-end::\n", "artifact", nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

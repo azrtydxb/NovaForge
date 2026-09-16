@@ -217,6 +217,9 @@ func (p *PodExecutor) Run(ctx context.Context, job *civ1.ConnectResponse, logs c
 		if aerr != nil {
 			return code, fmt.Errorf("reading artifacts: %w", aerr)
 		}
+		if len(job.GetArtifactPaths()) > 0 && len(arts) == 0 {
+			return code, fmt.Errorf("job declared artifacts but none were captured")
+		}
 		if len(arts) > 0 {
 			if p.OnArtifacts == nil {
 				return code, fmt.Errorf("artifact uploader is not configured")
