@@ -62,12 +62,16 @@ requirements are implemented, then add missing paths and regression evidence.
 
 ## Evidence location
 
-Latest deployed batch: architecture-policy wiring at revision 73 (b3c5549)
-passed the expanded factory suite. A subsequent working-tree fix isolates
-malformed policy from unrelated scanners and retains errors in sweep reports;
-its real Git/database regression was red then green under `-race`. It remains
-uncommitted and undeployed. Full Go suite with dev datastores passed:
+Latest deployed batch: maintenance policy isolation at revision 74 (b75d8d9)
+passed all twelve in-cluster suites in one run. The malformed-policy regression
+uses real Git/database services and was red then green under `-race`; the
+cluster factory fixture verifies valid architecture-policy proposals, not
+malformed policy. Complete images and normal Helm preflight were used.
+Full Go suite with dev datastores passed:
 /tmp/novaforge-maintenance-isolation-tests.log. Lint/security: zero findings.
+Cluster evidence: /tmp/novaforge-isolation-e2e.log; deployment:
+/tmp/novaforge-isolation-deploy.log. Approval to commit/deploy verified audit
+batches is recorded in .procoder/ask/decisions.md; broader completion stays open.
 
 Earlier: all twelve suites passed at revision 71 (d0069b2); work_ci and agent
 passed at revision 72 (c4ff7e7). Procoder test passed (39 packages).

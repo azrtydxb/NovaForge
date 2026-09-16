@@ -63,13 +63,17 @@ passed: default-branch architecture policy produces a proposal that remains
 unassigned and awaits approval. Procoder test passed (39 packages).
 
 Adversarial review found an isolation defect: failure to resolve repository
-gate configuration aborted the whole maintenance scan. A working-tree fix
+gate configuration aborted the whole maintenance scan. The fix in `b75d8d9`
 reports the architecture error while continuing unrelated scanners, and
 preserves scanner errors in periodic sweep reports. The real Git/database
 regression failed before the fix and passed under `-race` afterwards. The
 full Go suite passed with dev datastores; lint and security found no issues.
-This isolation fix is not yet committed or deployed. CI-history, coverage,
-benchmark and graph input gaps remain open; this is not whole-product
+The complete `b75d8d9` image set was deployed through normal preflight at
+Helm revision 74. All twelve in-cluster acceptance suites passed in one run;
+Procoder test passed (39 packages) and the gate had no blocking findings.
+Malformed-policy isolation itself is proven by the real Git/database regression,
+not by the cluster factory fixture, which uses valid policy. CI-history,
+coverage, benchmark and graph input gaps remain open; this is not whole-product
 completion.
 
 ## Environment
