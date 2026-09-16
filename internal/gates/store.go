@@ -6,6 +6,7 @@ package gates
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -33,6 +34,9 @@ type Evaluation struct {
 	Detail      string
 	EvaluatedAt time.Time
 	TargetSHA   string
+	RepoID      uuid.UUID
+	// Nil means no measurement, including legacy rows and failed test runs.
+	CoveragePercent *float64
 }
 
 // Store provides access to the gates schema's gate_evaluations table.
@@ -54,20 +58,32 @@ func (s *Store) RecordEvaluation(ctx context.Context, e Evaluation) error {
 	if err := authz.RequireOrg(ctx, e.OrgID); err != nil {
 		return err
 	}
+	if p := e.CoveragePercent; p != nil && (e.RepoID == uuid.Nil || e.Gate != "tests" ||
+		(e.Status != "pass" && e.Status != "fail") || math.IsNaN(*p) || math.IsInf(*p, 0) || *p < 0 || *p > 100) {
+		return fmt.Errorf("invalid coverage measurement")
+	}
 	if e.ID == uuid.Nil {
 		e.ID = uuid.New()
 	}
-	_, err := s.pool.Exec(ctx,
-		`INSERT INTO gates.gate_evaluations (id, org_id, run_id, gate, status, detail, target_sha, evaluated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+	tag, err := s.pool.Exec(ctx,
+		`INSERT INTO gates.gate_evaluations (id, org_id, run_id, gate, status, detail, target_sha, evaluated_at, repo_id, coverage_percent)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, now(), $8, $9)
 		 ON CONFLICT (run_id, gate, target_sha) DO UPDATE SET
 		   status = EXCLUDED.status,
 		   detail = EXCLUDED.detail,
-		   evaluated_at = now()`,
-		e.ID, e.OrgID, e.RunID, e.Gate, e.Status, e.Detail, e.TargetSHA,
+		   repo_id = EXCLUDED.repo_id,
+		   coverage_percent = EXCLUDED.coverage_percent,
+		   evaluated_at = now()
+		 WHERE gates.gate_evaluations.org_id = EXCLUDED.org_id
+		   AND (gates.gate_evaluations.repo_id = EXCLUDED.repo_id
+		        OR gates.gate_evaluations.repo_id = '00000000-0000-0000-0000-000000000000')`,
+		e.ID, e.OrgID, e.RunID, e.Gate, e.Status, e.Detail, e.TargetSHA, e.RepoID, e.CoveragePercent,
 	)
 	if err != nil {
 		return fmt.Errorf("record gate evaluation: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return fmt.Errorf("evaluation identity belongs to another scope")
 	}
 	return nil
 }
@@ -80,7 +96,7 @@ func (s *Store) ListEvaluations(ctx context.Context, runID uuid.UUID) ([]Evaluat
 		return nil, err
 	}
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, org_id, run_id, gate, status, detail, target_sha, evaluated_at
+		`SELECT id, org_id, run_id, gate, status, detail, target_sha, evaluated_at, repo_id, coverage_percent
 		 FROM gates.gate_evaluations WHERE run_id = $1 AND org_id = $2
 		 ORDER BY evaluated_at DESC`,
 		runID, scope.OrgID,
@@ -93,7 +109,7 @@ func (s *Store) ListEvaluations(ctx context.Context, runID uuid.UUID) ([]Evaluat
 	var out []Evaluation
 	for rows.Next() {
 		var e Evaluation
-		if err := rows.Scan(&e.ID, &e.OrgID, &e.RunID, &e.Gate, &e.Status, &e.Detail, &e.TargetSHA, &e.EvaluatedAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.OrgID, &e.RunID, &e.Gate, &e.Status, &e.Detail, &e.TargetSHA, &e.EvaluatedAt, &e.RepoID, &e.CoveragePercent); err != nil {
 			return nil, fmt.Errorf("scan gate evaluation: %w", err)
 		}
 		out = append(out, e)
@@ -116,7 +132,7 @@ func (s *Store) LatestForSHA(ctx context.Context, runID uuid.UUID, sha string) (
 		return nil, err
 	}
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, org_id, run_id, gate, status, detail, target_sha, evaluated_at
+		`SELECT id, org_id, run_id, gate, status, detail, target_sha, evaluated_at, repo_id, coverage_percent
 		 FROM gates.gate_evaluations WHERE run_id = $1 AND org_id = $2 AND target_sha = $3`,
 		runID, scope.OrgID, sha,
 	)
@@ -128,7 +144,7 @@ func (s *Store) LatestForSHA(ctx context.Context, runID uuid.UUID, sha string) (
 	out := make(map[string]Evaluation)
 	for rows.Next() {
 		var e Evaluation
-		if err := rows.Scan(&e.ID, &e.OrgID, &e.RunID, &e.Gate, &e.Status, &e.Detail, &e.TargetSHA, &e.EvaluatedAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.OrgID, &e.RunID, &e.Gate, &e.Status, &e.Detail, &e.TargetSHA, &e.EvaluatedAt, &e.RepoID, &e.CoveragePercent); err != nil {
 			return nil, fmt.Errorf("scan gate evaluation: %w", err)
 		}
 		out[e.Gate] = e

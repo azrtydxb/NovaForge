@@ -138,6 +138,7 @@ func (c *Controller) Evaluate(ctx context.Context, runID uuid.UUID) ([]Evaluatio
 			return nil, fmt.Errorf("run gate %q: %w", def.Name, err)
 		}
 		eval.OrgID = head.OrgID
+		eval.RepoID = head.RepoID
 		eval.RunID = runID
 		eval.Gate = def.Name
 		eval.TargetSHA = head.HeadSHA

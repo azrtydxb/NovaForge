@@ -39,10 +39,14 @@ func scanCoverage(ctx context.Context, in ScanInput) ([]Finding, error) {
 		severity = "medium"
 	}
 
+	detail := fmt.Sprintf("a %.1f point drop, at or above the %.1f point threshold", drop, threshold)
+	if in.Coverage.Evidence != "" {
+		detail += "; " + in.Coverage.Evidence
+	}
 	return []Finding{{
 		Kind:         "coverage_regression",
 		Title:        fmt.Sprintf("coverage dropped from %.1f%% to %.1f%%", *prev, *latest),
-		Detail:       fmt.Sprintf("a %.1f point drop, at or above the %.1f point threshold", drop, threshold),
+		Detail:       detail,
 		Severity:     severity,
 		ProposedType: "tech_debt",
 	}}, nil

@@ -53,6 +53,7 @@ var Runners = map[string]GateRunner{
 func newEvaluation(in Input, gate, status, detail string) Evaluation {
 	return Evaluation{
 		OrgID:     in.OrgID,
+		RepoID:    in.RepoID,
 		RunID:     in.RunID,
 		Gate:      gate,
 		Status:    status,

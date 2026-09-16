@@ -22,17 +22,20 @@ const (
 )
 
 type Evaluation struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	OrgId         string                 `protobuf:"bytes,2,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
-	RunId         string                 `protobuf:"bytes,3,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
-	Gate          string                 `protobuf:"bytes,4,opt,name=gate,proto3" json:"gate,omitempty"`
-	Status        string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
-	Detail        string                 `protobuf:"bytes,6,opt,name=detail,proto3" json:"detail,omitempty"`
-	TargetSha     string                 `protobuf:"bytes,7,opt,name=target_sha,json=targetSha,proto3" json:"target_sha,omitempty"`
-	EvaluatedAt   string                 `protobuf:"bytes,8,opt,name=evaluated_at,json=evaluatedAt,proto3" json:"evaluated_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Id          string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	OrgId       string                 `protobuf:"bytes,2,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	RunId       string                 `protobuf:"bytes,3,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	Gate        string                 `protobuf:"bytes,4,opt,name=gate,proto3" json:"gate,omitempty"`
+	Status      string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
+	Detail      string                 `protobuf:"bytes,6,opt,name=detail,proto3" json:"detail,omitempty"`
+	TargetSha   string                 `protobuf:"bytes,7,opt,name=target_sha,json=targetSha,proto3" json:"target_sha,omitempty"`
+	EvaluatedAt string                 `protobuf:"bytes,8,opt,name=evaluated_at,json=evaluatedAt,proto3" json:"evaluated_at,omitempty"`
+	// Absent for legacy evaluations, failed tests or unavailable measurements.
+	CoveragePercent *float64 `protobuf:"fixed64,9,opt,name=coverage_percent,json=coveragePercent,proto3,oneof" json:"coverage_percent,omitempty"`
+	RepoId          string   `protobuf:"bytes,10,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *Evaluation) Reset() {
@@ -121,6 +124,110 @@ func (x *Evaluation) GetEvaluatedAt() string {
 	return ""
 }
 
+func (x *Evaluation) GetCoveragePercent() float64 {
+	if x != nil && x.CoveragePercent != nil {
+		return *x.CoveragePercent
+	}
+	return 0
+}
+
+func (x *Evaluation) GetRepoId() string {
+	if x != nil {
+		return x.RepoId
+	}
+	return ""
+}
+
+type ListCoverageHistoryRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RepoId        string                 `protobuf:"bytes,1,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListCoverageHistoryRequest) Reset() {
+	*x = ListCoverageHistoryRequest{}
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListCoverageHistoryRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListCoverageHistoryRequest) ProtoMessage() {}
+
+func (x *ListCoverageHistoryRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListCoverageHistoryRequest.ProtoReflect.Descriptor instead.
+func (*ListCoverageHistoryRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ListCoverageHistoryRequest) GetRepoId() string {
+	if x != nil {
+		return x.RepoId
+	}
+	return ""
+}
+
+type ListCoverageHistoryResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Latest two recorded tests-gate head evaluations, newest first. Unavailable
+	// measurements remain present; callers must not skip them for older values.
+	Evaluations   []*Evaluation `protobuf:"bytes,1,rep,name=evaluations,proto3" json:"evaluations,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListCoverageHistoryResponse) Reset() {
+	*x = ListCoverageHistoryResponse{}
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListCoverageHistoryResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListCoverageHistoryResponse) ProtoMessage() {}
+
+func (x *ListCoverageHistoryResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListCoverageHistoryResponse.ProtoReflect.Descriptor instead.
+func (*ListCoverageHistoryResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ListCoverageHistoryResponse) GetEvaluations() []*Evaluation {
+	if x != nil {
+		return x.Evaluations
+	}
+	return nil
+}
+
 type EvaluateRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
@@ -130,7 +237,7 @@ type EvaluateRequest struct {
 
 func (x *EvaluateRequest) Reset() {
 	*x = EvaluateRequest{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[1]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -142,7 +249,7 @@ func (x *EvaluateRequest) String() string {
 func (*EvaluateRequest) ProtoMessage() {}
 
 func (x *EvaluateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[1]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -155,7 +262,7 @@ func (x *EvaluateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvaluateRequest.ProtoReflect.Descriptor instead.
 func (*EvaluateRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{1}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *EvaluateRequest) GetRunId() string {
@@ -174,7 +281,7 @@ type EvaluateResponse struct {
 
 func (x *EvaluateResponse) Reset() {
 	*x = EvaluateResponse{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[2]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -186,7 +293,7 @@ func (x *EvaluateResponse) String() string {
 func (*EvaluateResponse) ProtoMessage() {}
 
 func (x *EvaluateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[2]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -199,7 +306,7 @@ func (x *EvaluateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvaluateResponse.ProtoReflect.Descriptor instead.
 func (*EvaluateResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{2}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *EvaluateResponse) GetEvaluations() []*Evaluation {
@@ -218,7 +325,7 @@ type MayMergeRequest struct {
 
 func (x *MayMergeRequest) Reset() {
 	*x = MayMergeRequest{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[3]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -230,7 +337,7 @@ func (x *MayMergeRequest) String() string {
 func (*MayMergeRequest) ProtoMessage() {}
 
 func (x *MayMergeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[3]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -243,7 +350,7 @@ func (x *MayMergeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MayMergeRequest.ProtoReflect.Descriptor instead.
 func (*MayMergeRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{3}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *MayMergeRequest) GetRunId() string {
@@ -263,7 +370,7 @@ type MayMergeResponse struct {
 
 func (x *MayMergeResponse) Reset() {
 	*x = MayMergeResponse{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[4]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -275,7 +382,7 @@ func (x *MayMergeResponse) String() string {
 func (*MayMergeResponse) ProtoMessage() {}
 
 func (x *MayMergeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[4]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -288,7 +395,7 @@ func (x *MayMergeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MayMergeResponse.ProtoReflect.Descriptor instead.
 func (*MayMergeResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{4}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *MayMergeResponse) GetAllowed() bool {
@@ -314,7 +421,7 @@ type ListEvaluationsRequest struct {
 
 func (x *ListEvaluationsRequest) Reset() {
 	*x = ListEvaluationsRequest{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[5]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -326,7 +433,7 @@ func (x *ListEvaluationsRequest) String() string {
 func (*ListEvaluationsRequest) ProtoMessage() {}
 
 func (x *ListEvaluationsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[5]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -339,7 +446,7 @@ func (x *ListEvaluationsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListEvaluationsRequest.ProtoReflect.Descriptor instead.
 func (*ListEvaluationsRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{5}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ListEvaluationsRequest) GetRunId() string {
@@ -358,7 +465,7 @@ type ListEvaluationsResponse struct {
 
 func (x *ListEvaluationsResponse) Reset() {
 	*x = ListEvaluationsResponse{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[6]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -370,7 +477,7 @@ func (x *ListEvaluationsResponse) String() string {
 func (*ListEvaluationsResponse) ProtoMessage() {}
 
 func (x *ListEvaluationsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[6]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -383,7 +490,7 @@ func (x *ListEvaluationsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListEvaluationsResponse.ProtoReflect.Descriptor instead.
 func (*ListEvaluationsResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{6}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ListEvaluationsResponse) GetEvaluations() []*Evaluation {
@@ -422,7 +529,7 @@ type ApprovalRequestMsg struct {
 
 func (x *ApprovalRequestMsg) Reset() {
 	*x = ApprovalRequestMsg{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[7]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -434,7 +541,7 @@ func (x *ApprovalRequestMsg) String() string {
 func (*ApprovalRequestMsg) ProtoMessage() {}
 
 func (x *ApprovalRequestMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[7]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -447,7 +554,7 @@ func (x *ApprovalRequestMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApprovalRequestMsg.ProtoReflect.Descriptor instead.
 func (*ApprovalRequestMsg) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{7}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ApprovalRequestMsg) GetId() string {
@@ -566,7 +673,7 @@ type ListApprovalsRequest struct {
 
 func (x *ListApprovalsRequest) Reset() {
 	*x = ListApprovalsRequest{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[8]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -578,7 +685,7 @@ func (x *ListApprovalsRequest) String() string {
 func (*ListApprovalsRequest) ProtoMessage() {}
 
 func (x *ListApprovalsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[8]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -591,7 +698,7 @@ func (x *ListApprovalsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListApprovalsRequest.ProtoReflect.Descriptor instead.
 func (*ListApprovalsRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{8}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ListApprovalsRequest) GetRunId() string {
@@ -617,7 +724,7 @@ type ListApprovalsResponse struct {
 
 func (x *ListApprovalsResponse) Reset() {
 	*x = ListApprovalsResponse{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[9]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -629,7 +736,7 @@ func (x *ListApprovalsResponse) String() string {
 func (*ListApprovalsResponse) ProtoMessage() {}
 
 func (x *ListApprovalsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[9]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -642,7 +749,7 @@ func (x *ListApprovalsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListApprovalsResponse.ProtoReflect.Descriptor instead.
 func (*ListApprovalsResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{9}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ListApprovalsResponse) GetRequests() []*ApprovalRequestMsg {
@@ -677,7 +784,7 @@ type RequestApprovalRequest struct {
 
 func (x *RequestApprovalRequest) Reset() {
 	*x = RequestApprovalRequest{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[10]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -689,7 +796,7 @@ func (x *RequestApprovalRequest) String() string {
 func (*RequestApprovalRequest) ProtoMessage() {}
 
 func (x *RequestApprovalRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[10]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -702,7 +809,7 @@ func (x *RequestApprovalRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestApprovalRequest.ProtoReflect.Descriptor instead.
 func (*RequestApprovalRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{10}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *RequestApprovalRequest) GetRunId() string {
@@ -735,7 +842,7 @@ type RequestApprovalResponse struct {
 
 func (x *RequestApprovalResponse) Reset() {
 	*x = RequestApprovalResponse{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[11]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -747,7 +854,7 @@ func (x *RequestApprovalResponse) String() string {
 func (*RequestApprovalResponse) ProtoMessage() {}
 
 func (x *RequestApprovalResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[11]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -760,7 +867,7 @@ func (x *RequestApprovalResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestApprovalResponse.ProtoReflect.Descriptor instead.
 func (*RequestApprovalResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{11}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *RequestApprovalResponse) GetRequest() *ApprovalRequestMsg {
@@ -781,7 +888,7 @@ type ResolveApprovalRequest struct {
 
 func (x *ResolveApprovalRequest) Reset() {
 	*x = ResolveApprovalRequest{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[12]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -793,7 +900,7 @@ func (x *ResolveApprovalRequest) String() string {
 func (*ResolveApprovalRequest) ProtoMessage() {}
 
 func (x *ResolveApprovalRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[12]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -806,7 +913,7 @@ func (x *ResolveApprovalRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveApprovalRequest.ProtoReflect.Descriptor instead.
 func (*ResolveApprovalRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{12}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ResolveApprovalRequest) GetId() string {
@@ -840,7 +947,7 @@ type ResolveApprovalResponse struct {
 
 func (x *ResolveApprovalResponse) Reset() {
 	*x = ResolveApprovalResponse{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[13]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -852,7 +959,7 @@ func (x *ResolveApprovalResponse) String() string {
 func (*ResolveApprovalResponse) ProtoMessage() {}
 
 func (x *ResolveApprovalResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[13]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -865,7 +972,7 @@ func (x *ResolveApprovalResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveApprovalResponse.ProtoReflect.Descriptor instead.
 func (*ResolveApprovalResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{13}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ResolveApprovalResponse) GetOk() bool {
@@ -895,7 +1002,7 @@ type PutSecretRequest struct {
 
 func (x *PutSecretRequest) Reset() {
 	*x = PutSecretRequest{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[14]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -907,7 +1014,7 @@ func (x *PutSecretRequest) String() string {
 func (*PutSecretRequest) ProtoMessage() {}
 
 func (x *PutSecretRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[14]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -920,7 +1027,7 @@ func (x *PutSecretRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PutSecretRequest.ProtoReflect.Descriptor instead.
 func (*PutSecretRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{14}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *PutSecretRequest) GetName() string {
@@ -953,7 +1060,7 @@ type PutSecretResponse struct {
 
 func (x *PutSecretResponse) Reset() {
 	*x = PutSecretResponse{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[15]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -965,7 +1072,7 @@ func (x *PutSecretResponse) String() string {
 func (*PutSecretResponse) ProtoMessage() {}
 
 func (x *PutSecretResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[15]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -978,7 +1085,7 @@ func (x *PutSecretResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PutSecretResponse.ProtoReflect.Descriptor instead.
 func (*PutSecretResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{15}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *PutSecretResponse) GetSecret() *SecretReference {
@@ -1008,7 +1115,7 @@ type IssueJobLeaseRequest struct {
 
 func (x *IssueJobLeaseRequest) Reset() {
 	*x = IssueJobLeaseRequest{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[16]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1020,7 +1127,7 @@ func (x *IssueJobLeaseRequest) String() string {
 func (*IssueJobLeaseRequest) ProtoMessage() {}
 
 func (x *IssueJobLeaseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[16]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1033,7 +1140,7 @@ func (x *IssueJobLeaseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IssueJobLeaseRequest.ProtoReflect.Descriptor instead.
 func (*IssueJobLeaseRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{16}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *IssueJobLeaseRequest) GetJobId() string {
@@ -1092,7 +1199,7 @@ type IssueJobLeaseResponse struct {
 
 func (x *IssueJobLeaseResponse) Reset() {
 	*x = IssueJobLeaseResponse{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[17]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1104,7 +1211,7 @@ func (x *IssueJobLeaseResponse) String() string {
 func (*IssueJobLeaseResponse) ProtoMessage() {}
 
 func (x *IssueJobLeaseResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[17]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1117,7 +1224,7 @@ func (x *IssueJobLeaseResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IssueJobLeaseResponse.ProtoReflect.Descriptor instead.
 func (*IssueJobLeaseResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{17}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *IssueJobLeaseResponse) GetLeaseId() string {
@@ -1167,7 +1274,7 @@ type IssueLeaseRequest struct {
 
 func (x *IssueLeaseRequest) Reset() {
 	*x = IssueLeaseRequest{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[18]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1179,7 +1286,7 @@ func (x *IssueLeaseRequest) String() string {
 func (*IssueLeaseRequest) ProtoMessage() {}
 
 func (x *IssueLeaseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[18]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1192,7 +1299,7 @@ func (x *IssueLeaseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IssueLeaseRequest.ProtoReflect.Descriptor instead.
 func (*IssueLeaseRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{18}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *IssueLeaseRequest) GetRunId() string {
@@ -1235,7 +1342,7 @@ type IssueLeaseResponse struct {
 
 func (x *IssueLeaseResponse) Reset() {
 	*x = IssueLeaseResponse{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[19]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1247,7 +1354,7 @@ func (x *IssueLeaseResponse) String() string {
 func (*IssueLeaseResponse) ProtoMessage() {}
 
 func (x *IssueLeaseResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[19]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1260,7 +1367,7 @@ func (x *IssueLeaseResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IssueLeaseResponse.ProtoReflect.Descriptor instead.
 func (*IssueLeaseResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{19}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *IssueLeaseResponse) GetLeaseId() string {
@@ -1301,7 +1408,7 @@ type RedeemLeaseRequest struct {
 
 func (x *RedeemLeaseRequest) Reset() {
 	*x = RedeemLeaseRequest{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[20]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1313,7 +1420,7 @@ func (x *RedeemLeaseRequest) String() string {
 func (*RedeemLeaseRequest) ProtoMessage() {}
 
 func (x *RedeemLeaseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[20]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1326,7 +1433,7 @@ func (x *RedeemLeaseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RedeemLeaseRequest.ProtoReflect.Descriptor instead.
 func (*RedeemLeaseRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{20}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *RedeemLeaseRequest) GetRunId() string {
@@ -1352,7 +1459,7 @@ type RedeemLeaseResponse struct {
 
 func (x *RedeemLeaseResponse) Reset() {
 	*x = RedeemLeaseResponse{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[21]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1364,7 +1471,7 @@ func (x *RedeemLeaseResponse) String() string {
 func (*RedeemLeaseResponse) ProtoMessage() {}
 
 func (x *RedeemLeaseResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[21]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1377,7 +1484,7 @@ func (x *RedeemLeaseResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RedeemLeaseResponse.ProtoReflect.Descriptor instead.
 func (*RedeemLeaseResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{21}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *RedeemLeaseResponse) GetValue() string {
@@ -1398,7 +1505,7 @@ type SecretReference struct {
 
 func (x *SecretReference) Reset() {
 	*x = SecretReference{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[22]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1410,7 +1517,7 @@ func (x *SecretReference) String() string {
 func (*SecretReference) ProtoMessage() {}
 
 func (x *SecretReference) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[22]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1423,7 +1530,7 @@ func (x *SecretReference) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SecretReference.ProtoReflect.Descriptor instead.
 func (*SecretReference) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{22}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *SecretReference) GetName() string {
@@ -1448,7 +1555,7 @@ type ListSecretsRequest struct {
 
 func (x *ListSecretsRequest) Reset() {
 	*x = ListSecretsRequest{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[23]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1460,7 +1567,7 @@ func (x *ListSecretsRequest) String() string {
 func (*ListSecretsRequest) ProtoMessage() {}
 
 func (x *ListSecretsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[23]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1473,7 +1580,7 @@ func (x *ListSecretsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSecretsRequest.ProtoReflect.Descriptor instead.
 func (*ListSecretsRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{23}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{25}
 }
 
 type ListSecretsResponse struct {
@@ -1485,7 +1592,7 @@ type ListSecretsResponse struct {
 
 func (x *ListSecretsResponse) Reset() {
 	*x = ListSecretsResponse{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[24]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1497,7 +1604,7 @@ func (x *ListSecretsResponse) String() string {
 func (*ListSecretsResponse) ProtoMessage() {}
 
 func (x *ListSecretsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[24]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1510,7 +1617,7 @@ func (x *ListSecretsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSecretsResponse.ProtoReflect.Descriptor instead.
 func (*ListSecretsResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{24}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *ListSecretsResponse) GetSecrets() []*SecretReference {
@@ -1535,7 +1642,7 @@ type Lease struct {
 
 func (x *Lease) Reset() {
 	*x = Lease{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[25]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1547,7 +1654,7 @@ func (x *Lease) String() string {
 func (*Lease) ProtoMessage() {}
 
 func (x *Lease) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[25]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1560,7 +1667,7 @@ func (x *Lease) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Lease.ProtoReflect.Descriptor instead.
 func (*Lease) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{25}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *Lease) GetId() string {
@@ -1606,7 +1713,7 @@ type ListLeasesRequest struct {
 
 func (x *ListLeasesRequest) Reset() {
 	*x = ListLeasesRequest{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[26]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1618,7 +1725,7 @@ func (x *ListLeasesRequest) String() string {
 func (*ListLeasesRequest) ProtoMessage() {}
 
 func (x *ListLeasesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[26]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1631,7 +1738,7 @@ func (x *ListLeasesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListLeasesRequest.ProtoReflect.Descriptor instead.
 func (*ListLeasesRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{26}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{28}
 }
 
 type ListLeasesResponse struct {
@@ -1643,7 +1750,7 @@ type ListLeasesResponse struct {
 
 func (x *ListLeasesResponse) Reset() {
 	*x = ListLeasesResponse{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[27]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1655,7 +1762,7 @@ func (x *ListLeasesResponse) String() string {
 func (*ListLeasesResponse) ProtoMessage() {}
 
 func (x *ListLeasesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[27]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1668,7 +1775,7 @@ func (x *ListLeasesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListLeasesResponse.ProtoReflect.Descriptor instead.
 func (*ListLeasesResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{27}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *ListLeasesResponse) GetLeases() []*Lease {
@@ -1687,7 +1794,7 @@ type RevokeLeaseRequest struct {
 
 func (x *RevokeLeaseRequest) Reset() {
 	*x = RevokeLeaseRequest{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[28]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1699,7 +1806,7 @@ func (x *RevokeLeaseRequest) String() string {
 func (*RevokeLeaseRequest) ProtoMessage() {}
 
 func (x *RevokeLeaseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[28]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1712,7 +1819,7 @@ func (x *RevokeLeaseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeLeaseRequest.ProtoReflect.Descriptor instead.
 func (*RevokeLeaseRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{28}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *RevokeLeaseRequest) GetId() string {
@@ -1731,7 +1838,7 @@ type RevokeLeaseResponse struct {
 
 func (x *RevokeLeaseResponse) Reset() {
 	*x = RevokeLeaseResponse{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[29]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1743,7 +1850,7 @@ func (x *RevokeLeaseResponse) String() string {
 func (*RevokeLeaseResponse) ProtoMessage() {}
 
 func (x *RevokeLeaseResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[29]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1756,7 +1863,7 @@ func (x *RevokeLeaseResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeLeaseResponse.ProtoReflect.Descriptor instead.
 func (*RevokeLeaseResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{29}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *RevokeLeaseResponse) GetRevoked() bool {
@@ -1786,7 +1893,7 @@ type GateConfig struct {
 
 func (x *GateConfig) Reset() {
 	*x = GateConfig{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[30]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1798,7 +1905,7 @@ func (x *GateConfig) String() string {
 func (*GateConfig) ProtoMessage() {}
 
 func (x *GateConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[30]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1811,7 +1918,7 @@ func (x *GateConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GateConfig.ProtoReflect.Descriptor instead.
 func (*GateConfig) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{30}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *GateConfig) GetName() string {
@@ -1858,7 +1965,7 @@ type ListGateConfigRequest struct {
 
 func (x *ListGateConfigRequest) Reset() {
 	*x = ListGateConfigRequest{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[31]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1870,7 +1977,7 @@ func (x *ListGateConfigRequest) String() string {
 func (*ListGateConfigRequest) ProtoMessage() {}
 
 func (x *ListGateConfigRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[31]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1883,7 +1990,7 @@ func (x *ListGateConfigRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGateConfigRequest.ProtoReflect.Descriptor instead.
 func (*ListGateConfigRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{31}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *ListGateConfigRequest) GetRepo() string {
@@ -1905,7 +2012,7 @@ type ListGateConfigResponse struct {
 
 func (x *ListGateConfigResponse) Reset() {
 	*x = ListGateConfigResponse{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[32]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1917,7 +2024,7 @@ func (x *ListGateConfigResponse) String() string {
 func (*ListGateConfigResponse) ProtoMessage() {}
 
 func (x *ListGateConfigResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[32]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1930,7 +2037,7 @@ func (x *ListGateConfigResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGateConfigResponse.ProtoReflect.Descriptor instead.
 func (*ListGateConfigResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{32}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *ListGateConfigResponse) GetRef() string {
@@ -1972,7 +2079,7 @@ type ProposeGateChangeRequest struct {
 
 func (x *ProposeGateChangeRequest) Reset() {
 	*x = ProposeGateChangeRequest{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[33]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1984,7 +2091,7 @@ func (x *ProposeGateChangeRequest) String() string {
 func (*ProposeGateChangeRequest) ProtoMessage() {}
 
 func (x *ProposeGateChangeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[33]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1997,7 +2104,7 @@ func (x *ProposeGateChangeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProposeGateChangeRequest.ProtoReflect.Descriptor instead.
 func (*ProposeGateChangeRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{33}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *ProposeGateChangeRequest) GetRepo() string {
@@ -2041,7 +2148,7 @@ type ProposeGateChangeResponse struct {
 
 func (x *ProposeGateChangeResponse) Reset() {
 	*x = ProposeGateChangeResponse{}
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[34]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2053,7 +2160,7 @@ func (x *ProposeGateChangeResponse) String() string {
 func (*ProposeGateChangeResponse) ProtoMessage() {}
 
 func (x *ProposeGateChangeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[34]
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2066,7 +2173,7 @@ func (x *ProposeGateChangeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProposeGateChangeResponse.ProtoReflect.Descriptor instead.
 func (*ProposeGateChangeResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{34}
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *ProposeGateChangeResponse) GetRunId() string {
@@ -2108,7 +2215,7 @@ var File_novaforge_gates_v1_gates_proto protoreflect.FileDescriptor
 
 const file_novaforge_gates_v1_gates_proto_rawDesc = "" +
 	"\n" +
-	"\x1enovaforge/gates/v1/gates.proto\x12\x12novaforge.gates.v1\"\xd0\x01\n" +
+	"\x1enovaforge/gates/v1/gates.proto\x12\x12novaforge.gates.v1\"\xae\x02\n" +
 	"\n" +
 	"Evaluation\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x15\n" +
@@ -2119,7 +2226,15 @@ const file_novaforge_gates_v1_gates_proto_rawDesc = "" +
 	"\x06detail\x18\x06 \x01(\tR\x06detail\x12\x1d\n" +
 	"\n" +
 	"target_sha\x18\a \x01(\tR\ttargetSha\x12!\n" +
-	"\fevaluated_at\x18\b \x01(\tR\vevaluatedAt\"(\n" +
+	"\fevaluated_at\x18\b \x01(\tR\vevaluatedAt\x12.\n" +
+	"\x10coverage_percent\x18\t \x01(\x01H\x00R\x0fcoveragePercent\x88\x01\x01\x12\x17\n" +
+	"\arepo_id\x18\n" +
+	" \x01(\tR\x06repoIdB\x13\n" +
+	"\x11_coverage_percent\"5\n" +
+	"\x1aListCoverageHistoryRequest\x12\x17\n" +
+	"\arepo_id\x18\x01 \x01(\tR\x06repoId\"_\n" +
+	"\x1bListCoverageHistoryResponse\x12@\n" +
+	"\vevaluations\x18\x01 \x03(\v2\x1e.novaforge.gates.v1.EvaluationR\vevaluations\"(\n" +
 	"\x0fEvaluateRequest\x12\x15\n" +
 	"\x06run_id\x18\x01 \x01(\tR\x05runId\"T\n" +
 	"\x10EvaluateResponse\x12@\n" +
@@ -2266,11 +2381,12 @@ const file_novaforge_gates_v1_gates_proto_rawDesc = "" +
 	"\x06branch\x18\x03 \x01(\tR\x06branch\x12\x1d\n" +
 	"\n" +
 	"commit_sha\x18\x04 \x01(\tR\tcommitSha\x12\x14\n" +
-	"\x05title\x18\x05 \x01(\tR\x05title2\xdb\v\n" +
+	"\x05title\x18\x05 \x01(\tR\x05title2\xd3\f\n" +
 	"\fGatesService\x12U\n" +
 	"\bEvaluate\x12#.novaforge.gates.v1.EvaluateRequest\x1a$.novaforge.gates.v1.EvaluateResponse\x12U\n" +
 	"\bMayMerge\x12#.novaforge.gates.v1.MayMergeRequest\x1a$.novaforge.gates.v1.MayMergeResponse\x12j\n" +
-	"\x0fListEvaluations\x12*.novaforge.gates.v1.ListEvaluationsRequest\x1a+.novaforge.gates.v1.ListEvaluationsResponse\x12j\n" +
+	"\x0fListEvaluations\x12*.novaforge.gates.v1.ListEvaluationsRequest\x1a+.novaforge.gates.v1.ListEvaluationsResponse\x12v\n" +
+	"\x13ListCoverageHistory\x12..novaforge.gates.v1.ListCoverageHistoryRequest\x1a/.novaforge.gates.v1.ListCoverageHistoryResponse\x12j\n" +
 	"\x0fRequestApproval\x12*.novaforge.gates.v1.RequestApprovalRequest\x1a+.novaforge.gates.v1.RequestApprovalResponse\x12j\n" +
 	"\x0fResolveApproval\x12*.novaforge.gates.v1.ResolveApprovalRequest\x1a+.novaforge.gates.v1.ResolveApprovalResponse\x12[\n" +
 	"\n" +
@@ -2300,89 +2416,94 @@ func file_novaforge_gates_v1_gates_proto_rawDescGZIP() []byte {
 	return file_novaforge_gates_v1_gates_proto_rawDescData
 }
 
-var file_novaforge_gates_v1_gates_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
+var file_novaforge_gates_v1_gates_proto_msgTypes = make([]protoimpl.MessageInfo, 37)
 var file_novaforge_gates_v1_gates_proto_goTypes = []any{
-	(*Evaluation)(nil),                // 0: novaforge.gates.v1.Evaluation
-	(*EvaluateRequest)(nil),           // 1: novaforge.gates.v1.EvaluateRequest
-	(*EvaluateResponse)(nil),          // 2: novaforge.gates.v1.EvaluateResponse
-	(*MayMergeRequest)(nil),           // 3: novaforge.gates.v1.MayMergeRequest
-	(*MayMergeResponse)(nil),          // 4: novaforge.gates.v1.MayMergeResponse
-	(*ListEvaluationsRequest)(nil),    // 5: novaforge.gates.v1.ListEvaluationsRequest
-	(*ListEvaluationsResponse)(nil),   // 6: novaforge.gates.v1.ListEvaluationsResponse
-	(*ApprovalRequestMsg)(nil),        // 7: novaforge.gates.v1.ApprovalRequestMsg
-	(*ListApprovalsRequest)(nil),      // 8: novaforge.gates.v1.ListApprovalsRequest
-	(*ListApprovalsResponse)(nil),     // 9: novaforge.gates.v1.ListApprovalsResponse
-	(*RequestApprovalRequest)(nil),    // 10: novaforge.gates.v1.RequestApprovalRequest
-	(*RequestApprovalResponse)(nil),   // 11: novaforge.gates.v1.RequestApprovalResponse
-	(*ResolveApprovalRequest)(nil),    // 12: novaforge.gates.v1.ResolveApprovalRequest
-	(*ResolveApprovalResponse)(nil),   // 13: novaforge.gates.v1.ResolveApprovalResponse
-	(*PutSecretRequest)(nil),          // 14: novaforge.gates.v1.PutSecretRequest
-	(*PutSecretResponse)(nil),         // 15: novaforge.gates.v1.PutSecretResponse
-	(*IssueJobLeaseRequest)(nil),      // 16: novaforge.gates.v1.IssueJobLeaseRequest
-	(*IssueJobLeaseResponse)(nil),     // 17: novaforge.gates.v1.IssueJobLeaseResponse
-	(*IssueLeaseRequest)(nil),         // 18: novaforge.gates.v1.IssueLeaseRequest
-	(*IssueLeaseResponse)(nil),        // 19: novaforge.gates.v1.IssueLeaseResponse
-	(*RedeemLeaseRequest)(nil),        // 20: novaforge.gates.v1.RedeemLeaseRequest
-	(*RedeemLeaseResponse)(nil),       // 21: novaforge.gates.v1.RedeemLeaseResponse
-	(*SecretReference)(nil),           // 22: novaforge.gates.v1.SecretReference
-	(*ListSecretsRequest)(nil),        // 23: novaforge.gates.v1.ListSecretsRequest
-	(*ListSecretsResponse)(nil),       // 24: novaforge.gates.v1.ListSecretsResponse
-	(*Lease)(nil),                     // 25: novaforge.gates.v1.Lease
-	(*ListLeasesRequest)(nil),         // 26: novaforge.gates.v1.ListLeasesRequest
-	(*ListLeasesResponse)(nil),        // 27: novaforge.gates.v1.ListLeasesResponse
-	(*RevokeLeaseRequest)(nil),        // 28: novaforge.gates.v1.RevokeLeaseRequest
-	(*RevokeLeaseResponse)(nil),       // 29: novaforge.gates.v1.RevokeLeaseResponse
-	(*GateConfig)(nil),                // 30: novaforge.gates.v1.GateConfig
-	(*ListGateConfigRequest)(nil),     // 31: novaforge.gates.v1.ListGateConfigRequest
-	(*ListGateConfigResponse)(nil),    // 32: novaforge.gates.v1.ListGateConfigResponse
-	(*ProposeGateChangeRequest)(nil),  // 33: novaforge.gates.v1.ProposeGateChangeRequest
-	(*ProposeGateChangeResponse)(nil), // 34: novaforge.gates.v1.ProposeGateChangeResponse
+	(*Evaluation)(nil),                  // 0: novaforge.gates.v1.Evaluation
+	(*ListCoverageHistoryRequest)(nil),  // 1: novaforge.gates.v1.ListCoverageHistoryRequest
+	(*ListCoverageHistoryResponse)(nil), // 2: novaforge.gates.v1.ListCoverageHistoryResponse
+	(*EvaluateRequest)(nil),             // 3: novaforge.gates.v1.EvaluateRequest
+	(*EvaluateResponse)(nil),            // 4: novaforge.gates.v1.EvaluateResponse
+	(*MayMergeRequest)(nil),             // 5: novaforge.gates.v1.MayMergeRequest
+	(*MayMergeResponse)(nil),            // 6: novaforge.gates.v1.MayMergeResponse
+	(*ListEvaluationsRequest)(nil),      // 7: novaforge.gates.v1.ListEvaluationsRequest
+	(*ListEvaluationsResponse)(nil),     // 8: novaforge.gates.v1.ListEvaluationsResponse
+	(*ApprovalRequestMsg)(nil),          // 9: novaforge.gates.v1.ApprovalRequestMsg
+	(*ListApprovalsRequest)(nil),        // 10: novaforge.gates.v1.ListApprovalsRequest
+	(*ListApprovalsResponse)(nil),       // 11: novaforge.gates.v1.ListApprovalsResponse
+	(*RequestApprovalRequest)(nil),      // 12: novaforge.gates.v1.RequestApprovalRequest
+	(*RequestApprovalResponse)(nil),     // 13: novaforge.gates.v1.RequestApprovalResponse
+	(*ResolveApprovalRequest)(nil),      // 14: novaforge.gates.v1.ResolveApprovalRequest
+	(*ResolveApprovalResponse)(nil),     // 15: novaforge.gates.v1.ResolveApprovalResponse
+	(*PutSecretRequest)(nil),            // 16: novaforge.gates.v1.PutSecretRequest
+	(*PutSecretResponse)(nil),           // 17: novaforge.gates.v1.PutSecretResponse
+	(*IssueJobLeaseRequest)(nil),        // 18: novaforge.gates.v1.IssueJobLeaseRequest
+	(*IssueJobLeaseResponse)(nil),       // 19: novaforge.gates.v1.IssueJobLeaseResponse
+	(*IssueLeaseRequest)(nil),           // 20: novaforge.gates.v1.IssueLeaseRequest
+	(*IssueLeaseResponse)(nil),          // 21: novaforge.gates.v1.IssueLeaseResponse
+	(*RedeemLeaseRequest)(nil),          // 22: novaforge.gates.v1.RedeemLeaseRequest
+	(*RedeemLeaseResponse)(nil),         // 23: novaforge.gates.v1.RedeemLeaseResponse
+	(*SecretReference)(nil),             // 24: novaforge.gates.v1.SecretReference
+	(*ListSecretsRequest)(nil),          // 25: novaforge.gates.v1.ListSecretsRequest
+	(*ListSecretsResponse)(nil),         // 26: novaforge.gates.v1.ListSecretsResponse
+	(*Lease)(nil),                       // 27: novaforge.gates.v1.Lease
+	(*ListLeasesRequest)(nil),           // 28: novaforge.gates.v1.ListLeasesRequest
+	(*ListLeasesResponse)(nil),          // 29: novaforge.gates.v1.ListLeasesResponse
+	(*RevokeLeaseRequest)(nil),          // 30: novaforge.gates.v1.RevokeLeaseRequest
+	(*RevokeLeaseResponse)(nil),         // 31: novaforge.gates.v1.RevokeLeaseResponse
+	(*GateConfig)(nil),                  // 32: novaforge.gates.v1.GateConfig
+	(*ListGateConfigRequest)(nil),       // 33: novaforge.gates.v1.ListGateConfigRequest
+	(*ListGateConfigResponse)(nil),      // 34: novaforge.gates.v1.ListGateConfigResponse
+	(*ProposeGateChangeRequest)(nil),    // 35: novaforge.gates.v1.ProposeGateChangeRequest
+	(*ProposeGateChangeResponse)(nil),   // 36: novaforge.gates.v1.ProposeGateChangeResponse
 }
 var file_novaforge_gates_v1_gates_proto_depIdxs = []int32{
-	0,  // 0: novaforge.gates.v1.EvaluateResponse.evaluations:type_name -> novaforge.gates.v1.Evaluation
-	0,  // 1: novaforge.gates.v1.ListEvaluationsResponse.evaluations:type_name -> novaforge.gates.v1.Evaluation
-	7,  // 2: novaforge.gates.v1.ListApprovalsResponse.requests:type_name -> novaforge.gates.v1.ApprovalRequestMsg
-	7,  // 3: novaforge.gates.v1.RequestApprovalResponse.request:type_name -> novaforge.gates.v1.ApprovalRequestMsg
-	7,  // 4: novaforge.gates.v1.ResolveApprovalResponse.request:type_name -> novaforge.gates.v1.ApprovalRequestMsg
-	22, // 5: novaforge.gates.v1.PutSecretResponse.secret:type_name -> novaforge.gates.v1.SecretReference
-	22, // 6: novaforge.gates.v1.ListSecretsResponse.secrets:type_name -> novaforge.gates.v1.SecretReference
-	25, // 7: novaforge.gates.v1.ListLeasesResponse.leases:type_name -> novaforge.gates.v1.Lease
-	30, // 8: novaforge.gates.v1.ListGateConfigResponse.gates:type_name -> novaforge.gates.v1.GateConfig
-	1,  // 9: novaforge.gates.v1.GatesService.Evaluate:input_type -> novaforge.gates.v1.EvaluateRequest
-	3,  // 10: novaforge.gates.v1.GatesService.MayMerge:input_type -> novaforge.gates.v1.MayMergeRequest
-	5,  // 11: novaforge.gates.v1.GatesService.ListEvaluations:input_type -> novaforge.gates.v1.ListEvaluationsRequest
-	10, // 12: novaforge.gates.v1.GatesService.RequestApproval:input_type -> novaforge.gates.v1.RequestApprovalRequest
-	12, // 13: novaforge.gates.v1.GatesService.ResolveApproval:input_type -> novaforge.gates.v1.ResolveApprovalRequest
-	18, // 14: novaforge.gates.v1.GatesService.IssueLease:input_type -> novaforge.gates.v1.IssueLeaseRequest
-	20, // 15: novaforge.gates.v1.GatesService.RedeemLease:input_type -> novaforge.gates.v1.RedeemLeaseRequest
-	23, // 16: novaforge.gates.v1.GatesService.ListSecrets:input_type -> novaforge.gates.v1.ListSecretsRequest
-	26, // 17: novaforge.gates.v1.GatesService.ListLeases:input_type -> novaforge.gates.v1.ListLeasesRequest
-	8,  // 18: novaforge.gates.v1.GatesService.ListApprovals:input_type -> novaforge.gates.v1.ListApprovalsRequest
-	14, // 19: novaforge.gates.v1.GatesService.PutSecret:input_type -> novaforge.gates.v1.PutSecretRequest
-	16, // 20: novaforge.gates.v1.GatesService.IssueJobLease:input_type -> novaforge.gates.v1.IssueJobLeaseRequest
-	28, // 21: novaforge.gates.v1.GatesService.RevokeLease:input_type -> novaforge.gates.v1.RevokeLeaseRequest
-	31, // 22: novaforge.gates.v1.GatesService.ListGateConfig:input_type -> novaforge.gates.v1.ListGateConfigRequest
-	33, // 23: novaforge.gates.v1.GatesService.ProposeGateChange:input_type -> novaforge.gates.v1.ProposeGateChangeRequest
-	2,  // 24: novaforge.gates.v1.GatesService.Evaluate:output_type -> novaforge.gates.v1.EvaluateResponse
-	4,  // 25: novaforge.gates.v1.GatesService.MayMerge:output_type -> novaforge.gates.v1.MayMergeResponse
-	6,  // 26: novaforge.gates.v1.GatesService.ListEvaluations:output_type -> novaforge.gates.v1.ListEvaluationsResponse
-	11, // 27: novaforge.gates.v1.GatesService.RequestApproval:output_type -> novaforge.gates.v1.RequestApprovalResponse
-	13, // 28: novaforge.gates.v1.GatesService.ResolveApproval:output_type -> novaforge.gates.v1.ResolveApprovalResponse
-	19, // 29: novaforge.gates.v1.GatesService.IssueLease:output_type -> novaforge.gates.v1.IssueLeaseResponse
-	21, // 30: novaforge.gates.v1.GatesService.RedeemLease:output_type -> novaforge.gates.v1.RedeemLeaseResponse
-	24, // 31: novaforge.gates.v1.GatesService.ListSecrets:output_type -> novaforge.gates.v1.ListSecretsResponse
-	27, // 32: novaforge.gates.v1.GatesService.ListLeases:output_type -> novaforge.gates.v1.ListLeasesResponse
-	9,  // 33: novaforge.gates.v1.GatesService.ListApprovals:output_type -> novaforge.gates.v1.ListApprovalsResponse
-	15, // 34: novaforge.gates.v1.GatesService.PutSecret:output_type -> novaforge.gates.v1.PutSecretResponse
-	17, // 35: novaforge.gates.v1.GatesService.IssueJobLease:output_type -> novaforge.gates.v1.IssueJobLeaseResponse
-	29, // 36: novaforge.gates.v1.GatesService.RevokeLease:output_type -> novaforge.gates.v1.RevokeLeaseResponse
-	32, // 37: novaforge.gates.v1.GatesService.ListGateConfig:output_type -> novaforge.gates.v1.ListGateConfigResponse
-	34, // 38: novaforge.gates.v1.GatesService.ProposeGateChange:output_type -> novaforge.gates.v1.ProposeGateChangeResponse
-	24, // [24:39] is the sub-list for method output_type
-	9,  // [9:24] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	0,  // 0: novaforge.gates.v1.ListCoverageHistoryResponse.evaluations:type_name -> novaforge.gates.v1.Evaluation
+	0,  // 1: novaforge.gates.v1.EvaluateResponse.evaluations:type_name -> novaforge.gates.v1.Evaluation
+	0,  // 2: novaforge.gates.v1.ListEvaluationsResponse.evaluations:type_name -> novaforge.gates.v1.Evaluation
+	9,  // 3: novaforge.gates.v1.ListApprovalsResponse.requests:type_name -> novaforge.gates.v1.ApprovalRequestMsg
+	9,  // 4: novaforge.gates.v1.RequestApprovalResponse.request:type_name -> novaforge.gates.v1.ApprovalRequestMsg
+	9,  // 5: novaforge.gates.v1.ResolveApprovalResponse.request:type_name -> novaforge.gates.v1.ApprovalRequestMsg
+	24, // 6: novaforge.gates.v1.PutSecretResponse.secret:type_name -> novaforge.gates.v1.SecretReference
+	24, // 7: novaforge.gates.v1.ListSecretsResponse.secrets:type_name -> novaforge.gates.v1.SecretReference
+	27, // 8: novaforge.gates.v1.ListLeasesResponse.leases:type_name -> novaforge.gates.v1.Lease
+	32, // 9: novaforge.gates.v1.ListGateConfigResponse.gates:type_name -> novaforge.gates.v1.GateConfig
+	3,  // 10: novaforge.gates.v1.GatesService.Evaluate:input_type -> novaforge.gates.v1.EvaluateRequest
+	5,  // 11: novaforge.gates.v1.GatesService.MayMerge:input_type -> novaforge.gates.v1.MayMergeRequest
+	7,  // 12: novaforge.gates.v1.GatesService.ListEvaluations:input_type -> novaforge.gates.v1.ListEvaluationsRequest
+	1,  // 13: novaforge.gates.v1.GatesService.ListCoverageHistory:input_type -> novaforge.gates.v1.ListCoverageHistoryRequest
+	12, // 14: novaforge.gates.v1.GatesService.RequestApproval:input_type -> novaforge.gates.v1.RequestApprovalRequest
+	14, // 15: novaforge.gates.v1.GatesService.ResolveApproval:input_type -> novaforge.gates.v1.ResolveApprovalRequest
+	20, // 16: novaforge.gates.v1.GatesService.IssueLease:input_type -> novaforge.gates.v1.IssueLeaseRequest
+	22, // 17: novaforge.gates.v1.GatesService.RedeemLease:input_type -> novaforge.gates.v1.RedeemLeaseRequest
+	25, // 18: novaforge.gates.v1.GatesService.ListSecrets:input_type -> novaforge.gates.v1.ListSecretsRequest
+	28, // 19: novaforge.gates.v1.GatesService.ListLeases:input_type -> novaforge.gates.v1.ListLeasesRequest
+	10, // 20: novaforge.gates.v1.GatesService.ListApprovals:input_type -> novaforge.gates.v1.ListApprovalsRequest
+	16, // 21: novaforge.gates.v1.GatesService.PutSecret:input_type -> novaforge.gates.v1.PutSecretRequest
+	18, // 22: novaforge.gates.v1.GatesService.IssueJobLease:input_type -> novaforge.gates.v1.IssueJobLeaseRequest
+	30, // 23: novaforge.gates.v1.GatesService.RevokeLease:input_type -> novaforge.gates.v1.RevokeLeaseRequest
+	33, // 24: novaforge.gates.v1.GatesService.ListGateConfig:input_type -> novaforge.gates.v1.ListGateConfigRequest
+	35, // 25: novaforge.gates.v1.GatesService.ProposeGateChange:input_type -> novaforge.gates.v1.ProposeGateChangeRequest
+	4,  // 26: novaforge.gates.v1.GatesService.Evaluate:output_type -> novaforge.gates.v1.EvaluateResponse
+	6,  // 27: novaforge.gates.v1.GatesService.MayMerge:output_type -> novaforge.gates.v1.MayMergeResponse
+	8,  // 28: novaforge.gates.v1.GatesService.ListEvaluations:output_type -> novaforge.gates.v1.ListEvaluationsResponse
+	2,  // 29: novaforge.gates.v1.GatesService.ListCoverageHistory:output_type -> novaforge.gates.v1.ListCoverageHistoryResponse
+	13, // 30: novaforge.gates.v1.GatesService.RequestApproval:output_type -> novaforge.gates.v1.RequestApprovalResponse
+	15, // 31: novaforge.gates.v1.GatesService.ResolveApproval:output_type -> novaforge.gates.v1.ResolveApprovalResponse
+	21, // 32: novaforge.gates.v1.GatesService.IssueLease:output_type -> novaforge.gates.v1.IssueLeaseResponse
+	23, // 33: novaforge.gates.v1.GatesService.RedeemLease:output_type -> novaforge.gates.v1.RedeemLeaseResponse
+	26, // 34: novaforge.gates.v1.GatesService.ListSecrets:output_type -> novaforge.gates.v1.ListSecretsResponse
+	29, // 35: novaforge.gates.v1.GatesService.ListLeases:output_type -> novaforge.gates.v1.ListLeasesResponse
+	11, // 36: novaforge.gates.v1.GatesService.ListApprovals:output_type -> novaforge.gates.v1.ListApprovalsResponse
+	17, // 37: novaforge.gates.v1.GatesService.PutSecret:output_type -> novaforge.gates.v1.PutSecretResponse
+	19, // 38: novaforge.gates.v1.GatesService.IssueJobLease:output_type -> novaforge.gates.v1.IssueJobLeaseResponse
+	31, // 39: novaforge.gates.v1.GatesService.RevokeLease:output_type -> novaforge.gates.v1.RevokeLeaseResponse
+	34, // 40: novaforge.gates.v1.GatesService.ListGateConfig:output_type -> novaforge.gates.v1.ListGateConfigResponse
+	36, // 41: novaforge.gates.v1.GatesService.ProposeGateChange:output_type -> novaforge.gates.v1.ProposeGateChangeResponse
+	26, // [26:42] is the sub-list for method output_type
+	10, // [10:26] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_novaforge_gates_v1_gates_proto_init() }
@@ -2390,14 +2511,15 @@ func file_novaforge_gates_v1_gates_proto_init() {
 	if File_novaforge_gates_v1_gates_proto != nil {
 		return
 	}
-	file_novaforge_gates_v1_gates_proto_msgTypes[33].OneofWrappers = []any{}
+	file_novaforge_gates_v1_gates_proto_msgTypes[0].OneofWrappers = []any{}
+	file_novaforge_gates_v1_gates_proto_msgTypes[35].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_novaforge_gates_v1_gates_proto_rawDesc), len(file_novaforge_gates_v1_gates_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   35,
+			NumMessages:   37,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

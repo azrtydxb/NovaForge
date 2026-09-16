@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	civ1 "github.com/novaforge/novaforge/gen/novaforge/ci/v1"
+	gatesv1 "github.com/novaforge/novaforge/gen/novaforge/gates/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	"github.com/novaforge/novaforge/internal/analysis"
 	"github.com/novaforge/novaforge/internal/authz"
@@ -38,6 +39,7 @@ type Sweeper struct {
 	Proposer   *Proposer
 	Git        gitv1.GitServiceClient
 	CI         civ1.CIServiceClient
+	Gates      gatesv1.GatesServiceClient
 	HMACSecret string
 	// Orgs names the organizations a sweep covers. Production uses
 	// GitOrganizations: every organization that has a repository.
@@ -241,6 +243,10 @@ func (s *Sweeper) ScanAndPropose(ctx context.Context, orgID, repoID uuid.UUID, n
 	in.Benchmarks, err = ciBenchmarkResults(ctx, s.CI, repoID, defaultBranch)
 	if err != nil {
 		onError("performance_regression", err)
+	}
+	in.Coverage, err = gateCoverage(ctx, s.Gates, repoID)
+	if err != nil {
+		onError("coverage_regression", err)
 	}
 	findings := RunAll(ctx, in, onError)
 	res.Findings = len(findings)

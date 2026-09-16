@@ -10,6 +10,7 @@ service GatesService {
   rpc Evaluate(EvaluateRequest) returns (EvaluateResponse);
   rpc MayMerge(MayMergeRequest) returns (MayMergeResponse);
   rpc ListEvaluations(ListEvaluationsRequest) returns (ListEvaluationsResponse);
+  rpc ListCoverageHistory(ListCoverageHistoryRequest) returns (ListCoverageHistoryResponse);
   rpc RequestApproval(RequestApprovalRequest) returns (RequestApprovalResponse);
   rpc ResolveApproval(ResolveApprovalRequest) returns (ResolveApprovalResponse);
   rpc IssueLease(IssueLeaseRequest) returns (IssueLeaseResponse);
@@ -33,6 +34,18 @@ message Evaluation {
   string detail = 6;
   string target_sha = 7;
   string evaluated_at = 8;
+  // Absent for legacy evaluations, failed tests or unavailable measurements.
+  optional double coverage_percent = 9;
+  string repo_id = 10;
+}
+
+message ListCoverageHistoryRequest {
+  string repo_id = 1;
+}
+message ListCoverageHistoryResponse {
+  // Latest two recorded tests-gate head evaluations, newest first. Unavailable
+  // measurements remain present; callers must not skip them for older values.
+  repeated Evaluation evaluations = 1;
 }
 
 message EvaluateRequest {

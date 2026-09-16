@@ -76,14 +76,16 @@ func statusFromErr(err error, def codes.Code, msg string) error {
 
 func toProtoEvaluation(e Evaluation) *gatesv1.Evaluation {
 	return &gatesv1.Evaluation{
-		Id:          e.ID.String(),
-		OrgId:       e.OrgID.String(),
-		RunId:       e.RunID.String(),
-		Gate:        e.Gate,
-		Status:      e.Status,
-		Detail:      e.Detail,
-		TargetSha:   e.TargetSHA,
-		EvaluatedAt: e.EvaluatedAt.Format(rfc3339),
+		Id:              e.ID.String(),
+		OrgId:           e.OrgID.String(),
+		RunId:           e.RunID.String(),
+		Gate:            e.Gate,
+		Status:          e.Status,
+		Detail:          e.Detail,
+		TargetSha:       e.TargetSHA,
+		EvaluatedAt:     e.EvaluatedAt.Format(rfc3339),
+		RepoId:          e.RepoID.String(),
+		CoveragePercent: e.CoveragePercent,
 	}
 }
 

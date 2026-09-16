@@ -19,21 +19,22 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	GatesService_Evaluate_FullMethodName          = "/novaforge.gates.v1.GatesService/Evaluate"
-	GatesService_MayMerge_FullMethodName          = "/novaforge.gates.v1.GatesService/MayMerge"
-	GatesService_ListEvaluations_FullMethodName   = "/novaforge.gates.v1.GatesService/ListEvaluations"
-	GatesService_RequestApproval_FullMethodName   = "/novaforge.gates.v1.GatesService/RequestApproval"
-	GatesService_ResolveApproval_FullMethodName   = "/novaforge.gates.v1.GatesService/ResolveApproval"
-	GatesService_IssueLease_FullMethodName        = "/novaforge.gates.v1.GatesService/IssueLease"
-	GatesService_RedeemLease_FullMethodName       = "/novaforge.gates.v1.GatesService/RedeemLease"
-	GatesService_ListSecrets_FullMethodName       = "/novaforge.gates.v1.GatesService/ListSecrets"
-	GatesService_ListLeases_FullMethodName        = "/novaforge.gates.v1.GatesService/ListLeases"
-	GatesService_ListApprovals_FullMethodName     = "/novaforge.gates.v1.GatesService/ListApprovals"
-	GatesService_PutSecret_FullMethodName         = "/novaforge.gates.v1.GatesService/PutSecret"
-	GatesService_IssueJobLease_FullMethodName     = "/novaforge.gates.v1.GatesService/IssueJobLease"
-	GatesService_RevokeLease_FullMethodName       = "/novaforge.gates.v1.GatesService/RevokeLease"
-	GatesService_ListGateConfig_FullMethodName    = "/novaforge.gates.v1.GatesService/ListGateConfig"
-	GatesService_ProposeGateChange_FullMethodName = "/novaforge.gates.v1.GatesService/ProposeGateChange"
+	GatesService_Evaluate_FullMethodName            = "/novaforge.gates.v1.GatesService/Evaluate"
+	GatesService_MayMerge_FullMethodName            = "/novaforge.gates.v1.GatesService/MayMerge"
+	GatesService_ListEvaluations_FullMethodName     = "/novaforge.gates.v1.GatesService/ListEvaluations"
+	GatesService_ListCoverageHistory_FullMethodName = "/novaforge.gates.v1.GatesService/ListCoverageHistory"
+	GatesService_RequestApproval_FullMethodName     = "/novaforge.gates.v1.GatesService/RequestApproval"
+	GatesService_ResolveApproval_FullMethodName     = "/novaforge.gates.v1.GatesService/ResolveApproval"
+	GatesService_IssueLease_FullMethodName          = "/novaforge.gates.v1.GatesService/IssueLease"
+	GatesService_RedeemLease_FullMethodName         = "/novaforge.gates.v1.GatesService/RedeemLease"
+	GatesService_ListSecrets_FullMethodName         = "/novaforge.gates.v1.GatesService/ListSecrets"
+	GatesService_ListLeases_FullMethodName          = "/novaforge.gates.v1.GatesService/ListLeases"
+	GatesService_ListApprovals_FullMethodName       = "/novaforge.gates.v1.GatesService/ListApprovals"
+	GatesService_PutSecret_FullMethodName           = "/novaforge.gates.v1.GatesService/PutSecret"
+	GatesService_IssueJobLease_FullMethodName       = "/novaforge.gates.v1.GatesService/IssueJobLease"
+	GatesService_RevokeLease_FullMethodName         = "/novaforge.gates.v1.GatesService/RevokeLease"
+	GatesService_ListGateConfig_FullMethodName      = "/novaforge.gates.v1.GatesService/ListGateConfig"
+	GatesService_ProposeGateChange_FullMethodName   = "/novaforge.gates.v1.GatesService/ProposeGateChange"
 )
 
 // GatesServiceClient is the client API for GatesService service.
@@ -48,6 +49,7 @@ type GatesServiceClient interface {
 	Evaluate(ctx context.Context, in *EvaluateRequest, opts ...grpc.CallOption) (*EvaluateResponse, error)
 	MayMerge(ctx context.Context, in *MayMergeRequest, opts ...grpc.CallOption) (*MayMergeResponse, error)
 	ListEvaluations(ctx context.Context, in *ListEvaluationsRequest, opts ...grpc.CallOption) (*ListEvaluationsResponse, error)
+	ListCoverageHistory(ctx context.Context, in *ListCoverageHistoryRequest, opts ...grpc.CallOption) (*ListCoverageHistoryResponse, error)
 	RequestApproval(ctx context.Context, in *RequestApprovalRequest, opts ...grpc.CallOption) (*RequestApprovalResponse, error)
 	ResolveApproval(ctx context.Context, in *ResolveApprovalRequest, opts ...grpc.CallOption) (*ResolveApprovalResponse, error)
 	IssueLease(ctx context.Context, in *IssueLeaseRequest, opts ...grpc.CallOption) (*IssueLeaseResponse, error)
@@ -94,6 +96,16 @@ func (c *gatesServiceClient) ListEvaluations(ctx context.Context, in *ListEvalua
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListEvaluationsResponse)
 	err := c.cc.Invoke(ctx, GatesService_ListEvaluations_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gatesServiceClient) ListCoverageHistory(ctx context.Context, in *ListCoverageHistoryRequest, opts ...grpc.CallOption) (*ListCoverageHistoryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListCoverageHistoryResponse)
+	err := c.cc.Invoke(ctx, GatesService_ListCoverageHistory_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -232,6 +244,7 @@ type GatesServiceServer interface {
 	Evaluate(context.Context, *EvaluateRequest) (*EvaluateResponse, error)
 	MayMerge(context.Context, *MayMergeRequest) (*MayMergeResponse, error)
 	ListEvaluations(context.Context, *ListEvaluationsRequest) (*ListEvaluationsResponse, error)
+	ListCoverageHistory(context.Context, *ListCoverageHistoryRequest) (*ListCoverageHistoryResponse, error)
 	RequestApproval(context.Context, *RequestApprovalRequest) (*RequestApprovalResponse, error)
 	ResolveApproval(context.Context, *ResolveApprovalRequest) (*ResolveApprovalResponse, error)
 	IssueLease(context.Context, *IssueLeaseRequest) (*IssueLeaseResponse, error)
@@ -261,6 +274,9 @@ func (UnimplementedGatesServiceServer) MayMerge(context.Context, *MayMergeReques
 }
 func (UnimplementedGatesServiceServer) ListEvaluations(context.Context, *ListEvaluationsRequest) (*ListEvaluationsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListEvaluations not implemented")
+}
+func (UnimplementedGatesServiceServer) ListCoverageHistory(context.Context, *ListCoverageHistoryRequest) (*ListCoverageHistoryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListCoverageHistory not implemented")
 }
 func (UnimplementedGatesServiceServer) RequestApproval(context.Context, *RequestApprovalRequest) (*RequestApprovalResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RequestApproval not implemented")
@@ -368,6 +384,24 @@ func _GatesService_ListEvaluations_Handler(srv interface{}, ctx context.Context,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(GatesServiceServer).ListEvaluations(ctx, req.(*ListEvaluationsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GatesService_ListCoverageHistory_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListCoverageHistoryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GatesServiceServer).ListCoverageHistory(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GatesService_ListCoverageHistory_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GatesServiceServer).ListCoverageHistory(ctx, req.(*ListCoverageHistoryRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -606,6 +640,10 @@ var GatesService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListEvaluations",
 			Handler:    _GatesService_ListEvaluations_Handler,
+		},
+		{
+			MethodName: "ListCoverageHistory",
+			Handler:    _GatesService_ListCoverageHistory_Handler,
 		},
 		{
 			MethodName: "RequestApproval",

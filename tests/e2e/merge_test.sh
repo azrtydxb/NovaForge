@@ -119,4 +119,8 @@ STATE="$(call GET "/orgs/$ORG/repos/$REPO/runs/$NUMBER" "$A_TOKEN" | cut -d' ' -
 ok "run #$NUMBER merged into main"
 
 echo
+echo "== 6. tests-gate measurements feed coverage maintenance =="
+source tests/e2e/coverage_probe.sh
+verify_coverage_history
+
 echo "PASS: an Engineering Run is reviewed independently and merges on the kw cluster."

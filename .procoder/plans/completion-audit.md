@@ -48,9 +48,9 @@ requirements are implemented, then add missing paths and regression evidence.
   wiring and green afterwards. The factory e2e now asserts an unapproved
   architecture proposal. Go JSON CI history is wired and cluster-proven at
   revision 75. Benchmark artifacts are now wired with real-service regressions;
-  deployed at revision 77 with all twelve suites passing. Coverage and graph
-  inputs still need production
-  wiring; scanner unit tests are not sufficient.
+  deployed at revision 77 with all twelve suites passing. Graph inputs still
+  need production wiring. Coverage is now wired and passes
+  real-service regressions; cluster acceptance is pending.
 - S-7: workspace expiry now travels from agent-runtime through namespace
   provisioning to the reaper (d0069b2); configured long runs are protected.
   No-limit runs retain the existing 12-hour credential ceiling. Cost budget
@@ -116,6 +116,26 @@ Testing found shared-table truncation in `ciPoolExclusive`; isolated databases
 replace it. Their teardown exposed leaked dedicated migration connections,
 fixed with explicit ownership and proven by pg_stat_activity on success/failure.
 See BUILD-STATUS.md and /tmp/novaforge-benchmark-{race-fixed,tests-confirm}.log.
+
+## Coverage evidence input — current implementation scope
+
+Preserve structured coverage and repository identity in gates-owned evaluations;
+add an org-scoped latest-two tests-evaluation RPC. Compare successive recorded
+head evaluations, preserving unavailable samples rather than skipping failures.
+Read statement counts from the actual Go coverage profile, not rounded display
+strings. Wire the authenticated gates client into both maintenance entry points.
+Keep idempotent evaluation caching and existing cleanup ownership. Legacy rows
+without repository/measurement metadata remain unavailable, with no guessed
+backfill. Files: analysis coverage tests, gates runner/store/migration/proto/RPC,
+maintenance input and production wiring. Verify measured 100% -> 50% through real
+services, missing evidence and organization isolation, then gate/build/deploy and
+cluster acceptance. Graph inputs and other broader requirements remain open.
+
+Implementation is in the working tree. Real Go-profile precision/loss tests and
+maintenance wiring were red then green; scope and serialization mutations also
+failed as intended. Full uncached Go, affected-package race tests, Procoder test
+(39 packages) and buf lint pass. The expanded merge suite is pending cluster
+verification. No task is closed or whole-platform completion inferred.
 
 ## Evidence location
 

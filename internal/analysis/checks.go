@@ -1,7 +1,6 @@
 package analysis
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -12,6 +11,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"golang.org/x/tools/cover"
 )
 
 // Finding is one thing a check found, in a shape every caller can render.
@@ -36,13 +37,15 @@ func (f Finding) String() string {
 type TestResult struct {
 	Passed   bool
 	Coverage float64
+	// No executable statements means unavailable, not measured zero.
+	CoverageAvailable bool
 	// Output is the tail of `go test`'s output when tests failed — the part
 	// that says which test and why.
 	Output string
 }
 
-// Tests runs `go test` with a coverage profile and reads the total from
-// `go tool cover`, which prints a final "total:" line with the percentage.
+// Tests runs real Go tests and counts covered statements in their profile.
+// Display totals round to one decimal and are not suitable history evidence.
 func Tests(ctx context.Context, run Exec, dir string) (TestResult, error) {
 	profile, err := os.CreateTemp("", "novaforge-cover-*.out")
 	if err != nil {
@@ -59,34 +62,30 @@ func Tests(ctx context.Context, run Exec, dir string) (TestResult, error) {
 		return TestResult{Passed: false, Output: tail(out, 40)}, nil
 	}
 
-	cover, exit, err := run(ctx, dir, "go", "tool", "cover", "-func="+profile.Name())
+	info, err := os.Stat(profile.Name())
 	if err != nil {
-		return TestResult{}, err
+		return TestResult{}, fmt.Errorf("stat coverage evidence: %w", err)
 	}
-	if exit != 0 {
-		// A module with no test files produces an empty profile, which
-		// `go tool cover` rejects. That is a pass with no coverage, not a
-		// failure: nothing failed.
-		return TestResult{Passed: true, Coverage: 0}, nil
+	if info.Size() == 0 {
+		return TestResult{}, fmt.Errorf("coverage profile is empty, not a measured zero")
 	}
-	pct, err := parseCoverTotal(cover)
+	profiles, err := cover.ParseProfiles(profile.Name())
 	if err != nil {
-		return TestResult{}, err
+		return TestResult{}, fmt.Errorf("read coverage evidence: %w", err)
 	}
-	return TestResult{Passed: true, Coverage: pct}, nil
-}
-
-// parseCoverTotal reads `go tool cover -func` output, whose last line is
-// "total:\t(statements)\t86.4%".
-func parseCoverTotal(out []byte) (float64, error) {
-	sc := bufio.NewScanner(bytes.NewReader(out))
-	for sc.Scan() {
-		fields := strings.Fields(sc.Text())
-		if len(fields) >= 3 && fields[0] == "total:" {
-			return strconv.ParseFloat(strings.TrimSuffix(fields[len(fields)-1], "%"), 64)
+	var total, covered int64
+	for _, p := range profiles {
+		for _, block := range p.Blocks {
+			total += int64(block.NumStmt)
+			if block.Count > 0 {
+				covered += int64(block.NumStmt)
+			}
 		}
 	}
-	return 0, fmt.Errorf("go tool cover printed no total line")
+	if total == 0 {
+		return TestResult{Passed: true}, nil
+	}
+	return TestResult{Passed: true, CoverageAvailable: true, Coverage: float64(covered) * 100 / float64(total)}, nil
 }
 
 // gitleaksFinding is the subset of gitleaks' JSON report this reads.

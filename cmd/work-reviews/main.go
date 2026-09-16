@@ -135,6 +135,7 @@ func main() {
 
 		gitClient := gitv1.NewGitServiceClient(gitConn)
 		sweeper := maintenance.NewSweeper(workStore, gitClient, cfg.HMACSecret)
+		sweeper.Gates = gatesv1.NewGatesServiceClient(gatesConn)
 		if cfg.CIAddr != "" {
 			ciConn, err := grpc.NewClient(cfg.CIAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
 				grpc.WithChainUnaryInterceptor(svcauth.ForwardIncomingCredential),

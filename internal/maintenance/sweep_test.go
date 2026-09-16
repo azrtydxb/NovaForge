@@ -107,6 +107,7 @@ func TestMaintenanceProposesWorkItem(t *testing.T) {
 
 	sweeper := maintenance.NewSweeper(store, git, sweepSecret)
 	sweeper.CI = historyCI(t, orgID, uuid.MustParse(repo.GetRepo().GetId()))
+	sweeper.Gates = coverageHistory(t, orgID, uuid.MustParse(repo.GetRepo().GetId()))
 
 	// The organization list is production's, unfiltered, and must name this
 	// organization. The sweep is then confined to it only because the dev
@@ -142,10 +143,14 @@ func TestMaintenanceProposesWorkItem(t *testing.T) {
 	var architecture *work.Item
 	var flaky *work.Item
 	var performance *work.Item
+	var coverage *work.Item
 	for _, itemID := range open {
 		item, err := store.Get(scoped, itemID)
 		if err != nil {
 			t.Fatalf("Get proposal item: %v", err)
+		}
+		if strings.Contains(item.Goal, "coverage dropped from 100.0% to 50.0%") {
+			coverage = &item
 		}
 		if item.Type == "security" && strings.Contains(item.Goal, "golang.org/x/text") {
 			cve = &item
@@ -159,6 +164,12 @@ func TestMaintenanceProposesWorkItem(t *testing.T) {
 		if item.Type == "architecture" && strings.Contains(item.Goal, "forbidden dependency") {
 			architecture = &item
 		}
+	}
+	if coverage == nil {
+		t.Fatalf("tests-gate measurements produced no coverage proposal: %+v", report)
+	}
+	if waiting, err := store.AwaitingApproval(scoped, coverage.ID); err != nil || !waiting || coverage.AssigneeID != uuid.Nil {
+		t.Fatalf("coverage proposal bypassed approval: %v", err)
 	}
 	if performance == nil {
 		t.Fatalf("CI benchmark artifacts never produced a performance proposal: %+v", report)

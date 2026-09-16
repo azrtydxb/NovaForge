@@ -52,6 +52,7 @@ type JobResult struct {
 type CoverageSample struct {
 	Previous *float64
 	Latest   *float64
+	Evidence string
 	// MinDropPercent is the minimum percentage-point drop that counts as a
 	// regression. Zero (the default) is treated as 1.0: coverage jitters by
 	// less than a point on almost every run, so nothing would ever be

@@ -163,6 +163,35 @@ image set and normal Helm preflight. Coverage and graph maintenance inputs and
 the broader audit remain open. Evidence: /tmp/novaforge-benchmark-{mutation-0,
 mutation-1,mutation-2,race-fixed,tests-confirm,red-e2e,e2e,deploy}.log.
 
+## Coverage maintenance input (2026-09-16)
+
+The tests gate now records repository identity and optional, structured coverage
+in its own evaluation rows. Its org-scoped ListCoverageHistory RPC returns the
+latest two recorded tests-gate head evaluations, including unavailable results;
+maintenance consumes it with a bounded authenticated call. Cached evaluations
+at the same run/head do not add history. Legacy rows are not backfilled from
+rounded text or another service's schema. Findings preserve evaluation ids and
+SHAs and remain unassigned, awaiting approval.
+
+Coverage is counted from the real Go profile with the installed tools parser,
+not from rounded `go tool cover` display output. One-third coverage was previously
+rounded to 33.3 before persistence, and a missing profile was silently accepted
+as zero; both regressions were seen red then green. Empty profiles are errors;
+valid profiles without executable statements are unavailable, distinct from
+measured zero. Invalid minimum_coverage parameters now produce a gate error;
+a NaN minimum previously passed and has a red/green regression.
+
+The real Git/gates/PostgreSQL maintenance regression requires an unapproved
+100% -> 50% proposal and failed before wiring. Database/RPC tests preserve zero,
+missing results, ordering and scope. Removing the org query predicate, upsert
+scope guard or optional measurement serialization independently failed tests.
+The upsert guard also prevents a same-key evaluation from another scope being
+modified. Analysis, gates and maintenance passed under `-race`, all Go packages
+passed uncached, Procoder test passed (39 packages), buf lint passed, and lint
+and security have no blockers. The expanded merge cluster fixture is written
+but not yet deployed or run. Graph inputs and the broader completion audit stay
+open. Evidence: /tmp/novaforge-coverage-{race,tests,mutation-0,mutation-1,mutation-2}.log.
+
 ## Environment
 
 Everything runs on the **kw cluster** (k3s 1.34, 8 ARM64 nodes). There is no local
