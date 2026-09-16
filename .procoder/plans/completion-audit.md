@@ -46,8 +46,9 @@ requirements are implemented, then add missing paths and regression evidence.
 - S-20: the sweep now resolves default-branch gate definitions and supplies
   architecture parameters; the real Git/database regression was red before
   wiring and green afterwards. The factory e2e now asserts an unapproved
-  architecture proposal. CI history, coverage, benchmark and graph inputs
-  still need production wiring; scanner unit tests are not sufficient.
+  architecture proposal. Go JSON CI history is wired and cluster-proven at
+  revision 75. Coverage, benchmark and graph inputs still need production
+  wiring; scanner unit tests are not sufficient.
 - S-7: workspace expiry now travels from agent-runtime through namespace
   provisioning to the reaper (d0069b2); configured long runs are protected.
   No-limit runs retain the existing 12-hour credential ceiling. Cost budget
@@ -60,7 +61,7 @@ requirements are implemented, then add missing paths and regression evidence.
   work_ci run on revision 72.
 - Operational targets: no enterprise-scale proof may be inferred from small tests.
 
-## Next implementation: CI test history input
+## CI test history input — implemented and deployed
 
 - Wire the existing CI gRPC client into the production maintenance sweeper in
   `cmd/work-reviews/main.go` and `internal/maintenance/sweep.go`.
@@ -75,6 +76,14 @@ requirements are implemented, then add missing paths and regression evidence.
   coverage, benchmarks and graph inputs remain separate open work.
 
 ## Evidence location
+
+CI history input `bc51378` deployed at revision 75; all twelve suites passed:
+/tmp/novaforge-history-e2e.log. Expanded work_ci failed against revision 74:
+/tmp/novaforge-history-red-committed.log. Real Git/CI/PostgreSQL/Redis/MinIO
+regression was red then green under `-race`. Full uncached Go suite passed:
+/tmp/novaforge-history-tests-confirm.log. Prior run observed an intermittent
+`TestBrokerDownFailsClosed` failure (running with a blocked detail rather than
+pending); investigate retry/status reporting, do not widen the test tolerance.
 
 Latest deployed batch: maintenance policy isolation at revision 74 (b75d8d9)
 passed all twelve in-cluster suites in one run. The malformed-policy regression

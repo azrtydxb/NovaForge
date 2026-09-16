@@ -76,7 +76,7 @@ not by the cluster factory fixture, which uses valid policy. CI-history,
 coverage, benchmark and graph input gaps remain open; this is not whole-product
 completion.
 
-## Maintenance CI history input (in progress)
+## Maintenance CI history input (2026-09-16)
 
 The maintenance sweeper now has a CI gRPC input for completed shell-job logs
 on the default branch. It recognizes explicit Go `go test -json` test pass/fail
@@ -89,10 +89,18 @@ Other test-output formats are not parsed.
 The real Git/PostgreSQL/Redis/MinIO regression ran an actual test twice at the
 same code version, passing then failing, and required a maintenance proposal.
 It failed before wiring and passed afterwards under `-race`. The expanded
-`work_ci` cluster fixture adds the same proof through a real runner pod; it
-has not yet been verified on the cluster. The harness archives committed HEAD,
-so a pre-commit run only reran the old fixture and proves nothing about this
-new path. Coverage, benchmark and graph maintenance inputs remain open.
+`work_ci` cluster fixture adds the same proof through a real runner pod. It
+failed on revision 74 because no flaky-test proposal appeared, then passed on
+revision 75 (`bc51378`). All twelve suites passed on revision 75, using a
+complete immutable image set and normal Helm preflight. The harness archives
+committed HEAD; only the post-commit fixture run constitutes the red evidence.
+
+Procoder test passed (39 packages). An uncached full Go run observed
+`TestBrokerDownFailsClosed` reading `running` with a broker-blocked detail
+rather than `pending`; the subsequent full run passed unchanged. This
+intermittent CI status/retry observation remains an audit follow-up, not a
+proven maintenance-history defect. Coverage, benchmark and graph maintenance
+inputs remain open.
 
 ## Environment
 
