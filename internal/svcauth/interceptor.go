@@ -3,6 +3,7 @@ package svcauth
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -90,7 +91,11 @@ func withCallerScope(ctx context.Context, identity identityv1.IdentityServiceCli
 
 // resolveUser tries the credential as a token then as a session, mirroring the
 // edge: a bearer carries a credential, not specifically one kind of it.
+// A timeout protects against hung identity services — without it an unresolved
+// identity blocks the caller's gRPC handler forever.
 func resolveUser(ctx context.Context, identity identityv1.IdentityServiceClient, token, org string) (*identityv1.Subject, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 	if r, err := identity.ResolveToken(ctx, &identityv1.ResolveTokenRequest{Token: token, Org: org}); err == nil {
 		return r.GetSubject(), nil
 	}
