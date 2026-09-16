@@ -195,6 +195,39 @@ passed, including that same coverage fixture. Graph inputs and the broader
 completion audit stay open. Evidence: /tmp/novaforge-coverage-{race,tests,
 mutation-0,mutation-1,mutation-2,red-e2e,e2e,deploy}.log.
 
+## Graph audit safety corrections (2026-09-16)
+
+The graph-maintenance audit exposed defects beneath the missing production
+input. Dead-code scanning checked called_by, but the indexer emits depends_on;
+referenced code was therefore reported unused. Documentation lookup accepted a
+symbol from another repository. Both scanners queried graph tables directly
+using input organization ids without checking caller scope. Their queries now
+live in the graph store, require caller authorization and repository identity,
+and use the indexer's actual dependency/test relationships.
+
+The shared edge writer also accepted foreign endpoint ids. It now checks both
+endpoints atomically for every write, including duplicate edges and transactional
+file replacements; unauthorized replacement rolls back the previous graph.
+Finally, repository/organization cleanup now removes file_references, whose
+name-based rows have no node foreign key and previously survived deletion.
+No historical data was bulk-purged as part of this change.
+
+Real PostgreSQL regressions were observed failing before these fixes. The
+scanner, edge and cleanup regressions then passed under the race detector.
+The full suite exposed an unrelated benchmark fixture assumption: a 32-byte
+slice measured 48 B/op in a one-iteration run. The fixture now checks exact
+recorded measurements and intended CI run identities rather than guessed bytes.
+Removing compatibility matching still fails this stricter assertion. The full
+uncached Go suite, affected race suites and Procoder test (39 packages) passed
+afterward; evidence includes /tmp/novaforge-graph-{tests-confirm,race-confirm,
+benchmark-green,benchmark-mutation}.log. These are
+component corrections, not production graph-maintenance completion: authenticated
+RPC evidence, index freshness/completeness and context-reference extraction still
+need wiring and end-to-end acceptance. Findings now say what the index knows,
+not that absent symbols can safely be deleted. This batch is not deployed yet;
+revision 78 remains the last verified deployment. Evidence is in
+/tmp/novaforge-graph-{scanners-red,auth-red,purge-red,green,race,tests}.log.
+
 ## Environment
 
 Everything runs on the **kw cluster** (k3s 1.34, 8 ARM64 nodes). There is no local

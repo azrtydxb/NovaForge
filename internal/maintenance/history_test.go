@@ -25,7 +25,7 @@ import (
 // exposes it through the same authenticated QueryServer used in production.
 // Repeated tests within a single job also expose flakiness: -count=2 runs
 // the identical code twice without pretending a job exit code names a test.
-func historyCI(t *testing.T, orgID, repoID uuid.UUID) civ1.CIServiceClient {
+func historyCI(t *testing.T, orgID, repoID uuid.UUID) (civ1.CIServiceClient, benchmarkEvidence) {
 	t.Helper()
 	ctx := context.Background()
 	url := proposeDBURL(t)
@@ -87,7 +87,7 @@ func historyCI(t *testing.T, orgID, repoID uuid.UUID) civ1.CIServiceClient {
 	srv := grpc.NewServer(grpc.UnaryInterceptor(svcauth.UnaryServerInterceptor(nil, sweepSecret)),
 		grpc.StreamInterceptor(svcauth.StreamServerInterceptor(nil, sweepSecret)))
 	arts := ci.NewArtifactStore(pool, blobs)
-	seedBenchmarkHistory(t, store, arts, blobs, orgID, repoID)
+	evidence := seedBenchmarkHistory(t, store, arts, blobs, orgID, repoID)
 	civ1.RegisterCIServiceServer(srv, ci.NewQueryServer(store, logs, arts, blobs))
 	go func() { _ = srv.Serve(lis) }()
 	t.Cleanup(srv.Stop)
@@ -100,5 +100,5 @@ func historyCI(t *testing.T, orgID, repoID uuid.UUID) civ1.CIServiceClient {
 	t.Cleanup(func() { _ = conn.Close() })
 	client := civ1.NewCIServiceClient(conn)
 	assertBenchmarkCredentials(t, client, orgID, repoID)
-	return client
+	return client, evidence
 }

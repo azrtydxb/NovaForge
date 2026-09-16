@@ -117,12 +117,37 @@ func upsertNode(ctx context.Context, q querier, orgID, repoID uuid.UUID, hasRepo
 }
 
 func upsertEdge(ctx context.Context, q querier, e Edge) error {
-	_, err := q.Exec(ctx, `
-		INSERT INTO graph.graph_edges (from_id, to_id, kind)
-		VALUES ($1, $2, $3)
-		ON CONFLICT (from_id, to_id, kind) DO NOTHING
-	`, e.FromID, e.ToID, e.Kind)
-	return err
+	scope, err := authz.FromContext(ctx)
+	if err != nil {
+		return err
+	}
+	if scope.OrgID == uuid.Nil {
+		return fmt.Errorf("edge write requires an organization scope")
+	}
+	// Checking only that a scope exists allowed callers to join arbitrary
+	// organizations' nodes, including through ReplaceFileSubgraph. Check
+	// both endpoints in the write itself, including duplicate edge writes.
+	var owned bool
+	err = q.QueryRow(ctx, `
+		WITH endpoints AS (
+			SELECT src.id AS from_id, dst.id AS to_id
+			FROM graph.graph_nodes src, graph.graph_nodes dst
+			WHERE src.id = $1 AND dst.id = $2
+			  AND src.org_id = $4 AND dst.org_id = $4
+		), inserted AS (
+			INSERT INTO graph.graph_edges (from_id, to_id, kind)
+			SELECT from_id, to_id, $3 FROM endpoints
+			ON CONFLICT (from_id, to_id, kind) DO NOTHING
+		)
+		SELECT EXISTS (SELECT 1 FROM endpoints)
+	`, e.FromID, e.ToID, e.Kind, scope.OrgID).Scan(&owned)
+	if err != nil {
+		return err
+	}
+	if !owned {
+		return fmt.Errorf("edge endpoints not found in caller organization")
+	}
+	return nil
 }
 
 // UpsertNode inserts n, or updates the existing row sharing its (org_id,
@@ -135,8 +160,8 @@ func (s *Store) UpsertNode(ctx context.Context, n Node) (Node, error) {
 	return upsertNode(ctx, s.pool, n.OrgID, uuid.Nil, false, n)
 }
 
-// UpsertEdge inserts e, doing nothing if the (from_id, to_id, kind) triple
-// already exists.
+// UpsertEdge inserts e only when both endpoints belong to the caller's
+// organization, doing nothing if that authorized edge already exists.
 func (s *Store) UpsertEdge(ctx context.Context, e Edge) error {
 	if _, err := authz.FromContext(ctx); err != nil {
 		return err

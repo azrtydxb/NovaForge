@@ -161,17 +161,6 @@ func SortedKinds() []string {
 	return kinds
 }
 
-// nullableUUID turns uuid.Nil into a nil any, so it binds to a nullable
-// ::uuid query parameter as SQL NULL rather than the all-zero UUID —
-// letting a scanner's repo-scoping predicate be optional ("every repo in
-// the org" when RepoID is unset) without a second query shape.
-func nullableUUID(id uuid.UUID) any {
-	if id == uuid.Nil {
-		return nil
-	}
-	return id
-}
-
 // RunAll runs every scanner in Scanners against in, in a fixed (sorted)
 // order, isolating each scanner's failure from the rest: a scanner that
 // returns an error is reported through onError (if non-nil) and skipped —

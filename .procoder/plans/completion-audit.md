@@ -139,6 +139,31 @@ failed as intended. Full uncached Go, affected-package race tests, Procoder test
 suites. Complete immutable images and normal Helm preflight were used. No task
 is closed or whole-platform completion inferred.
 
+## Graph maintenance — safety corrections, integration still open
+
+Regression tests exposed four prerequisites before enabling production graph
+maintenance: the scanner ignored the indexer's depends_on edges, documentation
+lookup was not repository-scoped, both scanner queries trusted input org ids
+without checking caller scope, and edge writes accepted foreign endpoints.
+Queries now belong to `internal/graph/maintenance.go`; both endpoints are
+validated atomically by the shared edge writer, including transactional file
+replacement. Unauthorized replacements roll back rather than destroying the
+previous graph. Findings describe candidates, not proof that deletion is safe.
+Real PostgreSQL regressions were red then green; graph/maintenance/ctxasm race
+suites and the full uncached Go suite passed. Procoder test passed 39 packages;
+lint/security reported zero findings. This correction is not deployed yet.
+
+Remaining production work: expose graph-owned evidence through authenticated
+RPCs, wire `Sweeper` without a graph database connection, extract explicit
+context-document symbol references, and verify index completeness/freshness at
+the scanned revision before interpreting absence. Unsupported languages and
+entry points must not become fabricated dead-code findings. Add real-service
+and cluster proposals with approval assertions. Graph cleanup also omitted
+`file_references`; both existing purge paths now remove only their scoped
+references. The real PostgreSQL regression failed before the fix and covers
+repository/organization boundaries and repeated cleanup.
+The graph-input criterion remains unchecked; revision 78 remains deployed.
+
 ## Evidence location
 
 CI history input `bc51378` deployed at revision 75; all twelve suites passed:

@@ -40,6 +40,13 @@ func (s *Store) PurgeOrganization(ctx context.Context) error {
 }
 
 func (s *Store) purge(ctx context.Context, orgID uuid.UUID, repoID *uuid.UUID) error {
+	// References are retained by name so re-indexing either endpoint can
+	// rebuild edges. They have no node foreign key, so deleting nodes does
+	// not cascade to them. Leaving them behind retains deleted source data.
+	if _, err := s.pool.Exec(ctx,
+		`DELETE FROM graph.file_references WHERE org_id = $1 AND ($2::uuid IS NULL OR repo_id = $2)`, orgID, repoID); err != nil {
+		return fmt.Errorf("purge file references: %w", err)
+	}
 	if _, err := s.pool.Exec(ctx,
 		`DELETE FROM graph.code_chunks WHERE org_id = $1 AND ($2::uuid IS NULL OR repo_id = $2)`, orgID, repoID); err != nil {
 		return fmt.Errorf("purge code chunks: %w", err)

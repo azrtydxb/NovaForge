@@ -2,6 +2,7 @@ package maintenance_test
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"os"
 	"os/exec"
@@ -106,7 +107,8 @@ func TestMaintenanceProposesWorkItem(t *testing.T) {
 	}
 
 	sweeper := maintenance.NewSweeper(store, git, sweepSecret)
-	sweeper.CI = historyCI(t, orgID, uuid.MustParse(repo.GetRepo().GetId()))
+	var benchmark benchmarkEvidence
+	sweeper.CI, benchmark = historyCI(t, orgID, uuid.MustParse(repo.GetRepo().GetId()))
 	sweeper.Gates = coverageHistory(t, orgID, uuid.MustParse(repo.GetRepo().GetId()))
 
 	// The organization list is production's, unfiltered, and must name this
@@ -174,8 +176,10 @@ func TestMaintenanceProposesWorkItem(t *testing.T) {
 	if performance == nil {
 		t.Fatalf("CI benchmark artifacts never produced a performance proposal: %+v", report)
 	}
-	if !strings.Contains(performance.Goal, "(32 -> 4096)") {
-		t.Fatalf("did not choose nearest comparable successful default-branch baseline: %s", performance.Goal)
+	measurements := fmt.Sprintf("(%d -> %d)", benchmark.baseline, benchmark.latest)
+	runs := "CI baseline run " + benchmark.baselineRun + ", latest run " + benchmark.latestRun
+	if !strings.Contains(performance.Goal, measurements) || !strings.Contains(performance.Goal, runs) {
+		t.Fatalf("did not preserve intended baseline/latest runs and measured evidence (%s; %s): %s", runs, measurements, performance.Goal)
 	}
 	if performance.AssigneeID != uuid.Nil || performance.AssigneeKind != "" {
 		t.Fatal("performance proposal was assigned without approval")
