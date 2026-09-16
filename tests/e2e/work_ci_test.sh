@@ -23,7 +23,8 @@ EDGE_PORT="${NF_EDGE_PORT:-8080}"
 GIT_IP="$($KC get svc "$REL-git-platform" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
 [ -n "$EDGE_IP" ] && [ -n "$GIT_IP" ] || fail "edge or git-platform has no LoadBalancer IP"
 
-export XDG_CONFIG_HOME="$(mktemp -d)"
+XDG_CONFIG_HOME="$(mktemp -d)"
+export XDG_CONFIG_HOME
 USER="ci$RANDOM$$"
 ORG="ciorg$RANDOM$$"
 # Every run creates its own organization so runs cannot see each other's
@@ -128,6 +129,11 @@ jobs:
       mkdir -p out && echo "artifact body" > out/report.txt
     artifacts:
       - out/report.txt
+  test_history:
+    image: 192.168.10.131/novaforge/work-reviews:$IMG_TAG
+    run: |
+      cd history-fixture
+      if go test -json -count=2; then exit 1; fi
   secret:
     secrets: [NF_E2E_TOKEN]
     run: |
@@ -137,7 +143,13 @@ jobs:
 YAML
 git config user.email ci@example.com
 git config user.name "CI E2E"
-git add .novaforge/workflow.yaml
+# A deterministic flaky test: identical code passes once, then fails on its
+# second invocation. The job expects that failure; maintenance must use the
+# individual JSON outcomes, not infer test success from the job's success.
+mkdir -p history-fixture
+printf 'module example.com/history\n\ngo 1.24\n' >history-fixture/go.mod
+printf 'package history\nimport "testing"\nvar calls int\nfunc TestFlaky(t *testing.T) { calls++; if calls == 2 { t.Fatal("second invocation fails") } }\n' >history-fixture/flaky_test.go
+git add .novaforge/workflow.yaml history-fixture
 git commit -q -m "ci: add a workflow"
 git push -q origin HEAD:main || fail "push failed"
 PUSHED="$(git rev-parse HEAD)"
@@ -216,4 +228,18 @@ printf '%s' "$LEASES" | grep -q "$JOB_ID" || fail "no lease was recorded for the
 ok "credential brokered to the job, masked in its log, lease recorded"
 
 echo
+echo "== 11. maintenance reads real test outcomes from CI history =="
+MAINT="http://$EDGE_IP:$EDGE_PORT/api/v1/orgs/$ORG/repos/$REPO/maintenance"
+curl -fsS -X POST -H "$AUTH" "$MAINT/scan" >/dev/null || fail "maintenance scan failed"
+HISTORY="$(curl -fsS -H "$AUTH" "$MAINT" | python3 -c '
+import json,sys
+for p in json.load(sys.stdin)["proposals"]:
+    if "test_history: example.com/history/TestFlaky is flaky" in p["work_item_goal"]:
+        assert not p["assignee_id"] and not p["decision"], "proposal must await approval"
+        print(p["work_item_key"])
+        break
+')"
+[ -n "$HISTORY" ] || fail "CI test outcomes produced no unapproved maintenance proposal"
+ok "flaky-test proposal $HISTORY came from real CI test output"
+
 echo "PASS: Work Items and CI work end to end on the kw cluster."

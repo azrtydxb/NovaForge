@@ -76,6 +76,24 @@ not by the cluster factory fixture, which uses valid policy. CI-history,
 coverage, benchmark and graph input gaps remain open; this is not whole-product
 completion.
 
+## Maintenance CI history input (in progress)
+
+The maintenance sweeper now has a CI gRPC input for completed shell-job logs
+on the default branch. It recognizes explicit Go `go test -json` test pass/fail
+events, preserving job/package/test identity and commit SHA; it does not infer
+individual outcomes from a job exit status. Read failures are scanner errors,
+not a clean history. History inspection has a 30-second deadline and examines
+only the latest 100 repository runs; CI's metadata list still lacks pagination.
+Other test-output formats are not parsed.
+
+The real Git/PostgreSQL/Redis/MinIO regression ran an actual test twice at the
+same code version, passing then failing, and required a maintenance proposal.
+It failed before wiring and passed afterwards under `-race`. The expanded
+`work_ci` cluster fixture adds the same proof through a real runner pod; it
+has not yet been verified on the cluster. The harness archives committed HEAD,
+so a pre-commit run only reran the old fixture and proves nothing about this
+new path. Coverage, benchmark and graph maintenance inputs remain open.
+
 ## Environment
 
 Everything runs on the **kw cluster** (k3s 1.34, 8 ARM64 nodes). There is no local

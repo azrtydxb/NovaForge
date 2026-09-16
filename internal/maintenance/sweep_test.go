@@ -106,6 +106,7 @@ func TestMaintenanceProposesWorkItem(t *testing.T) {
 	}
 
 	sweeper := maintenance.NewSweeper(store, git, sweepSecret)
+	sweeper.CI = historyCI(t, orgID, uuid.MustParse(repo.GetRepo().GetId()))
 
 	// The organization list is production's, unfiltered, and must name this
 	// organization. The sweep is then confined to it only because the dev
@@ -139,6 +140,7 @@ func TestMaintenanceProposesWorkItem(t *testing.T) {
 	}
 	var cve *work.Item
 	var architecture *work.Item
+	var flaky *work.Item
 	for _, itemID := range open {
 		item, err := store.Get(scoped, itemID)
 		if err != nil {
@@ -147,9 +149,15 @@ func TestMaintenanceProposesWorkItem(t *testing.T) {
 		if item.Type == "security" && strings.Contains(item.Goal, "golang.org/x/text") {
 			cve = &item
 		}
+		if item.Type == "tech_debt" && strings.Contains(item.Goal, "TestFlaky is flaky") {
+			flaky = &item
+		}
 		if item.Type == "architecture" && strings.Contains(item.Goal, "forbidden dependency") {
 			architecture = &item
 		}
+	}
+	if flaky == nil {
+		t.Fatalf("CI test history never produced a flaky-test proposal: %+v", report)
 	}
 	if architecture == nil {
 		t.Fatalf("repository architecture policy never produced a proposal: %+v", report)

@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc/metadata"
 
+	civ1 "github.com/novaforge/novaforge/gen/novaforge/ci/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	"github.com/novaforge/novaforge/internal/analysis"
 	"github.com/novaforge/novaforge/internal/authz"
@@ -36,6 +37,7 @@ type OrgLister func(ctx context.Context) ([]uuid.UUID, error)
 type Sweeper struct {
 	Proposer   *Proposer
 	Git        gitv1.GitServiceClient
+	CI         civ1.CIServiceClient
 	HMACSecret string
 	// Orgs names the organizations a sweep covers. Production uses
 	// GitOrganizations: every organization that has a repository.
@@ -231,6 +233,10 @@ func (s *Sweeper) ScanAndPropose(ctx context.Context, orgID, repoID uuid.UUID, n
 				in.ArchParams = def.Params
 			}
 		}
+	}
+	in.JobResults, err = ciJobResults(ctx, s.CI, repoID, defaultBranch)
+	if err != nil {
+		onError("flaky_test", err)
 	}
 	findings := RunAll(ctx, in, onError)
 	res.Findings = len(findings)

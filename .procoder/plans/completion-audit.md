@@ -60,6 +60,20 @@ requirements are implemented, then add missing paths and regression evidence.
   work_ci run on revision 72.
 - Operational targets: no enterprise-scale proof may be inferred from small tests.
 
+## Next implementation: CI test history input
+
+- Wire the existing CI gRPC client into the production maintenance sweeper in
+  `cmd/work-reviews/main.go` and `internal/maintenance/sweep.go`.
+- Read completed shell-job logs through CI's authenticated API, parsing Go
+  `go test -json` pass/fail test events. Never infer individual test results
+  from a job exit status, package failure, skipped test or arbitrary text.
+- Keep job/package/test identity and exact commit SHA; isolate history-read
+  failures as flaky-scanner errors. Bound reads to recent runs and a deadline.
+- Extend the real Git/database maintenance regression with CI/PostgreSQL,
+  Redis and MinIO evidence, then verify production wiring and cluster acceptance.
+- This input supports Go JSON test output, not arbitrary test report formats;
+  coverage, benchmarks and graph inputs remain separate open work.
+
 ## Evidence location
 
 Latest deployed batch: maintenance policy isolation at revision 74 (b75d8d9)

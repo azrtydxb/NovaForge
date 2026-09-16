@@ -47,7 +47,7 @@ func scanFlaky(ctx context.Context, in ScanInput) ([]Finding, error) {
 		findings = append(findings, Finding{
 			Kind:         "flaky_test",
 			Title:        fmt.Sprintf("%s is flaky", name),
-			Detail:       fmt.Sprintf("%s both passed and failed at the same commit across recent runs", name),
+			Detail:       fmt.Sprintf("%s both passed and failed at the same commit in recent CI test observations", name),
 			Severity:     "medium",
 			Paths:        []string{name},
 			ProposedType: "tech_debt",

@@ -21,6 +21,7 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	agentsv1 "github.com/novaforge/novaforge/gen/novaforge/agents/v1"
+	civ1 "github.com/novaforge/novaforge/gen/novaforge/ci/v1"
 	gatesv1 "github.com/novaforge/novaforge/gen/novaforge/gates/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
@@ -134,6 +135,15 @@ func main() {
 
 		gitClient := gitv1.NewGitServiceClient(gitConn)
 		sweeper := maintenance.NewSweeper(workStore, gitClient, cfg.HMACSecret)
+		if cfg.CIAddr != "" {
+			ciConn, err := grpc.NewClient(cfg.CIAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+				grpc.WithChainUnaryInterceptor(svcauth.ForwardIncomingCredential))
+			if err != nil {
+				log.Fatalf("work-reviews: create CI client: %v", err)
+			}
+			defer ciConn.Close()
+			sweeper.CI = civ1.NewCIServiceClient(ciConn)
+		}
 
 		// The maintenance scanners sweep every repository on an interval,
 		// proposing Work Items for what they find. Nothing here executes a
