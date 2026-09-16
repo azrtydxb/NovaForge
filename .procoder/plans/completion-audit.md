@@ -47,7 +47,8 @@ requirements are implemented, then add missing paths and regression evidence.
   architecture parameters; the real Git/database regression was red before
   wiring and green afterwards. The factory e2e now asserts an unapproved
   architecture proposal. Go JSON CI history is wired and cluster-proven at
-  revision 75. Coverage, benchmark and graph inputs still need production
+  revision 75. Benchmark artifacts are now wired with real-service regressions;
+  cluster acceptance is pending. Coverage and graph inputs still need production
   wiring; scanner unit tests are not sufficient.
 - S-7: workspace expiry now travels from agent-runtime through namespace
   provisioning to the reaper (d0069b2); configured long runs are protected.
@@ -89,6 +90,29 @@ late-response case fail. Unchanged broker-down test passed three repeats,
 CI passed under `-race`, full uncached Go suite passed, and all twelve cluster
 suites passed. Evidence: /tmp/novaforge-reservation-{race,tests,e2e,deploy}.log.
 
+## Benchmark evidence input — implementation scope
+
+Use the approved previous-comparable-successful-default-branch baseline policy.
+Read `benchmarks.txt` artifacts through the CI gRPC API, never cross-schema SQL.
+Use the installed Go benchmark parser; require OS, architecture, CPU, toolchain,
+package and explicit environment metadata to match. Compare lower-is-better
+ns/op, B/op and allocs/op independently, using medians for repeated observations.
+Reject malformed/non-finite measurements and bounded-download violations.
+Missing latest evidence or baseline must surface as unavailable scanner errors.
+
+Files: `internal/maintenance/benchmarks*.go`, `sweep.go`, real CI artifact tests,
+and `tests/e2e/work_ci_test.sh`. Prove a real benchmark allocation regression
+through two successful CI runs and an unapproved Work Item. Keep coverage and
+graph input work open; this implements the performance input only.
+
+Implemented with real Go benchmarks, Git, CI/PostgreSQL/Redis/MinIO; integration
+and mutation regressions are red/green. Full Go and Procoder test (39 packages)
+pass; affected packages pass under `-race`. Cluster acceptance remains pending.
+Testing found shared-table truncation in `ciPoolExclusive`; isolated databases
+replace it. Their teardown exposed leaked dedicated migration connections,
+fixed with explicit ownership and proven by pg_stat_activity on success/failure.
+See BUILD-STATUS.md and /tmp/novaforge-benchmark-{race-fixed,tests-confirm}.log.
+
 ## Evidence location
 
 CI history input `bc51378` deployed at revision 75; all twelve suites passed:
@@ -100,7 +124,7 @@ regression was red then green under `-race`. Full uncached Go suite passed:
 pending); the reservation correction above fixes this without widening the
 test tolerance.
 
-Latest deployed batch: maintenance policy isolation at revision 74 (b75d8d9)
+Earlier deployed batch: maintenance policy isolation at revision 74 (b75d8d9)
 passed all twelve in-cluster suites in one run. The malformed-policy regression
 uses real Git/database services and was red then green under `-race`; the
 cluster factory fixture verifies valid architecture-policy proposals, not

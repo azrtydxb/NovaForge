@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -77,7 +78,16 @@ func migrate_(dbURL, schema, trackingName string, fsys fs.FS) error {
 	if err != nil {
 		return fmt.Errorf("read migrations: %w", err)
 	}
-	drv, err := postgres.WithInstance(db, &postgres.Config{
+	defer src.Close()
+	// WithInstance reserves a dedicated sql.Conn that sql.DB.Close cannot
+	// release. Own it explicitly, including driver-initialization failures;
+	// otherwise every service startup leaves a migration session behind.
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		return fmt.Errorf("migration connection: %w", err)
+	}
+	defer conn.Close()
+	drv, err := postgres.WithConnection(context.Background(), conn, &postgres.Config{
 		SchemaName:      schema,
 		MigrationsTable: "schema_migrations_" + trackingName,
 	})

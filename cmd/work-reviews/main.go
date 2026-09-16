@@ -137,7 +137,8 @@ func main() {
 		sweeper := maintenance.NewSweeper(workStore, gitClient, cfg.HMACSecret)
 		if cfg.CIAddr != "" {
 			ciConn, err := grpc.NewClient(cfg.CIAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
-				grpc.WithChainUnaryInterceptor(svcauth.ForwardIncomingCredential))
+				grpc.WithChainUnaryInterceptor(svcauth.ForwardIncomingCredential),
+				grpc.WithChainStreamInterceptor(svcauth.ForwardIncomingCredentialStream))
 			if err != nil {
 				log.Fatalf("work-reviews: create CI client: %v", err)
 			}

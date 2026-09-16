@@ -84,14 +84,21 @@ func historyCI(t *testing.T, orgID, repoID uuid.UUID) civ1.CIServiceClient {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := grpc.NewServer(grpc.UnaryInterceptor(svcauth.UnaryServerInterceptor(nil, sweepSecret)))
-	civ1.RegisterCIServiceServer(srv, ci.NewQueryServer(store, logs, nil, blobs))
+	srv := grpc.NewServer(grpc.UnaryInterceptor(svcauth.UnaryServerInterceptor(nil, sweepSecret)),
+		grpc.StreamInterceptor(svcauth.StreamServerInterceptor(nil, sweepSecret)))
+	arts := ci.NewArtifactStore(pool, blobs)
+	seedBenchmarkHistory(t, store, arts, blobs, orgID, repoID)
+	civ1.RegisterCIServiceServer(srv, ci.NewQueryServer(store, logs, arts, blobs))
 	go func() { _ = srv.Serve(lis) }()
 	t.Cleanup(srv.Stop)
-	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(svcauth.ForwardIncomingCredential),
+		grpc.WithChainStreamInterceptor(svcauth.ForwardIncomingCredentialStream))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
-	return civ1.NewCIServiceClient(conn)
+	client := civ1.NewCIServiceClient(conn)
+	assertBenchmarkCredentials(t, client, orgID, repoID)
+	return client
 }

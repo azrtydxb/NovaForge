@@ -141,6 +141,7 @@ func TestMaintenanceProposesWorkItem(t *testing.T) {
 	var cve *work.Item
 	var architecture *work.Item
 	var flaky *work.Item
+	var performance *work.Item
 	for _, itemID := range open {
 		item, err := store.Get(scoped, itemID)
 		if err != nil {
@@ -149,12 +150,27 @@ func TestMaintenanceProposesWorkItem(t *testing.T) {
 		if item.Type == "security" && strings.Contains(item.Goal, "golang.org/x/text") {
 			cve = &item
 		}
+		if item.Type == "tech_debt" && strings.Contains(item.Goal, "BenchmarkAlloc") && strings.Contains(item.Goal, "B/op regressed") {
+			performance = &item
+		}
 		if item.Type == "tech_debt" && strings.Contains(item.Goal, "TestFlaky is flaky") {
 			flaky = &item
 		}
 		if item.Type == "architecture" && strings.Contains(item.Goal, "forbidden dependency") {
 			architecture = &item
 		}
+	}
+	if performance == nil {
+		t.Fatalf("CI benchmark artifacts never produced a performance proposal: %+v", report)
+	}
+	if !strings.Contains(performance.Goal, "(32 -> 4096)") {
+		t.Fatalf("did not choose nearest comparable successful default-branch baseline: %s", performance.Goal)
+	}
+	if performance.AssigneeID != uuid.Nil || performance.AssigneeKind != "" {
+		t.Fatal("performance proposal was assigned without approval")
+	}
+	if waiting, err := store.AwaitingApproval(scoped, performance.ID); err != nil || !waiting {
+		t.Fatalf("performance proposal bypassed approval: %v", err)
 	}
 	if flaky == nil {
 		t.Fatalf("CI test history never produced a flaky-test proposal: %+v", report)

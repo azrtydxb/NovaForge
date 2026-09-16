@@ -123,6 +123,44 @@ by injecting outages into the live cluster. Procoder test passed (39 packages),
 lint/security had no findings and the gate had no blockers. Broader completion
 work remains open.
 
+## Benchmark evidence and database lifetime corrections (2026-09-16)
+
+Maintenance now ingests `benchmarks.txt` through org-authenticated CI artifact
+RPCs, using the approved previous-comparable-successful-default-branch baseline.
+`BENCHMARKS.md` defines the producer contract, metadata matching, measurement
+units, medians and limits. Missing/incomparable evidence remains unavailable;
+findings retain both CI run ids and await human approval. On-demand downloads
+also forward incoming credentials on streaming RPCs, not just unary calls.
+
+The real Go benchmark/Git/PostgreSQL/Redis/MinIO regression failed before wiring
+and passed afterwards. It checks measured allocations of 32 versus 4096 bytes,
+skipping failed runs, feature branches, mismatched environments and an older
+comparable baseline. Removing environment matching or stream forwarding made
+those assertions fail independently. Non-finite measurements and incomplete
+artifact streams are rejected; a NaN regression was observed red before fixing
+numeric validation.
+
+The first full suite failed because legacy CI test setup truncated shared CI
+tables while maintenance was reading them. Exclusive worker tests now create
+and remove their own real databases (the test role needs CREATEDB). A regression
+proves shared history survives; replacing isolation with the shared pool made
+it fail without repeating the destructive truncation.
+
+Isolated database teardown then exposed a production migration connection leak:
+`postgres.WithInstance` reserves a sql.Conn that sql.DB.Close does not release.
+Migrations now explicitly own and close that connection and their source on
+success and failure. Both real pg_stat_activity regressions were red before
+this correction, then green. Six session-created test databases left by the
+initial teardown failure were removed by exact name, without forced termination.
+
+The affected packages passed under `-race`, the full uncached Go suite passed,
+and Procoder test passed (39 packages). Lint and security have no blockers;
+the SQL interpolation advisory was audited against the existing strict schema
+name validation. The expanded `work_ci` cluster fixture is written but not yet
+run or deployed. Coverage and graph maintenance inputs and the broader audit
+remain open. Evidence: /tmp/novaforge-benchmark-{mutation-0,mutation-1,mutation-2,
+race-fixed,tests-confirm}.log.
+
 ## Environment
 
 Everything runs on the **kw cluster** (k3s 1.34, 8 ARM64 nodes). There is no local

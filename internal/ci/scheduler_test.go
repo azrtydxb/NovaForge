@@ -2,11 +2,13 @@ package ci_test
 
 import (
 	"context"
+	"net/url"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
@@ -58,16 +60,35 @@ func ciPool(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
-// ciPoolExclusive is ciPool plus a truncate of every ci table, for the one
-// test (TestJobBlockedUntilNeedsSucceed) that depends on ClaimJob seeing no
-// job but the ones it created itself, since ClaimJob's eligibility query is
-// intentionally global rather than org-scoped.
+// ciPoolExclusive gives platform-wide worker tests their own real database.
+// Truncating the shared schema used to erase other packages' evidence during
+// go test ./...; test exclusivity must never mean deleting another test's data.
 func ciPoolExclusive(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	pool := ciPool(t)
-	if _, err := pool.Exec(context.Background(), "TRUNCATE ci.workflow_runs, ci.runners CASCADE"); err != nil {
-		t.Fatalf("truncate ci schema: %v", err)
+	owner := ciPool(t)
+	u, err := url.Parse(dbURL(t))
+	if err != nil {
+		t.Fatal(err)
 	}
+	name := "novaforge_ci_test_" + uuid.New().String()
+	quoted := pgx.Identifier{name}.Sanitize()
+	if _, err := owner.Exec(context.Background(), "CREATE DATABASE "+quoted); err != nil {
+		t.Fatalf("create isolated CI test database: %v", err)
+	}
+	t.Cleanup(func() {
+		if _, err := owner.Exec(context.Background(), "DROP DATABASE "+quoted); err != nil {
+			t.Errorf("remove isolated CI test database: %v", err)
+		}
+	})
+	u.Path, u.RawPath = "/"+name, ""
+	if err := database.Migrate(u.String(), "ci", ci.MigrationsFS); err != nil {
+		t.Fatal(err)
+	}
+	pool, err := database.Connect(context.Background(), u.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
 	return pool
 }
 

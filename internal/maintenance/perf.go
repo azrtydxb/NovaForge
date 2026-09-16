@@ -3,6 +3,7 @@ package maintenance
 import (
 	"context"
 	"fmt"
+	"math"
 )
 
 // defaultRegressionThresholdPercent is used when
@@ -26,17 +27,27 @@ func scanPerf(ctx context.Context, in ScanInput) ([]Finding, error) {
 
 	var findings []Finding
 	for _, b := range in.Benchmarks {
+		if math.IsNaN(b.Baseline) || math.IsInf(b.Baseline, 0) || math.IsNaN(b.Latest) || math.IsInf(b.Latest, 0) || b.Latest < 0 {
+			return nil, fmt.Errorf("benchmark %s has invalid measurements", b.Name)
+		}
 		if b.Baseline <= 0 {
 			continue
 		}
 		regressionPct := (b.Latest - b.Baseline) / b.Baseline * 100
+		if math.IsInf(regressionPct, 0) || math.IsNaN(threshold) || math.IsInf(threshold, 0) {
+			return nil, fmt.Errorf("benchmark %s percentage comparison unavailable", b.Name)
+		}
 		if regressionPct < threshold {
 			continue
+		}
+		detail := fmt.Sprintf("regression of %.1f%%, at or above the %.1f%% threshold", regressionPct, threshold)
+		if b.BaselineRun != "" && b.LatestRun != "" {
+			detail += fmt.Sprintf("; CI baseline run %s, latest run %s", b.BaselineRun, b.LatestRun)
 		}
 		findings = append(findings, Finding{
 			Kind:         "performance_regression",
 			Title:        fmt.Sprintf("%s regressed %.1f%% (%.4g -> %.4g)", b.Name, regressionPct, b.Baseline, b.Latest),
-			Detail:       fmt.Sprintf("regression of %.1f%%, at or above the %.1f%% threshold", regressionPct, threshold),
+			Detail:       detail,
 			Severity:     perfSeverity(regressionPct),
 			Paths:        []string{b.Name},
 			ProposedType: "tech_debt",

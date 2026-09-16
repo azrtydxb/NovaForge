@@ -238,6 +238,10 @@ func (s *Sweeper) ScanAndPropose(ctx context.Context, orgID, repoID uuid.UUID, n
 	if err != nil {
 		onError("flaky_test", err)
 	}
+	in.Benchmarks, err = ciBenchmarkResults(ctx, s.CI, repoID, defaultBranch)
+	if err != nil {
+		onError("performance_regression", err)
+	}
 	findings := RunAll(ctx, in, onError)
 	res.Findings = len(findings)
 	if len(findings) == 0 {

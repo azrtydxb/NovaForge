@@ -2,6 +2,18 @@
 
 All decisions below are answered. No question is waiting on a human.
 
+## Performance-regression baseline policy
+
+Answered 2026-09-16: **Option 1**, explicitly selected by the user. Compare
+benchmark evidence from the latest eligible default-branch CI run with the
+previous comparable successful default-branch run. Require matching benchmark
+identity, units and execution-environment metadata. Missing or incomparable
+evidence means unavailable, never zero or a guessed baseline.
+
+A manually pinned baseline was not selected. Coverage's existing contract
+compares successive evaluations and is unchanged. This records the chosen
+policy, not completion of the still-missing production benchmark input.
+
 ## Commit and deploy verified completion-audit fixes
 
 Answered 2026-09-16: **Yes**, to the recommended option. The user authorizes

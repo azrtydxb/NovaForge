@@ -134,6 +134,10 @@ jobs:
     run: |
       cd history-fixture
       if go test -json -count=2; then exit 1; fi
+  z_benchmark:
+    image: 192.168.10.131/novaforge/work-reviews:$IMG_TAG
+    run: sh benchmark-fixture/run.sh "$IMG_TAG"
+    artifacts: [benchmark-fixture/benchmarks.txt]
   secret:
     secrets: [NF_E2E_TOKEN]
     run: |
@@ -149,7 +153,10 @@ git config user.name "CI E2E"
 mkdir -p history-fixture
 printf 'module example.com/history\n\ngo 1.24\n' >history-fixture/go.mod
 printf 'package history\nimport "testing"\nvar calls int\nfunc TestFlaky(t *testing.T) { calls++; if calls == 2 { t.Fatal("second invocation fails") } }\n' >history-fixture/flaky_test.go
-git add .novaforge/workflow.yaml history-fixture
+# Benchmark fixture is shared with the second-run regression assertion below.
+source "$OLDPWD/tests/e2e/benchmark_probe.sh"
+create_benchmark_fixture
+git add .novaforge/workflow.yaml history-fixture benchmark-fixture
 git commit -q -m "ci: add a workflow"
 git push -q origin HEAD:main || fail "push failed"
 PUSHED="$(git rev-parse HEAD)"
@@ -241,5 +248,8 @@ for p in json.load(sys.stdin)["proposals"]:
 ')"
 [ -n "$HISTORY" ] || fail "CI test outcomes produced no unapproved maintenance proposal"
 ok "flaky-test proposal $HISTORY came from real CI test output"
+
+echo "== 12. maintenance compares real benchmark artifacts across CI runs =="
+verify_benchmark_regression
 
 echo "PASS: Work Items and CI work end to end on the kw cluster."

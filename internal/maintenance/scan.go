@@ -68,6 +68,9 @@ type BenchmarkResult struct {
 	Name     string
 	Baseline float64
 	Latest   float64
+	// CI run ids retain the actual comparison evidence in a proposal.
+	BaselineRun string
+	LatestRun   string
 }
 
 // ContextDocRef is one context document (from a repository's

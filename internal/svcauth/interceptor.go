@@ -130,6 +130,18 @@ func ForwardIncomingCredential(
 	ctx context.Context, method string, req, reply any,
 	cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption,
 ) error {
+	return invoker(forwardIncomingCredential(ctx), method, req, reply, cc, opts...)
+}
+
+// ForwardIncomingCredentialStream applies the same identity forwarding to
+// streamed evidence downloads. Unary interceptors never see those calls.
+func ForwardIncomingCredentialStream(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn,
+	method string, streamer grpc.Streamer, opts ...grpc.CallOption,
+) (grpc.ClientStream, error) {
+	return streamer(forwardIncomingCredential(ctx), desc, cc, method, opts...)
+}
+
+func forwardIncomingCredential(ctx context.Context) context.Context {
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		if v := first(md, "authorization"); v != "" {
 			ctx = metadata.AppendToOutgoingContext(ctx, "authorization", v)
@@ -138,7 +150,7 @@ func ForwardIncomingCredential(
 			ctx = metadata.AppendToOutgoingContext(ctx, "x-novaforge-org", v)
 		}
 	}
-	return invoker(ctx, method, req, reply, cc, opts...)
+	return ctx
 }
 
 // AgentRunService is the service name an agent run mints its token under.
