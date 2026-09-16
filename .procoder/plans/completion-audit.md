@@ -54,12 +54,17 @@ requirements are implemented, then add missing paths and regression evidence.
 - Failure modes: artifact upload and decode errors now fail the job (d6e07d1),
   with red/green regressions. Missing/truncated payloads, partial missing paths,
   path whitespace and masked tar errors are fixed in d0069b2. Final log read
-  failure now fails the job in the working tree, with a red/green regression.
+  failure now fails the job in c4ff7e7, with a red/green regression and a passing
+  work_ci run on revision 72.
 - Operational targets: no enterprise-scale proof may be inferred from small tests.
 
 ## Evidence location
 
-Current full Go suite: /tmp/novaforge-full-go-test.log.
+Latest batch: all twelve suites passed at revision 71 (d0069b2); work_ci and
+agent passed at revision 72 (c4ff7e7). Latest full Go suite with dev datastores:
+/tmp/novaforge-gap-tests.log. Procoder test passed (39 packages).
+
+Earlier full Go suite: /tmp/novaforge-full-go-test.log.
 Current full cluster suite supervisor: /tmp/novaforge-full-e2e.log and
 /tmp/novaforge-full-e2e.exit; per-suite logs /tmp/e2e.<suite>.log.
 These temporary files support investigation; durable conclusions belong in

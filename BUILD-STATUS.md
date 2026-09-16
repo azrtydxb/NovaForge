@@ -31,7 +31,7 @@ remaining audit and implementation work. Passing these suites must not be
 used to claim deployment actions, expiring underlying external credentials,
 LSP/SCIP indexing, every graph relationship, or enterprise-scale validation.
 
-## Workspace and artifact gap corrections (in progress)
+## Workspace and artifact gap corrections (2026-09-16)
 
 The namespace reaper now honors `novaforge.io/expires-at`, set by the real
 agent-runtime provisioning path from `RunCredentialTTL`. A two-hour-old
@@ -43,8 +43,17 @@ is actually stored.
 CI now rejects an absent artifact set when the job declared artifacts and
 rejects an unterminated artifact block, even when its tar bytes were otherwise
 valid. Both cases previously reported success and were observed red before
-the fix. The workspace, runner and agentrun packages passed with `-race`
-against the configured dev services. These changes are not yet cluster-deployed.
+the fix. Capture also preserves path whitespace, refuses partially missing
+paths, and no longer hides tar failure behind a successful encoding pipeline.
+A final log read failure now fails the job rather than logging a warning and
+reporting success. The workspace, runner and agentrun packages passed with
+`-race` against the configured dev services.
+
+All twelve cluster suites passed at revision 71 (`d0069b2`). The final-log
+failure correction was then deployed at revision 72 (`c4ff7e7`), where
+`work_ci` and `agent` passed again. Procoder test passed (39 packages) and the
+gate reported no blocking findings. The specific long-duration reaper behavior
+is regression-tested; the agent suite does not run for multiple hours.
 
 ## Environment
 
@@ -540,7 +549,7 @@ These are real and are not worked around:
   preserves it until then (configured wall-clock limit plus 15 minutes, or
   12 hours when no limit is configured). Legacy namespaces without that
   annotation still use the one-hour orphan fallback. Regression tests passed;
-  deployment verification of this change is pending.
+  deployed at revision 71 and exercised by the agent acceptance suite.
 
 ## Graph edges, knowledge recall and repository configuration (2026-09-15)
 
