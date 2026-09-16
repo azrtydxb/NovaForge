@@ -188,9 +188,12 @@ scope guard or optional measurement serialization independently failed tests.
 The upsert guard also prevents a same-key evaluation from another scope being
 modified. Analysis, gates and maintenance passed under `-race`, all Go packages
 passed uncached, Procoder test passed (39 packages), buf lint passed, and lint
-and security have no blockers. The expanded merge cluster fixture is written
-but not yet deployed or run. Graph inputs and the broader completion audit stay
-open. Evidence: /tmp/novaforge-coverage-{race,tests,mutation-0,mutation-1,mutation-2}.log.
+and security have no blockers. The committed merge fixture failed on revision
+77 because measured coverage produced no proposal. Commit `18a9b6c` deployed
+through normal image preflight at Helm revision 78; all twelve cluster suites
+passed, including that same coverage fixture. Graph inputs and the broader
+completion audit stay open. Evidence: /tmp/novaforge-coverage-{race,tests,
+mutation-0,mutation-1,mutation-2,red-e2e,e2e,deploy}.log.
 
 ## Environment
 

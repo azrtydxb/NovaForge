@@ -49,8 +49,8 @@ requirements are implemented, then add missing paths and regression evidence.
   architecture proposal. Go JSON CI history is wired and cluster-proven at
   revision 75. Benchmark artifacts are now wired with real-service regressions;
   deployed at revision 77 with all twelve suites passing. Graph inputs still
-  need production wiring. Coverage is now wired and passes
-  real-service regressions; cluster acceptance is pending.
+  need production wiring. Coverage is wired and cluster-proven at revision 78;
+  all twelve suites passed.
 - S-7: workspace expiry now travels from agent-runtime through namespace
   provisioning to the reaper (d0069b2); configured long runs are protected.
   No-limit runs retain the existing 12-hour credential ceiling. Cost budget
@@ -131,11 +131,13 @@ maintenance input and production wiring. Verify measured 100% -> 50% through rea
 services, missing evidence and organization isolation, then gate/build/deploy and
 cluster acceptance. Graph inputs and other broader requirements remain open.
 
-Implementation is in the working tree. Real Go-profile precision/loss tests and
+Implemented in `18a9b6c`, deployed at Helm revision 78. Real Go-profile precision/loss tests and
 maintenance wiring were red then green; scope and serialization mutations also
 failed as intended. Full uncached Go, affected-package race tests, Procoder test
-(39 packages) and buf lint pass. The expanded merge suite is pending cluster
-verification. No task is closed or whole-platform completion inferred.
+(39 packages) and buf lint pass. The committed merge fixture failed on revision
+77 with no coverage proposal, then passed at revision 78 along with all twelve
+suites. Complete immutable images and normal Helm preflight were used. No task
+is closed or whole-platform completion inferred.
 
 ## Evidence location
 
