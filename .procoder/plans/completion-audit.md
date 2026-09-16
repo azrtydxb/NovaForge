@@ -48,7 +48,8 @@ requirements are implemented, then add missing paths and regression evidence.
   wiring and green afterwards. The factory e2e now asserts an unapproved
   architecture proposal. Go JSON CI history is wired and cluster-proven at
   revision 75. Benchmark artifacts are now wired with real-service regressions;
-  cluster acceptance is pending. Coverage and graph inputs still need production
+  deployed at revision 77 with all twelve suites passing. Coverage and graph
+  inputs still need production
   wiring; scanner unit tests are not sufficient.
 - S-7: workspace expiry now travels from agent-runtime through namespace
   provisioning to the reaper (d0069b2); configured long runs are protected.
@@ -107,7 +108,10 @@ graph input work open; this implements the performance input only.
 
 Implemented with real Go benchmarks, Git, CI/PostgreSQL/Redis/MinIO; integration
 and mutation regressions are red/green. Full Go and Procoder test (39 packages)
-pass; affected packages pass under `-race`. Cluster acceptance remains pending.
+pass; affected packages pass under `-race`. The committed work_ci fixture failed
+on revision 76 with no performance proposal, then passed after deployment of
+`4f7ee61` at revision 77. All twelve cluster suites passed with complete immutable
+images and the normal Helm preflight.
 Testing found shared-table truncation in `ciPoolExclusive`; isolated databases
 replace it. Their teardown exposed leaked dedicated migration connections,
 fixed with explicit ownership and proven by pg_stat_activity on success/failure.

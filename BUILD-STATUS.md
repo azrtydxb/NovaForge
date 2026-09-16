@@ -156,10 +156,12 @@ initial teardown failure were removed by exact name, without forced termination.
 The affected packages passed under `-race`, the full uncached Go suite passed,
 and Procoder test passed (39 packages). Lint and security have no blockers;
 the SQL interpolation advisory was audited against the existing strict schema
-name validation. The expanded `work_ci` cluster fixture is written but not yet
-run or deployed. Coverage and graph maintenance inputs and the broader audit
-remain open. Evidence: /tmp/novaforge-benchmark-{mutation-0,mutation-1,mutation-2,
-race-fixed,tests-confirm}.log.
+name validation. The committed `work_ci` fixture failed on revision 76 with
+no performance proposal, then passed after `4f7ee61` deployed at revision 77.
+All twelve in-cluster suites passed on revision 77, using the complete immutable
+image set and normal Helm preflight. Coverage and graph maintenance inputs and
+the broader audit remain open. Evidence: /tmp/novaforge-benchmark-{mutation-0,
+mutation-1,mutation-2,race-fixed,tests-confirm,red-e2e,e2e,deploy}.log.
 
 ## Environment
 
