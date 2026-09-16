@@ -559,8 +559,17 @@ The polling implementation selected the first newline, so only the first log
 line was forwarded while running. It now selects the last complete newline
 and sends only `data[sent:cut]`. The expanded
 `TestJobLogIsReadableWhileTheJobRuns` failed on the missing second live line
-before the fix and passed with `-race` after it. Cluster verification of this
-correction is still pending.
+before the fix and passed with `-race` after it. All images were built at
+`1c3c53f` and deployed through `hack/deploy.sh` with its image preflight intact
+(Helm revision 69). The in-cluster `work_ci`, `deploy` and `gui` suites passed:
+live logs, artifacts, the Git round trip and GUI endpoints are verified there.
+The first deploy/gui harness attempt raced deletion of the preceding test
+namespace; waiting for deletion before rerunning resolved that harness failure.
+
+`go test -race ./internal/runner ./internal/ci ./internal/svcauth` passed with
+`hack/env.sh` sourced. The full `procoder test` reported
+`TestSASTFindsWeakCrypto` failing because `NOVAFORGE_SEMGREP_RULES` was unset;
+this is not a full-suite green result.
 
 The earlier startup-hang diagnosis was not established: `grpc.NewClient` is
 nonblocking, quiet logs and a futex wait do not prove a hang, and repeated
