@@ -75,7 +75,7 @@ requirements are implemented, then add missing paths and regression evidence.
 - This input supports Go JSON test output, not arbitrary test report formats;
   coverage, benchmarks and graph inputs remain separate open work.
 
-## CI dispatch reservation correction
+## CI dispatch reservation correction — deployed
 
 The broker-down regression observed a job marked running before credentials
 were resolved. Trace `internal/ci/pump.go`, `store.go` and `dispatch.go`;
@@ -83,7 +83,11 @@ separate pending reservation (existing runner_id) from the running transition.
 Test the broker-call interval deterministically with the real credential stack,
 prevent double claims, preserve disconnect cleanup and terminal states, and
 retain the strict broker-down assertion. No new public job status is needed.
-Then run the real-service suite, review, gate and cluster acceptance.
+Implemented in `b3d2b3f`, deployed at revision 76. The deterministic held-broker
+regression was red then green; removing the terminal-state guard made the
+late-response case fail. Unchanged broker-down test passed three repeats,
+CI passed under `-race`, full uncached Go suite passed, and all twelve cluster
+suites passed. Evidence: /tmp/novaforge-reservation-{race,tests,e2e,deploy}.log.
 
 ## Evidence location
 
@@ -93,7 +97,8 @@ CI history input `bc51378` deployed at revision 75; all twelve suites passed:
 regression was red then green under `-race`. Full uncached Go suite passed:
 /tmp/novaforge-history-tests-confirm.log. Prior run observed an intermittent
 `TestBrokerDownFailsClosed` failure (running with a blocked detail rather than
-pending); investigate retry/status reporting, do not widen the test tolerance.
+pending); the reservation correction above fixes this without widening the
+test tolerance.
 
 Latest deployed batch: maintenance policy isolation at revision 74 (b75d8d9)
 passed all twelve in-cluster suites in one run. The malformed-policy regression

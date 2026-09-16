@@ -98,11 +98,12 @@ committed HEAD; only the post-commit fixture run constitutes the red evidence.
 Procoder test passed (39 packages). An uncached full Go run observed
 `TestBrokerDownFailsClosed` reading `running` with a broker-blocked detail
 rather than `pending`; the subsequent full run passed unchanged. This
-intermittent CI status/retry observation remains an audit follow-up, not a
-proven maintenance-history defect. Coverage, benchmark and graph maintenance
+intermittent CI status/retry observation was subsequently reproduced and
+corrected by the reservation change below; it was not a maintenance-history
+defect. Coverage, benchmark and graph maintenance
 inputs remain open.
 
-## CI credential reservation correction (in progress)
+## CI credential reservation correction (2026-09-16)
 
 `ClaimForDispatch` marked a job and run running before credential resolution,
 so each broker retry exposed a false running state. The correction reserves
@@ -115,7 +116,12 @@ The deterministic real-credential-stack regression failed before the correction
 and passed afterwards; removing the terminal-state guard independently made
 its disconnect case fail. The unchanged broker-down test passed three repeats.
 The CI package passed under `-race` and the full uncached Go suite passed.
-This batch has not yet been deployed. Broader completion work remains open.
+Commit `b3d2b3f` was deployed at Helm revision 76, with complete immutable
+images and normal preflight. All twelve cluster suites passed in one run.
+The held-broker timing cases are proven by the real-service regression, not
+by injecting outages into the live cluster. Procoder test passed (39 packages),
+lint/security had no findings and the gate had no blockers. Broader completion
+work remains open.
 
 ## Environment
 
