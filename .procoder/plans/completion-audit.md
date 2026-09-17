@@ -199,6 +199,29 @@ revision-bound graph read API remain to be handled. Production maintenance
 wiring/context references and the broader product gaps remain open. Do not
 infer their completion from the index recovery regressions.
 
+## Graph maintenance RPC — verified locally, deployment pending
+
+- [x] Distinguish successful supported parsing from empty/skipped/recovered syntax.
+- [x] Store exact source/root-module digests atomically with each file's graph.
+- [x] Add authenticated graph-owned `MaintenanceSnapshot`, validating the full Go
+      manifest and reading symbols/references in one database snapshot.
+- [x] Resolve stored by-name references as well as materialized edges, avoiding
+      false absence when concurrent file replacement delays edge materialization.
+- [x] Pin maintenance checkout/policy to one SHA, wire production graph client,
+      read explicit context-document symbol links and retain source evidence.
+- [x] Real-service red/green proposal tests; parser/snapshot regressions; anonymous,
+      incoming-credential and cross-org/repository checks; three restored mutations.
+- [x] Full uncached Go, affected-package race and Procoder suite pass; lint/security
+      have no blockers. Expanded committed cluster fixture still needs execution.
+- [ ] Commit, complete immutable image build, normal preflight/deploy and all suites.
+- [ ] Refresh legacy evidence and unchanged files after root-module remapping.
+- [ ] Reconcile unusual Git paths, audit lock-session-loss and deletion coordination.
+- [ ] Extend beyond bounded root-module Go evidence; this is not LSP/SCIP completeness.
+
+Missing/stale evidence stays unavailable, never a guessed clean result. The
+current limits and remaining work are recorded in BUILD-STATUS.md. No broader
+S-14/S-15/S-20 completion is claimed by these local regressions.
+
 ## Evidence location
 
 CI history input `bc51378` deployed at revision 75; all twelve suites passed:

@@ -262,6 +262,41 @@ These corrections do not yet establish index completeness: parser skips, unusual
 mapping changes and legacy checkpoints remain audit work. The graph maintenance
 RPC, revision-bound evidence and context-reference wiring are still absent.
 
+## Graph maintenance inputs (2026-09-17, awaiting deployment)
+
+The working batch wires `Sweeper.Graph` through the authenticated graph service.
+Maintenance pins one default-branch SHA before materializing source and policy;
+Go source and root-module digests must match every indexed Go file. One SQL
+snapshot validates parsing evidence and reads symbols/references together.
+Legacy, stale, skipped, missing and oversized evidence reports unavailable, not
+an empty graph. By-name references also protect against delayed materialized edges.
+
+Dead-code proposals are candidates only: unexported Go functions, excluding
+methods, init/main, test files, vendor and testdata. Dynamic/external consumers
+still require human verification. Explicit Markdown links with destinations such
+as `symbol:internal/service.go#Removed` under `.novaforge/context/*.md`
+produce documentation-drift candidates when the pinned Go graph lacks that
+path/name. Ordinary prose is not inferred into references. Proposals retain the
+source SHA, remain unassigned and require approval.
+
+Bounds: 5000 Go files, 10000 graph nodes, ten-second evidence RPC; context
+references allow 1024 documents of at most 1 MiB each. Nested Go modules are
+unavailable. Other-language graph maintenance, legacy-index refresh, unchanged
+files after root-module remapping, unusual Git path reconciliation and
+lock-session-loss/purge coordination remain open audit work, not completed by
+this batch. Existing index checkpoints are not treated as completeness evidence.
+
+The parser and authenticated snapshot regressions were observed failing before
+implementation. The real Git/PostgreSQL/indexer/RPC/sweeper regression first
+reported no graph proposals, then produced approval-required proposals.
+External embedding inference alone is substituted in that regression. Anonymous,
+foreign-org/repository and incoming-only credential cases are covered. Removing
+source matching, by-name reference resolution or credential forwarding each
+failed its regression; each mutation was immediately restored. Full uncached Go,
+affected-package race tests and Procoder's 39-package suite passed; security had
+no findings and lint had no blockers. The expanded cluster graph fixture has
+not yet been run. No deployment claim is made here.
+
 ## Environment
 
 Everything runs on the **kw cluster** (k3s 1.34, 8 ARM64 nodes). There is no local

@@ -22,6 +22,19 @@ service GraphService {
   // code outside it depends on its symbols, which tests cover them, and the
   // commits that changed it.
   rpc FileRelations(FileRelationsRequest) returns (FileRelationsResponse);
+  // Reads one consistent Go graph snapshot only when every file matches the
+  // caller's pinned source manifest. Legacy, stale or skipped files fail closed.
+  rpc MaintenanceSnapshot(MaintenanceSnapshotRequest) returns (MaintenanceSnapshotResponse);
+}
+
+message MaintenanceSnapshotRequest {
+  string repo_id = 1;
+  map<string, string> go_file_hashes = 2;
+  string module_hash = 3;
+}
+message MaintenanceSnapshotResponse {
+  repeated Node symbols = 1;
+  repeated Node unreferenced = 2;
 }
 
 message Symbol {

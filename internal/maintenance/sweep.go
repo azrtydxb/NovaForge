@@ -15,6 +15,7 @@ import (
 	civ1 "github.com/novaforge/novaforge/gen/novaforge/ci/v1"
 	gatesv1 "github.com/novaforge/novaforge/gen/novaforge/gates/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
+	graphv1 "github.com/novaforge/novaforge/gen/novaforge/graph/v1"
 	"github.com/novaforge/novaforge/internal/analysis"
 	"github.com/novaforge/novaforge/internal/authz"
 	"github.com/novaforge/novaforge/internal/gates"
@@ -40,6 +41,7 @@ type Sweeper struct {
 	Git        gitv1.GitServiceClient
 	CI         civ1.CIServiceClient
 	Gates      gatesv1.GatesServiceClient
+	Graph      graphv1.GraphServiceClient
 	HMACSecret string
 	// Orgs names the organizations a sweep covers. Production uses
 	// GitOrganizations: every organization that has a repository.
@@ -202,7 +204,17 @@ func (s *Sweeper) ScanAndPropose(ctx context.Context, orgID, repoID uuid.UUID, n
 	}
 	defer os.RemoveAll(dir)
 
-	if err := materialiseDir(ctx, s.Git, repoID, defaultBranch, "", dir, 0); err != nil {
+	// Pin once: reading a moving branch for each blob can invent a checkout
+	// that never existed, especially dangerous for absence-based findings.
+	head, err := s.Git.ListCommits(ctx, &gitv1.ListCommitsRequest{Repo: repoID.String(), Ref: defaultBranch, Limit: 1})
+	if err != nil {
+		return res, fmt.Errorf("resolve maintenance head: %w", err)
+	}
+	if len(head.GetCommits()) != 1 || head.GetCommits()[0].GetSha() == "" {
+		return res, fmt.Errorf("maintenance head unavailable")
+	}
+	sha := head.GetCommits()[0].GetSha()
+	if err := materialiseDir(ctx, s.Git, repoID, sha, "", dir, 0); err != nil {
 		return res, err
 	}
 
@@ -224,7 +236,7 @@ func (s *Sweeper) ScanAndPropose(ctx context.Context, orgID, repoID uuid.UUID, n
 	}
 	// Maintenance must enforce the same default-branch architecture policy
 	// as merge gates. A scanner with nil parameters silently checks nothing.
-	defs, err := gates.Resolve(ctx, s.Git, orgID, repoID, defaultBranch, nil)
+	defs, err := gates.Resolve(ctx, s.Git, orgID, repoID, sha, nil)
 	if err != nil {
 		// Bad policy is not a clean architecture result, but it must not
 		// hide a CVE found by an independent scanner in the same repository.
@@ -248,7 +260,22 @@ func (s *Sweeper) ScanAndPropose(ctx context.Context, orgID, repoID uuid.UUID, n
 	if err != nil {
 		onError("coverage_regression", err)
 	}
+	in.Graph, err = graphInput(ctx, s.Graph, orgID, repoID, dir)
+	if err != nil {
+		onError("graph_maintenance", err)
+	} else {
+		in.ContextDocs, err = contextReferences(dir)
+		if err != nil {
+			in.ContextDocs = nil
+			onError("documentation_drift", err)
+		}
+	}
 	findings := RunAll(ctx, in, onError)
+	for i := range findings {
+		if findings[i].Kind == "dead_code" || findings[i].Kind == "documentation_drift" {
+			findings[i].Detail += "\nSource revision: " + sha + ". Go static graph evidence; not proof that deletion is safe."
+		}
+	}
 	res.Findings = len(findings)
 	if len(findings) == 0 {
 		return res, nil
@@ -277,7 +304,7 @@ const maxTreeDepth = 32
 // repositories decides what may be read.
 func materialiseDir(ctx context.Context, git gitv1.GitServiceClient, repoID uuid.UUID, ref, path, dir string, depth int) error {
 	if depth > maxTreeDepth {
-		return nil
+		return fmt.Errorf("maintenance checkout exceeds depth %d", maxTreeDepth)
 	}
 	tree, err := git.GetTree(ctx, &gitv1.GetTreeRequest{Repo: repoID.String(), Ref: ref, Path: path})
 	if err != nil {

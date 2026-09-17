@@ -22,6 +22,8 @@ type FileIndex struct {
 	RepoID uuid.UUID
 	Path   string
 
+	Evidence *FileEvidence
+
 	// Symbols are the file's symbol nodes. Each carries attrs "path", "dir",
 	// "name" and "kind"; Key must be unique within the organization.
 	Symbols []Node
@@ -120,9 +122,17 @@ func (s *Store) ReplaceFileIndex(ctx context.Context, fi FileIndex) error {
 		return err
 	}
 
+	attrs := map[string]string{"path": fi.Path, "dir": dirOf(fi.Path)}
+	if fi.Evidence != nil {
+		attrs["source_hash"] = fi.Evidence.ContentHash
+		attrs["module_hash"] = fi.Evidence.ModuleHash
+		if fi.Evidence.Complete {
+			attrs["parse_complete"] = "true"
+		}
+	}
 	fileNode, err := upsertNode(ctx, tx, fi.OrgID, fi.RepoID, true, Node{
 		OrgID: fi.OrgID, Kind: "file", Key: FileNodeKey(fi.RepoID, fi.Path),
-		Attrs: map[string]string{"path": fi.Path, "dir": dirOf(fi.Path)},
+		Attrs: attrs,
 	})
 	if err != nil {
 		return fmt.Errorf("upsert file node: %w", err)

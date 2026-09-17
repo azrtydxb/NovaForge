@@ -24,6 +24,7 @@ import (
 	civ1 "github.com/novaforge/novaforge/gen/novaforge/ci/v1"
 	gatesv1 "github.com/novaforge/novaforge/gen/novaforge/gates/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
+	graphv1 "github.com/novaforge/novaforge/gen/novaforge/graph/v1"
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
 	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
 	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
@@ -136,6 +137,15 @@ func main() {
 		gitClient := gitv1.NewGitServiceClient(gitConn)
 		sweeper := maintenance.NewSweeper(workStore, gitClient, cfg.HMACSecret)
 		sweeper.Gates = gatesv1.NewGatesServiceClient(gatesConn)
+		if cfg.GraphAddr != "" {
+			graphConn, err := grpc.NewClient(cfg.GraphAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+				grpc.WithUnaryInterceptor(svcauth.ForwardIncomingCredential))
+			if err != nil {
+				log.Fatalf("work-reviews: create graph client: %v", err)
+			}
+			defer graphConn.Close()
+			sweeper.Graph = graphv1.NewGraphServiceClient(graphConn)
+		}
 		if cfg.CIAddr != "" {
 			ciConn, err := grpc.NewClient(cfg.CIAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
 				grpc.WithChainUnaryInterceptor(svcauth.ForwardIncomingCredential),

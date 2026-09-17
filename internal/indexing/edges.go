@@ -22,9 +22,10 @@ import (
 // IndexCommit call has none of it, and still writes symbols and dependency
 // edges — only changed_by history needs a push.
 type pushInfo struct {
-	module  string
-	changed map[string]map[int]bool
-	commits map[string]graph.CommitInfo
+	module     string
+	moduleHash string
+	changed    map[string]map[int]bool
+	commits    map[string]graph.CommitInfo
 }
 
 // attributionCommitLimit bounds how many of a push's commits are inspected
@@ -105,15 +106,21 @@ func workItemKey(message string) string {
 // goModule reads the module path the repository's root go.mod declares at
 // sha, or "" when it has none. Without it an import cannot be told apart from
 // a dependency outside the repository.
-func (idx *Indexer) goModule(ctx context.Context, repoID uuid.UUID, sha string) string {
+func (idx *Indexer) goModule(ctx context.Context, repoID uuid.UUID, sha string) (string, string) {
 	blob, err := idx.Git.GetBlob(ctx, &gitv1.GetBlobRequest{Repo: repoID.String(), Ref: sha, Path: "go.mod"})
+	if status.Code(err) == codes.NotFound {
+		return "", graph.SourceDigest(nil)
+	}
 	if err != nil {
-		return ""
+		// An unknown module must never masquerade as a known missing module
+		// when maintenance validates the graph's extraction context.
+		return "", ""
 	}
+	digest := graph.SourceDigest(blob.GetContent())
 	if m := goModuleRe.FindSubmatch(blob.GetContent()); m != nil {
-		return string(m[1])
+		return string(m[1]), digest
 	}
-	return ""
+	return "", digest
 }
 
 // attribute assigns each changed path to the newest commit in the push that

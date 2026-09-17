@@ -55,6 +55,9 @@ type Import struct {
 
 // File is everything ParseFile extracts from one source file.
 type File struct {
+	// Complete distinguishes a successful supported parse from a deliberate
+	// skip or a syntax-error recovery. Absence-based consumers require it.
+	Complete   bool
 	Symbols    []Symbol
 	References []Reference
 	Imports    []Import
@@ -126,9 +129,11 @@ func ParseFile(path string, src []byte) (File, error) {
 		return File{}, nil
 	}
 
+	complete := !root.HasError()
 	var symbols []Symbol
 	if spec.definitionQ != "" {
 		q, qerr := sitter.NewQuery(spec.language, spec.definitionQ)
+		complete = complete && qerr == nil
 		if qerr == nil {
 			defer q.Close()
 			cursor := sitter.NewQueryCursor()
@@ -146,6 +151,7 @@ func ParseFile(path string, src []byte) (File, error) {
 	var refs []Reference
 	if spec.referenceQ != "" {
 		q, qerr := sitter.NewQuery(spec.language, spec.referenceQ)
+		complete = complete && qerr == nil
 		if qerr == nil {
 			defer q.Close()
 			cursor := sitter.NewQueryCursor()
@@ -166,6 +172,7 @@ func ParseFile(path string, src []byte) (File, error) {
 	var imports []Import
 	if spec.importQ != "" {
 		q, qerr := sitter.NewQuery(spec.language, spec.importQ)
+		complete = complete && qerr == nil
 		if qerr == nil {
 			defer q.Close()
 			cursor := sitter.NewQueryCursor()
@@ -182,7 +189,7 @@ func ParseFile(path string, src []byte) (File, error) {
 		}
 	}
 
-	return File{Symbols: symbols, References: refs, Imports: imports}, nil
+	return File{Complete: complete, Symbols: symbols, References: refs, Imports: imports}, nil
 }
 
 // referenceFrom turns one reference capture into a Reference. A selector or

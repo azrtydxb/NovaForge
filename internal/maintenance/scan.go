@@ -77,11 +77,18 @@ type BenchmarkResult struct {
 // ContextDocRef is one context document (from a repository's
 // .novaforge/context directory) and the symbol keys it references — the
 // documentation-drift scanner's raw material. Extracting which symbols a
-// document references is context assembly's job, not this scanner's; it
+// document references is the input resolver's job, not this scanner's; it
 // only checks whether the referenced symbols still exist in the graph.
 type ContextDocRef struct {
 	Path              string
 	ReferencedSymbols []string
+}
+
+// GraphEvidence exposes scoped graph queries without requiring work-reviews
+// to read another service's schema. Production supplies a validated RPC snapshot.
+type GraphEvidence interface {
+	UnreferencedSymbols(context.Context, uuid.UUID, uuid.UUID) ([]graph.Node, error)
+	MissingSymbols(context.Context, uuid.UUID, uuid.UUID, []string) ([]string, error)
 }
 
 // ScanInput is what a Scanner needs to evaluate one repository. No single
@@ -113,7 +120,7 @@ type ScanInput struct {
 	Git gitv1.GitServiceClient
 
 	// Graph backs the dead-code and documentation-drift scanners.
-	Graph *graph.Store
+	Graph GraphEvidence
 
 	// JobResults backs the flaky-test scanner.
 	JobResults []JobResult

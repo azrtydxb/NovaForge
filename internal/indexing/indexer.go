@@ -263,8 +263,9 @@ func (idx *Indexer) HandlePush(ctx context.Context, evt events.PushEvent) error 
 			}
 		}
 	}
+	module, moduleHash := idx.goModule(ctx, evt.RepoID, evt.NewSHA)
 	info := pushInfo{
-		module:  idx.goModule(ctx, evt.RepoID, evt.NewSHA),
+		module: module, moduleHash: moduleHash,
 		changed: changedLines(unified),
 		commits: idx.attribute(ctx, evt.RepoID, evt.OldSHA, evt.NewSHA, paths),
 	}
@@ -434,7 +435,9 @@ func (idx *Indexer) indexPath(ctx context.Context, orgID, repoID uuid.UUID, sha,
 			},
 		})
 	}
-	fi := graph.FileIndex{OrgID: orgID, RepoID: repoID, Path: path, Symbols: nodes}
+	fi := graph.FileIndex{OrgID: orgID, RepoID: repoID, Path: path, Symbols: nodes,
+		Evidence: &graph.FileEvidence{ContentHash: graph.SourceDigest(blob.GetContent()), ModuleHash: info.moduleHash, Complete: file.Complete},
+	}
 	if strings.HasSuffix(path, ".go") {
 		fi.Imports, fi.References = goEdges(path, info.module, file, keys)
 	}

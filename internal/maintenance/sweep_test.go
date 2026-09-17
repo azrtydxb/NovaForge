@@ -97,6 +97,8 @@ func TestMaintenanceProposesWorkItem(t *testing.T) {
 		&gitv1.FileChange{Path: ".novaforge/gates/architecture.yaml", Content: []byte("name: architecture\nrequired: true\nparams:\n  forbidden_dependencies:\n    - frontend -> database\n")},
 		&gitv1.FileChange{Path: "frontend/frontend.go", Content: []byte("package frontend\nimport _ \"example.com/probe/database\"\n")},
 		&gitv1.FileChange{Path: "database/database.go", Content: []byte("package database\n")},
+		&gitv1.FileChange{Path: "orphan.go", Content: []byte("package probe\nfunc unused() {}\n")},
+		&gitv1.FileChange{Path: ".novaforge/context/design.md", Content: []byte("[Removed API](symbol:orphan.go#Gone)\n")},
 	)
 	if _, err := git.CreateCommit(asOrg, &gitv1.CreateCommitRequest{
 		Repo: repo.GetRepo().GetName(), Branch: repo.GetRepo().GetDefaultBranch(),
@@ -110,6 +112,8 @@ func TestMaintenanceProposesWorkItem(t *testing.T) {
 	var benchmark benchmarkEvidence
 	sweeper.CI, benchmark = historyCI(t, orgID, uuid.MustParse(repo.GetRepo().GetId()))
 	sweeper.Gates = coverageHistory(t, orgID, uuid.MustParse(repo.GetRepo().GetId()))
+	sweeper.Graph = graphHistory(t, git, orgID, uuid.MustParse(repo.GetRepo().GetId()), repo.GetRepo().GetDefaultBranch())
+	checkGraphRPCScope(t, sweeper.Graph, orgID, uuid.MustParse(repo.GetRepo().GetId()), files)
 
 	// The organization list is production's, unfiltered, and must name this
 	// organization. The sweep is then confined to it only because the dev
@@ -146,10 +150,17 @@ func TestMaintenanceProposesWorkItem(t *testing.T) {
 	var flaky *work.Item
 	var performance *work.Item
 	var coverage *work.Item
+	var deadCode, docs *work.Item
 	for _, itemID := range open {
 		item, err := store.Get(scoped, itemID)
 		if err != nil {
 			t.Fatalf("Get proposal item: %v", err)
+		}
+		if strings.Contains(item.Goal, "orphan.go#unused") {
+			deadCode = &item
+		}
+		if item.Type == "documentation" && strings.Contains(item.Goal, "design.md") {
+			docs = &item
 		}
 		if strings.Contains(item.Goal, "coverage dropped from 100.0% to 50.0%") {
 			coverage = &item
@@ -165,6 +176,17 @@ func TestMaintenanceProposesWorkItem(t *testing.T) {
 		}
 		if item.Type == "architecture" && strings.Contains(item.Goal, "forbidden dependency") {
 			architecture = &item
+		}
+	}
+	if deadCode == nil || docs == nil {
+		t.Fatalf("indexed source/context documents produced no graph proposals: dead=%v docs=%v report=%+v", deadCode != nil, docs != nil, report)
+	}
+	for _, item := range []*work.Item{deadCode, docs} {
+		if !strings.Contains(item.Goal, "Source revision: ") {
+			t.Fatal("graph proposal lost its source revision")
+		}
+		if waiting, err := store.AwaitingApproval(scoped, item.ID); err != nil || !waiting || item.AssigneeID != uuid.Nil {
+			t.Fatalf("graph proposal bypassed approval: %v", err)
 		}
 	}
 	if coverage == nil {

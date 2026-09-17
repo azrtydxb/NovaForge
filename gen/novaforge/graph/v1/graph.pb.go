@@ -21,6 +21,118 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type MaintenanceSnapshotRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RepoId        string                 `protobuf:"bytes,1,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	GoFileHashes  map[string]string      `protobuf:"bytes,2,rep,name=go_file_hashes,json=goFileHashes,proto3" json:"go_file_hashes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	ModuleHash    string                 `protobuf:"bytes,3,opt,name=module_hash,json=moduleHash,proto3" json:"module_hash,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MaintenanceSnapshotRequest) Reset() {
+	*x = MaintenanceSnapshotRequest{}
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MaintenanceSnapshotRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MaintenanceSnapshotRequest) ProtoMessage() {}
+
+func (x *MaintenanceSnapshotRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MaintenanceSnapshotRequest.ProtoReflect.Descriptor instead.
+func (*MaintenanceSnapshotRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *MaintenanceSnapshotRequest) GetRepoId() string {
+	if x != nil {
+		return x.RepoId
+	}
+	return ""
+}
+
+func (x *MaintenanceSnapshotRequest) GetGoFileHashes() map[string]string {
+	if x != nil {
+		return x.GoFileHashes
+	}
+	return nil
+}
+
+func (x *MaintenanceSnapshotRequest) GetModuleHash() string {
+	if x != nil {
+		return x.ModuleHash
+	}
+	return ""
+}
+
+type MaintenanceSnapshotResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Symbols       []*Node                `protobuf:"bytes,1,rep,name=symbols,proto3" json:"symbols,omitempty"`
+	Unreferenced  []*Node                `protobuf:"bytes,2,rep,name=unreferenced,proto3" json:"unreferenced,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MaintenanceSnapshotResponse) Reset() {
+	*x = MaintenanceSnapshotResponse{}
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MaintenanceSnapshotResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MaintenanceSnapshotResponse) ProtoMessage() {}
+
+func (x *MaintenanceSnapshotResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MaintenanceSnapshotResponse.ProtoReflect.Descriptor instead.
+func (*MaintenanceSnapshotResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *MaintenanceSnapshotResponse) GetSymbols() []*Node {
+	if x != nil {
+		return x.Symbols
+	}
+	return nil
+}
+
+func (x *MaintenanceSnapshotResponse) GetUnreferenced() []*Node {
+	if x != nil {
+		return x.Unreferenced
+	}
+	return nil
+}
+
 type Symbol struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -36,7 +148,7 @@ type Symbol struct {
 
 func (x *Symbol) Reset() {
 	*x = Symbol{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[0]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -48,7 +160,7 @@ func (x *Symbol) String() string {
 func (*Symbol) ProtoMessage() {}
 
 func (x *Symbol) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[0]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -61,7 +173,7 @@ func (x *Symbol) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Symbol.ProtoReflect.Descriptor instead.
 func (*Symbol) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{0}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *Symbol) GetId() string {
@@ -125,7 +237,7 @@ type Node struct {
 
 func (x *Node) Reset() {
 	*x = Node{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[1]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -137,7 +249,7 @@ func (x *Node) String() string {
 func (*Node) ProtoMessage() {}
 
 func (x *Node) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[1]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -150,7 +262,7 @@ func (x *Node) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Node.ProtoReflect.Descriptor instead.
 func (*Node) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{1}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *Node) GetId() string {
@@ -194,7 +306,7 @@ type CodeChunk struct {
 
 func (x *CodeChunk) Reset() {
 	*x = CodeChunk{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[2]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -206,7 +318,7 @@ func (x *CodeChunk) String() string {
 func (*CodeChunk) ProtoMessage() {}
 
 func (x *CodeChunk) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[2]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -219,7 +331,7 @@ func (x *CodeChunk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CodeChunk.ProtoReflect.Descriptor instead.
 func (*CodeChunk) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{2}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *CodeChunk) GetPath() string {
@@ -273,7 +385,7 @@ type KnowledgeEntry struct {
 
 func (x *KnowledgeEntry) Reset() {
 	*x = KnowledgeEntry{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[3]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -285,7 +397,7 @@ func (x *KnowledgeEntry) String() string {
 func (*KnowledgeEntry) ProtoMessage() {}
 
 func (x *KnowledgeEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[3]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -298,7 +410,7 @@ func (x *KnowledgeEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KnowledgeEntry.ProtoReflect.Descriptor instead.
 func (*KnowledgeEntry) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{3}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *KnowledgeEntry) GetId() string {
@@ -363,7 +475,7 @@ type ContextSnippet struct {
 
 func (x *ContextSnippet) Reset() {
 	*x = ContextSnippet{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[4]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -375,7 +487,7 @@ func (x *ContextSnippet) String() string {
 func (*ContextSnippet) ProtoMessage() {}
 
 func (x *ContextSnippet) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[4]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -388,7 +500,7 @@ func (x *ContextSnippet) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ContextSnippet.ProtoReflect.Descriptor instead.
 func (*ContextSnippet) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{4}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ContextSnippet) GetPath() string {
@@ -438,7 +550,7 @@ type ContextBundle struct {
 
 func (x *ContextBundle) Reset() {
 	*x = ContextBundle{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[5]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -450,7 +562,7 @@ func (x *ContextBundle) String() string {
 func (*ContextBundle) ProtoMessage() {}
 
 func (x *ContextBundle) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[5]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -463,7 +575,7 @@ func (x *ContextBundle) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ContextBundle.ProtoReflect.Descriptor instead.
 func (*ContextBundle) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{5}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ContextBundle) GetFiles() []*ContextSnippet {
@@ -504,7 +616,7 @@ type GetSymbolRequest struct {
 
 func (x *GetSymbolRequest) Reset() {
 	*x = GetSymbolRequest{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[6]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -516,7 +628,7 @@ func (x *GetSymbolRequest) String() string {
 func (*GetSymbolRequest) ProtoMessage() {}
 
 func (x *GetSymbolRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[6]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -529,7 +641,7 @@ func (x *GetSymbolRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSymbolRequest.ProtoReflect.Descriptor instead.
 func (*GetSymbolRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{6}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *GetSymbolRequest) GetRepoId() string {
@@ -555,7 +667,7 @@ type GetSymbolResponse struct {
 
 func (x *GetSymbolResponse) Reset() {
 	*x = GetSymbolResponse{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[7]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -567,7 +679,7 @@ func (x *GetSymbolResponse) String() string {
 func (*GetSymbolResponse) ProtoMessage() {}
 
 func (x *GetSymbolResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[7]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -580,7 +692,7 @@ func (x *GetSymbolResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSymbolResponse.ProtoReflect.Descriptor instead.
 func (*GetSymbolResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{7}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *GetSymbolResponse) GetSymbol() *Symbol {
@@ -600,7 +712,7 @@ type DependentsRequest struct {
 
 func (x *DependentsRequest) Reset() {
 	*x = DependentsRequest{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[8]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -612,7 +724,7 @@ func (x *DependentsRequest) String() string {
 func (*DependentsRequest) ProtoMessage() {}
 
 func (x *DependentsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[8]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -625,7 +737,7 @@ func (x *DependentsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DependentsRequest.ProtoReflect.Descriptor instead.
 func (*DependentsRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{8}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *DependentsRequest) GetRepoId() string {
@@ -651,7 +763,7 @@ type DependentsResponse struct {
 
 func (x *DependentsResponse) Reset() {
 	*x = DependentsResponse{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[9]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -663,7 +775,7 @@ func (x *DependentsResponse) String() string {
 func (*DependentsResponse) ProtoMessage() {}
 
 func (x *DependentsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[9]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -676,7 +788,7 @@ func (x *DependentsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DependentsResponse.ProtoReflect.Descriptor instead.
 func (*DependentsResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{9}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *DependentsResponse) GetNodes() []*Node {
@@ -696,7 +808,7 @@ type DependenciesRequest struct {
 
 func (x *DependenciesRequest) Reset() {
 	*x = DependenciesRequest{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[10]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -708,7 +820,7 @@ func (x *DependenciesRequest) String() string {
 func (*DependenciesRequest) ProtoMessage() {}
 
 func (x *DependenciesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[10]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -721,7 +833,7 @@ func (x *DependenciesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DependenciesRequest.ProtoReflect.Descriptor instead.
 func (*DependenciesRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{10}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *DependenciesRequest) GetRepoId() string {
@@ -747,7 +859,7 @@ type DependenciesResponse struct {
 
 func (x *DependenciesResponse) Reset() {
 	*x = DependenciesResponse{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[11]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -759,7 +871,7 @@ func (x *DependenciesResponse) String() string {
 func (*DependenciesResponse) ProtoMessage() {}
 
 func (x *DependenciesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[11]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -772,7 +884,7 @@ func (x *DependenciesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DependenciesResponse.ProtoReflect.Descriptor instead.
 func (*DependenciesResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{11}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *DependenciesResponse) GetNodes() []*Node {
@@ -792,7 +904,7 @@ type TestsCoveringRequest struct {
 
 func (x *TestsCoveringRequest) Reset() {
 	*x = TestsCoveringRequest{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[12]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -804,7 +916,7 @@ func (x *TestsCoveringRequest) String() string {
 func (*TestsCoveringRequest) ProtoMessage() {}
 
 func (x *TestsCoveringRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[12]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -817,7 +929,7 @@ func (x *TestsCoveringRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TestsCoveringRequest.ProtoReflect.Descriptor instead.
 func (*TestsCoveringRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{12}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *TestsCoveringRequest) GetRepoId() string {
@@ -846,7 +958,7 @@ type TestsCoveringResponse struct {
 
 func (x *TestsCoveringResponse) Reset() {
 	*x = TestsCoveringResponse{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[13]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -858,7 +970,7 @@ func (x *TestsCoveringResponse) String() string {
 func (*TestsCoveringResponse) ProtoMessage() {}
 
 func (x *TestsCoveringResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[13]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -871,7 +983,7 @@ func (x *TestsCoveringResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TestsCoveringResponse.ProtoReflect.Descriptor instead.
 func (*TestsCoveringResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{13}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *TestsCoveringResponse) GetTests() []string {
@@ -898,7 +1010,7 @@ type LastChangedByRequest struct {
 
 func (x *LastChangedByRequest) Reset() {
 	*x = LastChangedByRequest{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[14]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -910,7 +1022,7 @@ func (x *LastChangedByRequest) String() string {
 func (*LastChangedByRequest) ProtoMessage() {}
 
 func (x *LastChangedByRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[14]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -923,7 +1035,7 @@ func (x *LastChangedByRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LastChangedByRequest.ProtoReflect.Descriptor instead.
 func (*LastChangedByRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{14}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *LastChangedByRequest) GetRepoId() string {
@@ -957,7 +1069,7 @@ type LastChangedByResponse struct {
 
 func (x *LastChangedByResponse) Reset() {
 	*x = LastChangedByResponse{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[15]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -969,7 +1081,7 @@ func (x *LastChangedByResponse) String() string {
 func (*LastChangedByResponse) ProtoMessage() {}
 
 func (x *LastChangedByResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[15]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -982,7 +1094,7 @@ func (x *LastChangedByResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LastChangedByResponse.ProtoReflect.Descriptor instead.
 func (*LastChangedByResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{15}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *LastChangedByResponse) GetWorkItemKey() string {
@@ -1037,7 +1149,7 @@ type FileRelationsRequest struct {
 
 func (x *FileRelationsRequest) Reset() {
 	*x = FileRelationsRequest{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[16]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1049,7 +1161,7 @@ func (x *FileRelationsRequest) String() string {
 func (*FileRelationsRequest) ProtoMessage() {}
 
 func (x *FileRelationsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[16]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1062,7 +1174,7 @@ func (x *FileRelationsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FileRelationsRequest.ProtoReflect.Descriptor instead.
 func (*FileRelationsRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{16}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *FileRelationsRequest) GetRepoId() string {
@@ -1093,7 +1205,7 @@ type FileRelationsResponse struct {
 
 func (x *FileRelationsResponse) Reset() {
 	*x = FileRelationsResponse{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[17]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1105,7 +1217,7 @@ func (x *FileRelationsResponse) String() string {
 func (*FileRelationsResponse) ProtoMessage() {}
 
 func (x *FileRelationsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[17]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1118,7 +1230,7 @@ func (x *FileRelationsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FileRelationsResponse.ProtoReflect.Descriptor instead.
 func (*FileRelationsResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{17}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *FileRelationsResponse) GetSymbols() []*Symbol {
@@ -1174,7 +1286,7 @@ type SearchCodeRequest struct {
 
 func (x *SearchCodeRequest) Reset() {
 	*x = SearchCodeRequest{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[18]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1186,7 +1298,7 @@ func (x *SearchCodeRequest) String() string {
 func (*SearchCodeRequest) ProtoMessage() {}
 
 func (x *SearchCodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[18]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1199,7 +1311,7 @@ func (x *SearchCodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchCodeRequest.ProtoReflect.Descriptor instead.
 func (*SearchCodeRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{18}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *SearchCodeRequest) GetRepoId() string {
@@ -1236,7 +1348,7 @@ type SearchCodeResponse struct {
 
 func (x *SearchCodeResponse) Reset() {
 	*x = SearchCodeResponse{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[19]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1248,7 +1360,7 @@ func (x *SearchCodeResponse) String() string {
 func (*SearchCodeResponse) ProtoMessage() {}
 
 func (x *SearchCodeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[19]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1261,7 +1373,7 @@ func (x *SearchCodeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchCodeResponse.ProtoReflect.Descriptor instead.
 func (*SearchCodeResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{19}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *SearchCodeResponse) GetChunks() []*CodeChunk {
@@ -1289,7 +1401,7 @@ type AssembleContextRequest struct {
 
 func (x *AssembleContextRequest) Reset() {
 	*x = AssembleContextRequest{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[20]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1301,7 +1413,7 @@ func (x *AssembleContextRequest) String() string {
 func (*AssembleContextRequest) ProtoMessage() {}
 
 func (x *AssembleContextRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[20]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1314,7 +1426,7 @@ func (x *AssembleContextRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AssembleContextRequest.ProtoReflect.Descriptor instead.
 func (*AssembleContextRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{20}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *AssembleContextRequest) GetRepoId() string {
@@ -1347,7 +1459,7 @@ type AssembleContextResponse struct {
 
 func (x *AssembleContextResponse) Reset() {
 	*x = AssembleContextResponse{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[21]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1359,7 +1471,7 @@ func (x *AssembleContextResponse) String() string {
 func (*AssembleContextResponse) ProtoMessage() {}
 
 func (x *AssembleContextResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[21]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1372,7 +1484,7 @@ func (x *AssembleContextResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AssembleContextResponse.ProtoReflect.Descriptor instead.
 func (*AssembleContextResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{21}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *AssembleContextResponse) GetBundle() *ContextBundle {
@@ -1398,7 +1510,7 @@ type RecordKnowledgeRequest struct {
 
 func (x *RecordKnowledgeRequest) Reset() {
 	*x = RecordKnowledgeRequest{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[22]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1410,7 +1522,7 @@ func (x *RecordKnowledgeRequest) String() string {
 func (*RecordKnowledgeRequest) ProtoMessage() {}
 
 func (x *RecordKnowledgeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[22]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1423,7 +1535,7 @@ func (x *RecordKnowledgeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordKnowledgeRequest.ProtoReflect.Descriptor instead.
 func (*RecordKnowledgeRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{22}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *RecordKnowledgeRequest) GetRepoId() string {
@@ -1477,7 +1589,7 @@ type RecordKnowledgeResponse struct {
 
 func (x *RecordKnowledgeResponse) Reset() {
 	*x = RecordKnowledgeResponse{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[23]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1489,7 +1601,7 @@ func (x *RecordKnowledgeResponse) String() string {
 func (*RecordKnowledgeResponse) ProtoMessage() {}
 
 func (x *RecordKnowledgeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[23]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1502,7 +1614,7 @@ func (x *RecordKnowledgeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordKnowledgeResponse.ProtoReflect.Descriptor instead.
 func (*RecordKnowledgeResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{23}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *RecordKnowledgeResponse) GetId() string {
@@ -1523,7 +1635,7 @@ type SearchKnowledgeRequest struct {
 
 func (x *SearchKnowledgeRequest) Reset() {
 	*x = SearchKnowledgeRequest{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[24]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1535,7 +1647,7 @@ func (x *SearchKnowledgeRequest) String() string {
 func (*SearchKnowledgeRequest) ProtoMessage() {}
 
 func (x *SearchKnowledgeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[24]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1548,7 +1660,7 @@ func (x *SearchKnowledgeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchKnowledgeRequest.ProtoReflect.Descriptor instead.
 func (*SearchKnowledgeRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{24}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *SearchKnowledgeRequest) GetRepoId() string {
@@ -1584,7 +1696,7 @@ type SearchKnowledgeResponse struct {
 
 func (x *SearchKnowledgeResponse) Reset() {
 	*x = SearchKnowledgeResponse{}
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[25]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1596,7 +1708,7 @@ func (x *SearchKnowledgeResponse) String() string {
 func (*SearchKnowledgeResponse) ProtoMessage() {}
 
 func (x *SearchKnowledgeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[25]
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1609,7 +1721,7 @@ func (x *SearchKnowledgeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchKnowledgeResponse.ProtoReflect.Descriptor instead.
 func (*SearchKnowledgeResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{25}
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *SearchKnowledgeResponse) GetEntries() []*KnowledgeEntry {
@@ -1630,7 +1742,18 @@ var File_novaforge_graph_v1_graph_proto protoreflect.FileDescriptor
 
 const file_novaforge_graph_v1_graph_proto_rawDesc = "" +
 	"\n" +
-	"\x1enovaforge/graph/v1/graph.proto\x12\x12novaforge.graph.v1\"\xac\x01\n" +
+	"\x1enovaforge/graph/v1/graph.proto\x12\x12novaforge.graph.v1\"\xff\x01\n" +
+	"\x1aMaintenanceSnapshotRequest\x12\x17\n" +
+	"\arepo_id\x18\x01 \x01(\tR\x06repoId\x12f\n" +
+	"\x0ego_file_hashes\x18\x02 \x03(\v2@.novaforge.graph.v1.MaintenanceSnapshotRequest.GoFileHashesEntryR\fgoFileHashes\x12\x1f\n" +
+	"\vmodule_hash\x18\x03 \x01(\tR\n" +
+	"moduleHash\x1a?\n" +
+	"\x11GoFileHashesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8f\x01\n" +
+	"\x1bMaintenanceSnapshotResponse\x122\n" +
+	"\asymbols\x18\x01 \x03(\v2\x18.novaforge.graph.v1.NodeR\asymbols\x12<\n" +
+	"\funreferenced\x18\x02 \x03(\v2\x18.novaforge.graph.v1.NodeR\funreferenced\"\xac\x01\n" +
 	"\x06Symbol\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -1751,7 +1874,7 @@ const file_novaforge_graph_v1_graph_proto_rawDesc = "" +
 	"\x01k\x18\x03 \x01(\x05R\x01k\"k\n" +
 	"\x17SearchKnowledgeResponse\x12<\n" +
 	"\aentries\x18\x01 \x03(\v2\".novaforge.graph.v1.KnowledgeEntryR\aentries\x12\x12\n" +
-	"\x04mode\x18\x02 \x01(\tR\x04mode2\xfb\a\n" +
+	"\x04mode\x18\x02 \x01(\tR\x04mode2\xf3\b\n" +
 	"\fGraphService\x12X\n" +
 	"\tGetSymbol\x12$.novaforge.graph.v1.GetSymbolRequest\x1a%.novaforge.graph.v1.GetSymbolResponse\x12[\n" +
 	"\n" +
@@ -1764,7 +1887,8 @@ const file_novaforge_graph_v1_graph_proto_rawDesc = "" +
 	"\x0fAssembleContext\x12*.novaforge.graph.v1.AssembleContextRequest\x1a+.novaforge.graph.v1.AssembleContextResponse\x12j\n" +
 	"\x0fRecordKnowledge\x12*.novaforge.graph.v1.RecordKnowledgeRequest\x1a+.novaforge.graph.v1.RecordKnowledgeResponse\x12j\n" +
 	"\x0fSearchKnowledge\x12*.novaforge.graph.v1.SearchKnowledgeRequest\x1a+.novaforge.graph.v1.SearchKnowledgeResponse\x12d\n" +
-	"\rFileRelations\x12(.novaforge.graph.v1.FileRelationsRequest\x1a).novaforge.graph.v1.FileRelationsResponseB\xcd\x01\n" +
+	"\rFileRelations\x12(.novaforge.graph.v1.FileRelationsRequest\x1a).novaforge.graph.v1.FileRelationsResponse\x12v\n" +
+	"\x13MaintenanceSnapshot\x12..novaforge.graph.v1.MaintenanceSnapshotRequest\x1a/.novaforge.graph.v1.MaintenanceSnapshotResponseB\xcd\x01\n" +
 	"\x16com.novaforge.graph.v1B\n" +
 	"GraphProtoP\x01Z=github.com/novaforge/novaforge/gen/novaforge/graph/v1;graphv1\xa2\x02\x03NGX\xaa\x02\x12Novaforge.Graph.V1\xca\x02\x12Novaforge\\Graph\\V1\xe2\x02\x1eNovaforge\\Graph\\V1\\GPBMetadata\xea\x02\x14Novaforge::Graph::V1b\x06proto3"
 
@@ -1780,79 +1904,87 @@ func file_novaforge_graph_v1_graph_proto_rawDescGZIP() []byte {
 	return file_novaforge_graph_v1_graph_proto_rawDescData
 }
 
-var file_novaforge_graph_v1_graph_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
+var file_novaforge_graph_v1_graph_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_novaforge_graph_v1_graph_proto_goTypes = []any{
-	(*Symbol)(nil),                  // 0: novaforge.graph.v1.Symbol
-	(*Node)(nil),                    // 1: novaforge.graph.v1.Node
-	(*CodeChunk)(nil),               // 2: novaforge.graph.v1.CodeChunk
-	(*KnowledgeEntry)(nil),          // 3: novaforge.graph.v1.KnowledgeEntry
-	(*ContextSnippet)(nil),          // 4: novaforge.graph.v1.ContextSnippet
-	(*ContextBundle)(nil),           // 5: novaforge.graph.v1.ContextBundle
-	(*GetSymbolRequest)(nil),        // 6: novaforge.graph.v1.GetSymbolRequest
-	(*GetSymbolResponse)(nil),       // 7: novaforge.graph.v1.GetSymbolResponse
-	(*DependentsRequest)(nil),       // 8: novaforge.graph.v1.DependentsRequest
-	(*DependentsResponse)(nil),      // 9: novaforge.graph.v1.DependentsResponse
-	(*DependenciesRequest)(nil),     // 10: novaforge.graph.v1.DependenciesRequest
-	(*DependenciesResponse)(nil),    // 11: novaforge.graph.v1.DependenciesResponse
-	(*TestsCoveringRequest)(nil),    // 12: novaforge.graph.v1.TestsCoveringRequest
-	(*TestsCoveringResponse)(nil),   // 13: novaforge.graph.v1.TestsCoveringResponse
-	(*LastChangedByRequest)(nil),    // 14: novaforge.graph.v1.LastChangedByRequest
-	(*LastChangedByResponse)(nil),   // 15: novaforge.graph.v1.LastChangedByResponse
-	(*FileRelationsRequest)(nil),    // 16: novaforge.graph.v1.FileRelationsRequest
-	(*FileRelationsResponse)(nil),   // 17: novaforge.graph.v1.FileRelationsResponse
-	(*SearchCodeRequest)(nil),       // 18: novaforge.graph.v1.SearchCodeRequest
-	(*SearchCodeResponse)(nil),      // 19: novaforge.graph.v1.SearchCodeResponse
-	(*AssembleContextRequest)(nil),  // 20: novaforge.graph.v1.AssembleContextRequest
-	(*AssembleContextResponse)(nil), // 21: novaforge.graph.v1.AssembleContextResponse
-	(*RecordKnowledgeRequest)(nil),  // 22: novaforge.graph.v1.RecordKnowledgeRequest
-	(*RecordKnowledgeResponse)(nil), // 23: novaforge.graph.v1.RecordKnowledgeResponse
-	(*SearchKnowledgeRequest)(nil),  // 24: novaforge.graph.v1.SearchKnowledgeRequest
-	(*SearchKnowledgeResponse)(nil), // 25: novaforge.graph.v1.SearchKnowledgeResponse
-	nil,                             // 26: novaforge.graph.v1.Node.AttrsEntry
+	(*MaintenanceSnapshotRequest)(nil),  // 0: novaforge.graph.v1.MaintenanceSnapshotRequest
+	(*MaintenanceSnapshotResponse)(nil), // 1: novaforge.graph.v1.MaintenanceSnapshotResponse
+	(*Symbol)(nil),                      // 2: novaforge.graph.v1.Symbol
+	(*Node)(nil),                        // 3: novaforge.graph.v1.Node
+	(*CodeChunk)(nil),                   // 4: novaforge.graph.v1.CodeChunk
+	(*KnowledgeEntry)(nil),              // 5: novaforge.graph.v1.KnowledgeEntry
+	(*ContextSnippet)(nil),              // 6: novaforge.graph.v1.ContextSnippet
+	(*ContextBundle)(nil),               // 7: novaforge.graph.v1.ContextBundle
+	(*GetSymbolRequest)(nil),            // 8: novaforge.graph.v1.GetSymbolRequest
+	(*GetSymbolResponse)(nil),           // 9: novaforge.graph.v1.GetSymbolResponse
+	(*DependentsRequest)(nil),           // 10: novaforge.graph.v1.DependentsRequest
+	(*DependentsResponse)(nil),          // 11: novaforge.graph.v1.DependentsResponse
+	(*DependenciesRequest)(nil),         // 12: novaforge.graph.v1.DependenciesRequest
+	(*DependenciesResponse)(nil),        // 13: novaforge.graph.v1.DependenciesResponse
+	(*TestsCoveringRequest)(nil),        // 14: novaforge.graph.v1.TestsCoveringRequest
+	(*TestsCoveringResponse)(nil),       // 15: novaforge.graph.v1.TestsCoveringResponse
+	(*LastChangedByRequest)(nil),        // 16: novaforge.graph.v1.LastChangedByRequest
+	(*LastChangedByResponse)(nil),       // 17: novaforge.graph.v1.LastChangedByResponse
+	(*FileRelationsRequest)(nil),        // 18: novaforge.graph.v1.FileRelationsRequest
+	(*FileRelationsResponse)(nil),       // 19: novaforge.graph.v1.FileRelationsResponse
+	(*SearchCodeRequest)(nil),           // 20: novaforge.graph.v1.SearchCodeRequest
+	(*SearchCodeResponse)(nil),          // 21: novaforge.graph.v1.SearchCodeResponse
+	(*AssembleContextRequest)(nil),      // 22: novaforge.graph.v1.AssembleContextRequest
+	(*AssembleContextResponse)(nil),     // 23: novaforge.graph.v1.AssembleContextResponse
+	(*RecordKnowledgeRequest)(nil),      // 24: novaforge.graph.v1.RecordKnowledgeRequest
+	(*RecordKnowledgeResponse)(nil),     // 25: novaforge.graph.v1.RecordKnowledgeResponse
+	(*SearchKnowledgeRequest)(nil),      // 26: novaforge.graph.v1.SearchKnowledgeRequest
+	(*SearchKnowledgeResponse)(nil),     // 27: novaforge.graph.v1.SearchKnowledgeResponse
+	nil,                                 // 28: novaforge.graph.v1.MaintenanceSnapshotRequest.GoFileHashesEntry
+	nil,                                 // 29: novaforge.graph.v1.Node.AttrsEntry
 }
 var file_novaforge_graph_v1_graph_proto_depIdxs = []int32{
-	26, // 0: novaforge.graph.v1.Node.attrs:type_name -> novaforge.graph.v1.Node.AttrsEntry
-	4,  // 1: novaforge.graph.v1.ContextBundle.files:type_name -> novaforge.graph.v1.ContextSnippet
-	3,  // 2: novaforge.graph.v1.ContextBundle.knowledge:type_name -> novaforge.graph.v1.KnowledgeEntry
-	0,  // 3: novaforge.graph.v1.GetSymbolResponse.symbol:type_name -> novaforge.graph.v1.Symbol
-	1,  // 4: novaforge.graph.v1.DependentsResponse.nodes:type_name -> novaforge.graph.v1.Node
-	1,  // 5: novaforge.graph.v1.DependenciesResponse.nodes:type_name -> novaforge.graph.v1.Node
-	1,  // 6: novaforge.graph.v1.TestsCoveringResponse.nodes:type_name -> novaforge.graph.v1.Node
-	1,  // 7: novaforge.graph.v1.LastChangedByResponse.history:type_name -> novaforge.graph.v1.Node
-	0,  // 8: novaforge.graph.v1.FileRelationsResponse.symbols:type_name -> novaforge.graph.v1.Symbol
-	1,  // 9: novaforge.graph.v1.FileRelationsResponse.imports:type_name -> novaforge.graph.v1.Node
-	1,  // 10: novaforge.graph.v1.FileRelationsResponse.imported_by:type_name -> novaforge.graph.v1.Node
-	1,  // 11: novaforge.graph.v1.FileRelationsResponse.dependents:type_name -> novaforge.graph.v1.Node
-	1,  // 12: novaforge.graph.v1.FileRelationsResponse.tests:type_name -> novaforge.graph.v1.Node
-	1,  // 13: novaforge.graph.v1.FileRelationsResponse.history:type_name -> novaforge.graph.v1.Node
-	2,  // 14: novaforge.graph.v1.SearchCodeResponse.chunks:type_name -> novaforge.graph.v1.CodeChunk
-	5,  // 15: novaforge.graph.v1.AssembleContextResponse.bundle:type_name -> novaforge.graph.v1.ContextBundle
-	3,  // 16: novaforge.graph.v1.SearchKnowledgeResponse.entries:type_name -> novaforge.graph.v1.KnowledgeEntry
-	6,  // 17: novaforge.graph.v1.GraphService.GetSymbol:input_type -> novaforge.graph.v1.GetSymbolRequest
-	8,  // 18: novaforge.graph.v1.GraphService.Dependents:input_type -> novaforge.graph.v1.DependentsRequest
-	10, // 19: novaforge.graph.v1.GraphService.Dependencies:input_type -> novaforge.graph.v1.DependenciesRequest
-	12, // 20: novaforge.graph.v1.GraphService.TestsCovering:input_type -> novaforge.graph.v1.TestsCoveringRequest
-	14, // 21: novaforge.graph.v1.GraphService.LastChangedBy:input_type -> novaforge.graph.v1.LastChangedByRequest
-	18, // 22: novaforge.graph.v1.GraphService.SearchCode:input_type -> novaforge.graph.v1.SearchCodeRequest
-	20, // 23: novaforge.graph.v1.GraphService.AssembleContext:input_type -> novaforge.graph.v1.AssembleContextRequest
-	22, // 24: novaforge.graph.v1.GraphService.RecordKnowledge:input_type -> novaforge.graph.v1.RecordKnowledgeRequest
-	24, // 25: novaforge.graph.v1.GraphService.SearchKnowledge:input_type -> novaforge.graph.v1.SearchKnowledgeRequest
-	16, // 26: novaforge.graph.v1.GraphService.FileRelations:input_type -> novaforge.graph.v1.FileRelationsRequest
-	7,  // 27: novaforge.graph.v1.GraphService.GetSymbol:output_type -> novaforge.graph.v1.GetSymbolResponse
-	9,  // 28: novaforge.graph.v1.GraphService.Dependents:output_type -> novaforge.graph.v1.DependentsResponse
-	11, // 29: novaforge.graph.v1.GraphService.Dependencies:output_type -> novaforge.graph.v1.DependenciesResponse
-	13, // 30: novaforge.graph.v1.GraphService.TestsCovering:output_type -> novaforge.graph.v1.TestsCoveringResponse
-	15, // 31: novaforge.graph.v1.GraphService.LastChangedBy:output_type -> novaforge.graph.v1.LastChangedByResponse
-	19, // 32: novaforge.graph.v1.GraphService.SearchCode:output_type -> novaforge.graph.v1.SearchCodeResponse
-	21, // 33: novaforge.graph.v1.GraphService.AssembleContext:output_type -> novaforge.graph.v1.AssembleContextResponse
-	23, // 34: novaforge.graph.v1.GraphService.RecordKnowledge:output_type -> novaforge.graph.v1.RecordKnowledgeResponse
-	25, // 35: novaforge.graph.v1.GraphService.SearchKnowledge:output_type -> novaforge.graph.v1.SearchKnowledgeResponse
-	17, // 36: novaforge.graph.v1.GraphService.FileRelations:output_type -> novaforge.graph.v1.FileRelationsResponse
-	27, // [27:37] is the sub-list for method output_type
-	17, // [17:27] is the sub-list for method input_type
-	17, // [17:17] is the sub-list for extension type_name
-	17, // [17:17] is the sub-list for extension extendee
-	0,  // [0:17] is the sub-list for field type_name
+	28, // 0: novaforge.graph.v1.MaintenanceSnapshotRequest.go_file_hashes:type_name -> novaforge.graph.v1.MaintenanceSnapshotRequest.GoFileHashesEntry
+	3,  // 1: novaforge.graph.v1.MaintenanceSnapshotResponse.symbols:type_name -> novaforge.graph.v1.Node
+	3,  // 2: novaforge.graph.v1.MaintenanceSnapshotResponse.unreferenced:type_name -> novaforge.graph.v1.Node
+	29, // 3: novaforge.graph.v1.Node.attrs:type_name -> novaforge.graph.v1.Node.AttrsEntry
+	6,  // 4: novaforge.graph.v1.ContextBundle.files:type_name -> novaforge.graph.v1.ContextSnippet
+	5,  // 5: novaforge.graph.v1.ContextBundle.knowledge:type_name -> novaforge.graph.v1.KnowledgeEntry
+	2,  // 6: novaforge.graph.v1.GetSymbolResponse.symbol:type_name -> novaforge.graph.v1.Symbol
+	3,  // 7: novaforge.graph.v1.DependentsResponse.nodes:type_name -> novaforge.graph.v1.Node
+	3,  // 8: novaforge.graph.v1.DependenciesResponse.nodes:type_name -> novaforge.graph.v1.Node
+	3,  // 9: novaforge.graph.v1.TestsCoveringResponse.nodes:type_name -> novaforge.graph.v1.Node
+	3,  // 10: novaforge.graph.v1.LastChangedByResponse.history:type_name -> novaforge.graph.v1.Node
+	2,  // 11: novaforge.graph.v1.FileRelationsResponse.symbols:type_name -> novaforge.graph.v1.Symbol
+	3,  // 12: novaforge.graph.v1.FileRelationsResponse.imports:type_name -> novaforge.graph.v1.Node
+	3,  // 13: novaforge.graph.v1.FileRelationsResponse.imported_by:type_name -> novaforge.graph.v1.Node
+	3,  // 14: novaforge.graph.v1.FileRelationsResponse.dependents:type_name -> novaforge.graph.v1.Node
+	3,  // 15: novaforge.graph.v1.FileRelationsResponse.tests:type_name -> novaforge.graph.v1.Node
+	3,  // 16: novaforge.graph.v1.FileRelationsResponse.history:type_name -> novaforge.graph.v1.Node
+	4,  // 17: novaforge.graph.v1.SearchCodeResponse.chunks:type_name -> novaforge.graph.v1.CodeChunk
+	7,  // 18: novaforge.graph.v1.AssembleContextResponse.bundle:type_name -> novaforge.graph.v1.ContextBundle
+	5,  // 19: novaforge.graph.v1.SearchKnowledgeResponse.entries:type_name -> novaforge.graph.v1.KnowledgeEntry
+	8,  // 20: novaforge.graph.v1.GraphService.GetSymbol:input_type -> novaforge.graph.v1.GetSymbolRequest
+	10, // 21: novaforge.graph.v1.GraphService.Dependents:input_type -> novaforge.graph.v1.DependentsRequest
+	12, // 22: novaforge.graph.v1.GraphService.Dependencies:input_type -> novaforge.graph.v1.DependenciesRequest
+	14, // 23: novaforge.graph.v1.GraphService.TestsCovering:input_type -> novaforge.graph.v1.TestsCoveringRequest
+	16, // 24: novaforge.graph.v1.GraphService.LastChangedBy:input_type -> novaforge.graph.v1.LastChangedByRequest
+	20, // 25: novaforge.graph.v1.GraphService.SearchCode:input_type -> novaforge.graph.v1.SearchCodeRequest
+	22, // 26: novaforge.graph.v1.GraphService.AssembleContext:input_type -> novaforge.graph.v1.AssembleContextRequest
+	24, // 27: novaforge.graph.v1.GraphService.RecordKnowledge:input_type -> novaforge.graph.v1.RecordKnowledgeRequest
+	26, // 28: novaforge.graph.v1.GraphService.SearchKnowledge:input_type -> novaforge.graph.v1.SearchKnowledgeRequest
+	18, // 29: novaforge.graph.v1.GraphService.FileRelations:input_type -> novaforge.graph.v1.FileRelationsRequest
+	0,  // 30: novaforge.graph.v1.GraphService.MaintenanceSnapshot:input_type -> novaforge.graph.v1.MaintenanceSnapshotRequest
+	9,  // 31: novaforge.graph.v1.GraphService.GetSymbol:output_type -> novaforge.graph.v1.GetSymbolResponse
+	11, // 32: novaforge.graph.v1.GraphService.Dependents:output_type -> novaforge.graph.v1.DependentsResponse
+	13, // 33: novaforge.graph.v1.GraphService.Dependencies:output_type -> novaforge.graph.v1.DependenciesResponse
+	15, // 34: novaforge.graph.v1.GraphService.TestsCovering:output_type -> novaforge.graph.v1.TestsCoveringResponse
+	17, // 35: novaforge.graph.v1.GraphService.LastChangedBy:output_type -> novaforge.graph.v1.LastChangedByResponse
+	21, // 36: novaforge.graph.v1.GraphService.SearchCode:output_type -> novaforge.graph.v1.SearchCodeResponse
+	23, // 37: novaforge.graph.v1.GraphService.AssembleContext:output_type -> novaforge.graph.v1.AssembleContextResponse
+	25, // 38: novaforge.graph.v1.GraphService.RecordKnowledge:output_type -> novaforge.graph.v1.RecordKnowledgeResponse
+	27, // 39: novaforge.graph.v1.GraphService.SearchKnowledge:output_type -> novaforge.graph.v1.SearchKnowledgeResponse
+	19, // 40: novaforge.graph.v1.GraphService.FileRelations:output_type -> novaforge.graph.v1.FileRelationsResponse
+	1,  // 41: novaforge.graph.v1.GraphService.MaintenanceSnapshot:output_type -> novaforge.graph.v1.MaintenanceSnapshotResponse
+	31, // [31:42] is the sub-list for method output_type
+	20, // [20:31] is the sub-list for method input_type
+	20, // [20:20] is the sub-list for extension type_name
+	20, // [20:20] is the sub-list for extension extendee
+	0,  // [0:20] is the sub-list for field type_name
 }
 
 func init() { file_novaforge_graph_v1_graph_proto_init() }
@@ -1866,7 +1998,7 @@ func file_novaforge_graph_v1_graph_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_novaforge_graph_v1_graph_proto_rawDesc), len(file_novaforge_graph_v1_graph_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   27,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

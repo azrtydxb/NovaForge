@@ -19,16 +19,17 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	GraphService_GetSymbol_FullMethodName       = "/novaforge.graph.v1.GraphService/GetSymbol"
-	GraphService_Dependents_FullMethodName      = "/novaforge.graph.v1.GraphService/Dependents"
-	GraphService_Dependencies_FullMethodName    = "/novaforge.graph.v1.GraphService/Dependencies"
-	GraphService_TestsCovering_FullMethodName   = "/novaforge.graph.v1.GraphService/TestsCovering"
-	GraphService_LastChangedBy_FullMethodName   = "/novaforge.graph.v1.GraphService/LastChangedBy"
-	GraphService_SearchCode_FullMethodName      = "/novaforge.graph.v1.GraphService/SearchCode"
-	GraphService_AssembleContext_FullMethodName = "/novaforge.graph.v1.GraphService/AssembleContext"
-	GraphService_RecordKnowledge_FullMethodName = "/novaforge.graph.v1.GraphService/RecordKnowledge"
-	GraphService_SearchKnowledge_FullMethodName = "/novaforge.graph.v1.GraphService/SearchKnowledge"
-	GraphService_FileRelations_FullMethodName   = "/novaforge.graph.v1.GraphService/FileRelations"
+	GraphService_GetSymbol_FullMethodName           = "/novaforge.graph.v1.GraphService/GetSymbol"
+	GraphService_Dependents_FullMethodName          = "/novaforge.graph.v1.GraphService/Dependents"
+	GraphService_Dependencies_FullMethodName        = "/novaforge.graph.v1.GraphService/Dependencies"
+	GraphService_TestsCovering_FullMethodName       = "/novaforge.graph.v1.GraphService/TestsCovering"
+	GraphService_LastChangedBy_FullMethodName       = "/novaforge.graph.v1.GraphService/LastChangedBy"
+	GraphService_SearchCode_FullMethodName          = "/novaforge.graph.v1.GraphService/SearchCode"
+	GraphService_AssembleContext_FullMethodName     = "/novaforge.graph.v1.GraphService/AssembleContext"
+	GraphService_RecordKnowledge_FullMethodName     = "/novaforge.graph.v1.GraphService/RecordKnowledge"
+	GraphService_SearchKnowledge_FullMethodName     = "/novaforge.graph.v1.GraphService/SearchKnowledge"
+	GraphService_FileRelations_FullMethodName       = "/novaforge.graph.v1.GraphService/FileRelations"
+	GraphService_MaintenanceSnapshot_FullMethodName = "/novaforge.graph.v1.GraphService/MaintenanceSnapshot"
 )
 
 // GraphServiceClient is the client API for GraphService service.
@@ -55,6 +56,9 @@ type GraphServiceClient interface {
 	// code outside it depends on its symbols, which tests cover them, and the
 	// commits that changed it.
 	FileRelations(ctx context.Context, in *FileRelationsRequest, opts ...grpc.CallOption) (*FileRelationsResponse, error)
+	// Reads one consistent Go graph snapshot only when every file matches the
+	// caller's pinned source manifest. Legacy, stale or skipped files fail closed.
+	MaintenanceSnapshot(ctx context.Context, in *MaintenanceSnapshotRequest, opts ...grpc.CallOption) (*MaintenanceSnapshotResponse, error)
 }
 
 type graphServiceClient struct {
@@ -165,6 +169,16 @@ func (c *graphServiceClient) FileRelations(ctx context.Context, in *FileRelation
 	return out, nil
 }
 
+func (c *graphServiceClient) MaintenanceSnapshot(ctx context.Context, in *MaintenanceSnapshotRequest, opts ...grpc.CallOption) (*MaintenanceSnapshotResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MaintenanceSnapshotResponse)
+	err := c.cc.Invoke(ctx, GraphService_MaintenanceSnapshot_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // GraphServiceServer is the server API for GraphService service.
 // All implementations should embed UnimplementedGraphServiceServer
 // for forward compatibility.
@@ -189,6 +203,9 @@ type GraphServiceServer interface {
 	// code outside it depends on its symbols, which tests cover them, and the
 	// commits that changed it.
 	FileRelations(context.Context, *FileRelationsRequest) (*FileRelationsResponse, error)
+	// Reads one consistent Go graph snapshot only when every file matches the
+	// caller's pinned source manifest. Legacy, stale or skipped files fail closed.
+	MaintenanceSnapshot(context.Context, *MaintenanceSnapshotRequest) (*MaintenanceSnapshotResponse, error)
 }
 
 // UnimplementedGraphServiceServer should be embedded to have
@@ -227,6 +244,9 @@ func (UnimplementedGraphServiceServer) SearchKnowledge(context.Context, *SearchK
 }
 func (UnimplementedGraphServiceServer) FileRelations(context.Context, *FileRelationsRequest) (*FileRelationsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method FileRelations not implemented")
+}
+func (UnimplementedGraphServiceServer) MaintenanceSnapshot(context.Context, *MaintenanceSnapshotRequest) (*MaintenanceSnapshotResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method MaintenanceSnapshot not implemented")
 }
 func (UnimplementedGraphServiceServer) testEmbeddedByValue() {}
 
@@ -428,6 +448,24 @@ func _GraphService_FileRelations_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GraphService_MaintenanceSnapshot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MaintenanceSnapshotRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GraphServiceServer).MaintenanceSnapshot(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GraphService_MaintenanceSnapshot_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GraphServiceServer).MaintenanceSnapshot(ctx, req.(*MaintenanceSnapshotRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // GraphService_ServiceDesc is the grpc.ServiceDesc for GraphService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -474,6 +512,10 @@ var GraphService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "FileRelations",
 			Handler:    _GraphService_FileRelations_Handler,
+		},
+		{
+			MethodName: "MaintenanceSnapshot",
+			Handler:    _GraphService_MaintenanceSnapshot_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

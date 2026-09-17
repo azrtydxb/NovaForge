@@ -92,6 +92,9 @@ func Handle(lines []int) string {
 	return fmt.Sprint(invoicing.Total(lines))
 }
 GO
+mkdir -p "$WORK/repo/.novaforge/context"
+printf 'package shop\nfunc unusedMaintenance() {}\n' >"$WORK/repo/maintenance.go"
+printf '[Removed API](symbol:maintenance.go#Removed)\n' >"$WORK/repo/.novaforge/context/maintenance.md"
 git -C "$WORK/repo" config user.email graph@example.com
 git -C "$WORK/repo" config user.name "Graph E2E"
 git -C "$WORK/repo" add -A
@@ -148,6 +151,8 @@ assert [n["path"] for n in d["imported_by"]] == ["api/handler.go"], d
 assert any(n["sha"] == sys.argv[1] for n in d["history"]), d
 ' "$MAIN_SHA" || fail "invoicing/invoice.go's importers or history are wrong: $FILE"
 ok "imports, importers and history answer"
+source tests/e2e/graph_maintenance_probe.sh
+verify_graph_maintenance
 
 echo "== 5. a feature branch does not rewrite the default branch's index =="
 git -C "$WORK/repo" checkout -q -b feature
