@@ -323,14 +323,14 @@ are real-service regression evidence, not live fault injection. Logs are under
 `/tmp/novaforge-evidence-refresh-{red-e2e,build,deploy,e2e}.log`. Unusual Git paths
 and session-loss/deletion coordination remain separate open work.
 
-## Literal Git paths (2026-09-17, awaiting deployment)
+## Literal Git paths (2026-09-17, deployed at revision 83)
 
 Real Git regressions exposed two independent display-format bugs: `ls-tree`
 returned C-quoted names that could not retrieve their blobs, and the indexer's
 whitespace diff-header regex silently omitted spaces, tabs, newlines, quotes and
 Unicode filenames. A rename could also leave the old source indexed.
 
-The current batch uses NUL-framed tree output and a structured changed-path
+Commit `6b48f80` uses NUL-framed tree output and a structured changed-path
 manifest on `GetDiff`. Both diff endpoints are pinned before producing display
 text and the manifest; rename detection is disabled for the manifest so both
 old and new paths are included. Older servers lacking `paths_complete` cause a
@@ -347,7 +347,13 @@ decoding) failed and were immediately restored. Full uncached Go, affected race
 suites and Procoder's 39-package suite passed; lint/security have no blockers.
 The graph cluster fixture now includes `space café.go` and checks its symbol
 and Work Item attribution after maintenance can read the pinned checkout.
-Deployment and cluster verification of this batch remain pending.
+The committed fixture failed revision 82 at the maintenance checkout, then passed
+revision 83. All eleven immutable service images were built before normal
+preflight/deploy; all twelve cluster suites passed. Logs are under
+`/tmp/novaforge-literal-{tree-red,index-red,history-red,full,race,mutation-0,mutation-1,mutation-2,mutation-3,red-e2e,build,deploy,e2e}.log`.
+Literal control-byte names and rename cleanup are real Git/RPC regressions;
+the cluster fixture specifically proves the space/Unicode case. Lock-session-loss
+fencing and delete/index coordination still require implementation review.
 
 ## Environment
 

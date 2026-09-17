@@ -222,10 +222,11 @@ infer their completion from the index recovery regressions.
       mutations verified; committed module-change fixture failed revision 81,
       passed revision 82, and all twelve suites passed. Legacy refresh is on the
       next push wake-up, not a startup-wide backfill.
-- [ ] Deploy literal Git-path support: NUL-framed tree and changed-path manifest,
-      both rename sides, older-server completeness rejection, quoted attribution.
-      Real Git red/green and four restored mutations verified; full/race/Procoder
-      tests passed. Expanded cluster fixture remains to run.
+- [x] Deploy literal Git-path support (`6b48f80`, revision 83): NUL-framed tree
+      and changed-path manifest, both rename sides, older-server completeness
+      rejection, quoted attribution. Real Git red/green and four restored
+      mutations verified; full/race/Procoder tests passed. Committed space/Unicode
+      cluster fixture failed revision 82, passed 83; all twelve suites passed.
 - [ ] Audit lock-session-loss and deletion coordination.
 - [ ] Extend beyond bounded root-module Go evidence; this is not LSP/SCIP completeness.
 
