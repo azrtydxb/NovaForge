@@ -232,6 +232,30 @@ The new ownership/scanner/cleanup cases are proven by real PostgreSQL
 regressions, not newly added cluster assertions. Evidence is in
 /tmp/novaforge-graph-{scanners-red,auth-red,purge-red,green,race,tests,deploy,e2e}.log.
 
+## Index recovery prerequisite (2026-09-17, not deployed)
+
+The production push handler reported success after partial indexing failure and
+saved the SHA, making a recovered model unable to retry the missing file. The
+real Git/authenticated-RPC/PostgreSQL regression was red before correction.
+Failed paths now prevent checkpoint advancement without discarding successful
+files. A second regression exposed late events resurrecting deleted code.
+Handlers now serialize per repository in PostgreSQL, resolve the current head,
+and reconcile current and previously indexed paths when the event's base was
+not completed. Checkpoint invalidation before writes prevents partial state
+being accepted after a force push back to an earlier completed SHA.
+
+The expanded regression covers recovery, duplicate delivery, late delivery,
+a newer head overtaking a partial attempt, force-push rollback and repository
+lock contention. Removing locking, reconciliation or invalidation independently
+fails it. Indexing and graph passed under race; full uncached Go and Procoder
+tests passed. Evidence: /tmp/novaforge-index-{retry-red,order-red,race,
+mutation-0,mutation-1,mutation-2,full-tests}.log.
+
+This batch is not deployed; revision 79 remains deployed. These corrections do
+not yet establish index completeness: parser skips, unusual paths, module
+mapping changes and legacy checkpoints remain audit work. The graph maintenance
+RPC, revision-bound evidence and context-reference wiring are still absent.
+
 ## Environment
 
 Everything runs on the **kw cluster** (k3s 1.34, 8 ARM64 nodes). There is no local

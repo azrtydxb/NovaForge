@@ -232,15 +232,51 @@ func (idx *Indexer) HandlePush(ctx context.Context, evt events.PushEvent) error 
 		return nil
 	}
 
+	lock, err := idx.lockRepository(ctx, evt.OrgID, evt.RepoID)
+	if err != nil {
+		return fmt.Errorf("lock index repository: %w", err)
+	}
+	defer releaseIndexLock(ctx, lock)
+	ctx = authz.WithScope(ctx, authz.Scope{OrgID: evt.OrgID, ActorKind: "service"})
+	evt, full, done, err := idx.currentPush(ctx, evt)
+	if err != nil || done {
+		return err
+	}
 	unified, err := idx.diff(ctx, evt)
 	if err != nil {
 		return fmt.Errorf("compute changed paths for %s: %w", evt.NewSHA, err)
 	}
 	paths := parseDiffPaths(unified)
+	if full {
+		existing, err := idx.existingPaths(ctx, evt.OrgID, evt.RepoID)
+		if err != nil {
+			return fmt.Errorf("read paths for reconciliation: %w", err)
+		}
+		seen := make(map[string]bool, len(paths))
+		for _, path := range paths {
+			seen[path] = true
+		}
+		for _, path := range existing {
+			if !seen[path] {
+				paths = append(paths, path)
+				seen[path] = true
+			}
+		}
+	}
 	info := pushInfo{
 		module:  idx.goModule(ctx, evt.RepoID, evt.NewSHA),
 		changed: changedLines(unified),
 		commits: idx.attribute(ctx, evt.RepoID, evt.OldSHA, evt.NewSHA, paths),
+	}
+	// Files are replaced individually. Once any replacement starts, the old
+	// checkpoint no longer describes the whole index. Invalidate it first so
+	// a crash or a force-push back to that old SHA cannot make partial state
+	// look complete. The next attempt then reconciles all current/known paths.
+	if _, err := idx.Graph.Pool().Exec(ctx, `
+		UPDATE graph.graph_nodes SET attrs = attrs - 'sha'
+		WHERE org_id = $1 AND kind = 'commit' AND key = $2
+	`, evt.OrgID, evt.RepoID.String()); err != nil {
+		return fmt.Errorf("invalidate index checkpoint: %w", err)
 	}
 	_, err = idx.indexCommit(ctx, evt.OrgID, evt.RepoID, evt.NewSHA, paths, info)
 	return err
@@ -301,7 +337,9 @@ func parseDiffPaths(unified string) []string {
 // path. A path the git service reports missing at sha is treated as
 // deleted: its symbols and chunks are removed rather than parsed. A path
 // that fails to fetch or parse is skipped, with the error logged, so one
-// bad file never blocks the rest of the commit from indexing.
+// bad file never blocks the rest of the commit from indexing. A partial
+// attempt returns an error and does not advance the completed checkpoint,
+// so the stream consumer retains it for retry.
 //
 // The SHA last indexed for repoID is recorded in the graph itself (as a
 // "commit" node keyed by repoID), so a redelivery of an already-indexed SHA
@@ -323,13 +361,23 @@ func (idx *Indexer) indexCommit(ctx context.Context, orgID, repoID uuid.UUID, sh
 		return 0, nil
 	}
 
+	var failed []string
 	for _, path := range changedPaths {
 		if path == "" {
 			continue
 		}
 		if idx.indexPath(ctx, orgID, repoID, sha, path, info) {
 			indexed++
+		} else {
+			failed = append(failed, path)
 		}
+	}
+	// Success here causes XACK. Recording the SHA despite a model, fetch
+	// or storage failure both acknowledged lost work and made redelivery
+	// skip it permanently. Keep healthy-file progress without claiming a
+	// complete index until every requested path has succeeded.
+	if len(failed) > 0 {
+		return indexed, fmt.Errorf("index incomplete at %s: failed paths %s", sha, strings.Join(failed, ", "))
 	}
 
 	if err := idx.recordIndexedSHA(ctx, orgID, repoID, sha); err != nil {

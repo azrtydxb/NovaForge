@@ -37,6 +37,7 @@ type fakeGitClient struct {
 	diffs map[string]string
 
 	fetched []string
+	head    string
 }
 
 func newFakeGitClient() *fakeGitClient {
@@ -65,9 +66,12 @@ func (f *fakeGitClient) GetRepo(_ context.Context, in *gitv1.GetRepoRequest, _ .
 	return &gitv1.GetRepoResponse{Repo: &gitv1.Repo{Id: in.GetName(), DefaultBranch: "main"}}, nil
 }
 
-// ListCommits reports no commits: these tests exercise symbols and chunks,
-// not history, which the real-git-service tests cover.
-func (f *fakeGitClient) ListCommits(_ context.Context, _ *gitv1.ListCommitsRequest, _ ...grpc.CallOption) (*gitv1.ListCommitsResponse, error) {
+// ListCommits exposes the configured default-branch head, but no history:
+// the real-git-service tests cover commit attribution.
+func (f *fakeGitClient) ListCommits(_ context.Context, in *gitv1.ListCommitsRequest, _ ...grpc.CallOption) (*gitv1.ListCommitsResponse, error) {
+	if in.GetRef() == "refs/heads/main" && f.head != "" {
+		return &gitv1.ListCommitsResponse{Commits: []*gitv1.Commit{{Sha: f.head}}}, nil
+	}
 	return &gitv1.ListCommitsResponse{}, nil
 }
 
@@ -281,7 +285,8 @@ func TestRedeliveredPushIndexesOnce(t *testing.T) {
 
 // TestIndexerSurvivesParseError asserts a file that fails to fetch (and so
 // cannot be parsed) is skipped with a logged error while the remaining
-// files in the same commit still index.
+// files in the same commit still index. The attempt must nevertheless report
+// failure so the stream consumer retains the incomplete work for retry.
 func TestIndexerSurvivesParseError(t *testing.T) {
 	git := newFakeGitClient()
 	orgID := uuid.New()
@@ -293,8 +298,8 @@ func TestIndexerSurvivesParseError(t *testing.T) {
 
 	idx := newIndexer(t, git)
 	indexed, err := idx.IndexCommit(context.Background(), orgID, repoID, sha, []string{"broken.go", "ok.go"})
-	if err != nil {
-		t.Fatalf("IndexCommit should not fail the whole commit on one bad file: %v", err)
+	if err == nil {
+		t.Fatal("IndexCommit must report the failed path without discarding healthy-file progress")
 	}
 	if indexed != 1 {
 		t.Fatalf("indexed = %d, want 1 (only ok.go)", indexed)
@@ -334,7 +339,8 @@ func TestRunConsumesPushEventsAndAcks(t *testing.T) {
 	sha := "sha-" + uuid.NewString()
 
 	git := newFakeGitClient()
-	git.diffs["oldsha.."+sha] = "diff --git a/run.go b/run.go\n--- a/run.go\n+++ b/run.go\n"
+	git.head = sha
+	git.diffs["4b825dc642cb6eb9a060e54bf8d69288fbee4904.."+sha] = "diff --git a/run.go b/run.go\n--- a/run.go\n+++ b/run.go\n"
 	git.blobs["run.go@"+sha] = []byte(goSrc)
 
 	idx := newIndexer(t, git)
