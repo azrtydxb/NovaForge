@@ -301,9 +301,9 @@ preflight/deploy path was preserved, and all twelve cluster suites passed.
 Evidence is `/tmp/novaforge-graph-input-{red-e2e,build,deploy,e2e}.log`.
 This establishes the bounded Go path, not the remaining audit items above.
 
-## Extraction evidence refresh (2026-09-17, awaiting deployment)
+## Extraction evidence refresh (2026-09-17, deployed at revision 82)
 
-The next indexer batch invalidates pre-evidence checkpoints through an explicit
+Commit `de90ddd` invalidates pre-evidence checkpoints through an explicit
 extraction version. A subsequent default-branch push wake-up reconciles legacy
 files even when the head SHA is unchanged; it does not perform a startup-wide
 backfill. Changes to root `go.mod` refresh unchanged source as well, preserving
@@ -315,9 +315,13 @@ legacy SHA suppressing refresh, then passed. Removing module-change refresh,
 version checking or the module-read guard independently failed the regression;
 mutations were immediately restored. Full uncached Go, indexing/maintenance race
 and Procoder's 39-package suite passed. The expanded graph cluster fixture adds
-a module-only change and requires a new revision-bound documentation proposal;
-its cluster execution and deployment remain pending. Unusual Git paths and
-session-loss/deletion coordination remain separate open work.
+a module-only change and requires a new revision-bound documentation proposal.
+It failed against revision 81 with stale graph evidence, then passed revision 82.
+The complete immutable image set was built and deployed through normal preflight;
+all twelve cluster suites passed. Legacy refresh and module-RPC failure recovery
+are real-service regression evidence, not live fault injection. Logs are under
+`/tmp/novaforge-evidence-refresh-{red-e2e,build,deploy,e2e}.log`. Unusual Git paths
+and session-loss/deletion coordination remain separate open work.
 
 ## Environment
 
