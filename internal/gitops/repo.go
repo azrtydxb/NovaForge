@@ -185,12 +185,14 @@ func (r Repo) Tree(ref, path string) ([]TreeEntry, error) {
 	if path != "" {
 		target = ref + ":" + path
 	}
-	out, err := run("", "--git-dir="+r.path, "ls-tree", "-l", target)
+	out, err := run("", "--git-dir="+r.path, "ls-tree", "-l", "-z", target)
 	if err != nil {
 		return nil, err
 	}
 	var entries []TreeEntry
-	lines := strings.Split(strings.TrimSuffix(string(out), "\n"), "\n")
+	// Newlines, tabs and quotes are valid path bytes. NUL framing disables
+	// Git's display quoting and keeps the name usable by the blob RPC.
+	lines := strings.Split(strings.TrimSuffix(string(out), "\x00"), "\x00")
 	for _, line := range lines {
 		if line == "" {
 			continue
@@ -245,7 +247,7 @@ func (r Repo) diff(from, sep, to string) (string, error) {
 	if strings.HasPrefix(from, "-") || strings.HasPrefix(to, "-") {
 		return "", fmt.Errorf("invalid ref %q..%q", from, to)
 	}
-	out, err := run("", "--git-dir="+r.path, "diff", from+sep+to, "--")
+	out, err := run("", "--git-dir="+r.path, "diff", "--src-prefix=a/", "--dst-prefix=b/", from+sep+to, "--")
 	if err != nil {
 		return "", err
 	}

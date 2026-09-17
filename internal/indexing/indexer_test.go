@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -76,7 +77,16 @@ func (f *fakeGitClient) ListCommits(_ context.Context, in *gitv1.ListCommitsRequ
 }
 
 func (f *fakeGitClient) GetDiff(_ context.Context, in *gitv1.GetDiffRequest, _ ...grpc.CallOption) (*gitv1.GetDiffResponse, error) {
-	return &gitv1.GetDiffResponse{Unified: f.diffs[in.GetFrom()+".."+in.GetTo()]}, nil
+	unified := f.diffs[in.GetFrom()+".."+in.GetTo()]
+	var paths []string
+	// These toy fixtures use plain names; literal-path behavior is covered
+	// through real Git/RPC in TestPushIndexesAndRemovesLiteralGitPaths.
+	for _, line := range strings.Split(unified, "\n") {
+		if fields := strings.Fields(line); len(fields) == 4 && fields[0] == "diff" && fields[1] == "--git" {
+			paths = append(paths, strings.TrimPrefix(fields[3], "b/"))
+		}
+	}
+	return &gitv1.GetDiffResponse{Unified: unified, ChangedPaths: paths, PathsComplete: true}, nil
 }
 
 // stubEmbedder is a deterministic in-process test double for the external

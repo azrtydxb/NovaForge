@@ -408,18 +408,14 @@ func (s *Server) GetDiff(ctx context.Context, req *gitv1.GetDiffRequest) (*gitv1
 	if err != nil {
 		return nil, err
 	}
-	diff := repo.Diff
-	if req.GetMergeBase() {
-		diff = repo.DiffMergeBase
-	}
-	unified, err := diff(req.GetFrom(), req.GetTo())
+	unified, paths, err := repo.DiffDetails(req.GetFrom(), req.GetTo(), req.GetMergeBase())
 	if err != nil {
 		if isGitNotFound(err) {
 			return nil, status.Errorf(codes.NotFound, "unknown ref %q or %q", req.GetFrom(), req.GetTo())
 		}
 		return nil, status.Errorf(codes.Internal, "get diff: %v", err)
 	}
-	return &gitv1.GetDiffResponse{Unified: unified}, nil
+	return &gitv1.GetDiffResponse{Unified: unified, ChangedPaths: paths, PathsComplete: true}, nil
 }
 
 // Merge merges source_ref into target_ref using method ("merge" for an
@@ -581,6 +577,7 @@ func isGitNotFound(err error) bool {
 	markers := []string{
 		"does not exist",
 		"unknown revision",
+		"Needed a single revision", // rev-parse --verify on a missing parent/ref
 		"bad revision",
 		"not a valid object name",
 		"not a tree object",

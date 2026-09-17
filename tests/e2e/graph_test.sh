@@ -94,6 +94,7 @@ func Handle(lines []int) string {
 GO
 mkdir -p "$WORK/repo/.novaforge/context"
 printf 'package shop\nfunc unusedMaintenance() {}\n' >"$WORK/repo/maintenance.go"
+printf 'package shop\nfunc LiteralMarker() int { return 1 }\n' >"$WORK/repo/space café.go"
 printf '[Removed API](symbol:maintenance.go#Removed)\n' >"$WORK/repo/.novaforge/context/maintenance.md"
 git -C "$WORK/repo" config user.email graph@example.com
 git -C "$WORK/repo" config user.name "Graph E2E"
@@ -153,6 +154,8 @@ assert any(n["sha"] == sys.argv[1] for n in d["history"]), d
 ok "imports, importers and history answer"
 source tests/e2e/graph_maintenance_probe.sh
 verify_graph_maintenance
+BODY="$(get "graph/symbol?name=LiteralMarker")" || fail "literal path symbol lookup"
+printf '%s' "$BODY" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["symbol"]["path"] == "space café.go" and d["last_changed_by"] == "NF-7", d' || fail "literal path lost source/change evidence: $BODY"
 verify_module_evidence_refresh
 
 echo "== 5. a feature branch does not rewrite the default branch's index =="

@@ -323,6 +323,32 @@ are real-service regression evidence, not live fault injection. Logs are under
 `/tmp/novaforge-evidence-refresh-{red-e2e,build,deploy,e2e}.log`. Unusual Git paths
 and session-loss/deletion coordination remain separate open work.
 
+## Literal Git paths (2026-09-17, awaiting deployment)
+
+Real Git regressions exposed two independent display-format bugs: `ls-tree`
+returned C-quoted names that could not retrieve their blobs, and the indexer's
+whitespace diff-header regex silently omitted spaces, tabs, newlines, quotes and
+Unicode filenames. A rename could also leave the old source indexed.
+
+The current batch uses NUL-framed tree output and a structured changed-path
+manifest on `GetDiff`. Both diff endpoints are pinned before producing display
+text and the manifest; rename detection is disabled for the manifest so both
+old and new paths are included. Older servers lacking `paths_complete` cause a
+retry, never a completed empty index. The extraction version advances so the
+next push reconciles previously missed paths. Symbol line attribution decodes
+single destination headers rather than ambiguous pairs, preserving change
+history for unusual names. Pinning exposed another seam: missing parent refs
+from `rev-parse --verify` need the same NotFound mapping as Git diff, otherwise
+root-commit attribution silently skips its empty-tree fallback.
+
+Tree, indexing and symbol-history regressions were each observed red. Four
+mutations (tree framing, rename handling, manifest completeness and quoted-name
+decoding) failed and were immediately restored. Full uncached Go, affected race
+suites and Procoder's 39-package suite passed; lint/security have no blockers.
+The graph cluster fixture now includes `space café.go` and checks its symbol
+and Work Item attribution after maintenance can read the pinned checkout.
+Deployment and cluster verification of this batch remain pending.
+
 ## Environment
 
 Everything runs on the **kw cluster** (k3s 1.34, 8 ARM64 nodes). There is no local

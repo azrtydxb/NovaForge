@@ -55,10 +55,27 @@ func changedLines(unified string) map[string]map[int]bool {
 	sc.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
 	for sc.Scan() {
 		text := sc.Text()
-		if m := diffGitLineRe.FindStringSubmatch(text); m != nil {
-			current = map[int]bool{}
-			out[m[2]] = current
+		if strings.HasPrefix(text, "diff --git ") {
+			current = nil
 			line = 0
+			continue
+		}
+		if line == 0 && strings.HasPrefix(text, "+++ ") {
+			// This is one destination path, unlike the ambiguous pair of
+			// unquoted names in a diff header. Git C-quotes control bytes
+			// and non-ASCII names; decode them rather than indexing quotes.
+			name := strings.TrimSuffix(strings.TrimPrefix(text, "+++ "), "\t")
+			if strings.HasPrefix(name, "\"") {
+				decoded, err := strconv.Unquote(name)
+				if err != nil {
+					continue
+				}
+				name = decoded
+			}
+			if strings.HasPrefix(name, "b/") {
+				current = map[int]bool{}
+				out[strings.TrimPrefix(name, "b/")] = current
+			}
 			continue
 		}
 		if current == nil {
@@ -68,7 +85,7 @@ func changedLines(unified string) map[string]map[int]bool {
 			line, _ = strconv.Atoi(m[1])
 			continue
 		}
-		if line == 0 || strings.HasPrefix(text, "+++ ") || strings.HasPrefix(text, "--- ") {
+		if line == 0 {
 			continue
 		}
 		switch {
@@ -158,7 +175,7 @@ func (idx *Indexer) attribute(ctx context.Context, repoID uuid.UUID, oldSHA, new
 			// A root commit has no parent; everything in it is new.
 			diff, err = idx.Git.GetDiff(ctx, &gitv1.GetDiffRequest{Repo: repoID.String(), From: emptyTreeSHA, To: c.GetSha()})
 		}
-		if err != nil {
+		if err != nil || !diff.GetPathsComplete() {
 			continue
 		}
 		at, _ := time.Parse(time.RFC3339, c.GetAt())
@@ -169,7 +186,7 @@ func (idx *Indexer) attribute(ctx context.Context, repoID uuid.UUID, oldSHA, new
 			At:          at,
 			WorkItemKey: workItemKey(c.GetMessage()),
 		}
-		for _, p := range parseDiffPaths(diff.GetUnified()) {
+		for _, p := range diff.GetChangedPaths() {
 			if wanted[p] {
 				if _, done := out[p]; !done {
 					out[p] = info

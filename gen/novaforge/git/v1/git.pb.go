@@ -1285,8 +1285,13 @@ func (x *GetDiffRequest) GetMergeBase() bool {
 }
 
 type GetDiffResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Unified       string                 `protobuf:"bytes,1,opt,name=unified,proto3" json:"unified,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Unified string                 `protobuf:"bytes,1,opt,name=unified,proto3" json:"unified,omitempty"`
+	// Literal paths from Git's NUL-delimited manifest, including both sides of
+	// renames. Consumers must not parse display-quoted diff headers for paths.
+	ChangedPaths []string `protobuf:"bytes,2,rep,name=changed_paths,json=changedPaths,proto3" json:"changed_paths,omitempty"`
+	// False on older servers: an absent manifest must not mean an empty diff.
+	PathsComplete bool `protobuf:"varint,3,opt,name=paths_complete,json=pathsComplete,proto3" json:"paths_complete,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1326,6 +1331,20 @@ func (x *GetDiffResponse) GetUnified() string {
 		return x.Unified
 	}
 	return ""
+}
+
+func (x *GetDiffResponse) GetChangedPaths() []string {
+	if x != nil {
+		return x.ChangedPaths
+	}
+	return nil
+}
+
+func (x *GetDiffResponse) GetPathsComplete() bool {
+	if x != nil {
+		return x.PathsComplete
+	}
+	return false
 }
 
 type MergeRequest struct {
@@ -1820,9 +1839,11 @@ const file_novaforge_git_v1_git_proto_rawDesc = "" +
 	"\x04from\x18\x02 \x01(\tR\x04from\x12\x0e\n" +
 	"\x02to\x18\x03 \x01(\tR\x02to\x12\x1d\n" +
 	"\n" +
-	"merge_base\x18\x04 \x01(\bR\tmergeBase\"+\n" +
+	"merge_base\x18\x04 \x01(\bR\tmergeBase\"w\n" +
 	"\x0fGetDiffResponse\x12\x18\n" +
-	"\aunified\x18\x01 \x01(\tR\aunified\"\x92\x01\n" +
+	"\aunified\x18\x01 \x01(\tR\aunified\x12#\n" +
+	"\rchanged_paths\x18\x02 \x03(\tR\fchangedPaths\x12%\n" +
+	"\x0epaths_complete\x18\x03 \x01(\bR\rpathsComplete\"\x92\x01\n" +
 	"\fMergeRequest\x12\x12\n" +
 	"\x04repo\x18\x01 \x01(\tR\x04repo\x12\x1d\n" +
 	"\n" +

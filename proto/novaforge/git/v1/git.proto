@@ -138,6 +138,11 @@ message GetDiffRequest {
 }
 message GetDiffResponse {
   string unified = 1;
+  // Literal paths from Git's NUL-delimited manifest, including both sides of
+  // renames. Consumers must not parse display-quoted diff headers for paths.
+  repeated string changed_paths = 2;
+  // False on older servers: an absent manifest must not mean an empty diff.
+  bool paths_complete = 3;
 }
 
 message MergeRequest {

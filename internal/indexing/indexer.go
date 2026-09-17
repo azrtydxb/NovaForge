@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -243,11 +242,12 @@ func (idx *Indexer) HandlePush(ctx context.Context, evt events.PushEvent) error 
 	if err != nil || done {
 		return err
 	}
-	unified, err := idx.diff(ctx, evt)
+	delta, err := idx.diff(ctx, evt)
 	if err != nil {
 		return fmt.Errorf("compute changed paths for %s: %w", evt.NewSHA, err)
 	}
-	paths := parseDiffPaths(unified)
+	unified := delta.GetUnified()
+	paths := delta.GetChangedPaths()
 	if !full && slices.Contains(paths, "go.mod") {
 		// Imports in otherwise unchanged files resolve against the module
 		// path. Replacing only go.mod leaves both edges and evidence stale.
@@ -259,7 +259,7 @@ func (idx *Indexer) HandlePush(ctx context.Context, evt events.PushEvent) error 
 		if err != nil {
 			return fmt.Errorf("enumerate files after module change: %w", err)
 		}
-		paths = parseDiffPaths(all)
+		paths = all.GetChangedPaths()
 		full = true
 	}
 	if full {
@@ -312,11 +312,9 @@ func isZeroSHA(sha string) bool {
 	return strings.Trim(sha, "0") == ""
 }
 
-var diffGitLineRe = regexp.MustCompile(`(?m)^diff --git a/(\S+) b/(\S+)$`)
-
 // diff asks the git service for the unified diff between evt's old and new
 // SHA.
-func (idx *Indexer) diff(ctx context.Context, evt events.PushEvent) (string, error) {
+func (idx *Indexer) diff(ctx context.Context, evt events.PushEvent) (*gitv1.GetDiffResponse, error) {
 	// A ref that did not exist before the push reports an all-zero old SHA,
 	// which git cannot diff from: every repository's first push failed here,
 	// unacknowledged, and was retried forever. Everything in such a commit is
@@ -331,25 +329,12 @@ func (idx *Indexer) diff(ctx context.Context, evt events.PushEvent) (string, err
 		To:   evt.NewSHA,
 	})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return resp.GetUnified(), nil
-}
-
-// parseDiffPaths extracts every path named on a "diff --git a/X b/Y" header
-// line of a unified diff, de-duplicated and in first-seen order.
-func parseDiffPaths(unified string) []string {
-	matches := diffGitLineRe.FindAllStringSubmatch(unified, -1)
-	seen := make(map[string]bool, len(matches))
-	paths := make([]string, 0, len(matches))
-	for _, m := range matches {
-		p := m[2]
-		if !seen[p] {
-			seen[p] = true
-			paths = append(paths, p)
-		}
+	if !resp.GetPathsComplete() {
+		return nil, fmt.Errorf("git service returned no complete changed-path manifest")
 	}
-	return paths
+	return resp, nil
 }
 
 // IndexCommit indexes changedPaths as they exist at sha: each path's
@@ -576,10 +561,10 @@ func chunksForFile(path string, content []byte, symbols []Symbol) []graph.Chunk 
 	return chunks
 }
 
-// extractionVersion invalidates checkpoints created before source/module
-// evidence existed. Bump it when extraction semantics change; the next push
+// extractionVersion invalidates checkpoints created by older extraction
+// contracts. Bump it when extraction semantics change; the next push
 // wake-up reconciles legacy files, even if the repository head did not move.
-const extractionVersion = "graph-evidence-v1"
+const extractionVersion = "graph-evidence-v2-literal-paths"
 
 // lastIndexedSHA reads a checkpoint produced by this extraction contract.
 // A legacy SHA is not evidence that today's graph extraction ran.
