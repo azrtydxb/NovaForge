@@ -217,7 +217,9 @@ infer their completion from the index recovery regressions.
       with no proposals and passed revision 81.
 - [x] Commit `626a383`, complete immutable image build, normal preflight/deploy;
       all twelve cluster suites passed at revision 81.
-- [ ] Refresh legacy evidence and unchanged files after root-module remapping.
+- [ ] Deploy refresh of legacy evidence and unchanged files after root-module
+      remapping. Local real-Git/PostgreSQL tests and three mutations are verified;
+      legacy refresh is on the next push wake-up, not a startup-wide backfill.
 - [ ] Reconcile unusual Git paths, audit lock-session-loss and deletion coordination.
 - [ ] Extend beyond bounded root-module Go evidence; this is not LSP/SCIP completeness.
 

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -247,6 +248,20 @@ func (idx *Indexer) HandlePush(ctx context.Context, evt events.PushEvent) error 
 		return fmt.Errorf("compute changed paths for %s: %w", evt.NewSHA, err)
 	}
 	paths := parseDiffPaths(unified)
+	if !full && slices.Contains(paths, "go.mod") {
+		// Imports in otherwise unchanged files resolve against the module
+		// path. Replacing only go.mod leaves both edges and evidence stale.
+		// Keep the original diff for attribution: refreshed files were not
+		// necessarily changed by this commit.
+		whole := evt
+		whole.OldSHA = emptyTreeSHA
+		all, err := idx.diff(ctx, whole)
+		if err != nil {
+			return fmt.Errorf("enumerate files after module change: %w", err)
+		}
+		paths = parseDiffPaths(all)
+		full = true
+	}
 	if full {
 		existing, err := idx.existingPaths(ctx, evt.OrgID, evt.RepoID)
 		if err != nil {
@@ -264,6 +279,11 @@ func (idx *Indexer) HandlePush(ctx context.Context, evt events.PushEvent) error 
 		}
 	}
 	module, moduleHash := idx.goModule(ctx, evt.RepoID, evt.NewSHA)
+	if moduleHash == "" {
+		// An RPC failure is not a known absent module. Do not checkpoint
+		// source with unknown import-resolution context and suppress retries.
+		return fmt.Errorf("read module context at %s: unavailable", evt.NewSHA)
+	}
 	info := pushInfo{
 		module: module, moduleHash: moduleHash,
 		changed: changedLines(unified),
@@ -556,14 +576,19 @@ func chunksForFile(path string, content []byte, symbols []Symbol) []graph.Chunk 
 	return chunks
 }
 
-// lastIndexedSHA reads the SHA recorded for repoID's "commit" node, or ""
-// if none has been indexed yet.
+// extractionVersion invalidates checkpoints created before source/module
+// evidence existed. Bump it when extraction semantics change; the next push
+// wake-up reconciles legacy files, even if the repository head did not move.
+const extractionVersion = "graph-evidence-v1"
+
+// lastIndexedSHA reads a checkpoint produced by this extraction contract.
+// A legacy SHA is not evidence that today's graph extraction ran.
 func (idx *Indexer) lastIndexedSHA(ctx context.Context, orgID, repoID uuid.UUID) (string, error) {
 	var sha *string
 	err := idx.Graph.Pool().QueryRow(ctx, `
 		SELECT attrs->>'sha' FROM graph.graph_nodes
-		WHERE org_id = $1 AND kind = 'commit' AND key = $2
-	`, orgID, repoID.String()).Scan(&sha)
+		WHERE org_id = $1 AND kind = 'commit' AND key = $2 AND attrs->>'extraction_version' = $3
+	`, orgID, repoID.String(), extractionVersion).Scan(&sha)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", nil
@@ -584,7 +609,7 @@ func (idx *Indexer) recordIndexedSHA(ctx context.Context, orgID, repoID uuid.UUI
 		OrgID: orgID,
 		Kind:  "commit",
 		Key:   repoID.String(),
-		Attrs: map[string]string{"sha": sha},
+		Attrs: map[string]string{"sha": sha, "extraction_version": extractionVersion},
 	})
 	return err
 }

@@ -301,6 +301,24 @@ preflight/deploy path was preserved, and all twelve cluster suites passed.
 Evidence is `/tmp/novaforge-graph-input-{red-e2e,build,deploy,e2e}.log`.
 This establishes the bounded Go path, not the remaining audit items above.
 
+## Extraction evidence refresh (2026-09-17, awaiting deployment)
+
+The next indexer batch invalidates pre-evidence checkpoints through an explicit
+extraction version. A subsequent default-branch push wake-up reconciles legacy
+files even when the head SHA is unchanged; it does not perform a startup-wide
+backfill. Changes to root `go.mod` refresh unchanged source as well, preserving
+the original change diff for attribution. A failed module lookup now returns an
+error before writing a checkpoint rather than recording unknown import context.
+
+Real Git/PostgreSQL regressions failed for stale module evidence and a matching
+legacy SHA suppressing refresh, then passed. Removing module-change refresh,
+version checking or the module-read guard independently failed the regression;
+mutations were immediately restored. Full uncached Go, indexing/maintenance race
+and Procoder's 39-package suite passed. The expanded graph cluster fixture adds
+a module-only change and requires a new revision-bound documentation proposal;
+its cluster execution and deployment remain pending. Unusual Git paths and
+session-loss/deletion coordination remain separate open work.
+
 ## Environment
 
 Everything runs on the **kw cluster** (k3s 1.34, 8 ARM64 nodes). There is no local

@@ -153,6 +153,7 @@ assert any(n["sha"] == sys.argv[1] for n in d["history"]), d
 ok "imports, importers and history answer"
 source tests/e2e/graph_maintenance_probe.sh
 verify_graph_maintenance
+verify_module_evidence_refresh
 
 echo "== 5. a feature branch does not rewrite the default branch's index =="
 git -C "$WORK/repo" checkout -q -b feature
