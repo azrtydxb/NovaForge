@@ -232,7 +232,7 @@ The new ownership/scanner/cleanup cases are proven by real PostgreSQL
 regressions, not newly added cluster assertions. Evidence is in
 /tmp/novaforge-graph-{scanners-red,auth-red,purge-red,green,race,tests,deploy,e2e}.log.
 
-## Index recovery prerequisite (2026-09-17, not deployed)
+## Index recovery prerequisite (2026-09-17, deployed at revision 80)
 
 The production push handler reported success after partial indexing failure and
 saved the SHA, making a recovered model unable to retry the missing file. The
@@ -251,8 +251,14 @@ fails it. Indexing and graph passed under race; full uncached Go and Procoder
 tests passed. Evidence: /tmp/novaforge-index-{retry-red,order-red,race,
 mutation-0,mutation-1,mutation-2,full-tests}.log.
 
-This batch is not deployed; revision 79 remains deployed. These corrections do
-not yet establish index completeness: parser skips, unusual paths, module
+Commit `4cb2fe7` deployed at Helm revision 80 using the complete immutable
+image set and normal image preflight. All twelve in-cluster suites passed;
+Procoder test passed (39 packages) before deployment. The specific failure,
+late-delivery and lock-contention cases remain real-service regression evidence,
+not live-cluster fault injection. Deployment and acceptance logs:
+/tmp/novaforge-index-{build,deploy,e2e}.log.
+
+These corrections do not yet establish index completeness: parser skips, unusual paths, module
 mapping changes and legacy checkpoints remain audit work. The graph maintenance
 RPC, revision-bound evidence and context-reference wiring are still absent.
 

@@ -171,7 +171,7 @@ uncached Go and affected race suites passed afterward; Procoder test passed
 39 packages. Evidence: /tmp/novaforge-graph-{tests-confirm,race-confirm,
 benchmark-mutation,deploy,e2e}.log.
 
-## Index recovery prerequisite — implemented, not deployed
+## Index recovery prerequisite — deployed at revision 80
 
 Before exposing graph absence as maintenance evidence, correct its write path.
 `IndexCommit` acknowledged partial fetch/model/store failures and saved the SHA,
@@ -188,7 +188,10 @@ Files: `internal/indexing/{indexer,reconcile,retry_test}.go` and the existing
 indexer tests. The late-event regression was red before reconciliation. Removing
 the lock, full reconciliation or checkpoint invalidation independently fails
 tests. Real PostgreSQL/Git tests pass under race; the full uncached Go suite and
-Procoder test passed. No images or cluster acceptance have run for this batch.
+Procoder test passed. Commit `4cb2fe7` deployed at revision 80 with complete
+immutable images and normal preflight; all twelve cluster suites passed.
+The failure/recovery and lock cases are proven by real-service regressions,
+not cluster fault injection. Evidence: /tmp/novaforge-index-{build,deploy,e2e}.log.
 
 This is still not a completeness contract for maintenance: silent parser skips,
 unusual Git path parsing, module-mapping changes, legacy checkpoints and a
