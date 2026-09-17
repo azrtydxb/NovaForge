@@ -48,8 +48,9 @@ requirements are implemented, then add missing paths and regression evidence.
   wiring and green afterwards. The factory e2e now asserts an unapproved
   architecture proposal. Go JSON CI history is wired and cluster-proven at
   revision 75. Benchmark artifacts are now wired with real-service regressions;
-  deployed at revision 77 with all twelve suites passing. Graph inputs still
-  need production wiring. Coverage is wired and cluster-proven at revision 78;
+  deployed at revision 77 with all twelve suites passing. Bounded Go graph inputs
+  are wired and cluster-proven at revision 81; broader indexing remains open.
+  Coverage is wired and cluster-proven at revision 78;
   all twelve suites passed.
 - S-7: workspace expiry now travels from agent-runtime through namespace
   provisioning to the reaper (d0069b2); configured long runs are protected.
@@ -199,7 +200,7 @@ revision-bound graph read API remain to be handled. Production maintenance
 wiring/context references and the broader product gaps remain open. Do not
 infer their completion from the index recovery regressions.
 
-## Graph maintenance RPC — verified locally, deployment pending
+## Graph maintenance RPC — deployed at revision 81
 
 - [x] Distinguish successful supported parsing from empty/skipped/recovered syntax.
 - [x] Store exact source/root-module digests atomically with each file's graph.
@@ -212,15 +213,17 @@ infer their completion from the index recovery regressions.
 - [x] Real-service red/green proposal tests; parser/snapshot regressions; anonymous,
       incoming-credential and cross-org/repository checks; three restored mutations.
 - [x] Full uncached Go, affected-package race and Procoder suite pass; lint/security
-      have no blockers. Expanded committed cluster fixture still needs execution.
-- [ ] Commit, complete immutable image build, normal preflight/deploy and all suites.
+      have no blockers. Expanded committed cluster fixture failed revision 80
+      with no proposals and passed revision 81.
+- [x] Commit `626a383`, complete immutable image build, normal preflight/deploy;
+      all twelve cluster suites passed at revision 81.
 - [ ] Refresh legacy evidence and unchanged files after root-module remapping.
 - [ ] Reconcile unusual Git paths, audit lock-session-loss and deletion coordination.
 - [ ] Extend beyond bounded root-module Go evidence; this is not LSP/SCIP completeness.
 
 Missing/stale evidence stays unavailable, never a guessed clean result. The
 current limits and remaining work are recorded in BUILD-STATUS.md. No broader
-S-14/S-15/S-20 completion is claimed by these local regressions.
+S-14/S-15/S-20 completion is claimed by this bounded path's acceptance.
 
 ## Evidence location
 

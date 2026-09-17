@@ -262,9 +262,9 @@ These corrections do not yet establish index completeness: parser skips, unusual
 mapping changes and legacy checkpoints remain audit work. The graph maintenance
 RPC, revision-bound evidence and context-reference wiring are still absent.
 
-## Graph maintenance inputs (2026-09-17, awaiting deployment)
+## Graph maintenance inputs (2026-09-17, deployed at revision 81)
 
-The working batch wires `Sweeper.Graph` through the authenticated graph service.
+Commit `626a383` wires `Sweeper.Graph` through the authenticated graph service.
 Maintenance pins one default-branch SHA before materializing source and policy;
 Go source and root-module digests must match every indexed Go file. One SQL
 snapshot validates parsing evidence and reads symbols/references together.
@@ -294,8 +294,12 @@ foreign-org/repository and incoming-only credential cases are covered. Removing
 source matching, by-name reference resolution or credential forwarding each
 failed its regression; each mutation was immediately restored. Full uncached Go,
 affected-package race tests and Procoder's 39-package suite passed; security had
-no findings and lint had no blockers. The expanded cluster graph fixture has
-not yet been run. No deployment claim is made here.
+no findings and lint had no blockers. The committed expanded graph fixture failed
+against revision 80 with no graph/documentation proposals, then passed revision 81.
+All eleven service images were built with the immutable commit tag, the normal
+preflight/deploy path was preserved, and all twelve cluster suites passed.
+Evidence is `/tmp/novaforge-graph-input-{red-e2e,build,deploy,e2e}.log`.
+This establishes the bounded Go path, not the remaining audit items above.
 
 ## Environment
 
