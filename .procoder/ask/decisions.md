@@ -571,3 +571,32 @@ Ordered plan proposed as steps 1-8. Which work starts now?
 - Fix the security and spec defects first (steps 5-6) — `RecordProof` writable by any
   member, and the S-8 argument-level audit representation.
 - Everything, in the proposed order 1-8, autonomously.
+
+## How NovaForge should reach a dynamic credential provider (2026-09-25)
+
+Correction: OpenBao IS deployed on kw, as `openbao-0` in the `sera` namespace,
+initialized and unsealed (v2.4.1). An earlier note here inferred its absence from
+the chart's empty `openbao.secretName`; that inference was wrong.
+
+It still cannot be used as-is, for two reasons established by inspection:
+
+- Its listener sets `tls_disable = true`, deliberately — the config records that
+  it is in-cluster only and that adding a certificate would mean distributing a
+  CA to its one client, Sera. NovaForge's broker refuses a non-loopback HTTP
+  endpoint, because that hop carries credentials.
+- The only OpenBao token in the cluster is `sera/sera-bao`, scoped to Sera's own
+  KV mount. It cannot list mounts or auth methods, so it cannot configure a
+  dynamic engine, policy or token for NovaForge.
+
+Until one of these is resolved, `work_ci`'s brokered-secret job cannot run and
+S-12's e2e step stays unproven on the cluster (S-12 itself is covered by Go tests
+against a real OpenBao HTTP fixture).
+
+- Deploy a separate OpenBao for NovaForge, with TLS, in its own namespace —
+  leaves Sera untouched and gives NovaForge an provider it owns.
+- Enable TLS on the existing sera OpenBao and issue NovaForge an admin-scoped
+  token — reuses what is there, but changes another project's infrastructure
+  against its recorded rationale.
+- Supply an admin token and decide the TLS question yourself; I prepare
+  everything else and apply it.
+- Leave it. Record the prerequisite, accept work_ci failing, and move on.

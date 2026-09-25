@@ -99,7 +99,7 @@ resources:
 # Empty secretName explicitly leaves the feature unavailable; it is not enabled
 # merely by rendering the chart. Directory mounts permit kubelet secret rotation.
 operatorConfigs:
-  openbao: { secretName: "", configKey: config.json }
+  openbao: { secretName: novaforge-openbao, configKey: config.json }
   deployments: { secretName: "", configKey: config.json }
   semanticProducer: { secretName: "", configKey: config.json }
   mcpHTTP: { secretName: "", configKey: config.json }

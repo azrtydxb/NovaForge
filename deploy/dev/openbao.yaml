@@ -1,0 +1,101 @@
+# A dynamic credential provider for NovaForge.
+#
+# The broker mints a job's credential from a provider and refuses to hand out a
+# stored secret dressed as an expiring one, so without this no job that needs a
+# credential can run. The cluster already has an OpenBao, but it belongs to
+# another project and its listener disables TLS deliberately — its config records
+# that adding a certificate would mean distributing a CA for a hop that never
+# leaves the node network. That is a reasonable choice for its owner and not one
+# NovaForge can accept: this hop carries credentials, so the broker refuses any
+# endpoint that is not HTTPS (or loopback). Hence a separate instance, with TLS.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: novaforge-bao
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: { name: openbao-tls, namespace: novaforge-bao }
+spec:
+  secretName: openbao-tls
+  # The broker pins this CA explicitly; it does not trust the system roots for
+  # the provider.
+  issuerRef: { name: cluster-ca, kind: ClusterIssuer }
+  commonName: openbao.novaforge-bao.svc
+  dnsNames:
+    - openbao.novaforge-bao.svc
+    - openbao.novaforge-bao.svc.cluster.local
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: openbao-config, namespace: novaforge-bao }
+data:
+  config.hcl: |
+    ui = false
+    storage "file" {
+      path = "/openbao/data"
+    }
+    listener "tcp" {
+      address = "0.0.0.0:8200"
+      tls_cert_file = "/tls/tls.crt"
+      tls_key_file  = "/tls/tls.key"
+      tls_min_version = "tls12"
+    }
+    # A container without IPC_LOCK cannot mlock, and refusing to start over it is
+    # worse than the swap risk on a node with no swap.
+    disable_mlock = true
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: openbao-data, namespace: novaforge-bao }
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: { requests: { storage: 1Gi } }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: openbao, namespace: novaforge-bao }
+spec:
+  serviceName: openbao
+  replicas: 1
+  selector: { matchLabels: { app: openbao } }
+  template:
+    metadata: { labels: { app: openbao } }
+    spec:
+      securityContext:
+        { runAsNonRoot: true, runAsUser: 100, runAsGroup: 1000, fsGroup: 1000 }
+      containers:
+        - name: openbao
+          image: quay.io/openbao/openbao:2.4.1
+          args: ["server", "-config=/openbao/config/config.hcl"]
+          env:
+            - { name: BAO_ADDR, value: "https://127.0.0.1:8200" }
+            - { name: BAO_CACERT, value: "/tls/ca.crt" }
+          ports: [{ containerPort: 8200 }]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: config, mountPath: /openbao/config }
+            - { name: data, mountPath: /openbao/data }
+            - { name: tls, mountPath: /tls, readOnly: true }
+          readinessProbe:
+            # 501 is "sealed" and 200 "ready"; both mean the listener answers,
+            # and an unseal has to be possible before the pod is ready.
+            httpGet:
+              path: "/v1/sys/health?sealedcode=200&uninitcode=200"
+              port: 8200
+              scheme: HTTPS
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - { name: config, configMap: { name: openbao-config } }
+        - { name: data, persistentVolumeClaim: { claimName: openbao-data } }
+        - { name: tls, secret: { secretName: openbao-tls } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: openbao, namespace: novaforge-bao }
+spec:
+  selector: { app: openbao }
+  ports: [{ port: 8200, targetPort: 8200 }]

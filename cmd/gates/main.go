@@ -108,7 +108,19 @@ func main() {
 
 	gatesStore := gates.NewStore(pool)
 	approvalsStore := approvals.NewStore(pool)
-	secretsBroker := secrets.NewBroker(pool, []byte(cfg.SecretsKEK))
+	// A job's credential is minted by a dynamic provider, not handed the stored
+	// secret: NewConfiguredBroker builds that provider from the operator's
+	// mounted configuration, and refuses dynamic issuance when there is none
+	// rather than falling back to the stored value. Nothing called it —
+	// NF_OPENBAO_CONFIG_FILE was declared, rendered into the chart, mounted into
+	// the pod and never read — so every deployment brokered nothing.
+	secretsBroker, err := secrets.NewConfiguredBroker(pool, []byte(cfg.SecretsKEK), cfg.OpenBaoConfigFile)
+	if err != nil {
+		log.Fatalf("gates: configure secret broker: %v", err)
+	}
+	if cfg.OpenBaoConfigFile == "" {
+		log.Print("gates: NF_OPENBAO_CONFIG_FILE is unset; jobs needing a brokered credential cannot run")
+	}
 	// Grants are resolved through Identity's RPC, not by reading the capability
 	// owner's tables. gates used to migrate and query the gitplatform schema to
 	// broker a credential, which is a cross-schema read: it made gates a second
