@@ -130,6 +130,17 @@ func (s *Store) SetIndexCheckpoint(ctx context.Context, org, repo uuid.UUID, sha
 		return err
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
+	// A partial refresh must not expose the previous compiler generation
+	// beside new syntax nodes. Invalidate evidence and its nodes atomically with
+	// the checkpoint, using the same fenced connection as publication.
+	if sha == "" {
+		if _, err := tx.Exec(ctx, `DELETE FROM graph.semantic_snapshots WHERE org_id=$1 AND repo_id=$2`, org, repo); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM graph.graph_nodes WHERE org_id=$1 AND repo_id=$2 AND attrs->>'semantic'='true'`, org, repo); err != nil {
+			return err
+		}
+	}
 	attrs := map[string]string{"extraction_version": version}
 	if sha != "" {
 		attrs["sha"] = sha

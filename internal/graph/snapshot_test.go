@@ -18,7 +18,7 @@ func TestMaintenanceSnapshotRequiresExactCompleteManifest(t *testing.T) {
 	digest := graph.SourceDigest([]byte("package p\nfunc unused() {}\n"))
 	fi := graph.FileIndex{
 		OrgID: org, RepoID: repo, Path: "code.go",
-		Evidence: &graph.FileEvidence{ContentHash: digest, ModuleHash: module, Complete: true},
+		Evidence: &graph.FileEvidence{ContentHash: digest, ModuleHash: module, ModulePath: "go.mod", Complete: true},
 		Symbols: []graph.Node{{OrgID: org, Key: repo.String() + ":unused", Attrs: map[string]string{
 			"path": "code.go", "name": "unused", "kind": "function", "dir": "",
 		}}},
@@ -27,7 +27,7 @@ func TestMaintenanceSnapshotRequiresExactCompleteManifest(t *testing.T) {
 		t.Fatal(err)
 	}
 	srv := graph.NewGRPCServer(store, nil, nil, nil, nil, nil)
-	req := &graphv1.MaintenanceSnapshotRequest{RepoId: repo.String(), GoFileHashes: map[string]string{"code.go": digest}, ModuleHash: module}
+	req := &graphv1.MaintenanceSnapshotRequest{RepoId: repo.String(), GoFileHashes: map[string]string{"code.go": digest}, ModuleHash: module, GoFileModuleHashes: map[string]string{"code.go": module}, GoFileModulePaths: map[string]string{"code.go": "go.mod"}}
 	got, err := srv.MaintenanceSnapshot(ctx, req)
 	if err != nil {
 		t.Fatalf("complete matching evidence: %v", err)
@@ -64,7 +64,12 @@ func TestMaintenanceSnapshotRequiresExactCompleteManifest(t *testing.T) {
 		{"changed module", graph.SourceDigest([]byte("other module")), map[string]string{"code.go": digest}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := srv.MaintenanceSnapshot(ctx, &graphv1.MaintenanceSnapshotRequest{RepoId: repo.String(), GoFileHashes: tc.files, ModuleHash: tc.module})
+			hashes, paths := map[string]string{}, map[string]string{}
+			for p := range tc.files {
+				hashes[p] = tc.module
+				paths[p] = "go.mod"
+			}
+			_, err := srv.MaintenanceSnapshot(ctx, &graphv1.MaintenanceSnapshotRequest{RepoId: repo.String(), GoFileHashes: tc.files, GoFileModuleHashes: hashes, GoFileModulePaths: paths})
 			if status.Code(err) != codes.FailedPrecondition {
 				t.Fatalf("mismatched evidence accepted: %v", err)
 			}

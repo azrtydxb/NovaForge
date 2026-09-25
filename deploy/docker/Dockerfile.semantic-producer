@@ -1,0 +1,28 @@
+# No platform credentials, runtime downloads, repo hooks or host mounts. The
+# controller admits only the final image digest, never this build's mutable tag.
+ARG GO_VERSION=1.27.1
+FROM golang:${GO_VERSION} AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=1 GOOS=linux go build -trimpath -o /out/app ./cmd/engineering-graph
+RUN go install github.com/scip-code/scip-go/cmd/scip-go@v0.2.7 \
+ && go install github.com/scip-code/scip/cmd/scip@v0.9.0 \
+ && go install golang.org/x/tools/gopls@v0.21.1
+
+FROM node:22.22.0-bookworm-slim AS node
+RUN npm install --global --ignore-scripts @sourcegraph/scip-typescript@0.4.0 @sourcegraph/scip-python@0.6.6
+
+FROM golang:${GO_VERSION}-bookworm
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends python3 git \
+ && rm -rf /var/lib/apt/lists/*
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -s /usr/local/lib/node_modules/@sourcegraph/scip-typescript/dist/src/main.js /usr/local/bin/scip-typescript \
+ && ln -s /usr/local/lib/node_modules/@sourcegraph/scip-python/index.js /usr/local/bin/scip-python
+COPY --from=build /go/bin/scip-go /go/bin/scip /go/bin/gopls /usr/local/bin/
+COPY --from=build /out/app /app
+USER 65532:65532
+ENTRYPOINT ["/app", "semantic-producer"]

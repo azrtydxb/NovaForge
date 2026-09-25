@@ -31,10 +31,15 @@ func (s *GRPCServer) MaintenanceSnapshot(ctx context.Context, req *graphv1.Maint
 		return nil, err
 	}
 	files := req.GetGoFileHashes()
-	if len(files) == 0 || len(files) > 5000 || !validDigest(req.GetModuleHash()) {
-		return nil, status.Error(codes.InvalidArgument, "require 1..5000 Go files and a module digest")
+	if len(files) == 0 || len(files) > 5000 || len(req.GetGoFileModuleHashes()) != len(files) || len(req.GetGoFileModulePaths()) != len(files) {
+		return nil, status.Error(codes.InvalidArgument, "require 1..5000 Go files and exact module manifests")
 	}
 	for name, digest := range files {
+		modulePath, known := req.GetGoFileModulePaths()[name]
+		moduleHash := req.GetGoFileModuleHashes()[name]
+		if !known || !validDigest(moduleHash) || !validModulePath(name, modulePath) || (modulePath == "" && moduleHash != SourceDigest(nil)) {
+			return nil, status.Error(codes.InvalidArgument, "invalid module manifest")
+		}
 		if !strings.HasSuffix(name, ".go") || path.Clean(name) != name || path.IsAbs(name) || strings.HasPrefix(name, "../") || !validDigest(digest) {
 			return nil, status.Error(codes.InvalidArgument, "invalid source manifest")
 		}
@@ -88,7 +93,8 @@ func (s *GRPCServer) MaintenanceSnapshot(ctx context.Context, req *graphv1.Maint
 			return nil, status.Error(codes.FailedPrecondition, "Go graph contains removed source")
 		}
 		if n.Kind == "file" {
-			if files[name] == "" || n.Attrs["source_hash"] != files[name] || n.Attrs["module_hash"] != req.GetModuleHash() || n.Attrs["parse_complete"] != "true" {
+			_, pathKnown := n.Attrs["module_path"]
+			if !pathKnown || n.Attrs["source_hash"] != files[name] || n.Attrs["module_hash"] != req.GetGoFileModuleHashes()[name] || n.Attrs["module_path"] != req.GetGoFileModulePaths()[name] || n.Attrs["parse_complete"] != "true" {
 				return nil, status.Error(codes.FailedPrecondition, "Go graph is stale, incomplete or unavailable for this manifest")
 			}
 			seen[name] = true
@@ -123,4 +129,16 @@ func deadCodeCandidate(n Node) bool {
 	r, _ := utf8.DecodeRuneInString(name)
 	return n.Attrs["kind"] == "function" && name != "" && name != "init" && name != "main" && !unicode.IsUpper(r) &&
 		!strings.HasSuffix(file, "_test.go") && !strings.Contains("/"+file, "/vendor/") && !strings.Contains("/"+file, "/testdata/")
+}
+
+// A module must be a literal ancestor manifest, not a guessed import identity.
+func validModulePath(source, manifest string) bool {
+	if manifest == "" {
+		return true
+	}
+	if path.Clean(manifest) != manifest || path.IsAbs(manifest) || strings.HasPrefix(manifest, "../") || path.Base(manifest) != "go.mod" {
+		return false
+	}
+	dir := path.Dir(manifest)
+	return dir == "." || strings.HasPrefix(source, dir+"/")
 }

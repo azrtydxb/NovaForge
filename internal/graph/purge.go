@@ -66,7 +66,7 @@ func (s *Store) purge(ctx context.Context, orgID uuid.UUID, repoID *uuid.UUID) e
 	}
 	// References have no cascading foreign key. Purge all source evidence and
 	// its checkpoint atomically with the permanent write fence.
-	for _, table := range []string{"file_references", "code_chunks", "graph_nodes"} {
+	for _, table := range []string{"semantic_snapshots", "file_references", "code_chunks", "graph_nodes"} {
 		predicate := "org_id = $1 AND ($2::uuid IS NULL OR repo_id = $2)"
 		if table == "graph_nodes" {
 			// Legacy checkpoint nodes predate repo_id ownership.

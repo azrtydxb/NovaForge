@@ -57,17 +57,35 @@ const consumeRetry = 5 * time.Second
 // Consume reads stream as consumer in group until ctx is cancelled, passing
 // each message's data to handle and acknowledging it only when handle
 // succeeds. A message whose handler fails stays pending and is handed back on
-// the next pass, so a deletion that failed half-way — a database blip, an
+// a later bounded pass, so a deletion that failed half-way — a database blip, an
 // object store that was briefly down — is finished later rather than lost.
 // Handlers must therefore be idempotent, which deletions are.
 func Consume(ctx context.Context, rdb *redis.Client, stream, group, consumer string, handle func(ctx context.Context, data []byte) error) error {
 	if err := EnsureGroup(ctx, rdb, stream, group); err != nil {
 		return err
 	}
+	// Rotate through pending IDs rather than retrying only the first page. Each
+	// pass then admits one bounded fresh batch even if old handlers keep failing.
+	// Handling remains sequential within each batch; failed messages stay pending.
+	pendingAfter := "0"
+	var pendingRemaining int64
 	for ctx.Err() == nil {
-		// Pending first: messages delivered to this consumer before and never
-		// acknowledged. Only once none remain does it ask for new ones.
-		pending, err := read(ctx, rdb, stream, group, consumer, "0", 0)
+		if pendingAfter == "0" {
+			// A finite pass must not chase a tail of newly failing fresh messages
+			// forever. The group's current count bounds this consumer's older work;
+			// another consumer's entries may increase the bound but cannot erase it.
+			snapshot, err := rdb.XPending(ctx, stream, group).Result()
+			if err != nil {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				log.Printf("events: pending inventory %s: %v", stream, err)
+				sleep(ctx, consumeRetry)
+				continue
+			}
+			pendingRemaining = snapshot.Count
+		}
+		pending, err := read(ctx, rdb, stream, group, consumer, pendingAfter, 0)
 		if err != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()
@@ -76,34 +94,51 @@ func Consume(ctx context.Context, rdb *redis.Client, stream, group, consumer str
 			sleep(ctx, consumeRetry)
 			continue
 		}
-		msgs := pending
-		if len(msgs) == 0 {
-			msgs, err = read(ctx, rdb, stream, group, consumer, ">", 2*time.Second)
-			if err != nil {
-				if ctx.Err() != nil {
-					return ctx.Err()
-				}
-				log.Printf("events: read %s: %v", stream, err)
-				sleep(ctx, consumeRetry)
-				continue
-			}
+		pendingRemaining -= int64(len(pending))
+		if len(pending) > 0 && pendingRemaining > 0 {
+			pendingAfter = pending[len(pending)-1].ID
+		} else {
+			pendingAfter = "0"
 		}
 		failed := false
-		for _, m := range msgs {
-			data, _ := m.Values["data"].(string)
-			if err := handle(ctx, []byte(data)); err != nil {
-				log.Printf("events: %s %s on %s: %v (will retry)", group, m.ID, stream, err)
-				failed = true
-				continue
+		handleBatch := func(msgs []redis.XMessage) {
+			for _, m := range msgs {
+				if ctx.Err() != nil {
+					return
+				}
+				data, _ := m.Values["data"].(string)
+				if err := handle(ctx, []byte(data)); err != nil {
+					log.Printf("events: %s %s on %s: %v (will retry)", group, m.ID, stream, err)
+					failed = true
+					continue
+				}
+				if err := rdb.XAck(ctx, stream, group, m.ID).Err(); err != nil {
+					log.Printf("events: ack %s on %s: %v", m.ID, stream, err)
+				}
 			}
-			if err := rdb.XAck(ctx, stream, group, m.ID).Err(); err != nil {
-				log.Printf("events: ack %s on %s: %v", m.ID, stream, err)
+		}
+		handleBatch(pending)
+		// Do not block the pending scan for idle fresh traffic; otherwise a large
+		// backlog would accrue a two-second delay per page even after recovery.
+		block := 2 * time.Second
+		if len(pending) > 0 {
+			block = -1
+		}
+		fresh, err := read(ctx, rdb, stream, group, consumer, ">", block)
+		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
 			}
+			log.Printf("events: read %s: %v", stream, err)
+			failed = true
+		} else {
+			handleBatch(fresh)
 		}
 		if failed {
 			sleep(ctx, consumeRetry)
 		}
 	}
+
 	return ctx.Err()
 }
 
