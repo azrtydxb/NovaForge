@@ -5,6 +5,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
@@ -18,6 +19,22 @@ import (
 // the request body into memory to send it in one message is how the edge gets
 // killed by somebody publishing a container image.
 const uploadFrame = 256 << 10
+
+// encodedParam reads a path segment and undoes its percent-encoding.
+//
+// A tag is one path segment in these routes, and a git tag may contain slashes
+// (a release candidate tagged "v1.0.0/rc1" is ordinary). A client has to encode
+// those to keep the tag in one segment and chi hands the segment back still
+// encoded, so without this a release on such a tag would be addressable by
+// nothing — the same defect the repository browser had for every agent branch
+// (see refParam). Asset names get the same treatment, for the same reason.
+func encodedParam(r *http.Request, key string) string {
+	raw := chi.URLParam(r, key)
+	if decoded, err := url.PathUnescape(raw); err == nil {
+		return decoded
+	}
+	return raw
+}
 
 // addReleaseHandlers mounts releases: a tag published for download, and the files
 // published with it. It is the one part of a Git host's surface where the platform
@@ -63,13 +80,13 @@ func addReleaseHandlers(h map[string]http.HandlerFunc, c gitv1.GitServiceClient)
 
 	h["deleteRelease"] = func(w http.ResponseWriter, r *http.Request) {
 		_, err := c.DeleteRelease(r.Context(), &gitv1.DeleteReleaseRequest{
-			Repo: chi.URLParam(r, "repo"), Tag: chi.URLParam(r, "tag"),
+			Repo: chi.URLParam(r, "repo"), Tag: encodedParam(r, "tag"),
 		})
 		if err != nil {
 			WriteError(w, StatusFromGRPC(err), err)
 			return
 		}
-		WriteJSON(w, http.StatusOK, map[string]any{"deleted": chi.URLParam(r, "tag")})
+		WriteJSON(w, http.StatusOK, map[string]any{"deleted": encodedParam(r, "tag")})
 	}
 
 	h["uploadReleaseAsset"] = func(w http.ResponseWriter, r *http.Request) {
@@ -88,7 +105,7 @@ func addReleaseHandlers(h map[string]http.HandlerFunc, c gitv1.GitServiceClient)
 		// body only. The body is read a frame at a time, so the edge never holds
 		// more than uploadFrame bytes of it.
 		meta := &gitv1.UploadReleaseAssetRequest{
-			Repo: chi.URLParam(r, "repo"), Tag: chi.URLParam(r, "tag"),
+			Repo: chi.URLParam(r, "repo"), Tag: encodedParam(r, "tag"),
 			Name: name, ContentType: r.Header.Get("Content-Type"),
 		}
 		buf := make([]byte, uploadFrame)
@@ -125,7 +142,7 @@ func addReleaseHandlers(h map[string]http.HandlerFunc, c gitv1.GitServiceClient)
 
 	h["downloadReleaseAsset"] = func(w http.ResponseWriter, r *http.Request) {
 		stream, err := c.DownloadReleaseAsset(r.Context(), &gitv1.DownloadReleaseAssetRequest{
-			Repo: chi.URLParam(r, "repo"), Tag: chi.URLParam(r, "tag"), Name: chi.URLParam(r, "name"),
+			Repo: chi.URLParam(r, "repo"), Tag: encodedParam(r, "tag"), Name: encodedParam(r, "name"),
 		})
 		if err != nil {
 			WriteError(w, StatusFromGRPC(err), err)

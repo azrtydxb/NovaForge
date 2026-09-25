@@ -21,11 +21,14 @@ import (
 // proven here is the edge's framing, not the service behind it.
 type releaseDouble struct {
 	gitv1.GitServiceClient
-	download []*gitv1.DownloadReleaseAssetResponse
-	uploaded *uploadRecorder
+	download  []*gitv1.DownloadReleaseAssetResponse
+	uploaded  *uploadRecorder
+	askedTag  string
+	askedName string
 }
 
-func (d *releaseDouble) DownloadReleaseAsset(_ context.Context, _ *gitv1.DownloadReleaseAssetRequest, _ ...grpc.CallOption) (grpc.ServerStreamingClient[gitv1.DownloadReleaseAssetResponse], error) {
+func (d *releaseDouble) DownloadReleaseAsset(_ context.Context, in *gitv1.DownloadReleaseAssetRequest, _ ...grpc.CallOption) (grpc.ServerStreamingClient[gitv1.DownloadReleaseAssetResponse], error) {
+	d.askedTag, d.askedName = in.GetTag(), in.GetName()
 	return &releaseDownloadStream{frames: d.download}, nil
 }
 
@@ -176,6 +179,30 @@ func TestDownloadReleaseAssetReportsAbsence(t *testing.T) {
 		map[string]string{"repo": "ledger", "tag": "v1.0.0", "name": "gone.bin"})
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("an absent asset answered %d, want 404", rec.Code)
+	}
+}
+
+// TestReleaseTagWithSlashesReachesTheService pins the same defect the repository
+// browser had for agent branches: a tag may contain slashes ("v1.0.0/rc1" is an
+// ordinary release candidate), a client must percent-encode them to keep the tag
+// in one path segment, and chi hands the segment back still encoded. Undecoded,
+// the service is asked for a tag named "v1.0.0%2Frc1", which exists nowhere, and
+// the release is addressable by nothing.
+func TestReleaseTagWithSlashesReachesTheService(t *testing.T) {
+	g := &releaseDouble{download: []*gitv1.DownloadReleaseAssetResponse{
+		{Name: "build v1.bin", SizeBytes: 2, Data: []byte("ok")},
+	}}
+	h := edge.Handlers(edge.Config{Git: g})
+	rec := call(t, h, "downloadReleaseAsset", http.MethodGet, "",
+		map[string]string{"repo": "ledger", "tag": "v1.0.0%2Frc1", "name": "build%20v1.bin"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("download answered %d: %s", rec.Code, rec.Body.String())
+	}
+	if g.askedTag != "v1.0.0/rc1" {
+		t.Errorf("the service was asked for tag %q, want v1.0.0/rc1", g.askedTag)
+	}
+	if g.askedName != "build v1.bin" {
+		t.Errorf("the service was asked for asset %q, want \"build v1.bin\"", g.askedName)
 	}
 }
 
