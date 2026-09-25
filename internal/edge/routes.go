@@ -45,6 +45,11 @@ func Routes() []Route {
 
 		{http.MethodGet, "/api/v1/orgs/{org}/repos", "listRepos", "Repositories in an organization"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos", "createRepo", "Create a repository"},
+		// "import" is a literal segment on the collection, so it cannot be read as
+		// a repository name: repoNameRe would accept "import", but POST
+		// /repos/{repo} is not a route, and chi matches a static segment before a
+		// wildcard one in any case.
+		{http.MethodPost, "/api/v1/orgs/{org}/repos/import", "importRepo", "Import a repository from another Git host, optionally keeping it mirrored"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}", "getRepo", "One repository"},
 		{http.MethodPatch, "/api/v1/orgs/{org}/repos/{repo}", "updateRepo", "Rename a repository, change its default branch, or archive it"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/transfer", "transferRepo", "Move a repository to another organization"},
@@ -61,6 +66,12 @@ func Routes() []Route {
 		{http.MethodDelete, "/api/v1/orgs/{org}/repos/{repo}/releases/{tag}", "deleteRelease", "Delete a release and the objects its assets hold"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/releases/{tag}/assets", "uploadReleaseAsset", "Upload an asset onto a release; the body is the file itself"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/releases/{tag}/assets/{name}", "downloadReleaseAsset", "Download one release asset"},
+		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/mirror", "getMirror", "What this repository follows upstream; a credential is never returned"},
+		// POST rather than PUT: the platform's one API client speaks GET, POST,
+		// PATCH and DELETE, and a fifth verb added for one route is a verb every
+		// future caller has to discover. /transfer is POSTed for the same reason.
+		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/mirror", "setMirror", "Point a repository at an upstream, or repoint an existing mirror"},
+		{http.MethodDelete, "/api/v1/orgs/{org}/repos/{repo}/mirror", "deleteMirror", "Stop following upstream, which makes the repository writable again"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/hooks", "listHooks", "Webhooks registered for a repository; a secret is never returned"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/hooks", "createHook", "Register a webhook endpoint, optionally with a signing secret"},
 		{http.MethodPatch, "/api/v1/orgs/{org}/repos/{repo}/hooks/{id}", "updateHook", "Rotate a webhook's secret or switch it on and off"},

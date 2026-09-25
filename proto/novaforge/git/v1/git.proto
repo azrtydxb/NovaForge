@@ -41,6 +41,10 @@ service GitService {
   // serving concurrent downloads.
   rpc UploadReleaseAsset(stream UploadReleaseAssetRequest) returns (UploadReleaseAssetResponse);
   rpc DownloadReleaseAsset(DownloadReleaseAssetRequest) returns (stream DownloadReleaseAssetResponse);
+  rpc ImportRepo(ImportRepoRequest) returns (ImportRepoResponse);
+  rpc GetMirror(GetMirrorRequest) returns (GetMirrorResponse);
+  rpc SetMirror(SetMirrorRequest) returns (SetMirrorResponse);
+  rpc DeleteMirror(DeleteMirrorRequest) returns (DeleteMirrorResponse);
 }
 
 message ListOrganizationsWithRepositoriesRequest {}
@@ -394,3 +398,67 @@ message ListHookDeliveriesRequest {
 message ListHookDeliveriesResponse {
   repeated HookDelivery deliveries = 1;
 }
+
+// --- Import and mirroring ---
+// Importing brings a repository in from another Git host; mirroring keeps it
+// following that host until the migration is finished.
+//
+// The upstream credential is write-only. It travels in on ImportRepo and
+// SetMirror and no response carries it, so has_credential is how a reader learns
+// whether one is set. remote never contains it: git's own
+// https://user:token@host idiom would put a token for somebody else's host into
+// this message, into a table, and into every log line that printed the URL.
+message Mirror {
+  string repo_id = 1;
+  string remote = 2;
+  // 0 means every pass of the mirrorer. A caller who says nothing gets the
+  // platform's default instead, because an unset field is also 0.
+  int32 interval_seconds = 3;
+  // Empty when this mirror has never been refreshed since its remote last
+  // changed, which is also when it is due immediately.
+  string last_synced_at = 4;
+  // Why the last refresh failed, scrubbed of anything secret. Empty means the
+  // last refresh succeeded.
+  string last_error = 5;
+  bool has_credential = 6;
+}
+
+message ImportRepoRequest {
+  string name = 1;
+  string remote = 2;
+  string credential = 3;
+  // mirror keeps following upstream afterwards. Without it the import is a
+  // one-off copy, the credential is not stored at all, and the repository is
+  // writable like any other.
+  bool mirror = 4;
+  int32 interval_seconds = 5;
+}
+message ImportRepoResponse {
+  Repo repo = 1;
+  // Absent when the import was a one-off copy rather than a mirror.
+  Mirror mirror = 2;
+}
+
+message GetMirrorRequest {
+  string repo = 1;
+}
+message GetMirrorResponse {
+  Mirror mirror = 1;
+}
+
+message SetMirrorRequest {
+  string repo = 1;
+  string remote = 2;
+  // An empty credential removes the stored one, which is how a mirror of a
+  // repository that has been made public is deliberately made anonymous.
+  string credential = 3;
+  int32 interval_seconds = 4;
+}
+message SetMirrorResponse {
+  Mirror mirror = 1;
+}
+
+message DeleteMirrorRequest {
+  string repo = 1;
+}
+message DeleteMirrorResponse {}

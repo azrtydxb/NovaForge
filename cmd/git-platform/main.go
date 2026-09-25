@@ -214,13 +214,35 @@ func main() {
 		log.Println("git-platform: REDIS_URL is unset; webhooks can be registered but nothing will be delivered")
 	}
 
+	// --- import and mirroring ---
+	// A mirror follows a repository on another Git host, which is the migration
+	// path onto this platform. The mirrorer is the whole feature: without it an
+	// imported repository silently never changes again, which is
+	// indistinguishable from an upstream nobody has pushed to — the silence this
+	// repository has been caught by more than once. internal/gitops asserts this
+	// call exists.
+	mirrors := gitops.NewMirrorStore(pool, cfg.GitDataDir, []byte(cfg.SecretsKEK))
+	grpcServer.Mirrors = mirrors
+	if cfg.SecretsKEK == "" {
+		log.Println("git-platform: SECRETS_KEK is unset; a repository can be imported from a public remote, but no upstream credential can be stored")
+	}
+	mirrorer := &gitops.Mirrorer{Store: mirrors, Tick: time.Minute}
+	go func() {
+		if err := mirrorer.Run(ctx); err != nil {
+			log.Printf("git-platform: mirrorer stopped: %v", err)
+		}
+	}()
+
 	gitv1.RegisterGitServiceServer(srv, grpcServer)
 
 	// --- smart-HTTP ---
 	capFunc := newCapFunc(grants,
 		newBranchLockGuard(agentsClient, cfg.HMACSecret, repoIDResolver(pool)),
 		newArchiveGuard(pool),
-		newCollaboratorGuard(repoIDResolver(pool)))
+		newCollaboratorGuard(repoIDResolver(pool)),
+		// A mirror's history belongs to upstream, so a push here is refused on
+		// both transports from the one place they share.
+		gitops.NewMirrorCapFunc(pool))
 	// Branches written through the API answer to the same rules as a push.
 	grpcServer.RefGuard = capFunc
 	// Repository grants are resolved here so someone outside the organization can
@@ -365,7 +387,7 @@ func loadOrGenerateHostKey() (ssh.Signer, bool, error) {
 // newCapFunc is the capability check every write surface applies: a branch an
 // Agent Run holds is refused to everyone but that run's agent, and an agent is
 // held to its capability grant.
-func newCapFunc(grants *capability.Store, locks, archived, collaborator gitops.CapFunc) gitops.CapFunc {
+func newCapFunc(grants *capability.Store, locks, archived, collaborator, mirrored gitops.CapFunc) gitops.CapFunc {
 	byGrant := gitops.NewGrantCapFunc(grants)
 	return func(ctx context.Context, s authz.Scope, orgID uuid.UUID, repo string, refs []string) error {
 		// An outside collaborator is checked for reads as well as writes, so this
@@ -379,8 +401,13 @@ func newCapFunc(grants *capability.Store, locks, archived, collaborator gitops.C
 			return nil
 		}
 		// An archived repository refuses writes before anything else is
-		// considered: whether the pusher holds a grant is not the question.
+		// considered: whether the pusher holds a grant is not the question. A
+		// mirror is the same kind of refusal — its history is upstream's — so it
+		// is answered here too, before any grant is looked at.
 		if err := archived(ctx, s, orgID, repo, refs); err != nil {
+			return err
+		}
+		if err := mirrored(ctx, s, orgID, repo, refs); err != nil {
 			return err
 		}
 		if err := locks(ctx, s, orgID, repo, refs); err != nil {

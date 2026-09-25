@@ -65,6 +65,21 @@ export interface TreeEntry {
   size: number;
 }
 
+/** What a repository follows on another Git host. There is no credential field
+ * on purpose: the platform never sends one back, so `has_credential` is all a
+ * reader can be told about it, and `remote` never carries one inline. */
+export interface Mirror {
+  repo_id: string;
+  remote: string;
+  /** Seconds between refreshes. */
+  interval_seconds: number;
+  /** Empty when this mirror has never been refreshed since its remote changed. */
+  last_synced_at: string;
+  /** Why the last refresh failed; empty when it succeeded. */
+  last_error: string;
+  has_credential: boolean;
+}
+
 /** A registered endpoint outside the platform, told when something happens in a
  * repository. There is no secret field on purpose: the platform never sends one
  * back, so `has_secret` is all a reader can be told about it. */

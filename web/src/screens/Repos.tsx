@@ -5,7 +5,7 @@ import {
   useQueryClient,
   type UseMutationResult,
 } from "@tanstack/react-query";
-import { api, enc } from "../lib/api";
+import { api, ApiError, enc } from "../lib/api";
 import { useWorkspace } from "../lib/workspace";
 import {
   Async,
@@ -21,6 +21,7 @@ import type {
   Commit,
   Hook,
   HookDelivery,
+  Mirror,
   OrgMember,
   Ref,
   Release,
@@ -36,6 +37,7 @@ export function Repos() {
   const [repo, setRepo] = useState<string | null>(w.repo);
   const active = repo ?? w.repo ?? w.repos[0]?.name ?? null;
   const [deleting, setDeleting] = useState(false);
+  const [importing, setImporting] = useState(false);
   const qc = useQueryClient();
 
   // Whether to offer deletion is decided from the platform's own record of
@@ -125,19 +127,36 @@ export function Repos() {
       title="Repositories"
       subtitle="Standard Git, browsed through the platform"
       actions={
-        active !== null && canDelete ? (
-          <button
-            onClick={() => {
-              remove.reset();
-              setDeleting(true);
-            }}
-            style={dangerButton}
-          >
-            Delete repository
+        <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={() => setImporting(true)} style={adminButton}>
+            Import repository
           </button>
-        ) : null
+          {active !== null && canDelete ? (
+            <button
+              onClick={() => {
+                remove.reset();
+                setDeleting(true);
+              }}
+              style={dangerButton}
+            >
+              Delete repository
+            </button>
+          ) : null}
+        </div>
       }
     >
+      {importing && w.org !== null ? (
+        <ImportDialog
+          org={w.org}
+          onClose={() => setImporting(false)}
+          onImported={(name) => {
+            setImporting(false);
+            setRepo(name);
+            void qc.invalidateQueries({ queryKey: ["repos"] });
+          }}
+        />
+      ) : null}
+
       {deleting && active !== null ? (
         <Confirm
           title={`Delete ${active}`}
@@ -196,6 +215,12 @@ export function Repos() {
               transfer={transfer}
             />
           ) : null}
+          <MirrorPanel
+            key={`mirror:${w.org}/${active}`}
+            org={w.org!}
+            repo={active}
+            canAdminister={canDelete}
+          />
           <Hooks key={`hooks:${w.org}/${active}`} org={w.org!} repo={active} />
           <Browser
             key={`${w.org}/${active}`}
@@ -374,6 +399,261 @@ const adminButton: React.CSSProperties = {
   font: "500 12px var(--sans)",
   cursor: "pointer",
 };
+
+/** ImportDialog brings a repository in from another Git host.
+ *
+ * The token field is a password field and the help text says where the value
+ * goes, because the honest alternative — pasting a token into the URL, which is
+ * what every Git host's own instructions do — is refused by the platform on
+ * purpose: a URL with a token in it ends up in tables and log lines. */
+function ImportDialog({
+  org,
+  onClose,
+  onImported,
+}: {
+  org: string;
+  onClose: () => void;
+  onImported: (name: string) => void;
+}) {
+  const imported = useMutation({
+    mutationFn: (v: Record<string, string>) =>
+      api.post<{ repo: Repo; mirror: Mirror | null }>(
+        `/api/v1/orgs/${enc(org)}/repos/import`,
+        {
+          name: v.name,
+          remote: v.remote,
+          credential: v.credential,
+          mirror: v.mode === MIRRORED,
+          interval_seconds: Number(v.interval) || 0,
+        },
+      ),
+    onSuccess: (r) => onImported(r.repo.name),
+  });
+
+  return (
+    <Dialog
+      title="Import a repository"
+      description="The whole history is cloned from the address below. Nothing is created here unless the clone finishes, so a failed import can simply be retried."
+      submitLabel="Import"
+      busy={imported.isPending}
+      error={imported.error}
+      fields={[
+        {
+          name: "remote",
+          label: "Upstream URL",
+          placeholder: "https://github.com/owner/project.git",
+          required: true,
+          help: "http or https only. A URL containing a username or token is refused — use the token field instead.",
+        },
+        {
+          name: "name",
+          label: "Name here",
+          placeholder: "project",
+          required: true,
+        },
+        {
+          name: "credential",
+          label: "Access token",
+          type: "password",
+          help: "Only needed for a private upstream. It is stored encrypted and never shown again.",
+        },
+        {
+          name: "mode",
+          label: "Afterwards",
+          type: "select",
+          options: [ONE_OFF, MIRRORED],
+          help: `${ONE_OFF} leaves the repository writable here. ${MIRRORED} keeps following upstream, and refuses pushes.`,
+        },
+        {
+          name: "interval",
+          label: "Refresh every",
+          placeholder: "3600 seconds",
+          help: "Only used when mirrored; blank means hourly.",
+        },
+      ]}
+      onSubmit={(values) => imported.mutate(values)}
+      onClose={onClose}
+    />
+  );
+}
+
+const ONE_OFF = "one-off copy";
+const MIRRORED = "keep mirrored";
+
+/** MirrorPanel is what this repository follows, if anything.
+ *
+ * A repository that is not a mirror is an absence, not a failure: the endpoint
+ * answers 404 and the panel says the history is this platform's own. Rendering
+ * `Failed` for it would make every ordinary repository look broken. */
+function MirrorPanel({
+  org,
+  repo,
+  canAdminister,
+}: {
+  org: string;
+  repo: string;
+  canAdminister: boolean;
+}) {
+  const base = `/api/v1/orgs/${enc(org)}/repos/${enc(repo)}/mirror`;
+  const qc = useQueryClient();
+  const [remote, setRemote] = useState("");
+  const [credential, setCredential] = useState("");
+  // Not named `interval`: a state setter called setInterval would shadow the
+  // global of the same name inside this component.
+  const [every, setEvery] = useState("");
+
+  const mirror = useQuery({
+    queryKey: ["mirror", org, repo],
+    // A 404 is the answer, not a transient failure, so it is not retried.
+    retry: false,
+    queryFn: () => api.get<Mirror>(base),
+  });
+  const notMirrored =
+    mirror.error instanceof ApiError && mirror.error.status === 404;
+  const invalidate = () =>
+    void qc.invalidateQueries({ queryKey: ["mirror", org, repo] });
+
+  const save = useMutation({
+    mutationFn: () =>
+      api.post<Mirror>(base, {
+        remote,
+        credential,
+        interval_seconds: Number(every) || 0,
+      }),
+    onSuccess: () => {
+      // The token is cleared from the form as soon as it has been sent: it is
+      // write-only on the platform, and leaving it in an input is the one place
+      // it would still be readable.
+      setCredential("");
+      invalidate();
+    },
+  });
+  const stop = useMutation({
+    mutationFn: () => api.del(base),
+    onSuccess: invalidate,
+  });
+
+  const m = mirror.data;
+  return (
+    <Panel style={{ marginBottom: 12 }}>
+      <PanelHead>
+        UPSTREAM
+        <div style={{ flex: 1 }} />
+        <span style={{ font: "11px var(--sans)", color: "var(--fg-faint)" }}>
+          a mirror refuses pushes; upstream owns its history
+        </span>
+      </PanelHead>
+      <div style={{ padding: 12, display: "grid", gap: 10 }}>
+        {mirror.isPending ? (
+          <Empty>Checking…</Empty>
+        ) : notMirrored ? (
+          <Empty>
+            This repository&apos;s history is its own. It follows nothing.
+          </Empty>
+        ) : mirror.error ? (
+          <Failed error={mirror.error} />
+        ) : m ? (
+          <>
+            <div style={adminRow}>
+              <span style={adminLabel}>Follows</span>
+              <span style={mono}>{m.remote}</span>
+            </div>
+            <div style={adminRow}>
+              <span style={adminLabel}>Last refreshed</span>
+              <span style={{ font: "12px var(--sans)" }}>
+                {m.last_synced_at === ""
+                  ? "never since the remote changed — due now"
+                  : new Date(m.last_synced_at).toLocaleString()}
+              </span>
+            </div>
+            <div style={adminRow}>
+              <span style={adminLabel}>Every</span>
+              <span style={{ font: "12px var(--sans)" }}>
+                {m.interval_seconds === 0
+                  ? "every pass of the mirrorer"
+                  : `${m.interval_seconds} seconds`}
+              </span>
+            </div>
+            <div style={adminRow}>
+              <span style={adminLabel}>Credential</span>
+              <span style={{ font: "12px var(--sans)" }}>
+                {m.has_credential
+                  ? "stored, encrypted — it is never shown again"
+                  : "none; upstream is read anonymously"}
+              </span>
+            </div>
+            {/* The recorded reason, not a red dot: a mirror that is quietly
+                failing is the complaint, and the platform knows exactly why. */}
+            {m.last_error === "" ? null : (
+              <div style={adminRow}>
+                <span style={adminLabel}>Last failure</span>
+                <span style={{ font: "12px var(--sans)", color: "#ff6b6b" }}>
+                  {m.last_error}
+                </span>
+              </div>
+            )}
+          </>
+        ) : null}
+
+        {canAdminister ? (
+          <>
+            <div style={adminRow}>
+              <span style={adminLabel}>
+                {notMirrored ? "Follow" : "Repoint to"}
+              </span>
+              <input
+                value={remote}
+                placeholder="https://github.com/owner/project.git"
+                onChange={(e) => setRemote(e.target.value)}
+                style={{ ...adminInput, flex: 1 }}
+              />
+              <input
+                value={credential}
+                type="password"
+                placeholder="access token (optional)"
+                onChange={(e) => setCredential(e.target.value)}
+                style={adminInput}
+              />
+              <input
+                value={every}
+                placeholder="seconds (blank = hourly)"
+                onChange={(e) => setEvery(e.target.value)}
+                style={adminInput}
+              />
+              <button
+                onClick={() => save.mutate()}
+                disabled={remote === "" || save.isPending}
+                style={adminButton}
+              >
+                {notMirrored ? "Start mirroring" : "Save"}
+              </button>
+            </div>
+            {notMirrored ? null : (
+              <div style={adminRow}>
+                <span style={adminLabel}>Stop</span>
+                <button
+                  onClick={() => stop.mutate()}
+                  disabled={stop.isPending}
+                  style={adminButton}
+                >
+                  Stop following upstream
+                </button>
+                <span
+                  style={{ font: "11px var(--sans)", color: "var(--fg-faint)" }}
+                >
+                  keeps the history already fetched, and makes the repository
+                  writable again
+                </span>
+              </div>
+            )}
+            {save.error ? <Failed error={save.error} /> : null}
+            {stop.error ? <Failed error={stop.error} /> : null}
+          </>
+        ) : null}
+      </div>
+    </Panel>
+  );
+}
 
 /** Hooks is the webhook panel: the endpoints this repository notifies, and what
  * each one answered.

@@ -80,6 +80,11 @@ type Server struct {
 	// answering with an empty list — which would read as "this repository has no
 	// hooks" and hide a deployment that cannot deliver any.
 	Hooks *webhooks.Store
+	// Mirrors, when set, backs the import and mirroring RPCs (see
+	// grpc_mirror.go). Nil means this deployment cannot import, and those RPCs
+	// say so rather than answering Unimplemented — "not available in this
+	// deployment" and "this platform cannot import at all" are different answers.
+	Mirrors *MirrorStore
 
 	repoDeleted RepoDeletedPublisher
 }
