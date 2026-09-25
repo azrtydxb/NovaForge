@@ -555,3 +555,19 @@ Proposed authorization is limited to a fresh temporary local experiment:
 
 Choices: **Authorize local candidate (recommended)** under these restrictions,
 or **Keep design-only** and hold implementation until a different contract is specified.
+
+## Where to start closing the code-vs-spec gaps (2026-09-25)
+
+The analysis found no code-caused test failures: all 227 local failures trace to the
+missing datastore host, the kw namespaces are gone, executable gates ship disabled
+(`gates.analysisImage: ""`), and 41 files remain on five unmerged `integrate/*` lanes.
+Ordered plan proposed as steps 1-8. Which work starts now?
+
+- Restore the environment and switch on executable gates (steps 1-2) — redeploy the
+  dev datastores and platform, build and digest-pin the gate analysis image, re-run the
+  suites for a real baseline. Nothing can be verified before this.
+- Integrate the unmerged lane work first (steps 3-4) — graph-producer's 28 files and
+  three migrations, then the duplicated `identity_grants.go` and deployment-runner.
+- Fix the security and spec defects first (steps 5-6) — `RecordProof` writable by any
+  member, and the S-8 argument-level audit representation.
+- Everything, in the proposed order 1-8, autonomously.

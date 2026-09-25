@@ -21,6 +21,8 @@ import (
 	"crypto/rand"
 	"encoding/pem"
 	"fmt"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 	"net"
 	"net/http/httptest"
 	"os"
@@ -146,6 +148,36 @@ func (p *Platform) Index(t testing.TB, org Org, repo Repo, head string) {
 }
 
 // Start brings the platform up for t and tears it down when t ends.
+// AnalysisSandbox builds the isolated sandbox the executable gates run
+// repository code inside.
+//
+// The gates controller refuses to evaluate an executable gate without one,
+// because running a repository's tests in the gates service's own process would
+// hand code under review that service's database handles and cluster
+// credentials. Tests that exercise a merge therefore need a real cluster and a
+// real image; hack/env.sh exports the digest hack/build-images.sh recorded.
+func AnalysisSandbox(t testing.TB) *gates.AnalysisSandbox {
+	t.Helper()
+	image := os.Getenv("NF_GATE_SANDBOX_TEST_IMAGE")
+	if image == "" {
+		t.Skip("NF_GATE_SANDBOX_TEST_IMAGE is unset: executable gates cannot run (./hack/build-images.sh gate-analysis)")
+	}
+	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		clientcmd.NewDefaultClientConfigLoadingRules(), &clientcmd.ConfigOverrides{CurrentContext: "kw"}).ClientConfig()
+	if err != nil {
+		t.Fatalf("kube config: %v", err)
+	}
+	client, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		t.Fatalf("kube client: %v", err)
+	}
+	sandbox, err := gates.NewAnalysisSandbox(client, config, image)
+	if err != nil {
+		t.Fatalf("analysis sandbox: %v", err)
+	}
+	return sandbox
+}
+
 func Start(t testing.TB) *Platform { return StartWithExecutor(t, nil) }
 
 // StartWithExecutor binds an explicit executor after every real RPC client is
@@ -231,7 +263,8 @@ func StartWithExecutor(t testing.TB, factory func(*Platform) agents.ExecuteFunc)
 
 	// gates, with the controller the gates service composes.
 	controller := gates.NewController(gates.NewStore(pool), gitFwd,
-		reviewsv1.NewReviewsServiceClient(workConnFwd), workv1.NewWorkServiceClient(workConnFwd), "", gates.WithProofService(HMACSecret))
+		reviewsv1.NewReviewsServiceClient(workConnFwd), workv1.NewWorkServiceClient(workConnFwd), "",
+		gates.WithProofService(HMACSecret), gates.WithAnalysisSandbox(AnalysisSandbox(t)))
 	gatesSrv := gates.NewGRPCServer(controller, approvals.NewStore(pool), secrets.NewBroker(pool, []byte("platformtest-kek")), p.Grants)
 	gatesSrv.Proposals = &gates.Proposer{Git: gitFwd, Reviews: reviewsv1.NewReviewsServiceClient(workConnFwd)}
 	serveOn(t, gatesLis, func(s *grpc.Server) { gatesv1.RegisterGatesServiceServer(s, gatesSrv) }, interceptor)

@@ -3,6 +3,7 @@ package agents_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -13,6 +14,24 @@ import (
 	"github.com/novaforge/novaforge/internal/agents"
 	"github.com/novaforge/novaforge/internal/capability"
 )
+
+// recoverRun runs the platform-wide orphan recovery and fails only when it
+// could not reconcile this run.
+//
+// RecoverOrphanedRuns scans every organization and reports every run still
+// holding a resource, so its error is about the whole deployment, not about the
+// caller's run. Asserting it returns nil only holds on a database no other run
+// has ever touched — and these suites run against a shared cluster datastore
+// where other tests deliberately leave runs with cleanup outstanding
+// (TestPurgePreservesUnconfirmedGrantCleanup is one). That made this test fail
+// on other tests' leftovers rather than on its own behaviour.
+func recoverRun(t *testing.T, store *agents.Store, id uuid.UUID) {
+	t.Helper()
+	_, err := agents.RecoverOrphanedRuns(context.Background(), store, nil, agents.OrphanGrace)
+	if err != nil && strings.Contains(err.Error(), id.String()) {
+		t.Fatalf("recovery did not reconcile run %s: %v", id, err)
+	}
+}
 
 func TestTerminalGrantCleanupRetriesWithoutRerunning(t *testing.T) {
 	orgID, repoID := uuid.New(), uuid.New()
@@ -50,9 +69,7 @@ func TestTerminalGrantCleanupRetriesWithoutRerunning(t *testing.T) {
 	}
 	store.GrantIssuanceCanceller = revoke
 	time.Sleep(1100 * time.Millisecond) // persisted retry delay
-	if _, err := agents.RecoverOrphanedRuns(context.Background(), store, nil, agents.OrphanGrace); err != nil {
-		t.Fatal(err)
-	}
+	recoverRun(t, store, id)
 	run, err = store.GetRun(ctx, id)
 	if err != nil || run.State != "cancelled" || run.GrantCleanupPending {
 		t.Fatalf("cleanup not reconciled: %+v %v", run, err)
@@ -61,9 +78,7 @@ func TestTerminalGrantCleanupRetriesWithoutRerunning(t *testing.T) {
 		t.Fatal("cancelled run's grant is still active")
 	}
 	// A second recovery has nothing to resurrect or rewrite.
-	if _, err := agents.RecoverOrphanedRuns(context.Background(), store, nil, agents.OrphanGrace); err != nil {
-		t.Fatal(err)
-	}
+	recoverRun(t, store, id)
 }
 
 func TestPurgePreservesUnconfirmedGrantCleanup(t *testing.T) {

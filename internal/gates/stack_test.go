@@ -15,6 +15,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 
 	gatesv1 "github.com/novaforge/novaforge/gen/novaforge/gates/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
@@ -110,6 +112,37 @@ func serve(t *testing.T, register func(*grpc.Server), interceptor grpc.UnaryServ
 	return conn
 }
 
+// stackSandbox builds the isolated analysis sandbox the gates in this stack run
+// repository code inside.
+//
+// There is no in-process alternative on purpose: running a repository's tests
+// and compiler in the gates service's own process would give code under review
+// the service's database handles and cluster credentials, so the controller
+// refuses to evaluate an executable gate without a sandbox. That makes these
+// tests need a real cluster and a real image, which hack/env.sh supplies from
+// the digest hack/build-images.sh recorded.
+func stackSandbox(t *testing.T) *gates.AnalysisSandbox {
+	t.Helper()
+	image := os.Getenv("NF_GATE_SANDBOX_TEST_IMAGE")
+	if image == "" {
+		t.Skip("NF_GATE_SANDBOX_TEST_IMAGE is unset: executable gates cannot run (./hack/build-images.sh gate-analysis)")
+	}
+	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		clientcmd.NewDefaultClientConfigLoadingRules(), &clientcmd.ConfigOverrides{CurrentContext: "kw"}).ClientConfig()
+	if err != nil {
+		t.Fatalf("kube config: %v", err)
+	}
+	client, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		t.Fatalf("kube client: %v", err)
+	}
+	sandbox, err := gates.NewAnalysisSandbox(client, config, image)
+	if err != nil {
+		t.Fatalf("analysis sandbox: %v", err)
+	}
+	return sandbox
+}
+
 func newPlatformStack(t *testing.T) *platformStack {
 	t.Helper()
 	url := dbURL(t)
@@ -164,7 +197,7 @@ func newPlatformStack(t *testing.T) *platformStack {
 	s.reviews = reviewsv1.NewReviewsServiceClient(reviewsConn)
 
 	controller := gates.NewController(gates.NewStore(pool), s.git, s.reviews, nil, "",
-		gates.WithProofService(s.hmac))
+		gates.WithProofService(s.hmac), gates.WithAnalysisSandbox(stackSandbox(t)))
 	gatesSrv := gates.NewGRPCServer(controller, approvals.NewStore(pool), nil, capability.NewStore(pool))
 	gatesSrv.Proposals = &gates.Proposer{Git: s.git, Reviews: s.reviews}
 	gatesConn := serve(t, func(g *grpc.Server) { gatesv1.RegisterGatesServiceServer(g, gatesSrv) }, auth)

@@ -96,30 +96,76 @@ func (d delayCommands) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 func (d delayCommands) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
 	return next
 }
+
+// TestAuditPublisherRetainsPrefixProgress: a sweep cancelled part-way through
+// publishing keeps the prefix it already published and acked, so repeated short
+// sweeps drain the backlog instead of restarting it.
+//
+// The per-sweep budget is measured rather than written down. It used to be a
+// constant 160ms, calibrated against a datastore on the same machine. Against
+// the cluster's datastores, reached over a VPN, acquiring a connection, taking
+// the publisher lock and reading the backlog costs more than that on its own,
+// so no sweep ever reached its first publish: the backlog stayed at its full
+// size and the test failed without once exercising the behaviour it asserts.
+// A budget derived from one measured sweep holds on both.
 func TestAuditPublisherRetainsPrefixProgress(t *testing.T) {
 	s := newStore(t)
 	org := uuid.New()
 	ctx := scopedCtx(org)
-	run := mustCreateRun(t, s, ctx, org)
 	a := agents.NewAuditLog(s.Pool())
 	rdb := agentsRedis(t)
 	rdb.AddHook(delayCommands{30 * time.Millisecond})
-	for i := 0; i < 12; i++ {
-		if _, err := a.Record(ctx, agents.Entry{RunID: run.ID, Tool: fmt.Sprintf("test.%d", i), ArgsJSON: []byte(`{}`)}); err != nil {
-			t.Fatal(err)
+
+	const events = 12
+	record := func(run uuid.UUID) {
+		t.Helper()
+		for i := 0; i < events; i++ {
+			if _, err := a.Record(ctx, agents.Entry{RunID: run, Tool: fmt.Sprintf("test.%d", i), ArgsJSON: []byte(`{}`)}); err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
-	remaining := 12
-	for i := 0; i < 12 && remaining > 0; i++ {
-		c, cancel := context.WithTimeout(ctx, 160*time.Millisecond)
+	pending := func(run uuid.UUID) int {
+		t.Helper()
+		var n int
+		if err := s.Pool().QueryRow(ctx, `SELECT count(*) FROM agents.tool_events WHERE run_id=$1 AND NOT published`, run).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+
+	// One unhindered sweep gives the cost of publishing and acking one event
+	// against this deployment, and warms the pool so the measurement is not
+	// dominated by opening the first connection.
+	warm := mustCreateRun(t, s, ctx, org)
+	record(warm.ID)
+	began := time.Now()
+	if err := a.MaintainAudit(ctx, rdb); err != nil {
+		t.Fatal(err)
+	}
+	if n := pending(warm.ID); n != 0 {
+		t.Fatalf("an uninterrupted sweep left %d of %d events unpublished", n, events)
+	}
+	perEvent := time.Since(began) / events
+
+	// Each sweep gets room for a couple of events and never for all of them, so
+	// every sweep but the last is cancelled with work outstanding.
+	run := mustCreateRun(t, s, ctx, org)
+	record(run.ID)
+	budget := 2 * perEvent
+	remaining := events
+	for i := 0; i < 4*events && remaining > 0; i++ {
+		c, cancel := context.WithTimeout(ctx, budget)
 		_ = a.MaintainAudit(c, rdb)
 		cancel()
-		if err := s.Pool().QueryRow(ctx, `SELECT count(*) FROM agents.tool_events WHERE run_id=$1 AND NOT published`, run.ID).Scan(&remaining); err != nil {
-			t.Fatal(err)
+		n := pending(run.ID)
+		if n > remaining {
+			t.Fatalf("sweep %d raised the backlog from %d to %d", i, remaining, n)
 		}
+		remaining = n
 	}
 	if remaining != 0 {
-		t.Fatalf("short sweeps never drained prefix: %d pending", remaining)
+		t.Fatalf("short sweeps of %v never drained the backlog: %d of %d pending", budget, remaining, events)
 	}
 }
 

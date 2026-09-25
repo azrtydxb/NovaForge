@@ -133,16 +133,37 @@ func cmdRun(args []string, stdout, stderr io.Writer) error {
 		fs.SetOutput(stderr)
 		verdict := fs.String("verdict", "", "approve, request_changes or reject")
 		summary := fs.String("summary", "", "why")
+		sourceSHA := fs.String("source-sha", "", "the source revision reviewed (default: the run's current source)")
 		if err := fs.Parse(args[3:]); err != nil {
 			return err
 		}
 		if *verdict == "" {
 			return fmt.Errorf("--verdict is required")
 		}
-		if err := c.Do("POST", run+"/reviews", map[string]string{"verdict": *verdict, "summary": *summary}, nil); err != nil {
+		// A verdict names the revision it was formed against. The server refuses
+		// a review that does not, so that an approval cannot silently carry over
+		// to work pushed after it was read. When the reviewer does not say which
+		// revision, resolve the run's current source and report it: if the source
+		// moves between this read and the POST, the server still rejects.
+		reviewed := *sourceSHA
+		if reviewed == "" {
+			var current struct {
+				SHA       string `json:"current_source_sha"`
+				Available bool   `json:"current_source_available"`
+			}
+			if err := c.Do("GET", run+"/reviews", nil, &current); err != nil {
+				return err
+			}
+			if !current.Available || current.SHA == "" {
+				return fmt.Errorf("the run's current source revision is unavailable; pass --source-sha")
+			}
+			reviewed = current.SHA
+		}
+		body := map[string]string{"verdict": *verdict, "summary": *summary, "expected_source_sha": reviewed}
+		if err := c.Do("POST", run+"/reviews", body, nil); err != nil {
 			return err
 		}
-		fmt.Fprintf(stdout, "recorded %s on #%s\n", *verdict, args[2])
+		fmt.Fprintf(stdout, "recorded %s on #%s at %s\n", *verdict, args[2], reviewed)
 		return nil
 
 	case "merge":
