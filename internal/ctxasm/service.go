@@ -3,6 +3,10 @@ package ctxasm
 import (
 	"context"
 	"fmt"
+	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
+	"github.com/novaforge/novaforge/internal/authz"
+	"google.golang.org/grpc"
+	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc/metadata"
@@ -69,4 +73,46 @@ func ToGraphBundle(b Bundle) graph.ContextBundle {
 		}
 	}
 	return graph.ContextBundle{Files: files, Knowledge: entries, Tests: b.Tests, TokensEstimated: b.TokensEstimated}
+}
+
+// NewRPCAssembleFunc resolves intent through its owner. The graph connection has
+// no authority to query work tables, even when both schemas share a database.
+func NewRPCAssembleFunc(gitClient gitv1.GitServiceClient, graphStore *graph.Store, vectors *graph.VectorStore, knowledgeStore *knowledge.Store, client workv1.WorkServiceClient, embedder graph.Embedder, hmacSecret string, ranker Reranker) graph.AssembleContextFunc {
+	return func(ctx context.Context, orgID, repoID uuid.UUID, key string, budget int) (graph.ContextBundle, error) {
+		if err := authz.RequireOrg(ctx, orgID); err != nil {
+			return graph.ContextBundle{}, err
+		}
+		tok, err := svcauth.Mint(hmacSecret, "engineering-graph", orgID, svcauth.DefaultTTL)
+		if err != nil {
+			return graph.ContextBundle{}, err
+		}
+		ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs("authorization", "Bearer "+tok, "x-novaforge-org", orgID.String()))
+		item, err := resolveWorkItem(ctx, client, orgID, repoID, key)
+		if err != nil {
+			return graph.ContextBundle{}, err
+		}
+		b, err := Assemble(ctx, Input{OrgID: orgID, RepoID: repoID, WorkItem: item, TokenBudget: budget, Git: gitClient, Graph: graphStore, Vectors: vectors, Knowledge: knowledgeStore, Embedder: embedder, Reranker: ranker})
+		return ToGraphBundle(b), err
+	}
+}
+
+type workReader interface {
+	GetItem(context.Context, *workv1.GetItemRequest, ...grpc.CallOption) (*workv1.GetItemResponse, error)
+}
+
+func resolveWorkItem(ctx context.Context, client workReader, org, repo uuid.UUID, key string) (work.Item, error) {
+	if client == nil {
+		return work.Item{}, fmt.Errorf("work service unavailable")
+	}
+	call, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	response, err := client.GetItem(call, &workv1.GetItemRequest{Key: key})
+	if err != nil {
+		return work.Item{}, fmt.Errorf("resolve work item: %w", err)
+	}
+	item := response.GetItem()
+	if item.GetOrgId() != org.String() || item.GetRepoId() != repo.String() {
+		return work.Item{}, fmt.Errorf("work item repository scope mismatch")
+	}
+	return work.Item{Goal: item.GetGoal(), Acceptance: item.GetAcceptance()}, nil
 }

@@ -7,6 +7,7 @@ package knowledge
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -80,7 +81,7 @@ func scanEntry(row pgx.Row) (Entry, error) {
 
 // Record inserts a new knowledge entry with embedding, or updates the
 // existing row sharing its (org_id, repo_id, key) key. The org in e must
-// match the caller's authz.Scope.
+// match the caller's authz.Scope. Superseded entries cannot be overwritten.
 func (s *Store) Record(ctx context.Context, e Entry, embedding []float32) (Entry, error) {
 	if err := authz.RequireOrg(ctx, e.OrgID); err != nil {
 		return Entry{}, err
@@ -106,6 +107,7 @@ func (s *Store) Record(ctx context.Context, e Entry, embedding []float32) (Entry
 		ON CONFLICT (org_id, repo_id, key) DO UPDATE
 		SET kind = EXCLUDED.kind, title = EXCLUDED.title, body = EXCLUDED.body,
 			source_run_id = EXCLUDED.source_run_id, embedding = EXCLUDED.embedding
+		WHERE knowledge_entries.superseded_by IS NULL
 		RETURNING id, org_id, repo_id, key, kind, title, body, source_run_id, superseded_by, created_at
 	`, id, e.OrgID, e.RepoID, e.Key, e.Kind, e.Title, e.Body, e.SourceRunID, embArg)
 
@@ -250,24 +252,58 @@ func (s *Store) queryEntries(ctx context.Context, sql string, args ...any) ([]En
 	return out, rows.Err()
 }
 
-// Supersede marks oldID as superseded by newID: it stops appearing in
-// Search but remains fetchable by Get. Both entries must belong to the
-// caller's org.
+// ErrSupersessionConflict means the requested historical link is invalid.
+var ErrSupersessionConflict = errors.New("invalid knowledge supersession")
+
+// Supersede preserves immutable history within one repository. Repository-level
+// serialization prevents concurrent opposite links from each observing no cycle.
 func (s *Store) Supersede(ctx context.Context, oldID, newID uuid.UUID) error {
 	scope, err := authz.FromContext(ctx)
 	if err != nil {
 		return err
 	}
-	tag, err := s.pool.Exec(ctx, `
-		UPDATE knowledge.knowledge_entries
-		SET superseded_by = $1
-		WHERE id = $2 AND org_id = $3
-	`, newID, oldID, scope.OrgID)
+	if scope.OrgID == uuid.Nil || oldID == uuid.Nil || newID == uuid.Nil || oldID == newID {
+		return ErrSupersessionConflict
+	}
+	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("supersede %s -> %s: %w", oldID, newID, err)
+		return err
 	}
-	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("entry %s not found in org %s", oldID, scope.OrgID)
+	defer tx.Rollback(ctx)
+	var repo uuid.UUID
+	if err = tx.QueryRow(ctx, `SELECT repo_id FROM knowledge.knowledge_entries WHERE id=$1 AND org_id=$2`, oldID, scope.OrgID).Scan(&repo); err != nil {
+		return err
 	}
-	return nil
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, "knowledge-supersede:"+scope.OrgID.String()+":"+repo.String()); err != nil {
+		return err
+	}
+	var existing *uuid.UUID
+	if err = tx.QueryRow(ctx, `SELECT superseded_by FROM knowledge.knowledge_entries WHERE id=$1 AND org_id=$2 AND repo_id=$3 FOR UPDATE`, oldID, scope.OrgID, repo).Scan(&existing); err != nil {
+		return err
+	}
+	if existing != nil && *existing != newID {
+		return ErrSupersessionConflict
+	}
+	// Follow only authorized rows, with a visited set so even corrupt legacy
+	// cycles cannot hang the owner. A missing/foreign replacement is not trusted.
+	seen := map[uuid.UUID]bool{oldID: true}
+	next := &newID
+	for next != nil {
+		if seen[*next] || len(seen) > 10000 {
+			return ErrSupersessionConflict
+		}
+		seen[*next] = true
+		var successor *uuid.UUID
+		if err = tx.QueryRow(ctx, `SELECT superseded_by FROM knowledge.knowledge_entries WHERE id=$1 AND org_id=$2 AND repo_id=$3`, *next, scope.OrgID, repo).Scan(&successor); err != nil {
+			return err
+		}
+		next = successor
+	}
+	if existing != nil {
+		return tx.Commit(ctx)
+	}
+	if _, err = tx.Exec(ctx, `UPDATE knowledge.knowledge_entries SET superseded_by=$1 WHERE id=$2 AND org_id=$3 AND repo_id=$4`, newID, oldID, scope.OrgID, repo); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }

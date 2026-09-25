@@ -16,6 +16,7 @@ service GraphService {
   rpc SearchCode(SearchCodeRequest) returns (SearchCodeResponse);
   rpc AssembleContext(AssembleContextRequest) returns (AssembleContextResponse);
   rpc RecordKnowledge(RecordKnowledgeRequest) returns (RecordKnowledgeResponse);
+  rpc SupersedeKnowledge(SupersedeKnowledgeRequest) returns (SupersedeKnowledgeResponse);
   rpc SearchKnowledge(SearchKnowledgeRequest) returns (SearchKnowledgeResponse);
   // FileRelations answers for a whole file what the four symbol queries
   // answer for one symbol: what it imports, who imports its package, which
@@ -30,7 +31,11 @@ service GraphService {
 message MaintenanceSnapshotRequest {
   string repo_id = 1;
   map<string, string> go_file_hashes = 2;
-  string module_hash = 3;
+  // Legacy root digest is not sufficient evidence for nested modules.
+  string module_hash = 3 [deprecated = true];
+  map<string, string> go_file_module_hashes = 4;
+  // Exact source-manifest keys; empty path explicitly means no ancestor go.mod.
+  map<string, string> go_file_module_paths = 5;
 }
 message MaintenanceSnapshotResponse {
   repeated Node symbols = 1;
@@ -199,3 +204,11 @@ message SearchKnowledgeResponse {
   // "text" (full-text match, used when no embedding model answered).
   string mode = 2;
 }
+
+// An org owner/admin corrects knowledge using an already-recorded entry.
+// Both IDs must belong to the same repository; historical links are immutable.
+message SupersedeKnowledgeRequest {
+  string old_id = 1;
+  string replacement_id = 2;
+}
+message SupersedeKnowledgeResponse {}

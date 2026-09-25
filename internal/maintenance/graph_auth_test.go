@@ -27,6 +27,11 @@ func checkGraphRPCScope(t *testing.T, client graphv1.GraphServiceClient, org, re
 			req.ModuleHash = graph.SourceDigest(file.GetContent())
 		}
 	}
+	req.GoFileModuleHashes, req.GoFileModulePaths = map[string]string{}, map[string]string{}
+	for file := range req.GoFileHashes {
+		req.GoFileModuleHashes[file] = req.ModuleHash
+		req.GoFileModulePaths[file] = "go.mod"
+	}
 	if _, err := client.MaintenanceSnapshot(context.Background(), req); status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("anonymous graph evidence: %v", err)
 	}

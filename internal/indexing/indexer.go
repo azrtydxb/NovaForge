@@ -26,6 +26,7 @@ import (
 	"github.com/novaforge/novaforge/internal/authz"
 	"github.com/novaforge/novaforge/internal/events"
 	"github.com/novaforge/novaforge/internal/graph"
+	"github.com/novaforge/novaforge/internal/semanticindex"
 	"github.com/novaforge/novaforge/internal/svcauth"
 )
 
@@ -64,6 +65,7 @@ type Indexer struct {
 	Graph    *graph.Store
 	Vectors  *graph.VectorStore
 	Embedder graph.Embedder
+	Semantic *semanticindex.Controller
 
 	// HMACSecret signs the service token the indexer presents to the git
 	// service for the organization whose push it is indexing.
@@ -261,7 +263,7 @@ func (idx *Indexer) HandlePush(ctx context.Context, evt events.PushEvent) error 
 	}
 	unified := delta.GetUnified()
 	paths := delta.GetChangedPaths()
-	if !full && slices.ContainsFunc(paths, moduleManifest) {
+	if !full && (idx.Semantic != nil || slices.ContainsFunc(paths, moduleManifest)) {
 		// Imports in otherwise unchanged files resolve against the module
 		// path. Replacing only go.mod leaves both edges and evidence stale.
 		// Keep the original diff for attribution: refreshed files were not
@@ -401,6 +403,14 @@ func (idx *Indexer) indexCommit(ctx context.Context, orgID, repoID uuid.UUID, sh
 		return indexed, fmt.Errorf("index incomplete at %s: failed paths %s", sha, strings.Join(failed, ", "))
 	}
 
+	if err := idx.indexDeclarations(ctx, orgID, repoID, sha); err != nil {
+		return indexed, err
+	}
+	if idx.Semantic != nil {
+		if err := idx.indexSemantic(ctx, orgID, repoID, sha); err != nil {
+			return indexed, err
+		}
+	}
 	if err := idx.recordIndexedSHA(ctx, orgID, repoID, sha); err != nil {
 		return indexed, fmt.Errorf("record indexed sha %s for repo %s: %w", sha, repoID, err)
 	}
@@ -587,18 +597,18 @@ func chunksForFile(path string, content []byte, symbols []Symbol) []graph.Chunk 
 // extractionVersion invalidates checkpoints created by older extraction
 // contracts. Bump it when extraction semantics change; the next push
 // wake-up reconciles legacy files, even if the repository head did not move.
-const extractionVersion = "graph-evidence-v4-module-path"
+const extractionVersion = "graph-evidence-v5-module-path-declarations"
 
 // lastIndexedSHA reads a checkpoint produced by this extraction contract.
 // A legacy SHA is not evidence that today's graph extraction ran.
 func (idx *Indexer) lastIndexedSHA(ctx context.Context, orgID, repoID uuid.UUID) (string, error) {
-	return idx.Graph.IndexCheckpoint(ctx, orgID, repoID, extractionVersion)
+	return idx.Graph.IndexCheckpoint(ctx, orgID, repoID, idx.extractionVersion())
 }
 
 // recordIndexedSHA upserts repoID's "commit" node with sha, so a later
 // redelivery of the same push can be detected and skipped immediately.
 func (idx *Indexer) recordIndexedSHA(ctx context.Context, orgID, repoID uuid.UUID, sha string) error {
-	return idx.Graph.SetIndexCheckpoint(ctx, orgID, repoID, sha, extractionVersion)
+	return idx.Graph.SetIndexCheckpoint(ctx, orgID, repoID, sha, idx.extractionVersion())
 }
 
 func (idx *Indexer) pushStream() string {
@@ -606,4 +616,13 @@ func (idx *Indexer) pushStream() string {
 		return idx.PushStream
 	}
 	return events.StreamGitPush
+}
+
+func (idx *Indexer) extractionVersion() string {
+	if idx.Semantic != nil {
+		if d, err := idx.Semantic.ExecutionDigest(); err == nil {
+			return extractionVersion + ":" + d
+		}
+	}
+	return extractionVersion
 }

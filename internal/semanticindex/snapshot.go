@@ -1,5 +1,6 @@
 // Package semanticindex validates semantic evidence produced in an isolated,
-// revision-pinned workspace. It never launches tools or reads host source paths.
+// revision-pinned workspace. Importers never read host source paths; the producer
+// modes execute only inside the credential-free isolated tool image.
 package semanticindex
 
 import (

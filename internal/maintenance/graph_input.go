@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -13,7 +14,6 @@ import (
 	graphv1 "github.com/novaforge/novaforge/gen/novaforge/graph/v1"
 	"github.com/novaforge/novaforge/internal/authz"
 	"github.com/novaforge/novaforge/internal/graph"
-	"golang.org/x/mod/modfile"
 )
 
 // graphInput reads through the owning service, never work-reviews' database.
@@ -23,17 +23,8 @@ func graphInput(ctx context.Context, client graphv1.GraphServiceClient, org, rep
 		return nil, fmt.Errorf("graph maintenance unavailable: no graph service configured")
 	}
 	files := map[string]string{}
-	module, err := os.ReadFile(filepath.Join(dir, "go.mod"))
-	if err != nil && !os.IsNotExist(err) {
-		return nil, err
-	}
-	if err == nil {
-		parsed, err := modfile.Parse("go.mod", module, nil)
-		if err != nil || parsed.Module == nil {
-			return nil, fmt.Errorf("graph maintenance unavailable: invalid root Go module")
-		}
-	}
-	err = filepath.WalkDir(dir, func(name string, entry fs.DirEntry, err error) error {
+	modules := map[string]string{}
+	err := filepath.WalkDir(dir, func(name string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -45,8 +36,15 @@ func graphInput(ctx context.Context, client graphv1.GraphServiceClient, org, rep
 			return err
 		}
 		rel = filepath.ToSlash(rel)
-		if entry.Name() == "go.mod" && rel != "go.mod" {
-			return fmt.Errorf("graph maintenance unavailable: nested Go modules are not resolved")
+		if entry.Type()&os.ModeSymlink != 0 {
+			return fmt.Errorf("graph manifest refuses symlink %q", rel)
+		}
+		if entry.Name() == "go.mod" {
+			body, err := os.ReadFile(name)
+			if err != nil {
+				return err
+			}
+			modules[rel] = graph.SourceDigest(body)
 		}
 		if !strings.HasSuffix(rel, ".go") {
 			return nil
@@ -67,10 +65,24 @@ func graphInput(ctx context.Context, client graphv1.GraphServiceClient, org, rep
 	if len(files) == 0 {
 		return nil, fmt.Errorf("graph maintenance unavailable: no Go source files")
 	}
+	moduleHashes, modulePaths := map[string]string{}, map[string]string{}
+	for file := range files {
+		moduleHashes[file], modulePaths[file] = graph.SourceDigest(nil), ""
+		for dir := path.Dir(file); ; dir = path.Dir(dir) {
+			name := path.Join(dir, "go.mod")
+			if hash, ok := modules[name]; ok {
+				moduleHashes[file], modulePaths[file] = hash, name
+				break
+			}
+			if dir == "." {
+				break
+			}
+		}
+	}
 	call, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	resp, err := client.MaintenanceSnapshot(call, &graphv1.MaintenanceSnapshotRequest{
-		RepoId: repo.String(), GoFileHashes: files, ModuleHash: graph.SourceDigest(module),
+		RepoId: repo.String(), GoFileHashes: files, GoFileModuleHashes: moduleHashes, GoFileModulePaths: modulePaths,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("graph maintenance unavailable: %w", err)

@@ -25,6 +25,16 @@ read-only. Workers do not push, deploy, close tasks or modify shared evidence do
 | closure/runtime-policy | runtime-policy  | internal/agentrun, agents, workspace, tools MCP files, runtime-specific configuration/tests       | Budget, confinement and MCP runtime gaps; real-service tests; fresh review                   |
 | completion-audit       | main, read-only | Design, spec, six plans, BUILD-STATUS, configuration consumers and acceptance                     | Exhaustive requirement-to-evidence matrix; identify omissions and dependencies               |
 | parent integration     | main            | Shared proto/generated interfaces, service wiring, Helm, shared edge routes, evidence docs        | Synthesize all handoffs, resolve integration, full tests/gate, deploy and cluster acceptance |
+| Lane / branch          | Worktree suffix | Exclusive edit boundary                                                                           | Delivery / next gate                                                                         |
+| ---                    | ---             | ---                                                                                               | ---                                                                                          |
+| closure/index-safety   | index-safety    | internal/indexing, graph store/vector/purge/fence internals, internal/cleanup                     | Fenced writes and deletion coordination; real-PG failure tests; fresh review                 |
+| closure/deployments    | deployments     | new internal/deployment, internal/approvals, deployment-specific tools/tests; no credential files | Actual approved deployment execution and evidence; real execution tests; fresh review        |
+| closure/credentials    | credentials     | internal/secrets, internal/ci credential files and credential tests                               | Underlying credential expiry/scoping; real provider tests; fresh review                      |
+| closure/semantic-index | semantic-index  | new internal/semanticindex plus new adapters/tests; no existing graph/indexing files              | LSP/SCIP and broader-language ingestion; real-tool tests; integration handoff; fresh review  |
+| closure/gui            | gui             | web, new GUI-specific edge handlers/tests; no shared route registration                           | Finish design-to-GUI coverage and tests; fresh review                                        |
+| closure/runtime-policy | runtime-policy  | internal/agentrun, agents, workspace, tools MCP files, runtime-specific configuration/tests       | Budget, confinement and MCP runtime gaps; real-service tests; fresh review                   |
+| completion-audit       | main, read-only | Design, spec, six plans, BUILD-STATUS, configuration consumers and acceptance                     | Exhaustive requirement-to-evidence matrix; identify omissions and dependencies               |
+| parent integration     | main            | Shared proto/generated interfaces, service wiring, Helm, shared edge routes, evidence docs        | Synthesize all handoffs, resolve integration, full tests/gate, deploy and cluster acceptance |
 
 Approved supervisor scope updates:
 
@@ -161,3 +171,5 @@ independent reviews. `go test -race ./internal/service -count=1` passed, recorde
 not chart mounts or configured services. Canonical security found two advisory
 findings and no blocking findings; that does not supersede the source audit's
 privileged gate execution defect or constitute a release gate.
+session invalidation must not be claimed from those tests. Production issuer and
+Helm target authorization/configuration remain separate prerequisites.

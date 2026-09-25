@@ -8,7 +8,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/novaforge/novaforge/internal/semanticindex"
+	"io"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -21,6 +26,7 @@ import (
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	graphv1 "github.com/novaforge/novaforge/gen/novaforge/graph/v1"
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
+	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
 	"github.com/novaforge/novaforge/internal/authz"
 	"github.com/novaforge/novaforge/internal/cleanup"
 	"github.com/novaforge/novaforge/internal/ctxasm"
@@ -30,19 +36,33 @@ import (
 	"github.com/novaforge/novaforge/internal/knowledge"
 	"github.com/novaforge/novaforge/internal/service"
 	"github.com/novaforge/novaforge/internal/svcauth"
-	"github.com/novaforge/novaforge/internal/work"
 )
 
 // defaultGRPCPort is used when GRPC_PORT is not set in the environment.
 const defaultGRPCPort = 9097
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "semantic-producer" {
+		if err := semanticindex.RunProducer(os.Stdin, os.Stdout); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+	if len(os.Args) == 2 && os.Args[1] == "semantic-lsp" {
+		if err := semanticindex.RunLSP(); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	cfg := service.LoadConfig()
 	if cfg.DatabaseURL == "" {
 		log.Fatal("engineering-graph: DATABASE_URL is required")
 	}
 	if cfg.RedisURL == "" {
 		log.Fatal("engineering-graph: REDIS_URL is required")
+	}
+	if cfg.HMACSecret == "" {
+		log.Fatal("engineering-graph: HMAC_SECRET is required for authenticated background workers")
 	}
 	if cfg.IdentityAddr == "" {
 		log.Fatal("engineering-graph: IDENTITY_ADDR is required")
@@ -97,7 +117,15 @@ func main() {
 	// organization's, are removed when the deletion is announced; otherwise a
 	// deleted repository's code went on answering searches.
 	cleanup.EngineeringGraph(graphStore, knowledgeStore).Run(ctx, rdb, "engineering-graph")
-	workStore := work.NewStore(pool)
+	if cfg.WorkAddr == "" {
+		log.Fatal("engineering-graph: WORK_ADDR is required")
+	}
+	workConn, err := grpc.NewClient(cfg.WorkAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatalf("engineering-graph: dial work service: %v", err)
+	}
+	defer workConn.Close()
+	workClient := workv1.NewWorkServiceClient(workConn)
 
 	// Embedder is optional: EMBED_ENDPOINT/EMBED_MODEL are unset on a
 	// deployment that has not configured a local embedding model yet.
@@ -127,9 +155,23 @@ func main() {
 		cancelProbe()
 	}
 
-	assemble := ctxasm.NewAssembleFunc(gitClient, graphStore, vectors, knowledgeStore, workStore, embedder, cfg.HMACSecret)
+	var ranker ctxasm.Reranker
+	if endpoint, model := os.Getenv("RERANK_ENDPOINT"), os.Getenv("RERANK_MODEL"); endpoint != "" || model != "" {
+		key := os.Getenv("RERANK_API_KEY")
+		if key == "" {
+			key = os.Getenv("AI_API_KEY")
+		}
+		configured, err := ctxasm.NewGatewayReranker(endpoint, model, key)
+		if err != nil {
+			log.Fatal(err)
+		}
+		ranker = configured
+	} else {
+		log.Print("engineering-graph: reranker unavailable; stable retrieval order fallback")
+	}
+	assemble := ctxasm.NewRPCAssembleFunc(gitClient, graphStore, vectors, knowledgeStore, workClient, embedder, cfg.HMACSecret, ranker)
 
-	grpcServer := graph.NewGRPCServer(graphStore, vectors, knowledgeStore, workStore, embedder, assemble)
+	grpcServer := graph.NewGRPCServer(graphStore, vectors, knowledgeStore, nil, embedder, assemble)
 
 	// Callers are resolved the same way every service resolves them: a
 	// person's credential through identity, or a platform service token
@@ -141,8 +183,37 @@ func main() {
 		svcauth.UnaryServerInterceptor(identityClient, cfg.HMACSecret)))
 	graphv1.RegisterGraphServiceServer(srv, grpcServer)
 
+	var producer *semanticindex.Controller
+	configPath := cfg.SemanticProducerConfigFile
+	if configPath != "" {
+		f, err := os.Open(configPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		data, err := io.ReadAll(io.LimitReader(f, 16385))
+		f.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+		config, err := semanticindex.ParseProducerConfig(data)
+		if err != nil {
+			log.Fatal(err)
+		}
+		restConfig, err := rest.InClusterConfig()
+		if err != nil {
+			log.Fatal(err)
+		}
+		kube, err := kubernetes.NewForConfig(restConfig)
+		if err != nil {
+			log.Fatal(err)
+		}
+		producer = &semanticindex.Controller{Client: kube, REST: restConfig, Config: config}
+	} else {
+		log.Print("engineering-graph: semantic producer unavailable: NF_SEMANTIC_PRODUCER_CONFIG_FILE unset")
+	}
 	idx := &indexing.Indexer{
 		RDB:      rdb,
+		Semantic: producer,
 		Git:      gitClient,
 		Graph:    graphStore,
 		Vectors:  vectors,
@@ -153,6 +224,31 @@ func main() {
 	}
 	indexerCtx, cancelIndexer := context.WithCancel(ctx)
 	defer cancelIndexer()
+	deploymentEvents := &indexing.DeploymentConsumer{Store: graphStore, RDB: rdb, HMACSecret: cfg.HMACSecret}
+	go func() {
+		if err := deploymentEvents.Run(indexerCtx); err != nil && indexerCtx.Err() == nil {
+			log.Printf("engineering-graph: deployment consumer stopped: %v", err)
+		}
+	}()
+	if producer != nil {
+		go func() {
+			ticker := time.NewTicker(time.Minute)
+			defer ticker.Stop()
+			for {
+				call, cancel := context.WithTimeout(indexerCtx, 30*time.Second)
+				err := producer.Reap(call)
+				cancel()
+				if err != nil {
+					log.Printf("semantic reaper: %v", err)
+				}
+				select {
+				case <-indexerCtx.Done():
+					return
+				case <-ticker.C:
+				}
+			}
+		}()
+	}
 	go func() {
 		if err := idx.Run(indexerCtx); err != nil && indexerCtx.Err() == nil {
 			log.Printf("engineering-graph: indexer stopped: %v", err)

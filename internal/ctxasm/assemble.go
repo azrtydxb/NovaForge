@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"regexp"
 	"sort"
 	"strconv"
@@ -159,6 +160,11 @@ func rerank(ctx context.Context, r Reranker, query string, docs []string) []floa
 		}
 		return fallback()
 	}
+	for _, score := range scores {
+		if math.IsNaN(float64(score)) || math.IsInf(float64(score), 0) {
+			return fallback()
+		}
+	}
 	return scores
 }
 
@@ -234,7 +240,7 @@ func symbolCandidates(ctx context.Context, in Input, keywords []string) ([]Snipp
 	}
 	rows, err := in.Graph.Pool().Query(ctx, `
 		SELECT id, attrs->>'path', attrs->>'start_line', attrs->>'end_line',
-		       attrs->>'name', attrs->>'signature'
+		       attrs->>'name', COALESCE(attrs->>'signature', '')
 		FROM graph.graph_nodes
 		WHERE org_id = $1 AND repo_id = $2 AND kind = 'symbol'
 		  AND (key ~* $3 OR attrs->>'name' ~* $3)

@@ -22,12 +22,18 @@ const (
 )
 
 type MaintenanceSnapshotRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RepoId        string                 `protobuf:"bytes,1,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
-	GoFileHashes  map[string]string      `protobuf:"bytes,2,rep,name=go_file_hashes,json=goFileHashes,proto3" json:"go_file_hashes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	ModuleHash    string                 `protobuf:"bytes,3,opt,name=module_hash,json=moduleHash,proto3" json:"module_hash,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	RepoId       string                 `protobuf:"bytes,1,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	GoFileHashes map[string]string      `protobuf:"bytes,2,rep,name=go_file_hashes,json=goFileHashes,proto3" json:"go_file_hashes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// Legacy root digest is not sufficient evidence for nested modules.
+	//
+	// Deprecated: Marked as deprecated in novaforge/graph/v1/graph.proto.
+	ModuleHash         string            `protobuf:"bytes,3,opt,name=module_hash,json=moduleHash,proto3" json:"module_hash,omitempty"`
+	GoFileModuleHashes map[string]string `protobuf:"bytes,4,rep,name=go_file_module_hashes,json=goFileModuleHashes,proto3" json:"go_file_module_hashes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// Exact source-manifest keys; empty path explicitly means no ancestor go.mod.
+	GoFileModulePaths map[string]string `protobuf:"bytes,5,rep,name=go_file_module_paths,json=goFileModulePaths,proto3" json:"go_file_module_paths,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *MaintenanceSnapshotRequest) Reset() {
@@ -74,11 +80,26 @@ func (x *MaintenanceSnapshotRequest) GetGoFileHashes() map[string]string {
 	return nil
 }
 
+// Deprecated: Marked as deprecated in novaforge/graph/v1/graph.proto.
 func (x *MaintenanceSnapshotRequest) GetModuleHash() string {
 	if x != nil {
 		return x.ModuleHash
 	}
 	return ""
+}
+
+func (x *MaintenanceSnapshotRequest) GetGoFileModuleHashes() map[string]string {
+	if x != nil {
+		return x.GoFileModuleHashes
+	}
+	return nil
+}
+
+func (x *MaintenanceSnapshotRequest) GetGoFileModulePaths() map[string]string {
+	if x != nil {
+		return x.GoFileModulePaths
+	}
+	return nil
 }
 
 type MaintenanceSnapshotResponse struct {
@@ -1738,17 +1759,115 @@ func (x *SearchKnowledgeResponse) GetMode() string {
 	return ""
 }
 
+// An org owner/admin corrects knowledge using an already-recorded entry.
+// Both IDs must belong to the same repository; historical links are immutable.
+type SupersedeKnowledgeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OldId         string                 `protobuf:"bytes,1,opt,name=old_id,json=oldId,proto3" json:"old_id,omitempty"`
+	ReplacementId string                 `protobuf:"bytes,2,opt,name=replacement_id,json=replacementId,proto3" json:"replacement_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SupersedeKnowledgeRequest) Reset() {
+	*x = SupersedeKnowledgeRequest{}
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SupersedeKnowledgeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SupersedeKnowledgeRequest) ProtoMessage() {}
+
+func (x *SupersedeKnowledgeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SupersedeKnowledgeRequest.ProtoReflect.Descriptor instead.
+func (*SupersedeKnowledgeRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *SupersedeKnowledgeRequest) GetOldId() string {
+	if x != nil {
+		return x.OldId
+	}
+	return ""
+}
+
+func (x *SupersedeKnowledgeRequest) GetReplacementId() string {
+	if x != nil {
+		return x.ReplacementId
+	}
+	return ""
+}
+
+type SupersedeKnowledgeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SupersedeKnowledgeResponse) Reset() {
+	*x = SupersedeKnowledgeResponse{}
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SupersedeKnowledgeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SupersedeKnowledgeResponse) ProtoMessage() {}
+
+func (x *SupersedeKnowledgeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_graph_v1_graph_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SupersedeKnowledgeResponse.ProtoReflect.Descriptor instead.
+func (*SupersedeKnowledgeResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_graph_v1_graph_proto_rawDescGZIP(), []int{29}
+}
+
 var File_novaforge_graph_v1_graph_proto protoreflect.FileDescriptor
 
 const file_novaforge_graph_v1_graph_proto_rawDesc = "" +
 	"\n" +
-	"\x1enovaforge/graph/v1/graph.proto\x12\x12novaforge.graph.v1\"\xff\x01\n" +
+	"\x1enovaforge/graph/v1/graph.proto\x12\x12novaforge.graph.v1\"\x83\x05\n" +
 	"\x1aMaintenanceSnapshotRequest\x12\x17\n" +
 	"\arepo_id\x18\x01 \x01(\tR\x06repoId\x12f\n" +
-	"\x0ego_file_hashes\x18\x02 \x03(\v2@.novaforge.graph.v1.MaintenanceSnapshotRequest.GoFileHashesEntryR\fgoFileHashes\x12\x1f\n" +
-	"\vmodule_hash\x18\x03 \x01(\tR\n" +
-	"moduleHash\x1a?\n" +
+	"\x0ego_file_hashes\x18\x02 \x03(\v2@.novaforge.graph.v1.MaintenanceSnapshotRequest.GoFileHashesEntryR\fgoFileHashes\x12#\n" +
+	"\vmodule_hash\x18\x03 \x01(\tB\x02\x18\x01R\n" +
+	"moduleHash\x12y\n" +
+	"\x15go_file_module_hashes\x18\x04 \x03(\v2F.novaforge.graph.v1.MaintenanceSnapshotRequest.GoFileModuleHashesEntryR\x12goFileModuleHashes\x12v\n" +
+	"\x14go_file_module_paths\x18\x05 \x03(\v2E.novaforge.graph.v1.MaintenanceSnapshotRequest.GoFileModulePathsEntryR\x11goFileModulePaths\x1a?\n" +
 	"\x11GoFileHashesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aE\n" +
+	"\x17GoFileModuleHashesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aD\n" +
+	"\x16GoFileModulePathsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8f\x01\n" +
 	"\x1bMaintenanceSnapshotResponse\x122\n" +
@@ -1874,7 +1993,11 @@ const file_novaforge_graph_v1_graph_proto_rawDesc = "" +
 	"\x01k\x18\x03 \x01(\x05R\x01k\"k\n" +
 	"\x17SearchKnowledgeResponse\x12<\n" +
 	"\aentries\x18\x01 \x03(\v2\".novaforge.graph.v1.KnowledgeEntryR\aentries\x12\x12\n" +
-	"\x04mode\x18\x02 \x01(\tR\x04mode2\xf3\b\n" +
+	"\x04mode\x18\x02 \x01(\tR\x04mode\"Y\n" +
+	"\x19SupersedeKnowledgeRequest\x12\x15\n" +
+	"\x06old_id\x18\x01 \x01(\tR\x05oldId\x12%\n" +
+	"\x0ereplacement_id\x18\x02 \x01(\tR\rreplacementId\"\x1c\n" +
+	"\x1aSupersedeKnowledgeResponse2\xe8\t\n" +
 	"\fGraphService\x12X\n" +
 	"\tGetSymbol\x12$.novaforge.graph.v1.GetSymbolRequest\x1a%.novaforge.graph.v1.GetSymbolResponse\x12[\n" +
 	"\n" +
@@ -1885,7 +2008,8 @@ const file_novaforge_graph_v1_graph_proto_rawDesc = "" +
 	"\n" +
 	"SearchCode\x12%.novaforge.graph.v1.SearchCodeRequest\x1a&.novaforge.graph.v1.SearchCodeResponse\x12j\n" +
 	"\x0fAssembleContext\x12*.novaforge.graph.v1.AssembleContextRequest\x1a+.novaforge.graph.v1.AssembleContextResponse\x12j\n" +
-	"\x0fRecordKnowledge\x12*.novaforge.graph.v1.RecordKnowledgeRequest\x1a+.novaforge.graph.v1.RecordKnowledgeResponse\x12j\n" +
+	"\x0fRecordKnowledge\x12*.novaforge.graph.v1.RecordKnowledgeRequest\x1a+.novaforge.graph.v1.RecordKnowledgeResponse\x12s\n" +
+	"\x12SupersedeKnowledge\x12-.novaforge.graph.v1.SupersedeKnowledgeRequest\x1a..novaforge.graph.v1.SupersedeKnowledgeResponse\x12j\n" +
 	"\x0fSearchKnowledge\x12*.novaforge.graph.v1.SearchKnowledgeRequest\x1a+.novaforge.graph.v1.SearchKnowledgeResponse\x12d\n" +
 	"\rFileRelations\x12(.novaforge.graph.v1.FileRelationsRequest\x1a).novaforge.graph.v1.FileRelationsResponse\x12v\n" +
 	"\x13MaintenanceSnapshot\x12..novaforge.graph.v1.MaintenanceSnapshotRequest\x1a/.novaforge.graph.v1.MaintenanceSnapshotResponseB\xcd\x01\n" +
@@ -1904,7 +2028,7 @@ func file_novaforge_graph_v1_graph_proto_rawDescGZIP() []byte {
 	return file_novaforge_graph_v1_graph_proto_rawDescData
 }
 
-var file_novaforge_graph_v1_graph_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
+var file_novaforge_graph_v1_graph_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
 var file_novaforge_graph_v1_graph_proto_goTypes = []any{
 	(*MaintenanceSnapshotRequest)(nil),  // 0: novaforge.graph.v1.MaintenanceSnapshotRequest
 	(*MaintenanceSnapshotResponse)(nil), // 1: novaforge.graph.v1.MaintenanceSnapshotResponse
@@ -1934,57 +2058,65 @@ var file_novaforge_graph_v1_graph_proto_goTypes = []any{
 	(*RecordKnowledgeResponse)(nil),     // 25: novaforge.graph.v1.RecordKnowledgeResponse
 	(*SearchKnowledgeRequest)(nil),      // 26: novaforge.graph.v1.SearchKnowledgeRequest
 	(*SearchKnowledgeResponse)(nil),     // 27: novaforge.graph.v1.SearchKnowledgeResponse
-	nil,                                 // 28: novaforge.graph.v1.MaintenanceSnapshotRequest.GoFileHashesEntry
-	nil,                                 // 29: novaforge.graph.v1.Node.AttrsEntry
+	(*SupersedeKnowledgeRequest)(nil),   // 28: novaforge.graph.v1.SupersedeKnowledgeRequest
+	(*SupersedeKnowledgeResponse)(nil),  // 29: novaforge.graph.v1.SupersedeKnowledgeResponse
+	nil,                                 // 30: novaforge.graph.v1.MaintenanceSnapshotRequest.GoFileHashesEntry
+	nil,                                 // 31: novaforge.graph.v1.MaintenanceSnapshotRequest.GoFileModuleHashesEntry
+	nil,                                 // 32: novaforge.graph.v1.MaintenanceSnapshotRequest.GoFileModulePathsEntry
+	nil,                                 // 33: novaforge.graph.v1.Node.AttrsEntry
 }
 var file_novaforge_graph_v1_graph_proto_depIdxs = []int32{
-	28, // 0: novaforge.graph.v1.MaintenanceSnapshotRequest.go_file_hashes:type_name -> novaforge.graph.v1.MaintenanceSnapshotRequest.GoFileHashesEntry
-	3,  // 1: novaforge.graph.v1.MaintenanceSnapshotResponse.symbols:type_name -> novaforge.graph.v1.Node
-	3,  // 2: novaforge.graph.v1.MaintenanceSnapshotResponse.unreferenced:type_name -> novaforge.graph.v1.Node
-	29, // 3: novaforge.graph.v1.Node.attrs:type_name -> novaforge.graph.v1.Node.AttrsEntry
-	6,  // 4: novaforge.graph.v1.ContextBundle.files:type_name -> novaforge.graph.v1.ContextSnippet
-	5,  // 5: novaforge.graph.v1.ContextBundle.knowledge:type_name -> novaforge.graph.v1.KnowledgeEntry
-	2,  // 6: novaforge.graph.v1.GetSymbolResponse.symbol:type_name -> novaforge.graph.v1.Symbol
-	3,  // 7: novaforge.graph.v1.DependentsResponse.nodes:type_name -> novaforge.graph.v1.Node
-	3,  // 8: novaforge.graph.v1.DependenciesResponse.nodes:type_name -> novaforge.graph.v1.Node
-	3,  // 9: novaforge.graph.v1.TestsCoveringResponse.nodes:type_name -> novaforge.graph.v1.Node
-	3,  // 10: novaforge.graph.v1.LastChangedByResponse.history:type_name -> novaforge.graph.v1.Node
-	2,  // 11: novaforge.graph.v1.FileRelationsResponse.symbols:type_name -> novaforge.graph.v1.Symbol
-	3,  // 12: novaforge.graph.v1.FileRelationsResponse.imports:type_name -> novaforge.graph.v1.Node
-	3,  // 13: novaforge.graph.v1.FileRelationsResponse.imported_by:type_name -> novaforge.graph.v1.Node
-	3,  // 14: novaforge.graph.v1.FileRelationsResponse.dependents:type_name -> novaforge.graph.v1.Node
-	3,  // 15: novaforge.graph.v1.FileRelationsResponse.tests:type_name -> novaforge.graph.v1.Node
-	3,  // 16: novaforge.graph.v1.FileRelationsResponse.history:type_name -> novaforge.graph.v1.Node
-	4,  // 17: novaforge.graph.v1.SearchCodeResponse.chunks:type_name -> novaforge.graph.v1.CodeChunk
-	7,  // 18: novaforge.graph.v1.AssembleContextResponse.bundle:type_name -> novaforge.graph.v1.ContextBundle
-	5,  // 19: novaforge.graph.v1.SearchKnowledgeResponse.entries:type_name -> novaforge.graph.v1.KnowledgeEntry
-	8,  // 20: novaforge.graph.v1.GraphService.GetSymbol:input_type -> novaforge.graph.v1.GetSymbolRequest
-	10, // 21: novaforge.graph.v1.GraphService.Dependents:input_type -> novaforge.graph.v1.DependentsRequest
-	12, // 22: novaforge.graph.v1.GraphService.Dependencies:input_type -> novaforge.graph.v1.DependenciesRequest
-	14, // 23: novaforge.graph.v1.GraphService.TestsCovering:input_type -> novaforge.graph.v1.TestsCoveringRequest
-	16, // 24: novaforge.graph.v1.GraphService.LastChangedBy:input_type -> novaforge.graph.v1.LastChangedByRequest
-	20, // 25: novaforge.graph.v1.GraphService.SearchCode:input_type -> novaforge.graph.v1.SearchCodeRequest
-	22, // 26: novaforge.graph.v1.GraphService.AssembleContext:input_type -> novaforge.graph.v1.AssembleContextRequest
-	24, // 27: novaforge.graph.v1.GraphService.RecordKnowledge:input_type -> novaforge.graph.v1.RecordKnowledgeRequest
-	26, // 28: novaforge.graph.v1.GraphService.SearchKnowledge:input_type -> novaforge.graph.v1.SearchKnowledgeRequest
-	18, // 29: novaforge.graph.v1.GraphService.FileRelations:input_type -> novaforge.graph.v1.FileRelationsRequest
-	0,  // 30: novaforge.graph.v1.GraphService.MaintenanceSnapshot:input_type -> novaforge.graph.v1.MaintenanceSnapshotRequest
-	9,  // 31: novaforge.graph.v1.GraphService.GetSymbol:output_type -> novaforge.graph.v1.GetSymbolResponse
-	11, // 32: novaforge.graph.v1.GraphService.Dependents:output_type -> novaforge.graph.v1.DependentsResponse
-	13, // 33: novaforge.graph.v1.GraphService.Dependencies:output_type -> novaforge.graph.v1.DependenciesResponse
-	15, // 34: novaforge.graph.v1.GraphService.TestsCovering:output_type -> novaforge.graph.v1.TestsCoveringResponse
-	17, // 35: novaforge.graph.v1.GraphService.LastChangedBy:output_type -> novaforge.graph.v1.LastChangedByResponse
-	21, // 36: novaforge.graph.v1.GraphService.SearchCode:output_type -> novaforge.graph.v1.SearchCodeResponse
-	23, // 37: novaforge.graph.v1.GraphService.AssembleContext:output_type -> novaforge.graph.v1.AssembleContextResponse
-	25, // 38: novaforge.graph.v1.GraphService.RecordKnowledge:output_type -> novaforge.graph.v1.RecordKnowledgeResponse
-	27, // 39: novaforge.graph.v1.GraphService.SearchKnowledge:output_type -> novaforge.graph.v1.SearchKnowledgeResponse
-	19, // 40: novaforge.graph.v1.GraphService.FileRelations:output_type -> novaforge.graph.v1.FileRelationsResponse
-	1,  // 41: novaforge.graph.v1.GraphService.MaintenanceSnapshot:output_type -> novaforge.graph.v1.MaintenanceSnapshotResponse
-	31, // [31:42] is the sub-list for method output_type
-	20, // [20:31] is the sub-list for method input_type
-	20, // [20:20] is the sub-list for extension type_name
-	20, // [20:20] is the sub-list for extension extendee
-	0,  // [0:20] is the sub-list for field type_name
+	30, // 0: novaforge.graph.v1.MaintenanceSnapshotRequest.go_file_hashes:type_name -> novaforge.graph.v1.MaintenanceSnapshotRequest.GoFileHashesEntry
+	31, // 1: novaforge.graph.v1.MaintenanceSnapshotRequest.go_file_module_hashes:type_name -> novaforge.graph.v1.MaintenanceSnapshotRequest.GoFileModuleHashesEntry
+	32, // 2: novaforge.graph.v1.MaintenanceSnapshotRequest.go_file_module_paths:type_name -> novaforge.graph.v1.MaintenanceSnapshotRequest.GoFileModulePathsEntry
+	3,  // 3: novaforge.graph.v1.MaintenanceSnapshotResponse.symbols:type_name -> novaforge.graph.v1.Node
+	3,  // 4: novaforge.graph.v1.MaintenanceSnapshotResponse.unreferenced:type_name -> novaforge.graph.v1.Node
+	33, // 5: novaforge.graph.v1.Node.attrs:type_name -> novaforge.graph.v1.Node.AttrsEntry
+	6,  // 6: novaforge.graph.v1.ContextBundle.files:type_name -> novaforge.graph.v1.ContextSnippet
+	5,  // 7: novaforge.graph.v1.ContextBundle.knowledge:type_name -> novaforge.graph.v1.KnowledgeEntry
+	2,  // 8: novaforge.graph.v1.GetSymbolResponse.symbol:type_name -> novaforge.graph.v1.Symbol
+	3,  // 9: novaforge.graph.v1.DependentsResponse.nodes:type_name -> novaforge.graph.v1.Node
+	3,  // 10: novaforge.graph.v1.DependenciesResponse.nodes:type_name -> novaforge.graph.v1.Node
+	3,  // 11: novaforge.graph.v1.TestsCoveringResponse.nodes:type_name -> novaforge.graph.v1.Node
+	3,  // 12: novaforge.graph.v1.LastChangedByResponse.history:type_name -> novaforge.graph.v1.Node
+	2,  // 13: novaforge.graph.v1.FileRelationsResponse.symbols:type_name -> novaforge.graph.v1.Symbol
+	3,  // 14: novaforge.graph.v1.FileRelationsResponse.imports:type_name -> novaforge.graph.v1.Node
+	3,  // 15: novaforge.graph.v1.FileRelationsResponse.imported_by:type_name -> novaforge.graph.v1.Node
+	3,  // 16: novaforge.graph.v1.FileRelationsResponse.dependents:type_name -> novaforge.graph.v1.Node
+	3,  // 17: novaforge.graph.v1.FileRelationsResponse.tests:type_name -> novaforge.graph.v1.Node
+	3,  // 18: novaforge.graph.v1.FileRelationsResponse.history:type_name -> novaforge.graph.v1.Node
+	4,  // 19: novaforge.graph.v1.SearchCodeResponse.chunks:type_name -> novaforge.graph.v1.CodeChunk
+	7,  // 20: novaforge.graph.v1.AssembleContextResponse.bundle:type_name -> novaforge.graph.v1.ContextBundle
+	5,  // 21: novaforge.graph.v1.SearchKnowledgeResponse.entries:type_name -> novaforge.graph.v1.KnowledgeEntry
+	8,  // 22: novaforge.graph.v1.GraphService.GetSymbol:input_type -> novaforge.graph.v1.GetSymbolRequest
+	10, // 23: novaforge.graph.v1.GraphService.Dependents:input_type -> novaforge.graph.v1.DependentsRequest
+	12, // 24: novaforge.graph.v1.GraphService.Dependencies:input_type -> novaforge.graph.v1.DependenciesRequest
+	14, // 25: novaforge.graph.v1.GraphService.TestsCovering:input_type -> novaforge.graph.v1.TestsCoveringRequest
+	16, // 26: novaforge.graph.v1.GraphService.LastChangedBy:input_type -> novaforge.graph.v1.LastChangedByRequest
+	20, // 27: novaforge.graph.v1.GraphService.SearchCode:input_type -> novaforge.graph.v1.SearchCodeRequest
+	22, // 28: novaforge.graph.v1.GraphService.AssembleContext:input_type -> novaforge.graph.v1.AssembleContextRequest
+	24, // 29: novaforge.graph.v1.GraphService.RecordKnowledge:input_type -> novaforge.graph.v1.RecordKnowledgeRequest
+	28, // 30: novaforge.graph.v1.GraphService.SupersedeKnowledge:input_type -> novaforge.graph.v1.SupersedeKnowledgeRequest
+	26, // 31: novaforge.graph.v1.GraphService.SearchKnowledge:input_type -> novaforge.graph.v1.SearchKnowledgeRequest
+	18, // 32: novaforge.graph.v1.GraphService.FileRelations:input_type -> novaforge.graph.v1.FileRelationsRequest
+	0,  // 33: novaforge.graph.v1.GraphService.MaintenanceSnapshot:input_type -> novaforge.graph.v1.MaintenanceSnapshotRequest
+	9,  // 34: novaforge.graph.v1.GraphService.GetSymbol:output_type -> novaforge.graph.v1.GetSymbolResponse
+	11, // 35: novaforge.graph.v1.GraphService.Dependents:output_type -> novaforge.graph.v1.DependentsResponse
+	13, // 36: novaforge.graph.v1.GraphService.Dependencies:output_type -> novaforge.graph.v1.DependenciesResponse
+	15, // 37: novaforge.graph.v1.GraphService.TestsCovering:output_type -> novaforge.graph.v1.TestsCoveringResponse
+	17, // 38: novaforge.graph.v1.GraphService.LastChangedBy:output_type -> novaforge.graph.v1.LastChangedByResponse
+	21, // 39: novaforge.graph.v1.GraphService.SearchCode:output_type -> novaforge.graph.v1.SearchCodeResponse
+	23, // 40: novaforge.graph.v1.GraphService.AssembleContext:output_type -> novaforge.graph.v1.AssembleContextResponse
+	25, // 41: novaforge.graph.v1.GraphService.RecordKnowledge:output_type -> novaforge.graph.v1.RecordKnowledgeResponse
+	29, // 42: novaforge.graph.v1.GraphService.SupersedeKnowledge:output_type -> novaforge.graph.v1.SupersedeKnowledgeResponse
+	27, // 43: novaforge.graph.v1.GraphService.SearchKnowledge:output_type -> novaforge.graph.v1.SearchKnowledgeResponse
+	19, // 44: novaforge.graph.v1.GraphService.FileRelations:output_type -> novaforge.graph.v1.FileRelationsResponse
+	1,  // 45: novaforge.graph.v1.GraphService.MaintenanceSnapshot:output_type -> novaforge.graph.v1.MaintenanceSnapshotResponse
+	34, // [34:46] is the sub-list for method output_type
+	22, // [22:34] is the sub-list for method input_type
+	22, // [22:22] is the sub-list for extension type_name
+	22, // [22:22] is the sub-list for extension extendee
+	0,  // [0:22] is the sub-list for field type_name
 }
 
 func init() { file_novaforge_graph_v1_graph_proto_init() }
@@ -1998,7 +2130,7 @@ func file_novaforge_graph_v1_graph_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_novaforge_graph_v1_graph_proto_rawDesc), len(file_novaforge_graph_v1_graph_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   30,
+			NumMessages:   34,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
