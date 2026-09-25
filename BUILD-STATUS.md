@@ -93,29 +93,23 @@ did not use it — none of them reachable from a local suite:
 Admission failures are now logged. The reason was discarded, which is why the
 first of these took two deploy cycles to identify rather than one.
 
-**In-cluster result: nine of twelve suites pass** — airgap, deploy, gui, search,
-graph, agent_ci, merge, cli and crossorg. `merge`, `cli` and `agent_ci` are the
-ones that matter most here: they exercise a real gate evaluation inside the
-sandbox, a full Agent Run, and a CI-sponsored Agent Run.
+**In-cluster result: twelve of thirteen suites pass** — airgap, deploy, work_ci,
+secrets, gui, search, graph, factory, agent_ci, merge, cli and crossorg. The
+ones that carry the most weight: `merge` and `cli` evaluate a real gate inside
+the isolated sandbox and land a merge, `agent_ci` runs a CI-sponsored Agent Run,
+and `secrets` proves a job receives a credential minted by the provider that no
+stored value could have produced.
 
-**The three that do not pass, and why none is a defect in this tree:**
+**The one that does not pass.** `agent` drives a full Agent Run, which needs
+several sequential planner-sized model calls, and each failed with the gateway's
+120-second upstream header timeout. The same deployment decomposes an epic
+(`factory`) and completes a CI agent job (`agent_ci`) in the same run, so the
+platform path is exercised and it is the long calls that do not come back. See
+the model limitation below for the measurements.
 
-- `work_ci` needs a dynamic credential provider to broker its job's secret.
-  None is deployed (see the limitation below). The suite now names that
-  prerequisite instead of reporting a bare CI failure.
-- `factory` and `agent` both need model calls, and the FastLLM gateway is
-  flapping. One of three identical requests succeeded and the others returned
-  502 "no healthy backend for model cacheaffinity-qwen3-6-35b-a3b-nvfp4", while
-  the upstream served the same model directly in 12ms. Both suites have passed
-  on this deployment when the backend was healthy — `factory` passed in an
-  earlier run of this same tree and failed in a later one with that exact error,
-  which is what distinguishes infrastructure from code. An Agent Run needs
-  several sequential calls, so it fails more reliably than a single
-  decomposition.
-
-  The failure is recorded honestly rather than hidden: the run's summary is the
-  model error and its state is failed, not succeeded. That is the verification
-  behaviour working — a run that did nothing is not a success.
+The failure is recorded rather than hidden: the run's state is failed and its
+summary is the model error, not a success. A run that did nothing is not a
+success, which is the verification behaviour working.
 
 The deployment accounts below are historical evidence from revision 70 and
 earlier, and describe an older tree.
@@ -897,11 +891,19 @@ These are real and are not worked around:
   `REGISTRY_PASSWORD`; `hack/deploy.sh` refuses to deploy without the first,
   because a deployment with no gateway credential looks configured and is not.
   A fresh clone must create that file before deploying.
-- **Model choice is not free on this cluster.** The 27B dense model takes over
-  120 seconds to first token for a planner-sized prompt, which is past the
-  gateway's upstream header timeout, so every such call 502s. The chart points
-  at the MoE model (`qwen3-6-35b-a3b`), which answers the same prompt in about
-  six seconds.
+- **Model choice is not free on this cluster, and the gateway is not steady.**
+  The 27B dense model takes over 120 seconds to first token for a planner-sized
+  prompt, past the gateway's upstream header timeout, so every such call 502s.
+  The chart points at the MoE model (`qwen3-6-35b-a3b`), which answered the same
+  prompt in about six seconds. As of 2026-09-25 that model is hitting the same
+  timeout intermittently: one of three identical completions succeeded through
+  the gateway and the others returned "no healthy backend", while the upstream
+  answered `/v1/models` directly in 12ms, and the proxy runs three replicas whose
+  backend registries rebuild independently (observed going 7 → 9 → 10). Short
+  calls get through — `factory` decomposes and a CI agent job completes — while
+  the `agent` suite, which needs several sequential planner-sized calls, fails on
+  a 120s header timeout. This is model infrastructure, outside this repository,
+  and it is why `agent` is the one suite that does not pass.
 - **Verification is a model's judgement.** A run is judged against its
   acceptance criteria by the model, shown only the run's tool calls and their
   results — not its reasoning or its claims — but it is still a model deciding.
