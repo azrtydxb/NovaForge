@@ -37,10 +37,38 @@ if [ -n "$missing" ]; then
 	exit 1
 fi
 
+# The gates service runs repository code inside the analysis sandbox image and
+# refuses to run executable gates without one, so the deployment must carry it.
+# The chart demands a digest, not a tag: a gate's verdict is reproducible only
+# if the tools that produced it are exactly the ones that were qualified. The
+# digest is read from the registry rather than written down, so it always
+# describes the image actually published at this tag.
+#
+# This is checked like the model credential above, and for the same reason: a
+# deployment with no sandbox comes up healthy, serves the whole API, and fails
+# every merge gate with "isolated analysis sandbox is not configured", which
+# reads like a platform outage rather than a missing setting.
+ANALYSIS_DIGEST="$(curl -sk -o /dev/null -D - \
+	-u "$REGISTRY_USER:$REGISTRY_PASSWORD" \
+	-H 'Accept: application/vnd.oci.image.manifest.v1+json' \
+	"https://$REGISTRY_PUSH/v2/$REGISTRY_REPO/gate-analysis/manifests/$TAG" |
+	tr -d '\r' | awk -F': ' 'tolower($1)=="docker-content-digest"{print $2}')"
+case "$ANALYSIS_DIGEST" in
+sha256:????????????????????????????????????????????????????????????????) ;;
+*)
+	echo "no gate-analysis image at tag $TAG (got digest \"$ANALYSIS_DIGEST\")" >&2
+	echo "run: ./hack/build-images.sh gate-analysis" >&2
+	exit 1
+	;;
+esac
+ANALYSIS_IMAGE="$REGISTRY_PULL/$REGISTRY_REPO/gate-analysis@$ANALYSIS_DIGEST"
+echo "gate analysis sandbox: $ANALYSIS_IMAGE"
+
 helm --kube-context "$KUBE_CONTEXT" upgrade --install "$REL" deploy/helm/novaforge \
 	--namespace "$NS" \
 	--set image.tag="$TAG" \
 	--set ai.apiKey="${AI_API_KEY:?set AI_API_KEY (hack/env.local.sh) — the model gateway rejects unauthenticated calls}" \
+	--set services.gates.analysisImage="$ANALYSIS_IMAGE" \
 	--wait --timeout 15m "$@"
 
 kubectl --context "$KUBE_CONTEXT" -n "$NS" get pods

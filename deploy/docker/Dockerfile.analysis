@@ -32,7 +32,55 @@ RUN curl -sSfL -o /tmp/gitleaks.tgz \
  && echo "${OSV_SHA256}  /usr/local/bin/osv-scanner" | sha256sum -c - \
  && chmod 0755 /usr/local/bin/gitleaks /usr/local/bin/osv-scanner
 
-FROM golang:${GO_VERSION}
+# The offline advisory snapshot the vulnerability scanner reads. The sandbox has
+# no network at all (deny-all NetworkPolicy, GOPROXY=off), so osv-scanner cannot
+# fetch its advisory database at scan time: the database is part of the image or
+# the dependencies gate simply cannot run. internal/analysis expects it at the
+# fixed path /opt/analysis/osv and verifies every ZIP against the digest in
+# manifest.json before trusting it, so a truncated or swapped download makes the
+# scan unavailable rather than silently clean.
+#
+# The four ecosystems here are exactly the manifest kinds the approval policy
+# detects — go.mod, package.json, requirements*.txt and Cargo.toml. Adding an
+# ecosystem to that list means adding it here too, or dependencies declared that
+# way are scanned against no advisories.
+#
+# The snapshot carries an explicit validity interval, and an expired manifest
+# makes the scan unavailable rather than clean. The image therefore has to be
+# rebuilt inside ADVISORY_VALID_DAYS; that is deliberate, because a
+# vulnerability scan against a year-old advisory database is worse than none.
+FROM golang:${GO_VERSION} AS advisories
+ARG ADVISORY_VALID_DAYS=90
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends unzip \
+ && rm -rf /var/lib/apt/lists/*
+RUN set -eu; \
+    root=/opt/analysis/osv; mkdir -p "$root/osv-scalibr"; \
+    : >/tmp/ecosystems; \
+    for eco in Go npm PyPI crates.io; do \
+      mkdir -p "$root/osv-scalibr/$eco"; \
+      curl -sSfL -o "$root/osv-scalibr/$eco/all.zip" \
+        "https://osv-vulnerabilities.storage.googleapis.com/$eco/all.zip"; \
+      # A ZIP that does not open is a failed download, not an empty ecosystem.
+      unzip -tqq "$root/osv-scalibr/$eco/all.zip" >/dev/null; \
+      printf '%s %s\n' "$eco" "$(sha256sum "$root/osv-scalibr/$eco/all.zip" | cut -d' ' -f1)" >>/tmp/ecosystems; \
+    done; \
+    # The reader requires exactly four fields, rejects duplicate keys, and wants
+    # RFC 3339 times with generated_at <= now < valid_until.
+    now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"; \
+    until_="$(date -u -d "+${ADVISORY_VALID_DAYS} days" +%Y-%m-%dT%H:%M:%SZ)"; \
+    { printf '{"schema_version":1,"generated_at":"%s","valid_until":"%s","ecosystems":{' "$now" "$until_"; \
+      sep=''; while read -r eco digest; do printf '%s"%s":"%s"' "$sep" "$eco" "$digest"; sep=','; done </tmp/ecosystems; \
+      printf '}}\n'; } >"$root/manifest.json"; \
+    rm -f /tmp/ecosystems
+
+# The sandbox stage is the analysis toolchain with no service binary: it is
+# published as its own image and is what the gates service runs repository code
+# inside (NF_GATE_ANALYSIS_IMAGE). It is a stage of this file rather than a
+# separate Dockerfile so the sandbox and the gates service cannot drift onto
+# different tool versions — a gate that measured one semgrep here and another
+# there would report findings nobody could reproduce.
+FROM golang:${GO_VERSION} AS sandbox
 ARG SEMGREP_VERSION=1.173.0
 RUN apt-get update \
  && apt-get install -y --no-install-recommends git ca-certificates openssh-client python3 python3-venv \
@@ -42,9 +90,16 @@ RUN apt-get update \
  && ln -s /opt/semgrep/bin/semgrep /usr/local/bin/semgrep
 COPY --from=tools /usr/local/bin/gitleaks /usr/local/bin/osv-scanner /usr/local/bin/
 COPY deploy/analysis/semgrep-gosec.yml /opt/analysis/semgrep-gosec.yml
+# Read-only at runtime: the scanner checks every ancestor of these paths for
+# symlinks and refuses the snapshot if any is one.
+COPY --from=advisories /opt/analysis/osv /opt/analysis/osv
 # The services run as a non-root user with a read-only view of nothing but
 # their temp dirs; give the toolchain writable caches there.
 ENV GOCACHE=/tmp/go-cache GOMODCACHE=/tmp/go-mod GOTOOLCHAIN=local \
     SEMGREP_SEND_METRICS=off XDG_CACHE_HOME=/tmp/cache
+# The sandbox pod runs as uid 65532 with a read-only root filesystem and
+# overrides the command, so the stage above needs no entrypoint and no user.
+
+FROM sandbox
 COPY --from=build /out/app /app
 ENTRYPOINT ["/app"]

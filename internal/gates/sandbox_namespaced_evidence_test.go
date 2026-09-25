@@ -119,8 +119,12 @@ func TestNamespacedSandboxUIDCommitFailure(t *testing.T) {
 	c := namespacedClient(t)
 	// A real deferred-trigger COMMIT failure, not a lost COMMIT acknowledgement.
 	// The wrapper creates this random owned DB; never install on shared datastores.
+	// This test installs a constraint trigger on the service's own table. On the
+	// shared dev datastore that would change every concurrently running suite's
+	// behaviour and would outlive a crashed run, so it only runs against a
+	// database this run exclusively owns. hack/owned-db-test.sh creates one.
 	if !strings.HasPrefix(pool.Config().ConnConfig.Database, "nf_ci_recovery_") {
-		t.Fatal("fault injection requires the authorized owned-DB wrapper")
+		t.Skip("fault injection needs an owned database: run ./hack/owned-db-test.sh")
 	}
 	intent := sandboxIntent()
 	name := "namespaced_uid_" + strings.ReplaceAll(uuid.NewString(), "-", "")
