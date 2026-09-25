@@ -76,9 +76,6 @@ func main() {
 	if err := database.Migrate(cfg.DatabaseURL, "agents", agents.MigrationsFS); err != nil {
 		log.Fatalf("agent-runtime: migrate agents schema: %v", err)
 	}
-	if err := database.Migrate(cfg.DatabaseURL, "gitplatform", capability.MigrationsFS); err != nil {
-		log.Fatalf("agent-runtime: migrate gitplatform (capability) schema: %v", err)
-	}
 
 	ctx := context.Background()
 
@@ -176,7 +173,14 @@ func main() {
 	// A deleted repository's Agent Runs, and a deleted organization's runs and
 	// agents, are cancelled and removed when the deletion is announced.
 	cleanup.AgentRuntime(store, cleanup.RedisRunsPublisher(rdb)).Run(ctx, rdb, "agent-runtime")
-	grants := capability.NewStore(pool)
+	// Grants go through Identity, which validates a run's intent against what
+	// this service itself recorded before issuing — the delegation a run
+	// sponsored by a platform worker (a CI agent job, the swarm scheduler)
+	// depends on, since that sponsor is not the caller. Reading and writing the
+	// capability owner's schema directly, as this did, is also a cross-schema
+	// read of another service's tables. The platform test stack has always used
+	// this client; only production did not.
+	grants := capability.RuntimeClient{Identity: identityClient, HMACSecret: cfg.HMACSecret}
 	audit := agents.NewAuditLog(pool)
 
 	var provisioner *workspace.Provisioner
@@ -309,7 +313,7 @@ func runReaper(ctx context.Context, provisioner *workspace.Provisioner) {
 // runs the model/tool loop, persists the resulting terminal state, and
 // tears the workspace down. When provisioner is nil (no Kubernetes API
 // reachable), it returns nil so StartRun's degrade path applies instead.
-func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents.AuditLog, rdb *redis.Client, price *agents.TokenPrice, provisioner *workspace.Provisioner, gitClient gitv1.GitServiceClient, graphClient graphv1.GraphServiceClient, workClient workv1.WorkServiceClient, reviewsClient reviewsv1.ReviewsServiceClient, ciClient civ1.CIServiceClient, mcpClient mcpv1.McpServiceClient, cfg service.Config) agents.ExecuteFunc {
+func newExecuteFunc(store *agents.Store, grants capability.RuntimeClient, audit *agents.AuditLog, rdb *redis.Client, price *agents.TokenPrice, provisioner *workspace.Provisioner, gitClient gitv1.GitServiceClient, graphClient graphv1.GraphServiceClient, workClient workv1.WorkServiceClient, reviewsClient reviewsv1.ReviewsServiceClient, ciClient civ1.CIServiceClient, mcpClient mcpv1.McpServiceClient, cfg service.Config) agents.ExecuteFunc {
 	if provisioner == nil {
 		return nil
 	}
