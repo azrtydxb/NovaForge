@@ -19,7 +19,6 @@ import (
 	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
 	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
 	"github.com/novaforge/novaforge/internal/approvals"
-	"github.com/novaforge/novaforge/internal/capability"
 	"github.com/novaforge/novaforge/internal/cleanup"
 	"github.com/novaforge/novaforge/internal/database"
 	"github.com/novaforge/novaforge/internal/gates"
@@ -71,12 +70,6 @@ func main() {
 	if err := database.Migrate(cfg.DatabaseURL, "secrets", secrets.MigrationsFS); err != nil {
 		log.Fatalf("gates: migrate secrets schema: %v", err)
 	}
-	// capability_grants lives in the gitplatform schema; IssueLease resolves
-	// grants by id, so it needs the table to exist even on a fresh database
-	// the identity service has not touched yet (see cmd/identity/main.go).
-	if err := database.Migrate(cfg.DatabaseURL, "gitplatform", capability.MigrationsFS); err != nil {
-		log.Fatalf("gates: migrate gitplatform (capability) schema: %v", err)
-	}
 
 	ctx := context.Background()
 
@@ -116,7 +109,12 @@ func main() {
 	gatesStore := gates.NewStore(pool)
 	approvalsStore := approvals.NewStore(pool)
 	secretsBroker := secrets.NewBroker(pool, []byte(cfg.SecretsKEK))
-	grants := capability.NewStore(pool)
+	// Grants are resolved through Identity's RPC, not by reading the capability
+	// owner's tables. gates used to migrate and query the gitplatform schema to
+	// broker a credential, which is a cross-schema read: it made gates a second
+	// writer of another service's schema and coupled its startup to a migration
+	// it does not own.
+	grants := gates.IdentityGrants{Client: identityClient, HMACSecret: cfg.HMACSecret}
 
 	// A deleted run's evaluations, approvals and leases, and a deleted
 	// organization's secrets, are removed when their deletion is announced.

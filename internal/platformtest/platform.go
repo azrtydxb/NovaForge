@@ -265,7 +265,12 @@ func StartWithExecutor(t testing.TB, factory func(*Platform) agents.ExecuteFunc)
 	controller := gates.NewController(gates.NewStore(pool), gitFwd,
 		reviewsv1.NewReviewsServiceClient(workConnFwd), workv1.NewWorkServiceClient(workConnFwd), "",
 		gates.WithProofService(HMACSecret), gates.WithAnalysisSandbox(AnalysisSandbox(t)))
-	gatesSrv := gates.NewGRPCServer(controller, approvals.NewStore(pool), secrets.NewBroker(pool, []byte("platformtest-kek")), p.Grants)
+	// Grants reach gates the way they do in production: through Identity's RPC,
+	// not by reading the capability owner's tables. Handing it p.Grants here
+	// would leave the resolver the gates service actually uses exercised by
+	// nothing.
+	gatesSrv := gates.NewGRPCServer(controller, approvals.NewStore(pool), secrets.NewBroker(pool, []byte("platformtest-kek")),
+		gates.IdentityGrants{Client: p.Identity, HMACSecret: HMACSecret})
 	gatesSrv.Proposals = &gates.Proposer{Git: gitFwd, Reviews: reviewsv1.NewReviewsServiceClient(workConnFwd)}
 	serveOn(t, gatesLis, func(s *grpc.Server) { gatesv1.RegisterGatesServiceServer(s, gatesSrv) }, interceptor)
 

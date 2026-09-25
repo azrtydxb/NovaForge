@@ -11,7 +11,6 @@ import (
 	gatesv1 "github.com/novaforge/novaforge/gen/novaforge/gates/v1"
 	"github.com/novaforge/novaforge/internal/approvals"
 	"github.com/novaforge/novaforge/internal/authz"
-	"github.com/novaforge/novaforge/internal/capability"
 	"github.com/novaforge/novaforge/internal/secrets"
 )
 
@@ -28,7 +27,7 @@ type GRPCServer struct {
 	Controller *Controller
 	Approvals  *approvals.Store
 	Secrets    *secrets.Broker
-	Grants     *capability.Store
+	Grants     GrantResolver
 	// Proposals backs ListGateConfig and ProposeGateChange. Nil means this
 	// server was built without git and reviews clients, and those RPCs answer
 	// Unimplemented rather than pretending a repository has no gates.
@@ -40,7 +39,7 @@ type GRPCServer struct {
 }
 
 // NewGRPCServer wraps the given dependencies as a gatesv1.GatesServiceServer.
-func NewGRPCServer(controller *Controller, approvalsStore *approvals.Store, secretsBroker *secrets.Broker, grants *capability.Store) *GRPCServer {
+func NewGRPCServer(controller *Controller, approvalsStore *approvals.Store, secretsBroker *secrets.Broker, grants GrantResolver) *GRPCServer {
 	if controller != nil && controller.Approvals == nil {
 		controller.Approvals = approvalsStore
 	}
