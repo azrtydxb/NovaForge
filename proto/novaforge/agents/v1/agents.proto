@@ -30,6 +30,13 @@ message Agent {
   string role = 4;
   string model_ref = 5;
   bool enabled = 6;
+  // What the agent is doing now. Empty means idle: a roster has to be able to
+  // say an agent has nothing to do, not merely omit it. The Work Item key comes
+  // from the run's own frozen snapshot, so reporting activity never reads the
+  // Work service's schema.
+  string current_run_id = 7;
+  string current_work_item_key = 8;
+  string busy_since = 9;
 }
 
 message CreateAgentRequest {

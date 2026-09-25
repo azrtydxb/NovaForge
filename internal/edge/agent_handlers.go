@@ -178,13 +178,19 @@ func addWorkItemRunHandlers(h map[string]http.HandlerFunc, w workv1.WorkServiceC
 }
 
 func agentJSON(a *agentsv1.Agent) map[string]any {
+	// The activity fields are always present and empty when the agent is idle, so
+	// a client can render "idle" from the response rather than inferring it from
+	// an absent field.
 	return map[string]any{
-		"id":        a.GetId(),
-		"org_id":    a.GetOrgId(),
-		"name":      a.GetName(),
-		"role":      a.GetRole(),
-		"model_ref": a.GetModelRef(),
-		"enabled":   a.GetEnabled(),
+		"id":                    a.GetId(),
+		"org_id":                a.GetOrgId(),
+		"name":                  a.GetName(),
+		"role":                  a.GetRole(),
+		"model_ref":             a.GetModelRef(),
+		"enabled":               a.GetEnabled(),
+		"current_run_id":        a.GetCurrentRunId(),
+		"current_work_item_key": a.GetCurrentWorkItemKey(),
+		"busy_since":            a.GetBusySince(),
 	}
 }
 

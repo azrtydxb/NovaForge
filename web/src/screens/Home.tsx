@@ -12,7 +12,7 @@ import {
   PanelHead,
   StatePill,
 } from "../components/ui";
-import type { Dashboard, EngineeringRun, WorkItem } from "../lib/types";
+import type { Agent, Dashboard, EngineeringRun, WorkItem } from "../lib/types";
 
 /** Home is the design's overview: the counts that need a person, what is
  * open, and what the platform has been doing. Every number is the platform's
@@ -25,6 +25,17 @@ export function Home() {
     queryKey: ["dashboard", w.org],
     queryFn: () => api.get<Dashboard>(`/api/v1/orgs/${enc(w.org!)}/dashboard`),
     enabled: w.org !== null,
+  });
+
+  // Section 24's roster: who is working on what, and who is idle. The activity
+  // comes with each agent, so this is one request and the client does not derive
+  // it by cross-referencing runs.
+  const agents = useQuery({
+    queryKey: ["agents", w.org],
+    queryFn: () =>
+      api.get<{ agents: Agent[] }>(`/api/v1/orgs/${enc(w.org!)}/agents`),
+    enabled: w.org !== null,
+    refetchInterval: 5000,
   });
 
   const work = useQueries({
@@ -104,6 +115,12 @@ export function Home() {
               label="Ready to auto-merge"
               value={d.ready_to_auto_merge}
               tone="info"
+            />
+            <Stat
+              label="Completed today"
+              value={d.completed_today}
+              tone="ok"
+              available={d.completed_today_available}
             />
           </div>
         )}
@@ -196,6 +213,76 @@ export function Home() {
           )}
         </Panel>
       </div>
+
+      <Panel style={{ marginTop: 14 }}>
+        <PanelHead>
+          AGENTS
+          <div style={{ flex: 1 }} />
+          <Link to="/agents" style={{ font: "11px var(--sans)" }}>
+            all agents →
+          </Link>
+        </PanelHead>
+        <Async query={agents}>
+          {(list) =>
+            list.agents.length === 0 ? (
+              <Empty>
+                No agents in this organization yet. Create one from the Agents
+                screen to have it pick up Work Items.
+              </Empty>
+            ) : (
+              <>
+                {list.agents.map((a) => (
+                  <Row key={a.id}>
+                    <Link
+                      to="/agents"
+                      style={{ font: "600 12px var(--sans)", minWidth: 160 }}
+                    >
+                      {a.name}
+                    </Link>
+                    <span
+                      style={{
+                        font: "11px var(--mono)",
+                        color: "var(--fg-faint)",
+                        minWidth: 90,
+                      }}
+                    >
+                      {a.role}
+                    </span>
+                    <span style={{ flex: 1, font: "13px var(--sans)" }}>
+                      {a.current_run_id ? (
+                        <>
+                          working{" "}
+                          <Link
+                            to={`/agent-runs/${enc(a.current_run_id)}`}
+                            style={{ font: "600 12px var(--mono)" }}
+                          >
+                            {a.current_work_item_key || "on an unnamed item"}
+                          </Link>
+                        </>
+                      ) : (
+                        <span style={{ color: "var(--fg-muted)" }}>
+                          {a.enabled ? "idle" : "disabled"}
+                        </span>
+                      )}
+                    </span>
+                    {a.busy_since ? (
+                      <span
+                        style={{
+                          font: "11px var(--mono)",
+                          color: "var(--fg-faint)",
+                        }}
+                        title={a.busy_since}
+                      >
+                        since {new Date(a.busy_since).toLocaleTimeString()}
+                      </span>
+                    ) : null}
+                  </Row>
+                ))}
+              </>
+            )
+          }
+        </Async>
+      </Panel>
     </Page>
   );
 }
@@ -211,20 +298,24 @@ function Stat({
   label,
   value,
   tone,
+  available = true,
 }: {
   label: string;
   value: number;
   tone: keyof typeof TONE;
+  /** False when the platform could not say. A zero would claim it knew. */
+  available?: boolean;
 }) {
   return (
     <Panel style={{ padding: "13px 14px" }}>
       <div
         style={{
           font: "600 22px var(--sans)",
-          color: value > 0 ? TONE[tone] : "var(--fg-muted)",
+          color: available && value > 0 ? TONE[tone] : "var(--fg-muted)",
         }}
+        title={available ? undefined : "This deployment could not report it"}
       >
-        {value}
+        {available ? value : "—"}
       </div>
       <div
         style={{

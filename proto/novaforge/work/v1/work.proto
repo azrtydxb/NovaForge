@@ -11,6 +11,7 @@ service WorkService {
   rpc CreateItem(CreateItemRequest) returns (CreateItemResponse);
   rpc GetItem(GetItemRequest) returns (GetItemResponse);
   rpc ListItems(ListItemsRequest) returns (ListItemsResponse);
+  rpc CountCompleted(CountCompletedRequest) returns (CountCompletedResponse);
   rpc AssignItem(AssignItemRequest) returns (AssignItemResponse);
   rpc PatchItem(PatchItemRequest) returns (PatchItemResponse);
   rpc TransitionItem(TransitionItemRequest) returns (TransitionItemResponse);
@@ -233,6 +234,16 @@ message TransitionItemResponse {
 // Persist run_id before calling; replay the same binding after an uncertain
 // result. Active exact retries return the original immutable intent. Released
 // identities cannot be reused. No claim expires on a wall clock.
+// How much work finished in a period. The organization comes from the caller's
+// credential, never from the request; "since" is an instant the caller chooses so
+// a surface can ask for its own day without this service assuming a timezone.
+message CountCompletedRequest {
+  string since = 1;
+}
+message CountCompletedResponse {
+  int64 completed = 1;
+}
+
 message ClaimExecutionRequest {
   string work_item_id = 1;
   string repo_id = 2;

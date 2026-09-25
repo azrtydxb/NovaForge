@@ -189,9 +189,27 @@ func (g *GRPCServer) ListAgents(ctx context.Context, req *agentsv1.ListAgentsReq
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "list agents: %v", err)
 	}
+	// What each agent is doing is reported with it, so a caller showing a roster
+	// makes one request and does not derive activity by listing runs itself.
+	activity, err := g.Store.ListAgentActivity(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "list agent activity: %v", err)
+	}
+	busy := make(map[uuid.UUID]Activity, len(activity))
+	for _, a := range activity {
+		busy[a.AgentID] = a
+	}
 	out := make([]*agentsv1.Agent, len(list))
 	for i, a := range list {
-		out[i] = toProtoAgent(a)
+		p := toProtoAgent(a)
+		if act, ok := busy[a.ID]; ok && act.RunID != uuid.Nil {
+			p.CurrentRunId = act.RunID.String()
+			p.CurrentWorkItemKey = act.WorkItemKey
+			if !act.Since.IsZero() {
+				p.BusySince = act.Since.UTC().Format(time.RFC3339)
+			}
+		}
+		out[i] = p
 	}
 	return &agentsv1.ListAgentsResponse{Agents: out}, nil
 }

@@ -23,15 +23,22 @@ const (
 )
 
 type Agent struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	OrgId         string                 `protobuf:"bytes,2,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
-	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	Role          string                 `protobuf:"bytes,4,opt,name=role,proto3" json:"role,omitempty"`
-	ModelRef      string                 `protobuf:"bytes,5,opt,name=model_ref,json=modelRef,proto3" json:"model_ref,omitempty"`
-	Enabled       bool                   `protobuf:"varint,6,opt,name=enabled,proto3" json:"enabled,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Id       string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	OrgId    string                 `protobuf:"bytes,2,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	Name     string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Role     string                 `protobuf:"bytes,4,opt,name=role,proto3" json:"role,omitempty"`
+	ModelRef string                 `protobuf:"bytes,5,opt,name=model_ref,json=modelRef,proto3" json:"model_ref,omitempty"`
+	Enabled  bool                   `protobuf:"varint,6,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	// What the agent is doing now. Empty means idle: a roster has to be able to
+	// say an agent has nothing to do, not merely omit it. The Work Item key comes
+	// from the run's own frozen snapshot, so reporting activity never reads the
+	// Work service's schema.
+	CurrentRunId       string `protobuf:"bytes,7,opt,name=current_run_id,json=currentRunId,proto3" json:"current_run_id,omitempty"`
+	CurrentWorkItemKey string `protobuf:"bytes,8,opt,name=current_work_item_key,json=currentWorkItemKey,proto3" json:"current_work_item_key,omitempty"`
+	BusySince          string `protobuf:"bytes,9,opt,name=busy_since,json=busySince,proto3" json:"busy_since,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *Agent) Reset() {
@@ -104,6 +111,27 @@ func (x *Agent) GetEnabled() bool {
 		return x.Enabled
 	}
 	return false
+}
+
+func (x *Agent) GetCurrentRunId() string {
+	if x != nil {
+		return x.CurrentRunId
+	}
+	return ""
+}
+
+func (x *Agent) GetCurrentWorkItemKey() string {
+	if x != nil {
+		return x.CurrentWorkItemKey
+	}
+	return ""
+}
+
+func (x *Agent) GetBusySince() string {
+	if x != nil {
+		return x.BusySince
+	}
+	return ""
 }
 
 type CreateAgentRequest struct {
@@ -1870,14 +1898,18 @@ var File_novaforge_agents_v1_agents_proto protoreflect.FileDescriptor
 
 const file_novaforge_agents_v1_agents_proto_rawDesc = "" +
 	"\n" +
-	" novaforge/agents/v1/agents.proto\x12\x13novaforge.agents.v1\x1a$novaforge/identity/v1/identity.proto\"\x8d\x01\n" +
+	" novaforge/agents/v1/agents.proto\x12\x13novaforge.agents.v1\x1a$novaforge/identity/v1/identity.proto\"\x85\x02\n" +
 	"\x05Agent\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x15\n" +
 	"\x06org_id\x18\x02 \x01(\tR\x05orgId\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x12\n" +
 	"\x04role\x18\x04 \x01(\tR\x04role\x12\x1b\n" +
 	"\tmodel_ref\x18\x05 \x01(\tR\bmodelRef\x12\x18\n" +
-	"\aenabled\x18\x06 \x01(\bR\aenabled\"s\n" +
+	"\aenabled\x18\x06 \x01(\bR\aenabled\x12$\n" +
+	"\x0ecurrent_run_id\x18\a \x01(\tR\fcurrentRunId\x121\n" +
+	"\x15current_work_item_key\x18\b \x01(\tR\x12currentWorkItemKey\x12\x1d\n" +
+	"\n" +
+	"busy_since\x18\t \x01(\tR\tbusySince\"s\n" +
 	"\x12CreateAgentRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04role\x18\x02 \x01(\tR\x04role\x12\x1b\n" +

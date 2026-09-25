@@ -102,6 +102,10 @@ export interface DashboardException {
 
 export interface Dashboard {
   exceptions: DashboardException[];
+  /** Work Items that reached done since midnight UTC. Unavailable is not zero:
+   * zero would read as "nothing was done today". */
+  completed_today: number;
+  completed_today_available: boolean;
   agents_running: number;
   ready_to_auto_merge: number;
   need_human_review: number;
@@ -117,6 +121,11 @@ export interface Agent {
   role: string;
   model_ref: string;
   enabled: boolean;
+  /** What the agent is doing now. Empty means idle — the platform says so
+   * rather than the client inferring it from an absent run. */
+  current_run_id: string;
+  current_work_item_key: string;
+  busy_since: string;
 }
 
 export interface AgentRun {

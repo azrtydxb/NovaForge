@@ -1912,6 +1912,97 @@ func (x *TransitionItemResponse) GetItem() *WorkItem {
 // Persist run_id before calling; replay the same binding after an uncertain
 // result. Active exact retries return the original immutable intent. Released
 // identities cannot be reused. No claim expires on a wall clock.
+// How much work finished in a period. The organization comes from the caller's
+// credential, never from the request; "since" is an instant the caller chooses so
+// a surface can ask for its own day without this service assuming a timezone.
+type CountCompletedRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Since         string                 `protobuf:"bytes,1,opt,name=since,proto3" json:"since,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CountCompletedRequest) Reset() {
+	*x = CountCompletedRequest{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CountCompletedRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CountCompletedRequest) ProtoMessage() {}
+
+func (x *CountCompletedRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CountCompletedRequest.ProtoReflect.Descriptor instead.
+func (*CountCompletedRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *CountCompletedRequest) GetSince() string {
+	if x != nil {
+		return x.Since
+	}
+	return ""
+}
+
+type CountCompletedResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Completed     int64                  `protobuf:"varint,1,opt,name=completed,proto3" json:"completed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CountCompletedResponse) Reset() {
+	*x = CountCompletedResponse{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CountCompletedResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CountCompletedResponse) ProtoMessage() {}
+
+func (x *CountCompletedResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CountCompletedResponse.ProtoReflect.Descriptor instead.
+func (*CountCompletedResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *CountCompletedResponse) GetCompleted() int64 {
+	if x != nil {
+		return x.Completed
+	}
+	return 0
+}
+
 type ClaimExecutionRequest struct {
 	state      protoimpl.MessageState `protogen:"open.v1"`
 	WorkItemId string                 `protobuf:"bytes,1,opt,name=work_item_id,json=workItemId,proto3" json:"work_item_id,omitempty"`
@@ -1926,7 +2017,7 @@ type ClaimExecutionRequest struct {
 
 func (x *ClaimExecutionRequest) Reset() {
 	*x = ClaimExecutionRequest{}
-	mi := &file_novaforge_work_v1_work_proto_msgTypes[32]
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1938,7 +2029,7 @@ func (x *ClaimExecutionRequest) String() string {
 func (*ClaimExecutionRequest) ProtoMessage() {}
 
 func (x *ClaimExecutionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_work_v1_work_proto_msgTypes[32]
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1951,7 +2042,7 @@ func (x *ClaimExecutionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimExecutionRequest.ProtoReflect.Descriptor instead.
 func (*ClaimExecutionRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{32}
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *ClaimExecutionRequest) GetWorkItemId() string {
@@ -1999,7 +2090,7 @@ type ClaimExecutionResponse struct {
 
 func (x *ClaimExecutionResponse) Reset() {
 	*x = ClaimExecutionResponse{}
-	mi := &file_novaforge_work_v1_work_proto_msgTypes[33]
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2011,7 +2102,7 @@ func (x *ClaimExecutionResponse) String() string {
 func (*ClaimExecutionResponse) ProtoMessage() {}
 
 func (x *ClaimExecutionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_work_v1_work_proto_msgTypes[33]
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2024,7 +2115,7 @@ func (x *ClaimExecutionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimExecutionResponse.ProtoReflect.Descriptor instead.
 func (*ClaimExecutionResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{33}
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *ClaimExecutionResponse) GetItem() *WorkItem {
@@ -2055,7 +2146,7 @@ type ReleaseExecutionRequest struct {
 
 func (x *ReleaseExecutionRequest) Reset() {
 	*x = ReleaseExecutionRequest{}
-	mi := &file_novaforge_work_v1_work_proto_msgTypes[34]
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2067,7 +2158,7 @@ func (x *ReleaseExecutionRequest) String() string {
 func (*ReleaseExecutionRequest) ProtoMessage() {}
 
 func (x *ReleaseExecutionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_work_v1_work_proto_msgTypes[34]
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2080,7 +2171,7 @@ func (x *ReleaseExecutionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleaseExecutionRequest.ProtoReflect.Descriptor instead.
 func (*ReleaseExecutionRequest) Descriptor() ([]byte, []int) {
-	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{34}
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *ReleaseExecutionRequest) GetWorkItemId() string {
@@ -2133,7 +2224,7 @@ type ReleaseExecutionResponse struct {
 
 func (x *ReleaseExecutionResponse) Reset() {
 	*x = ReleaseExecutionResponse{}
-	mi := &file_novaforge_work_v1_work_proto_msgTypes[35]
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2145,7 +2236,7 @@ func (x *ReleaseExecutionResponse) String() string {
 func (*ReleaseExecutionResponse) ProtoMessage() {}
 
 func (x *ReleaseExecutionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_novaforge_work_v1_work_proto_msgTypes[35]
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2158,7 +2249,7 @@ func (x *ReleaseExecutionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleaseExecutionResponse.ProtoReflect.Descriptor instead.
 func (*ReleaseExecutionResponse) Descriptor() ([]byte, []int) {
-	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{35}
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{37}
 }
 
 var File_novaforge_work_v1_work_proto protoreflect.FileDescriptor
@@ -2304,7 +2395,11 @@ const file_novaforge_work_v1_work_proto_rawDesc = "" +
 	"\x0eexpected_state\x18\x03 \x01(\tR\rexpectedState\x12\x19\n" +
 	"\bto_state\x18\x04 \x01(\tR\atoState\"I\n" +
 	"\x16TransitionItemResponse\x12/\n" +
-	"\x04item\x18\x01 \x01(\v2\x1b.novaforge.work.v1.WorkItemR\x04item\"\xa3\x01\n" +
+	"\x04item\x18\x01 \x01(\v2\x1b.novaforge.work.v1.WorkItemR\x04item\"-\n" +
+	"\x15CountCompletedRequest\x12\x14\n" +
+	"\x05since\x18\x01 \x01(\tR\x05since\"6\n" +
+	"\x16CountCompletedResponse\x12\x1c\n" +
+	"\tcompleted\x18\x01 \x01(\x03R\tcompleted\"\xa3\x01\n" +
 	"\x15ClaimExecutionRequest\x12 \n" +
 	"\fwork_item_id\x18\x01 \x01(\tR\n" +
 	"workItemId\x12\x17\n" +
@@ -2323,12 +2418,13 @@ const file_novaforge_work_v1_work_proto_rawDesc = "" +
 	"\aoutcome\x18\x04 \x01(\tR\aoutcome\x120\n" +
 	"\x14no_execution_started\x18\x05 \x01(\bR\x12noExecutionStarted\x12\x19\n" +
 	"\bagent_id\x18\x06 \x01(\tR\aagentId\"\x1a\n" +
-	"\x18ReleaseExecutionResponse2\x86\r\n" +
+	"\x18ReleaseExecutionResponse2\xed\r\n" +
 	"\vWorkService\x12Y\n" +
 	"\n" +
 	"CreateItem\x12$.novaforge.work.v1.CreateItemRequest\x1a%.novaforge.work.v1.CreateItemResponse\x12P\n" +
 	"\aGetItem\x12!.novaforge.work.v1.GetItemRequest\x1a\".novaforge.work.v1.GetItemResponse\x12V\n" +
-	"\tListItems\x12#.novaforge.work.v1.ListItemsRequest\x1a$.novaforge.work.v1.ListItemsResponse\x12Y\n" +
+	"\tListItems\x12#.novaforge.work.v1.ListItemsRequest\x1a$.novaforge.work.v1.ListItemsResponse\x12e\n" +
+	"\x0eCountCompleted\x12(.novaforge.work.v1.CountCompletedRequest\x1a).novaforge.work.v1.CountCompletedResponse\x12Y\n" +
 	"\n" +
 	"AssignItem\x12$.novaforge.work.v1.AssignItemRequest\x1a%.novaforge.work.v1.AssignItemResponse\x12V\n" +
 	"\tPatchItem\x12#.novaforge.work.v1.PatchItemRequest\x1a$.novaforge.work.v1.PatchItemResponse\x12e\n" +
@@ -2358,7 +2454,7 @@ func file_novaforge_work_v1_work_proto_rawDescGZIP() []byte {
 	return file_novaforge_work_v1_work_proto_rawDescData
 }
 
-var file_novaforge_work_v1_work_proto_msgTypes = make([]protoimpl.MessageInfo, 36)
+var file_novaforge_work_v1_work_proto_msgTypes = make([]protoimpl.MessageInfo, 38)
 var file_novaforge_work_v1_work_proto_goTypes = []any{
 	(*WorkItem)(nil),                           // 0: novaforge.work.v1.WorkItem
 	(*CreateItemRequest)(nil),                  // 1: novaforge.work.v1.CreateItemRequest
@@ -2392,11 +2488,13 @@ var file_novaforge_work_v1_work_proto_goTypes = []any{
 	(*PatchItemResponse)(nil),                  // 29: novaforge.work.v1.PatchItemResponse
 	(*TransitionItemRequest)(nil),              // 30: novaforge.work.v1.TransitionItemRequest
 	(*TransitionItemResponse)(nil),             // 31: novaforge.work.v1.TransitionItemResponse
-	(*ClaimExecutionRequest)(nil),              // 32: novaforge.work.v1.ClaimExecutionRequest
-	(*ClaimExecutionResponse)(nil),             // 33: novaforge.work.v1.ClaimExecutionResponse
-	(*ReleaseExecutionRequest)(nil),            // 34: novaforge.work.v1.ReleaseExecutionRequest
-	(*ReleaseExecutionResponse)(nil),           // 35: novaforge.work.v1.ReleaseExecutionResponse
-	(*fieldmaskpb.FieldMask)(nil),              // 36: google.protobuf.FieldMask
+	(*CountCompletedRequest)(nil),              // 32: novaforge.work.v1.CountCompletedRequest
+	(*CountCompletedResponse)(nil),             // 33: novaforge.work.v1.CountCompletedResponse
+	(*ClaimExecutionRequest)(nil),              // 34: novaforge.work.v1.ClaimExecutionRequest
+	(*ClaimExecutionResponse)(nil),             // 35: novaforge.work.v1.ClaimExecutionResponse
+	(*ReleaseExecutionRequest)(nil),            // 36: novaforge.work.v1.ReleaseExecutionRequest
+	(*ReleaseExecutionResponse)(nil),           // 37: novaforge.work.v1.ReleaseExecutionResponse
+	(*fieldmaskpb.FieldMask)(nil),              // 38: google.protobuf.FieldMask
 }
 var file_novaforge_work_v1_work_proto_depIdxs = []int32{
 	0,  // 0: novaforge.work.v1.CreateItemResponse.item:type_name -> novaforge.work.v1.WorkItem
@@ -2413,44 +2511,46 @@ var file_novaforge_work_v1_work_proto_depIdxs = []int32{
 	19, // 11: novaforge.work.v1.ListMaintenanceProposalsResponse.proposals:type_name -> novaforge.work.v1.MaintenanceProposal
 	0,  // 12: novaforge.work.v1.PatchItemRequest.values:type_name -> novaforge.work.v1.WorkItem
 	0,  // 13: novaforge.work.v1.PatchItemRequest.expected:type_name -> novaforge.work.v1.WorkItem
-	36, // 14: novaforge.work.v1.PatchItemRequest.update_mask:type_name -> google.protobuf.FieldMask
+	38, // 14: novaforge.work.v1.PatchItemRequest.update_mask:type_name -> google.protobuf.FieldMask
 	0,  // 15: novaforge.work.v1.PatchItemResponse.item:type_name -> novaforge.work.v1.WorkItem
 	0,  // 16: novaforge.work.v1.TransitionItemResponse.item:type_name -> novaforge.work.v1.WorkItem
 	0,  // 17: novaforge.work.v1.ClaimExecutionResponse.item:type_name -> novaforge.work.v1.WorkItem
 	1,  // 18: novaforge.work.v1.WorkService.CreateItem:input_type -> novaforge.work.v1.CreateItemRequest
 	3,  // 19: novaforge.work.v1.WorkService.GetItem:input_type -> novaforge.work.v1.GetItemRequest
 	5,  // 20: novaforge.work.v1.WorkService.ListItems:input_type -> novaforge.work.v1.ListItemsRequest
-	7,  // 21: novaforge.work.v1.WorkService.AssignItem:input_type -> novaforge.work.v1.AssignItemRequest
-	28, // 22: novaforge.work.v1.WorkService.PatchItem:input_type -> novaforge.work.v1.PatchItemRequest
-	30, // 23: novaforge.work.v1.WorkService.TransitionItem:input_type -> novaforge.work.v1.TransitionItemRequest
-	32, // 24: novaforge.work.v1.WorkService.ClaimExecution:input_type -> novaforge.work.v1.ClaimExecutionRequest
-	34, // 25: novaforge.work.v1.WorkService.ReleaseExecution:input_type -> novaforge.work.v1.ReleaseExecutionRequest
-	10, // 26: novaforge.work.v1.WorkService.ListSubtasks:input_type -> novaforge.work.v1.ListSubtasksRequest
-	12, // 27: novaforge.work.v1.WorkService.DecomposeEpic:input_type -> novaforge.work.v1.DecomposeEpicRequest
-	15, // 28: novaforge.work.v1.WorkService.AddComment:input_type -> novaforge.work.v1.AddCommentRequest
-	17, // 29: novaforge.work.v1.WorkService.ListComments:input_type -> novaforge.work.v1.ListCommentsRequest
-	26, // 30: novaforge.work.v1.WorkService.ListMaintenanceProposals:input_type -> novaforge.work.v1.ListMaintenanceProposalsRequest
-	20, // 31: novaforge.work.v1.WorkService.ApproveMaintenanceProposal:input_type -> novaforge.work.v1.ApproveMaintenanceProposalRequest
-	22, // 32: novaforge.work.v1.WorkService.DismissMaintenanceProposal:input_type -> novaforge.work.v1.DismissMaintenanceProposalRequest
-	24, // 33: novaforge.work.v1.WorkService.ScanRepository:input_type -> novaforge.work.v1.ScanRepositoryRequest
-	2,  // 34: novaforge.work.v1.WorkService.CreateItem:output_type -> novaforge.work.v1.CreateItemResponse
-	4,  // 35: novaforge.work.v1.WorkService.GetItem:output_type -> novaforge.work.v1.GetItemResponse
-	6,  // 36: novaforge.work.v1.WorkService.ListItems:output_type -> novaforge.work.v1.ListItemsResponse
-	8,  // 37: novaforge.work.v1.WorkService.AssignItem:output_type -> novaforge.work.v1.AssignItemResponse
-	29, // 38: novaforge.work.v1.WorkService.PatchItem:output_type -> novaforge.work.v1.PatchItemResponse
-	31, // 39: novaforge.work.v1.WorkService.TransitionItem:output_type -> novaforge.work.v1.TransitionItemResponse
-	33, // 40: novaforge.work.v1.WorkService.ClaimExecution:output_type -> novaforge.work.v1.ClaimExecutionResponse
-	35, // 41: novaforge.work.v1.WorkService.ReleaseExecution:output_type -> novaforge.work.v1.ReleaseExecutionResponse
-	11, // 42: novaforge.work.v1.WorkService.ListSubtasks:output_type -> novaforge.work.v1.ListSubtasksResponse
-	13, // 43: novaforge.work.v1.WorkService.DecomposeEpic:output_type -> novaforge.work.v1.DecomposeEpicResponse
-	16, // 44: novaforge.work.v1.WorkService.AddComment:output_type -> novaforge.work.v1.AddCommentResponse
-	18, // 45: novaforge.work.v1.WorkService.ListComments:output_type -> novaforge.work.v1.ListCommentsResponse
-	27, // 46: novaforge.work.v1.WorkService.ListMaintenanceProposals:output_type -> novaforge.work.v1.ListMaintenanceProposalsResponse
-	21, // 47: novaforge.work.v1.WorkService.ApproveMaintenanceProposal:output_type -> novaforge.work.v1.ApproveMaintenanceProposalResponse
-	23, // 48: novaforge.work.v1.WorkService.DismissMaintenanceProposal:output_type -> novaforge.work.v1.DismissMaintenanceProposalResponse
-	25, // 49: novaforge.work.v1.WorkService.ScanRepository:output_type -> novaforge.work.v1.ScanRepositoryResponse
-	34, // [34:50] is the sub-list for method output_type
-	18, // [18:34] is the sub-list for method input_type
+	32, // 21: novaforge.work.v1.WorkService.CountCompleted:input_type -> novaforge.work.v1.CountCompletedRequest
+	7,  // 22: novaforge.work.v1.WorkService.AssignItem:input_type -> novaforge.work.v1.AssignItemRequest
+	28, // 23: novaforge.work.v1.WorkService.PatchItem:input_type -> novaforge.work.v1.PatchItemRequest
+	30, // 24: novaforge.work.v1.WorkService.TransitionItem:input_type -> novaforge.work.v1.TransitionItemRequest
+	34, // 25: novaforge.work.v1.WorkService.ClaimExecution:input_type -> novaforge.work.v1.ClaimExecutionRequest
+	36, // 26: novaforge.work.v1.WorkService.ReleaseExecution:input_type -> novaforge.work.v1.ReleaseExecutionRequest
+	10, // 27: novaforge.work.v1.WorkService.ListSubtasks:input_type -> novaforge.work.v1.ListSubtasksRequest
+	12, // 28: novaforge.work.v1.WorkService.DecomposeEpic:input_type -> novaforge.work.v1.DecomposeEpicRequest
+	15, // 29: novaforge.work.v1.WorkService.AddComment:input_type -> novaforge.work.v1.AddCommentRequest
+	17, // 30: novaforge.work.v1.WorkService.ListComments:input_type -> novaforge.work.v1.ListCommentsRequest
+	26, // 31: novaforge.work.v1.WorkService.ListMaintenanceProposals:input_type -> novaforge.work.v1.ListMaintenanceProposalsRequest
+	20, // 32: novaforge.work.v1.WorkService.ApproveMaintenanceProposal:input_type -> novaforge.work.v1.ApproveMaintenanceProposalRequest
+	22, // 33: novaforge.work.v1.WorkService.DismissMaintenanceProposal:input_type -> novaforge.work.v1.DismissMaintenanceProposalRequest
+	24, // 34: novaforge.work.v1.WorkService.ScanRepository:input_type -> novaforge.work.v1.ScanRepositoryRequest
+	2,  // 35: novaforge.work.v1.WorkService.CreateItem:output_type -> novaforge.work.v1.CreateItemResponse
+	4,  // 36: novaforge.work.v1.WorkService.GetItem:output_type -> novaforge.work.v1.GetItemResponse
+	6,  // 37: novaforge.work.v1.WorkService.ListItems:output_type -> novaforge.work.v1.ListItemsResponse
+	33, // 38: novaforge.work.v1.WorkService.CountCompleted:output_type -> novaforge.work.v1.CountCompletedResponse
+	8,  // 39: novaforge.work.v1.WorkService.AssignItem:output_type -> novaforge.work.v1.AssignItemResponse
+	29, // 40: novaforge.work.v1.WorkService.PatchItem:output_type -> novaforge.work.v1.PatchItemResponse
+	31, // 41: novaforge.work.v1.WorkService.TransitionItem:output_type -> novaforge.work.v1.TransitionItemResponse
+	35, // 42: novaforge.work.v1.WorkService.ClaimExecution:output_type -> novaforge.work.v1.ClaimExecutionResponse
+	37, // 43: novaforge.work.v1.WorkService.ReleaseExecution:output_type -> novaforge.work.v1.ReleaseExecutionResponse
+	11, // 44: novaforge.work.v1.WorkService.ListSubtasks:output_type -> novaforge.work.v1.ListSubtasksResponse
+	13, // 45: novaforge.work.v1.WorkService.DecomposeEpic:output_type -> novaforge.work.v1.DecomposeEpicResponse
+	16, // 46: novaforge.work.v1.WorkService.AddComment:output_type -> novaforge.work.v1.AddCommentResponse
+	18, // 47: novaforge.work.v1.WorkService.ListComments:output_type -> novaforge.work.v1.ListCommentsResponse
+	27, // 48: novaforge.work.v1.WorkService.ListMaintenanceProposals:output_type -> novaforge.work.v1.ListMaintenanceProposalsResponse
+	21, // 49: novaforge.work.v1.WorkService.ApproveMaintenanceProposal:output_type -> novaforge.work.v1.ApproveMaintenanceProposalResponse
+	23, // 50: novaforge.work.v1.WorkService.DismissMaintenanceProposal:output_type -> novaforge.work.v1.DismissMaintenanceProposalResponse
+	25, // 51: novaforge.work.v1.WorkService.ScanRepository:output_type -> novaforge.work.v1.ScanRepositoryResponse
+	35, // [35:52] is the sub-list for method output_type
+	18, // [18:35] is the sub-list for method input_type
 	18, // [18:18] is the sub-list for extension type_name
 	18, // [18:18] is the sub-list for extension extendee
 	0,  // [0:18] is the sub-list for field type_name
@@ -2467,7 +2567,7 @@ func file_novaforge_work_v1_work_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_novaforge_work_v1_work_proto_rawDesc), len(file_novaforge_work_v1_work_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   36,
+			NumMessages:   38,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

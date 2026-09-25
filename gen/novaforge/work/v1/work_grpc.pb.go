@@ -22,6 +22,7 @@ const (
 	WorkService_CreateItem_FullMethodName                 = "/novaforge.work.v1.WorkService/CreateItem"
 	WorkService_GetItem_FullMethodName                    = "/novaforge.work.v1.WorkService/GetItem"
 	WorkService_ListItems_FullMethodName                  = "/novaforge.work.v1.WorkService/ListItems"
+	WorkService_CountCompleted_FullMethodName             = "/novaforge.work.v1.WorkService/CountCompleted"
 	WorkService_AssignItem_FullMethodName                 = "/novaforge.work.v1.WorkService/AssignItem"
 	WorkService_PatchItem_FullMethodName                  = "/novaforge.work.v1.WorkService/PatchItem"
 	WorkService_TransitionItem_FullMethodName             = "/novaforge.work.v1.WorkService/TransitionItem"
@@ -48,6 +49,7 @@ type WorkServiceClient interface {
 	CreateItem(ctx context.Context, in *CreateItemRequest, opts ...grpc.CallOption) (*CreateItemResponse, error)
 	GetItem(ctx context.Context, in *GetItemRequest, opts ...grpc.CallOption) (*GetItemResponse, error)
 	ListItems(ctx context.Context, in *ListItemsRequest, opts ...grpc.CallOption) (*ListItemsResponse, error)
+	CountCompleted(ctx context.Context, in *CountCompletedRequest, opts ...grpc.CallOption) (*CountCompletedResponse, error)
 	AssignItem(ctx context.Context, in *AssignItemRequest, opts ...grpc.CallOption) (*AssignItemResponse, error)
 	PatchItem(ctx context.Context, in *PatchItemRequest, opts ...grpc.CallOption) (*PatchItemResponse, error)
 	TransitionItem(ctx context.Context, in *TransitionItemRequest, opts ...grpc.CallOption) (*TransitionItemResponse, error)
@@ -95,6 +97,16 @@ func (c *workServiceClient) ListItems(ctx context.Context, in *ListItemsRequest,
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListItemsResponse)
 	err := c.cc.Invoke(ctx, WorkService_ListItems_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *workServiceClient) CountCompleted(ctx context.Context, in *CountCompletedRequest, opts ...grpc.CallOption) (*CountCompletedResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CountCompletedResponse)
+	err := c.cc.Invoke(ctx, WorkService_CountCompleted_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -242,6 +254,7 @@ type WorkServiceServer interface {
 	CreateItem(context.Context, *CreateItemRequest) (*CreateItemResponse, error)
 	GetItem(context.Context, *GetItemRequest) (*GetItemResponse, error)
 	ListItems(context.Context, *ListItemsRequest) (*ListItemsResponse, error)
+	CountCompleted(context.Context, *CountCompletedRequest) (*CountCompletedResponse, error)
 	AssignItem(context.Context, *AssignItemRequest) (*AssignItemResponse, error)
 	PatchItem(context.Context, *PatchItemRequest) (*PatchItemResponse, error)
 	TransitionItem(context.Context, *TransitionItemRequest) (*TransitionItemResponse, error)
@@ -272,6 +285,9 @@ func (UnimplementedWorkServiceServer) GetItem(context.Context, *GetItemRequest) 
 }
 func (UnimplementedWorkServiceServer) ListItems(context.Context, *ListItemsRequest) (*ListItemsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListItems not implemented")
+}
+func (UnimplementedWorkServiceServer) CountCompleted(context.Context, *CountCompletedRequest) (*CountCompletedResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CountCompleted not implemented")
 }
 func (UnimplementedWorkServiceServer) AssignItem(context.Context, *AssignItemRequest) (*AssignItemResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AssignItem not implemented")
@@ -382,6 +398,24 @@ func _WorkService_ListItems_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(WorkServiceServer).ListItems(ctx, req.(*ListItemsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WorkService_CountCompleted_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CountCompletedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkServiceServer).CountCompleted(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WorkService_CountCompleted_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkServiceServer).CountCompleted(ctx, req.(*CountCompletedRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -638,6 +672,10 @@ var WorkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListItems",
 			Handler:    _WorkService_ListItems_Handler,
+		},
+		{
+			MethodName: "CountCompleted",
+			Handler:    _WorkService_CountCompleted_Handler,
 		},
 		{
 			MethodName: "AssignItem",

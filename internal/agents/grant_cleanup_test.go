@@ -68,11 +68,28 @@ func TestTerminalGrantCleanupRetriesWithoutRerunning(t *testing.T) {
 		t.Fatalf("cleanup intent not durable: %+v %v", run, err)
 	}
 	store.GrantIssuanceCanceller = revoke
-	time.Sleep(1100 * time.Millisecond) // persisted retry delay
-	recoverRun(t, store, id)
-	run, err = store.GetRun(ctx, id)
-	if err != nil || run.State != "cancelled" || run.GrantCleanupPending {
-		t.Fatalf("cleanup not reconciled: %+v %v", run, err)
+	// Cleanup is retried no sooner than a second after it was recorded, so
+	// recovery is repeated until it takes rather than run once after a sleep
+	// just longer than that delay: against a shared database under load the
+	// delay had not always elapsed, and the single attempt then found nothing
+	// eligible and left the run pending.
+	cleanupDeadline := time.Now().Add(30 * time.Second)
+	for {
+		time.Sleep(200 * time.Millisecond)
+		recoverRun(t, store, id)
+		run, err = store.GetRun(ctx, id)
+		if err != nil {
+			t.Fatalf("GetRun: %v", err)
+		}
+		if !run.GrantCleanupPending && !run.WorkReleasePending && !run.WorkspaceCleanupPending {
+			break
+		}
+		if time.Now().After(cleanupDeadline) {
+			t.Fatalf("cleanup not reconciled within 30s: %+v", run)
+		}
+	}
+	if run.State != "cancelled" {
+		t.Fatalf("a reconciled run is %s, want cancelled: %+v", run.State, run)
 	}
 	if _, err := capability.NewStore(store.Pool()).Resolve(ctx, run.GrantID); err == nil {
 		t.Fatal("cancelled run's grant is still active")

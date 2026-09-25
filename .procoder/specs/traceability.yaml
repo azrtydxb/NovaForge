@@ -695,3 +695,34 @@ criteria:
         step: "1. every deployment reports ready"
       - script: tests/e2e/deploy_test.sh
         step: "2. edge answers readiness"
+  S-23/TestAgentActivityReported:
+    status: covered
+    note: >-
+      ListAgentActivity reports every agent in the organization with the run it
+      is executing and that run's Work Item key, or as idle when it holds none,
+      and an agent whose run has ended is idle again. The key is read from the
+      run's own frozen work_item_snapshot, so activity is answerable without
+      reading the Work service's schema. ListAgents carries the activity with
+      each agent, so a roster is one request rather than a client
+      cross-referencing runs, and the edge always emits the fields so an idle
+      agent is stated rather than inferred from an absent value. No e2e step
+      reads the roster; the coverage here is the Go tests.
+    go_tests:
+      - ./internal/agents TestAgentActivityReported
+      - ./internal/agents TestAgentActivityIsOrganizationScoped
+  S-23/TestWorkCompletedTodayCounted:
+    status: covered
+    note: >-
+      A trigger records when a Work Item reached done and clears it when the item
+      leaves done, so a reopened item is not counted as finished and a
+      recompleted one counts once for its latest completion; items already done
+      before the migration stay unrecorded rather than back-dated.
+      CompletedSince counts within a window and is organization scoped, and it
+      lives in work because that is where the items are — reviews computes the
+      rest of the dashboard from runs in its own schema. The edge asks the Work
+      service for the UTC day and reports the count as unavailable rather than
+      zero when it cannot answer, because zero would read as "nothing was done".
+    go_tests:
+      - ./internal/work TestDoneAtRecordsWhenAnItemCompleted
+      - ./internal/work TestCompletedSinceCountsOnlyItemsThatAreDoneNow
+      - ./internal/work TestCompletedSinceIsOrganizationScoped

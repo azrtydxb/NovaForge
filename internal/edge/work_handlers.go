@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -163,15 +164,28 @@ func addWorkHandlers(h map[string]http.HandlerFunc, g gitv1.GitServiceClient, w 
 					"state": it.GetState(), "reason": it.GetReason(),
 				})
 			}
-			WriteJSON(wr, http.StatusOK, map[string]any{
-				"agents_running":         sm.GetAgentsRunning(),
-				"ready_to_auto_merge":    sm.GetReadyToAutoMerge(),
-				"need_human_review":      sm.GetNeedHumanReview(),
-				"architecture_decisions": sm.GetArchitectureDecisions(),
-				"gate_failures":          sm.GetGateFailures(),
-				"agents_blocked":         sm.GetAgentsBlocked(),
-				"exceptions":             items,
-			})
+			// How much finished today comes from the Work service, because that is
+			// where Work Items live; reviews computes the rest from runs, in its own
+			// schema. The day is UTC so the number does not depend on where the
+			// caller is, and it is reported as unavailable rather than zero if the
+			// Work service cannot answer — zero would read as "nothing was done".
+			body := map[string]any{
+				"agents_running":            sm.GetAgentsRunning(),
+				"ready_to_auto_merge":       sm.GetReadyToAutoMerge(),
+				"need_human_review":         sm.GetNeedHumanReview(),
+				"architecture_decisions":    sm.GetArchitectureDecisions(),
+				"gate_failures":             sm.GetGateFailures(),
+				"agents_blocked":            sm.GetAgentsBlocked(),
+				"exceptions":                items,
+				"completed_today":           0,
+				"completed_today_available": false,
+			}
+			midnight := time.Now().UTC().Truncate(24 * time.Hour).Format(time.RFC3339)
+			if done, err := w.CountCompleted(r.Context(), &workv1.CountCompletedRequest{Since: midnight}); err == nil {
+				body["completed_today"] = done.GetCompleted()
+				body["completed_today_available"] = true
+			}
+			WriteJSON(wr, http.StatusOK, body)
 		}
 
 		h["createRun"] = func(wr http.ResponseWriter, r *http.Request) {
