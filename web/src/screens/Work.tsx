@@ -10,6 +10,7 @@ import { api, enc } from "../lib/api";
 import { scopedRepos, useWorkspace } from "../lib/workspace";
 import {
   Empty,
+  Failed,
   Loading,
   Page,
   Panel,
@@ -22,7 +23,7 @@ import type { Agent, WorkItem } from "../lib/types";
 
 /** TYPES is the closed set the work schema allows. Offering anything else
  * would be offering an item the platform will refuse to create. */
-const TYPES = [
+export const TYPES = [
   "feature",
   "bug",
   "refactor",
@@ -120,6 +121,7 @@ export function Work() {
   });
 
   const loading = queries.some((q) => q.isLoading);
+  const listError = queries.find((q) => q.error)?.error;
   const rows = queries
     .flatMap((q, i) =>
       (q.data?.items ?? []).map((item) => ({ item, repo: repos[i]!.name })),
@@ -248,6 +250,8 @@ export function Work() {
         </PanelHead>
         {loading ? (
           <Loading />
+        ) : listError ? (
+          <Failed error={listError} />
         ) : rows.length === 0 ? (
           <Empty>
             {filter === null

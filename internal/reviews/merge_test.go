@@ -43,6 +43,13 @@ func (s *stubMergeGitClient) Merge(_ context.Context, _ *gitv1.MergeRequest, _ .
 	return &gitv1.MergeResponse{MergeSha: s.mergeSHA}, nil
 }
 
+func (s *stubMergeGitClient) ListCommits(context.Context, *gitv1.ListCommitsRequest, ...grpc.CallOption) (*gitv1.ListCommitsResponse, error) {
+	return &gitv1.ListCommitsResponse{Commits: []*gitv1.Commit{{Sha: reviewedSHA}}}, nil
+}
+func (s *stubMergeGitClient) GetDiff(context.Context, *gitv1.GetDiffRequest, ...grpc.CallOption) (*gitv1.GetDiffResponse, error) {
+	return &gitv1.GetDiffResponse{Unified: "diff --git a/example b/example\n+review this line\n"}, nil
+}
+
 func TestMergeBlockedByFailingGate(t *testing.T) {
 	store := newStore(t)
 	orgID := uuid.New()
@@ -117,7 +124,7 @@ func TestMergeProceedsWhenAllowed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateRun: %v", err)
 	}
-	if err := store.SubmitReview(ctx, run.ID, reviewerID, "user", "approve"); err != nil {
+	if err := store.SubmitReviewAt(ctx, run.ID, reviewerID, "user", "approve", reviewedSHA, "reviewed this revision"); err != nil {
 		t.Fatalf("SubmitReview: %v", err)
 	}
 

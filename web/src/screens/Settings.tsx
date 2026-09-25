@@ -34,7 +34,7 @@ const POLICY_TONE: Record<string, [string, string]> = {
 export function Settings() {
   const w = useWorkspace();
   const navigate = useNavigate();
-  const repo = w.repo ?? w.repos[0]?.name ?? null;
+  const repo = w.repo;
   const [pending, setPending] = useState<GateConfig | null>(null);
 
   const approvals = useQuery({
@@ -59,10 +59,6 @@ export function Settings() {
         `/api/v1/orgs/${enc(w.org!)}/repos/${enc(repo!)}/gates/${enc(g.name)}/proposals`,
         { enabled: !g.enabled },
       ),
-    onSuccess: (p) => {
-      setPending(null);
-      navigate(`/runs/${enc(repo!)}/${p.run_number}`);
-    },
   });
 
   return (
@@ -208,7 +204,14 @@ export function Settings() {
           fields={[]}
           busy={propose.isPending}
           error={propose.error}
-          onSubmit={() => propose.mutate(pending)}
+          onSubmit={() =>
+            propose.mutate(pending, {
+              onSuccess: (p) => {
+                setPending(null);
+                navigate(`/runs/${enc(repo!)}/${p.run_number}`);
+              },
+            })
+          }
           onClose={() => setPending(null)}
         />
       ) : null}

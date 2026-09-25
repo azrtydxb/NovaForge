@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
-import { setStoredToken } from "../lib/api";
+import { useMutation } from "@tanstack/react-query";
+import { Failed } from "./ui";
+import { api, setStoredToken } from "../lib/api";
 import { useWorkspace } from "../lib/workspace";
 import type { User } from "../lib/types";
 
@@ -13,6 +15,13 @@ export function TopBar({
   onSignedOut: () => void;
 }) {
   const w = useWorkspace();
+  const logout = useMutation({
+    mutationFn: () => api.post("/api/v1/auth/logout", {}),
+    onSuccess: () => {
+      setStoredToken(null);
+      onSignedOut();
+    },
+  });
   const path = `${w.org ?? "…"} / ${w.repo ?? "all projects"}`;
 
   return (
@@ -57,11 +66,10 @@ export function TopBar({
         </span>
         {user?.username ?? "account"}
       </Link>
+      {logout.error ? <Failed error={logout.error} /> : null}
       <button
-        onClick={() => {
-          setStoredToken(null);
-          onSignedOut();
-        }}
+        disabled={logout.isPending}
+        onClick={() => logout.mutate()}
         style={{
           background: "transparent",
           border: "1px solid var(--line-2)",

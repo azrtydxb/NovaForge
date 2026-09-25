@@ -2,7 +2,16 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, enc } from "../lib/api";
 import { useWorkspace } from "../lib/workspace";
-import { Async, Empty, Page, Panel, PanelHead, Pill } from "../components/ui";
+import {
+  Async,
+  Empty,
+  Failed,
+  Loading,
+  Page,
+  Panel,
+  PanelHead,
+  Pill,
+} from "../components/ui";
 import { Dialog, NewButton } from "../components/Dialog";
 
 /** ROLES are the roles a decomposition may assign work to. They match
@@ -201,6 +210,7 @@ export function Agents() {
                   d.agents[Math.min(selected, d.agents.length - 1)]!.id,
                 )}
                 statsError={stats.error}
+                statsLoading={stats.isLoading}
               />
             </div>
           )
@@ -214,10 +224,12 @@ function AgentDetail({
   agent,
   stats,
   statsError,
+  statsLoading,
 }: {
   agent: Agent;
   stats: AgentStats | undefined;
   statsError: unknown;
+  statsLoading: boolean;
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -233,8 +245,10 @@ function AgentDetail({
 
       <Panel>
         <PanelHead>RUN HISTORY</PanelHead>
-        {statsError ? (
-          <Empty>Run statistics are not available in this deployment.</Empty>
+        {statsLoading ? (
+          <Loading />
+        ) : statsError ? (
+          <Failed error={statsError} />
         ) : !stats ? (
           <Empty>This agent has started no runs.</Empty>
         ) : (

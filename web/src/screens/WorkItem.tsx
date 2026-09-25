@@ -12,6 +12,7 @@ import {
   PanelHead,
   StatePill,
 } from "../components/ui";
+import { TYPES } from "./Work";
 import { Dialog } from "../components/Dialog";
 import {
   ACTIVE_RUN_STATES,
@@ -96,6 +97,46 @@ export function WorkItemDetail() {
   const qc = useQueryClient();
   const [starting, setStarting] = useState(false);
   const [body, setBody] = useState("");
+  const [editing, setEditing] = useState<Item | null>(null);
+  const intent = (i: Item) => ({
+    type: i.type,
+    goal: i.goal,
+    acceptance: i.acceptance ?? [],
+    constraints: i.constraints ?? [],
+    required_gates: i.required_gates ?? [],
+  });
+  const edit = useMutation({
+    mutationFn: (v: Record<string, string>) => {
+      if (!editing) throw new Error("No intent selected");
+      const lines = (s: string | undefined) =>
+        (s ?? "")
+          .split("\n")
+          .map((s) => s.trim())
+          .filter(Boolean);
+      return api.patch(base, {
+        type: v.type,
+        goal: v.goal,
+        acceptance: lines(v.acceptance),
+        constraints: lines(v.constraints),
+        required_gates: lines(v.required_gates),
+        expected: intent(editing),
+      });
+    },
+    onSuccess: () => {
+      setEditing(null);
+      void qc.invalidateQueries();
+    },
+  });
+  const transition = useMutation({
+    mutationFn: (i: Item) =>
+      api.post(`${base}/transitions`, {
+        expected_state: i.state,
+        to_state: i.state === "open" ? "blocked" : "open",
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries();
+    },
+  });
 
   const base = `/api/v1/orgs/${enc(w.org ?? "")}/repos/${enc(repo)}/work/${enc(key)}`;
 
@@ -236,12 +277,41 @@ export function WorkItemDetail() {
       actions={
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {item.data ? <StatePill state={item.data.state} /> : null}
+          {item.data?.state === "open" &&
+          item.data.execution_claimed === false &&
+          item.data.maintenance_proposal === false ? (
+            <button
+              style={secondary}
+              onClick={() => {
+                edit.reset();
+                setEditing(item.data!);
+              }}
+            >
+              Edit intent
+            </button>
+          ) : null}
+          {item.data &&
+          item.data.execution_claimed === false &&
+          item.data.maintenance_proposal === false &&
+          item.data.assignee_kind !== "agent" &&
+          ["open", "blocked"].includes(item.data.state) ? (
+            <button
+              style={secondary}
+              disabled={transition.isPending}
+              onClick={() => transition.mutate(item.data!)}
+            >
+              {item.data.state === "open" ? "Block work" : "Reopen work"}
+            </button>
+          ) : null}
           {item.data && assignees.length > 0 ? (
             <button onClick={() => setAssigning(true)} style={secondary}>
               Assign
             </button>
           ) : null}
-          {subs.length === 0 ? (
+          {item.data &&
+          subtasks.data &&
+          !subtasks.error &&
+          subs.length === 0 ? (
             <button
               onClick={() => decompose.mutate()}
               disabled={decompose.isPending}
@@ -256,7 +326,9 @@ export function WorkItemDetail() {
             <Link to="/maintenance" style={secondary}>
               Awaiting approval · Maintenance
             </Link>
-          ) : enabledAgents.length > 0 ? (
+          ) : item.data?.state === "open" &&
+            !item.data.awaiting_approval &&
+            enabledAgents.length > 0 ? (
             <button onClick={() => setStarting(true)} style={primary}>
               Start an Agent Run
             </button>
@@ -264,6 +336,51 @@ export function WorkItemDetail() {
         </div>
       }
     >
+      {transition.error ? <Failed error={transition.error} /> : null}
+      {editing ? (
+        <Dialog
+          title={`Edit ${key} intent`}
+          submitLabel="Save intent"
+          fields={[
+            {
+              name: "goal",
+              label: "Goal",
+              required: true,
+              initialValue: editing.goal,
+            },
+            {
+              name: "type",
+              label: "Type",
+              type: "select",
+              options: TYPES,
+              required: true,
+              initialValue: editing.type,
+            },
+            {
+              name: "acceptance",
+              label: "Acceptance criteria",
+              type: "textarea",
+              initialValue: (editing.acceptance ?? []).join("\n"),
+            },
+            {
+              name: "constraints",
+              label: "Constraints",
+              type: "textarea",
+              initialValue: (editing.constraints ?? []).join("\n"),
+            },
+            {
+              name: "required_gates",
+              label: "Required gates",
+              type: "textarea",
+              initialValue: (editing.required_gates ?? []).join("\n"),
+            },
+          ]}
+          busy={edit.isPending}
+          error={edit.error}
+          onSubmit={(v) => edit.mutate(v)}
+          onClose={() => setEditing(null)}
+        />
+      ) : null}
       {starting ? (
         <Dialog
           title={`Start an Agent Run on ${key}`}
@@ -386,9 +503,12 @@ export function WorkItemDetail() {
                         }}
                       >
                         <span style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ font: "500 12px var(--sans)" }}>
-                            {agentName(r.agent_id)}
-                          </div>
+                          <Link
+                            to={`/agent-runs/${enc(r.id)}`}
+                            style={{ font: "500 12px var(--sans)" }}
+                          >
+                            {agentName(r.agent_id)} · inspect run
+                          </Link>
                           <div
                             style={{
                               font: "11px var(--mono)",
@@ -423,7 +543,11 @@ export function WorkItemDetail() {
               SUBTASKS
               <span style={{ color: "var(--fg-faint)" }}>{subs.length}</span>
             </PanelHead>
-            {subs.length === 0 ? (
+            {subtasks.error ? (
+              <Failed error={subtasks.error} />
+            ) : subtasks.isLoading ? (
+              <Empty>Loading subtasks…</Empty>
+            ) : subs.length === 0 ? (
               <Empty>
                 Not decomposed.
                 <br />
@@ -539,6 +663,7 @@ export function WorkItemDetail() {
             style={{ padding: 14 }}
           >
             <textarea
+              aria-label="Work Item comment"
               value={body}
               onChange={(e) => setBody(e.target.value)}
               placeholder="Record a decision, or correct an agent…"
