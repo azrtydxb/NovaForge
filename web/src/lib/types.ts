@@ -32,6 +32,15 @@ export interface Team {
   member_ids: string[];
 }
 
+/** A grant of one repository to a person or a team. Exactly one of user_id and
+ * team_id is set; both are always present so a reader can tell them apart without
+ * inferring from a missing key. */
+export interface RepoCollaborator {
+  user_id: string;
+  team_id: string;
+  role: string;
+}
+
 export interface Repo {
   id: string;
   name: string;

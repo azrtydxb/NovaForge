@@ -25,6 +25,8 @@ import type {
   Ref,
   Release,
   Repo,
+  RepoCollaborator,
+  Team,
   TreeEntry,
   User,
 } from "../lib/types";
@@ -194,6 +196,13 @@ export function Repos() {
               orgs={otherOrgs}
               administer={administer}
               transfer={transfer}
+            />
+          ) : null}
+          {canDelete ? (
+            <Collaborators
+              key={`collab:${w.org}/${active}`}
+              org={w.org!}
+              repo={active}
             />
           ) : null}
           <Hooks key={`hooks:${w.org}/${active}`} org={w.org!} repo={active} />
@@ -1379,4 +1388,163 @@ function entryStyle(color: string): React.CSSProperties {
     font: "12px var(--mono)",
     cursor: "pointer",
   };
+}
+
+/** Who holds this repository without belonging to the organization that owns it.
+ *
+ * Only an owner or admin sees this panel, because only they can change it and the
+ * server refuses anyone else. A grant is shown with the role it gives, since that is
+ * what the grant is; a list of names without roles would hide the difference between
+ * someone who can read and someone who can push. */
+function Collaborators({ org, repo }: { org: string; repo: string }) {
+  const qc = useQueryClient();
+  const [user, setUser] = useState("");
+  const [role, setRole] = useState("read");
+  const base = `/api/v1/orgs/${enc(org)}/repos/${enc(repo)}/collaborators`;
+
+  const grants = useQuery({
+    queryKey: ["collaborators", org, repo],
+    queryFn: () => api.get<{ collaborators: RepoCollaborator[] }>(base),
+  });
+  const teams = useQuery({
+    queryKey: ["teams", org],
+    queryFn: () => api.get<{ teams: Team[] }>(`/api/v1/orgs/${enc(org)}/teams`),
+  });
+  const grant = useMutation({
+    mutationFn: (v: { user?: string; team_id?: string; role: string }) =>
+      api.post(base, v),
+    onSuccess: () => {
+      setUser("");
+      void qc.invalidateQueries({ queryKey: ["collaborators", org, repo] });
+    },
+  });
+  const revoke = useMutation({
+    mutationFn: (v: { subject: string; kind: string }) =>
+      api.del(`${base}/${enc(v.subject)}?kind=${v.kind}`),
+    onSuccess: () =>
+      void qc.invalidateQueries({ queryKey: ["collaborators", org, repo] }),
+  });
+
+  const teamName = new Map(
+    (teams.data?.teams ?? []).map((t) => [t.id, t.name]),
+  );
+
+  return (
+    <Panel style={{ marginBottom: 12 }}>
+      <PanelHead>
+        COLLABORATORS
+        <span style={{ color: "var(--fg-faint)" }}>
+          {grants.data?.collaborators.length ?? 0}
+        </span>
+      </PanelHead>
+      <div style={{ padding: 12, display: "grid", gap: 10 }}>
+        <div style={{ font: "12px var(--sans)", color: "var(--fg-muted)" }}>
+          Access to this repository alone, for someone who is not a member of
+          this organization. A grant to a team reaches whoever is in it.
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <input
+            value={user}
+            placeholder="username"
+            onChange={(e) => setUser(e.target.value)}
+            style={adminInput}
+          />
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            style={{ ...adminInput, minWidth: 100 }}
+          >
+            <option value="read">read</option>
+            <option value="write">write</option>
+          </select>
+          <button
+            disabled={user === "" || grant.isPending}
+            onClick={() => grant.mutate({ user, role })}
+            style={adminButton}
+          >
+            Grant
+          </button>
+          <select
+            defaultValue=""
+            onChange={(e) => {
+              if (e.target.value !== "") {
+                grant.mutate({ team_id: e.target.value, role });
+                e.target.value = "";
+              }
+            }}
+            disabled={(teams.data?.teams ?? []).length === 0 || grant.isPending}
+            style={{ ...adminInput, minWidth: 160 }}
+          >
+            <option value="">
+              {(teams.data?.teams ?? []).length === 0
+                ? "no teams to grant to"
+                : "…or grant to a team"}
+            </option>
+            {(teams.data?.teams ?? []).map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        {grant.error ? <Failed error={grant.error} /> : null}
+        {revoke.error ? <Failed error={revoke.error} /> : null}
+
+        <Async query={grants}>
+          {(data) =>
+            data.collaborators.length === 0 ? (
+              <Empty>
+                Nobody outside this organization holds this repository.
+              </Empty>
+            ) : (
+              <>
+                {data.collaborators.map((g) => {
+                  const isTeam = g.team_id !== "";
+                  const subject = isTeam ? g.team_id : g.user_id;
+                  return (
+                    <div
+                      key={subject}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        padding: "7px 0",
+                        borderTop: "1px solid var(--line)",
+                      }}
+                    >
+                      <span style={{ font: "12px var(--mono)", flex: 1 }}>
+                        {isTeam
+                          ? `team ${teamName.get(g.team_id) ?? g.team_id}`
+                          : g.user_id}
+                      </span>
+                      <span
+                        style={{
+                          font: "11px var(--mono)",
+                          color: "var(--fg-muted)",
+                        }}
+                      >
+                        {g.role}
+                      </span>
+                      <button
+                        onClick={() =>
+                          revoke.mutate({
+                            subject,
+                            kind: isTeam ? "team" : "user",
+                          })
+                        }
+                        style={adminButton}
+                      >
+                        Revoke
+                      </button>
+                    </div>
+                  );
+                })}
+              </>
+            )
+          }
+        </Async>
+      </div>
+    </Panel>
+  );
 }
