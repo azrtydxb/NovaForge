@@ -155,7 +155,10 @@ func TestApprovedExternalMCPServersAreOfferedToAgents(t *testing.T) {
 	}
 	found := false
 	for _, e := range entries {
-		if e.Tool == "mcp.jira.lookup" && strings.Contains(string(e.ArgsJSON), "argument_bytes") && !strings.Contains(string(e.ArgsJSON), "NF-7") && e.Outcome == "ok" {
+		// An external server's argument schema is not defined here, so no
+		// argument of it is disclosed: each is recorded as its length and
+		// digest, and the value itself never reaches the audit log.
+		if e.Tool == "mcp.jira.lookup" && strings.Contains(string(e.ArgsJSON), "sha256") && !strings.Contains(string(e.ArgsJSON), "NF-7") && e.Outcome == "ok" {
 			found = true
 		}
 	}

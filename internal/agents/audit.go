@@ -15,14 +15,17 @@ import (
 // Entry is a row in the agents.tool_calls table: one tool invocation made by
 // an agent run.
 type Entry struct {
-	ID        uuid.UUID
-	RunID     uuid.UUID
-	Tool      string
-	ArgsJSON  []byte
-	Outcome   string
-	Error     string
-	StartedAt time.Time
-	EndedAt   *time.Time
+	ID       uuid.UUID
+	RunID    uuid.UUID
+	Tool     string
+	ArgsJSON []byte
+	// ArgsAudited marks ArgsJSON as already reduced to the audited
+	// representation, so Record keeps it instead of replacing it.
+	ArgsAudited bool
+	Outcome     string
+	Error       string
+	StartedAt   time.Time
+	EndedAt     *time.Time
 }
 
 // AuditLog is an append-only record of every tool call an agent run makes.
@@ -49,9 +52,13 @@ func (a *AuditLog) Record(ctx context.Context, e Entry) (uuid.UUID, error) {
 	if id == uuid.Nil {
 		id = uuid.New()
 	}
-	// Only trusted run evidence has a separate schema. Tool argument values,
-	// arbitrary keys and upstream error text are never durable audit metadata.
-	if e.Tool != "run.summary" && e.Tool != "run.verification" {
+	// Only trusted run evidence has a separate schema. A caller that has already
+	// reduced a tool call's arguments to the audited representation says so
+	// (tools.AuditArgs decides, per tool, which arguments are identifiers kept
+	// verbatim and which are content kept as a digest). Anything else is reduced
+	// here, so an unconsidered caller cannot make the audit log a copy of
+	// whatever it was passed.
+	if e.Tool != "run.summary" && e.Tool != "run.verification" && !e.ArgsAudited {
 		e.ArgsJSON, _ = json.Marshal(map[string]any{"argument_bytes": len(e.ArgsJSON), "valid_json": json.Valid(e.ArgsJSON)})
 	}
 	tx, err := a.pool.Begin(ctx)

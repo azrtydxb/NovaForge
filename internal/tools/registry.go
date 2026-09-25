@@ -245,10 +245,14 @@ func (r *Registry) Call(ctx context.Context, runID uuid.UUID, name string, argsJ
 	}
 	recordCtx, stopRecord := context.WithTimeout(ctx, 2*time.Second)
 	defer stopRecord()
+	// A built-in tool's arguments are described by Specs, so which of them are
+	// identifiers and which are content is known; an external server's are not.
+	_, builtin := Specs[auditName]
 	auditID, err := r.audit.Record(recordCtx, agents.Entry{
-		RunID:    runID,
-		Tool:     auditName,
-		ArgsJSON: normalizeArgs(argsJSON),
+		RunID:       runID,
+		Tool:        auditName,
+		ArgsJSON:    AuditArgs(auditName, builtin, normalizeArgs(argsJSON)),
+		ArgsAudited: true,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("%w: start receipt unavailable", ErrAuditUnavailable)

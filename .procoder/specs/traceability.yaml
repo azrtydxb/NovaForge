@@ -316,16 +316,21 @@ criteria:
         step: "4a. a person's push to the agent's branch is refused while the run holds it"
 
   S-8/TestToolCallAudited:
-    status: partial
+    status: covered
     note: >-
-      Registry.Call records observable argument metadata and outcomes for
+      Registry.Call records each call's arguments and its outcome for
       successful, failing, denied, unknown, over-budget and cancelled calls.
-      Raw arguments are deliberately not retained: the current metadata-only
-      representation does not establish the specification's argument-level
-      audit criterion. Reconcile a privacy-safe argument evidence contract
-      before marking this criterion covered. No e2e step reads the audit log.
+      The argument evidence contract is per argument (tools.AuditArgs): a
+      built-in tool's identifiers — repository, ref, path, symbol, work item —
+      are kept verbatim, while an argument declared as content, an argument
+      past the length bound, and every argument of a tool whose schema this
+      repository does not define are kept as their length and sha256. That
+      satisfies the criterion's argument-level requirement without the audit
+      log becoming a copy of whatever an agent was handed. No e2e step reads
+      the audit log; the coverage here is the Go tests.
     go_tests:
       - ./internal/tools TestToolCallAudited
+      - ./internal/tools TestAuditArgsDisclosesIdentifiersAndDigestsContent
       - ./internal/tools TestCancelledCallStillRecordsItsOutcome
       - ./internal/tools TestEveryCallIsAudited
       - ./internal/agents TestRecordThenComplete

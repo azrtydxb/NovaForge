@@ -69,15 +69,21 @@ func TestToolCallAudited(t *testing.T) {
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
+	// S-8 requires the arguments themselves, not merely that some were present.
+	// A built-in tool's arguments are identifiers and are kept verbatim; an
+	// argument declared as content, and every argument of a tool whose schema
+	// this repository does not define, is kept as its length and digest (see
+	// tools.AuditArgs). test.fails and shell.exec are not in Specs, so neither
+	// is disclosed.
 	type want struct {
-		tool, args, outcome, errContains string
+		tool, args, auditedArgs, outcome, errContains string
 	}
 	wants := []want{
-		{"work.get", okArgs, "ok", ""},
-		{"test.fails", failArgs, "error", "the handler could not do it"},
-		{"git.commit", deniedArgs, "denied", "agents/NF-1/"},
-		{"unregistered", unknownArgs, "refused", "unknown tool"},
-		{"work.get", overArgs, "refused", "over budget"},
+		{"work.get", okArgs, okArgs, "ok", ""},
+		{"test.fails", failArgs, `{"why":{"bytes":20,"sha256":"c2e2ae654166e81143ec7433395f97c15141ddaa50ede2ced985386ba80d33d2"}}`, "error", "the handler could not do it"},
+		{"git.commit", deniedArgs, deniedArgs, "denied", "agents/NF-1/"},
+		{"unregistered", unknownArgs, `{"cmd":{"bytes":10,"sha256":"997a2474778fe97c213b11896a8e4a14379c1d90a91c61778c16422ed2e4bb0e"}}`, "refused", "unknown tool"},
+		{"work.get", overArgs, overArgs, "refused", "over budget"},
 	}
 	if len(entries) != len(wants) {
 		t.Fatalf("got %d audit entries, want %d: %+v", len(entries), len(wants), entries)
@@ -87,9 +93,8 @@ func TestToolCallAudited(t *testing.T) {
 		if e.Tool != w.tool {
 			t.Errorf("entry %d tool = %q, want %q", i, e.Tool, w.tool)
 		}
-		wantArgs, _ := json.Marshal(map[string]any{"argument_bytes": len(w.args), "valid_json": true})
-		if !jsonEqual(t, e.ArgsJSON, wantArgs) {
-			t.Errorf("entry %d (%s) args = %s, want %s", i, w.tool, e.ArgsJSON, w.args)
+		if !jsonEqual(t, e.ArgsJSON, []byte(w.auditedArgs)) {
+			t.Errorf("entry %d (%s) args = %s, want %s", i, w.tool, e.ArgsJSON, w.auditedArgs)
 		}
 		if e.Outcome != w.outcome {
 			t.Errorf("entry %d (%s) outcome = %q, want %q", i, w.tool, e.Outcome, w.outcome)
