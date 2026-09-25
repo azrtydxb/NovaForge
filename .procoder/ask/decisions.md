@@ -639,3 +639,58 @@ self-hosted dev platform and wrong for anything else.
 - Acceptable for this cluster; record it as a limitation.
 - Move the unseal key and root token out of the cluster now.
 - Re-key with more shares and a threshold above one.
+
+## Whether to fix the FastLLM backend flapping (2026-09-25)
+
+Correction to the earlier entry that framed FastLLM as another project's
+infrastructure: section 27 of the design document places it inside the NovaForge
+ecosystem (NovaForge → go-ai-sdk → FastLLM → vLLM → Qwen), on the same cluster.
+The earlier option "it isn't NovaForge's" was wrong and may have biased the
+choice to leave it alone.
+
+Diagnosis: three model backends serve the configured model (192.168.10.245, .246
+and .203). The proxy replicas repeatedly eject and re-admit them, logging "the
+rest of the fleet can reach this backend; withdrawing our own ejection so the
+next probe decides again". One replica's health probe fails while the others
+succeed, so backends flap rather than being down. Short model calls get through;
+the sequential planner-sized calls an Agent Run makes do not, which is why the
+`agent` suite is the one failure of thirteen.
+
+Separately confirmed this turn: NovaForge already works as an ordinary Git host —
+clone, commit, push branch and tag, fresh clone, pull, and the browse API for
+branches, tags, history, tree, blobs and diffs, all against the live deployment
+with an unmodified git client.
+
+- Fix the flapping in FastLLM so the `agent` suite passes.
+- Leave the fleet alone and close out S-23 instead.
+- Leave it and stop here; the Git-host question is answered.
+
+## Gitea parity: which gaps to close (2026-09-25)
+
+NovaForge is already usable as an ordinary Git host — verified live against the
+deployment with an unmodified git client: clone, commit, push branch and tag, fresh
+clone, pull, and the browse API for branches, tags, history, tree, blobs and diffs.
+It is not yet a drop-in Gitea replacement. Verified absent by grepping the route
+table and the whole codebase:
+
+- Webhooks — no code at all.
+- Git LFS — no code at all.
+- Releases and release assets — CI artifacts exist, releases do not.
+- Forks and cross-fork Engineering Runs — runs are branch-based within one repo.
+- Mirroring / import — no way to bring an existing repo in from Gitea or GitHub.
+- Labels and milestones — Work Items replace issues, without either.
+- Repository settings — only GET and DELETE on a repo: no rename, default-branch
+  change, archive or transfer.
+- Per-repository collaborators — organization membership only.
+- GPG commit signature verification.
+- TLS on the Git endpoint — plain HTTP on :8081.
+
+Deliberately excluded by design-document section 25, not gaps: wiki, portfolio
+management, SCM integrations, full Kubernetes management, observability suites.
+
+Separately, a defect rather than a gap: the spec claims **teams** in S-1 and in its
+Data section, and no team table or team code exists anywhere. Either teams get built
+or the spec stops claiming them.
+
+Options recorded for the user's selection: any combination of the above, the teams
+discrepancy, or none.

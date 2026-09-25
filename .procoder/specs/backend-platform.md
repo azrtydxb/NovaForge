@@ -96,6 +96,30 @@ mcp-server.
   engineering activity rather than repository browsing. The platform computes these; a client
   deriving them again would be a second opinion about what is happening.
 
+Git-host parity. NovaForge is meant to replace an existing self-hosted Git server, which
+means a team can move onto it without giving up what they already rely on. These are the
+gaps measured against Gitea; section 25's exclusions (wiki, portfolio management, SCM
+integrations) stay excluded.
+
+- [S-24] **Webhooks**: outgoing HTTP notifications for pushes, Engineering Runs and CI
+  results, with a per-hook secret, delivery attempts recorded, and retries that stop.
+- [S-25] **Git LFS**: the batch API and object transfer over the existing Git transport, so a
+  repository with large files can be cloned and pushed by an unmodified client.
+- [S-26] **Repository administration**: rename, change of default branch, archive (read-only)
+  and transfer between organizations, plus per-repository collaborators so access does not
+  have to be organization-wide.
+- [S-27] **Import and mirroring**: create a repository from a remote URL, and keep a mirror
+  refreshed on a schedule, so there is a migration path onto the platform.
+- [S-28] **Releases**: a named release on a tag carrying downloadable assets, distinct from a
+  CI run's artifacts.
+- [S-29] **Transport security**: Git over HTTPS with a served certificate, so credentials do
+  not cross a network in the clear.
+- [S-30] **Forks**: fork a repository within or across organizations, and open an Engineering
+  Run whose source is a fork rather than a branch of the target.
+- [S-31] **Teams**: named groups within an organization holding a role, with membership and
+  repository access granted to the team rather than to each person. The spec has claimed
+  teams since the beginning and nothing implemented them.
+
 ## Out of scope
 
 - **The web GUI** — deferred to its own spec. No React, Vite, TanStack, Shadcn, or Monaco work
@@ -338,5 +362,41 @@ agent logs expire after 90 days.
 - [ ] [S-23] `TestWorkCompletedTodayCounted`: the dashboard reports how many Work Items reached
       done since midnight UTC; an item that reached done earlier is not counted, and one that
       has since moved back out of done is not counted.
+- [ ] [S-24] `TestWebhookDelivered`: a push delivers a signed POST to the repository's hook,
+      the delivery is recorded with its response status, and a hook whose endpoint fails is
+      retried a bounded number of times and then left failed rather than retried forever.
+- [ ] [S-24] `TestWebhookSecretNeverReadBack`: a hook's secret can be set and rotated and is
+      never returned by any read, and the signature a receiver verifies is computed over the
+      exact delivered body.
+- [ ] [S-25] `TestLFSRoundTrip`: an unmodified `git lfs` client pushes a large file and a fresh
+      clone retrieves its content byte for byte, with the object stored in the blobstore and
+      not in the Git repository.
+- [ ] [S-25] `TestLFSQuotaAndOwnership`: an LFS object is readable only within the
+      organization that owns its repository, and an upload beyond the configured object size is
+      refused before any bytes are stored.
+- [ ] [S-26] `TestRepositoryAdministration`: a repository is renamed and remains clonable at
+      the new name, its default branch is changed and a fresh clone checks out the new one, an
+      archived repository refuses pushes while still serving reads, and a transferred
+      repository belongs to the receiving organization and is gone from the sending one.
+- [ ] [S-26] `TestRepositoryCollaborator`: a person who is not an organization member can be
+      granted access to one repository, reaches only that repository, and loses access when the
+      grant is removed.
+- [ ] [S-27] `TestImportFromRemote`: a repository created from a remote URL contains that
+      remote's commits, branches and tags, and an import from an unreachable or unauthorized
+      remote fails without leaving a half-created repository.
+- [ ] [S-27] `TestMirrorRefresh`: a mirrored repository picks up a new upstream commit on
+      refresh, and a push to a mirror is refused because upstream owns its history.
+- [ ] [S-28] `TestReleaseWithAssets`: a release is created on an existing tag with an uploaded
+      asset, the asset downloads byte for byte, a release cannot be created on a tag that does
+      not exist, and deleting a release removes its assets.
+- [ ] [S-29] `TestGitOverHTTPS`: an unmodified git client clones and pushes over HTTPS against
+      the served certificate, and a plaintext HTTP attempt is refused rather than silently
+      downgraded.
+- [ ] [S-30] `TestForkAndCrossForkRun`: a fork carries the parent's history and records its
+      parent, a push to the fork leaves the parent untouched, and an Engineering Run opened
+      from the fork into the parent is reviewed and merged by the same rules as a branch run.
+- [ ] [S-31] `TestTeamAccess`: a team grants its members access to the repositories granted to
+      the team and to nothing else, removing a person from the team removes that access, and a
+      team's role bounds what its members may do regardless of their organization role.
 
 ## Open questions

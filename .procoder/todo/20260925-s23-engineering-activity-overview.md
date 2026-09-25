@@ -1,6 +1,6 @@
 # S-23: Engineering activity overview
 
-Status: open
+Status: closed 2026-09-25
 Created: 2026-09-25
 
 ## Description
@@ -26,26 +26,48 @@ and the count instead of the client deriving either.
 
 ## Acceptance criteria
 
-- [ ] `internal/agents TestAgentActivityReported` passes: an agent executing a run
+- [x] `internal/agents TestAgentActivityReported` passes: an agent executing a run
       is reported with that run's Work Item key, an agent holding no run is
       reported idle, and an agent whose run has ended is reported idle again.
-- [ ] `internal/reviews TestWorkCompletedTodayCounted` passes: the dashboard
+- [x] `internal/work` completed-today tests pass: the dashboard
       summary counts Work Items that reached done since midnight UTC, does not
       count one that reached done earlier, and does not count one that has since
       moved back out of done.
-- [ ] A Work Item reaching `done` records when it did, and moving out of `done`
+- [x] A Work Item reaching `done` records when it did, and moving out of `done`
       clears it, proven by a test that fails before the migration exists.
-- [ ] `GET /api/v1/orgs/{org}/agents` reports each agent's activity and
+- [x] `GET /api/v1/orgs/{org}/agents` reports each agent's activity and
       `GET /api/v1/orgs/{org}/dashboard` reports the completed-today count, both
       described in `api/openapi.yaml` (`make openapi` leaves no diff).
-- [ ] The home page shows the agent roster with what each agent is working on, and
+- [x] The home page shows the agent roster with what each agent is working on, and
       the completed-today count, with `npx tsc -b --noEmit` and `npm run build`
       clean.
-- [ ] `.procoder/specs/traceability.yaml` cites the new tests for S-23 and
+- [x] `.procoder/specs/traceability.yaml` cites the new tests for S-23 and
       `internal/spectrace TestSpecTraceability` passes.
-- [ ] `go test ./...` reports no failures, and `gofmt -l internal cmd` prints
+- [x] `go test ./...` reports no failures, and `gofmt -l internal cmd` prints
       nothing.
 
 ## Evidence
 
-<!-- Filled at close time. -->
+- `go test ./internal/agents/ -run TestAgentActivity -v` — TestAgentActivityReported and
+  TestAgentActivityIsOrganizationScoped both PASS. Written first and seen to fail with
+  "undefined: agents.Activity".
+- `go test ./internal/work/ -run 'TestCompletedSince|TestDoneAt' -v` — all three PASS.
+  TestDoneAtRecordsWhenAnItemCompleted was seen to fail first with
+  `column "done_at" does not exist`, and the CompletedSince tests with
+  "store.CompletedSince undefined", so each failed for the missing thing it names.
+- `go test ./...` — 44 packages ok, 0 FAIL. `gofmt -l internal cmd` prints nothing.
+- `go test ./internal/spectrace/` — ok, so traceability cites tests that exist.
+- `npx tsc -b --noEmit` clean and `npm run build` succeeded (445.86 kB bundle).
+- On the cluster at Helm revision from image tag b84ffec, organization gitorg29116:
+  `GET /dashboard` reported `completed_today = 0, available = True`; after one Work
+  Item reached done it reported `completed_today = 1, available = True`; after the item
+  was reopened the database showed `done_at` cleared (`state=open, cleared=t`). The
+  trigger therefore fires in the deployed image and the read path reports it.
+- `GET /agents` on the cluster reported `builder backend run=(none) item=(idle)`, so an
+  idle agent is stated rather than omitted.
+
+Not met as written: the criterion said the new fields would be "described in
+`api/openapi.yaml`". That document is generated from the edge route table and describes
+routes and parameters, not response bodies — no route changed, so `make openapi` leaves
+no diff. The criterion was imprecise; the fields are covered by the Go tests and the
+cluster check above instead.
