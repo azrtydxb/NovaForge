@@ -48,6 +48,7 @@ func Routes() []Route {
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}", "getRepo", "One repository"},
 		{http.MethodPatch, "/api/v1/orgs/{org}/repos/{repo}", "updateRepo", "Rename a repository, change its default branch, or archive it"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/transfer", "transferRepo", "Move a repository to another organization"},
+		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/forks", "forkRepo", "Fork a repository, carrying its history into a repository of your own"},
 		{http.MethodDelete, "/api/v1/orgs/{org}/repos/{repo}", "deleteRepo", "Delete a repository"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/branches", "listBranches", "Branches"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/branches", "createBranch", "Create a branch"},

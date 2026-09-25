@@ -95,6 +95,11 @@ func toProtoRun(r Run) *reviewsv1.Run {
 	if r.AuthorID != uuid.Nil {
 		out.AuthorId = r.AuthorID.String()
 	}
+	// A run always reports the repository its source ref lives in, defaulting to
+	// its own. Leaving it empty for a branch run would make every reader — the
+	// gate controller included — repeat the defaulting rule, and one of them
+	// would get it wrong.
+	out.SourceRepoId = r.sourceRepo().String()
 	return out
 }
 
@@ -123,13 +128,21 @@ func (g *GRPCServer) CreateRun(ctx context.Context, req *reviewsv1.CreateRunRequ
 		return nil, err
 	}
 
+	// An absent source repository means this run's own, which is every run that
+	// existed before forks did.
+	sourceRepoID, err := optionalUUID("source_repo_id", req.GetSourceRepoId())
+	if err != nil {
+		return nil, err
+	}
+
 	run := Run{
-		OrgID:      scope.OrgID,
-		RepoID:     repoID,
-		WorkItemID: workItemID,
-		Title:      strings.TrimSpace(req.GetTitle()),
-		SourceRef:  req.GetSourceRef(),
-		TargetRef:  req.GetTargetRef(),
+		OrgID:        scope.OrgID,
+		RepoID:       repoID,
+		SourceRepoID: sourceRepoID,
+		WorkItemID:   workItemID,
+		Title:        strings.TrimSpace(req.GetTitle()),
+		SourceRef:    req.GetSourceRef(),
+		TargetRef:    req.GetTargetRef(),
 	}
 	if scope.ActorKind == "user" {
 		run.AuthorID = scope.ActorID

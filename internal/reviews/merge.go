@@ -86,8 +86,14 @@ func (m *Merger) Merge(ctx context.Context, runID uuid.UUID, method string) (str
 		return "", fmt.Errorf("%w: run %s has no approval independent of its author", ErrMergeBlocked, runID)
 	}
 
+	// SourceRepo is what makes a cross-fork run merge through this one path
+	// rather than a second one: git-platform fetches the source ref out of that
+	// repository into the target's throwaway clone and then runs the merge it
+	// always ran. For a branch run it is the run's own repository, which
+	// git-platform treats as "no fork", so nothing about an existing run changes.
 	resp, err := m.Git.Merge(ctx, &gitv1.MergeRequest{
 		Repo:              run.RepoID.String(),
+		SourceRepo:        run.sourceRepo().String(),
 		SourceRef:         run.SourceRef,
 		ExpectedSourceSha: head,
 		ExpectedTargetSha: target,

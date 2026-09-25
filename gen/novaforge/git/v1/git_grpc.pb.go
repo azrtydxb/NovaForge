@@ -32,6 +32,7 @@ const (
 	GitService_GetBlob_FullMethodName                           = "/novaforge.git.v1.GitService/GetBlob"
 	GitService_GetDiff_FullMethodName                           = "/novaforge.git.v1.GitService/GetDiff"
 	GitService_Merge_FullMethodName                             = "/novaforge.git.v1.GitService/Merge"
+	GitService_ForkRepo_FullMethodName                          = "/novaforge.git.v1.GitService/ForkRepo"
 	GitService_CreateBranch_FullMethodName                      = "/novaforge.git.v1.GitService/CreateBranch"
 	GitService_CreateCommit_FullMethodName                      = "/novaforge.git.v1.GitService/CreateCommit"
 	GitService_CreateHook_FullMethodName                        = "/novaforge.git.v1.GitService/CreateHook"
@@ -68,6 +69,7 @@ type GitServiceClient interface {
 	GetBlob(ctx context.Context, in *GetBlobRequest, opts ...grpc.CallOption) (*GetBlobResponse, error)
 	GetDiff(ctx context.Context, in *GetDiffRequest, opts ...grpc.CallOption) (*GetDiffResponse, error)
 	Merge(ctx context.Context, in *MergeRequest, opts ...grpc.CallOption) (*MergeResponse, error)
+	ForkRepo(ctx context.Context, in *ForkRepoRequest, opts ...grpc.CallOption) (*ForkRepoResponse, error)
 	CreateBranch(ctx context.Context, in *CreateBranchRequest, opts ...grpc.CallOption) (*CreateBranchResponse, error)
 	CreateCommit(ctx context.Context, in *CreateCommitRequest, opts ...grpc.CallOption) (*CreateCommitResponse, error)
 	CreateHook(ctx context.Context, in *CreateHookRequest, opts ...grpc.CallOption) (*CreateHookResponse, error)
@@ -224,6 +226,16 @@ func (c *gitServiceClient) Merge(ctx context.Context, in *MergeRequest, opts ...
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(MergeResponse)
 	err := c.cc.Invoke(ctx, GitService_Merge_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gitServiceClient) ForkRepo(ctx context.Context, in *ForkRepoRequest, opts ...grpc.CallOption) (*ForkRepoResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ForkRepoResponse)
+	err := c.cc.Invoke(ctx, GitService_ForkRepo_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -393,6 +405,7 @@ type GitServiceServer interface {
 	GetBlob(context.Context, *GetBlobRequest) (*GetBlobResponse, error)
 	GetDiff(context.Context, *GetDiffRequest) (*GetDiffResponse, error)
 	Merge(context.Context, *MergeRequest) (*MergeResponse, error)
+	ForkRepo(context.Context, *ForkRepoRequest) (*ForkRepoResponse, error)
 	CreateBranch(context.Context, *CreateBranchRequest) (*CreateBranchResponse, error)
 	CreateCommit(context.Context, *CreateCommitRequest) (*CreateCommitResponse, error)
 	CreateHook(context.Context, *CreateHookRequest) (*CreateHookResponse, error)
@@ -462,6 +475,9 @@ func (UnimplementedGitServiceServer) GetDiff(context.Context, *GetDiffRequest) (
 }
 func (UnimplementedGitServiceServer) Merge(context.Context, *MergeRequest) (*MergeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Merge not implemented")
+}
+func (UnimplementedGitServiceServer) ForkRepo(context.Context, *ForkRepoRequest) (*ForkRepoResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ForkRepo not implemented")
 }
 func (UnimplementedGitServiceServer) CreateBranch(context.Context, *CreateBranchRequest) (*CreateBranchResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateBranch not implemented")
@@ -756,6 +772,24 @@ func _GitService_Merge_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GitService_ForkRepo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ForkRepoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GitServiceServer).ForkRepo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GitService_ForkRepo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GitServiceServer).ForkRepo(ctx, req.(*ForkRepoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _GitService_CreateBranch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateBranchRequest)
 	if err := dec(in); err != nil {
@@ -1030,6 +1064,10 @@ var GitService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Merge",
 			Handler:    _GitService_Merge_Handler,
+		},
+		{
+			MethodName: "ForkRepo",
+			Handler:    _GitService_ForkRepo_Handler,
 		},
 		{
 			MethodName: "CreateBranch",

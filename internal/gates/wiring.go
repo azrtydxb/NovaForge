@@ -105,7 +105,32 @@ func NewServiceRunLookup(reviewsClient reviewsv1.ReviewsServiceClient, workClien
 		// gate and merged. Definitions are still read from the target (see
 		// Resolve), which is what keeps a change from weakening its own gates.
 		source := strings.TrimPrefix(run.GetSourceRef(), "refs/heads/")
-		headSHA := heads[source]
+		// A cross-fork run's source branch lives in the fork, not in the target, so
+		// its head is resolved there. Looking it up in the target would have found
+		// nothing and failed every cross-fork evaluation — safe, since nothing is
+		// authorized, but it would also mean no cross-fork run could ever pass a
+		// gate. Gate *definitions* are still read from the target (see Resolve), so
+		// a fork cannot relax the gates its change has to pass.
+		sourceHeads := heads
+		if srcRepo := run.GetSourceRepoId(); srcRepo != "" && srcRepo != run.GetRepoId() {
+			srcRepoID, err := uuid.Parse(srcRepo)
+			if err != nil {
+				return RunHead{}, fmt.Errorf("run %s has invalid source_repo_id: %w", runID, err)
+			}
+			srcName, err := resolveRepoName(ctx, gitClient, srcRepoID)
+			if err != nil {
+				return RunHead{}, err
+			}
+			srcBranches, err := gitClient.ListBranches(ctx, &gitv1.ListBranchesRequest{Repo: srcName})
+			if err != nil {
+				return RunHead{}, fmt.Errorf("list branches for %s: %w", srcName, err)
+			}
+			sourceHeads = map[string]string{}
+			for _, ref := range srcBranches.GetRefs() {
+				sourceHeads[ref.GetName()] = ref.GetSha()
+			}
+		}
+		headSHA := sourceHeads[source]
 		if headSHA == "" {
 			return RunHead{}, fmt.Errorf("source branch %q not found in repo %s", source, repoName)
 		}

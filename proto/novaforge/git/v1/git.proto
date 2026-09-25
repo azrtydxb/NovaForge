@@ -19,6 +19,7 @@ service GitService {
   rpc GetBlob(GetBlobRequest) returns (GetBlobResponse);
   rpc GetDiff(GetDiffRequest) returns (GetDiffResponse);
   rpc Merge(MergeRequest) returns (MergeResponse);
+  rpc ForkRepo(ForkRepoRequest) returns (ForkRepoResponse);
   rpc CreateBranch(CreateBranchRequest) returns (CreateBranchResponse);
   rpc CreateCommit(CreateCommitRequest) returns (CreateCommitResponse);
   rpc CreateHook(CreateHookRequest) returns (CreateHookResponse);
@@ -202,6 +203,14 @@ message MergeRequest {
   // Trusted policy baseline inspected by the gate owner. Both refs are checked
   // in the same native Git transaction before publishing the merge.
   string expected_target_sha = 7;
+  // source_repo names the repository source_ref lives in, when that is not
+  // this one — a fork proposing a change to its parent. Empty means source_ref
+  // is a branch of repo, which is what every merge before forks existed meant,
+  // so an existing caller keeps working unchanged. It must name a repository in
+  // the caller's own organization: organizations are a hard boundary, and
+  // reading another organization's objects is not something either side
+  // authorized.
+  string source_repo = 8;
 }
 message MergeResponse {
   string merge_sha = 1;
@@ -393,4 +402,20 @@ message ListHookDeliveriesRequest {
 }
 message ListHookDeliveriesResponse {
   repeated HookDelivery deliveries = 1;
+}
+
+// ForkRepoRequest forks repo into a new repository named name. A fork is a
+// full repository carrying the parent's history and recording which repository
+// it came from — not a reference to the parent, which would empty the fork the
+// moment the parent was deleted.
+message ForkRepoRequest {
+  string repo = 1;
+  string name = 2;
+  // to_org must be the caller's own organization, or be left empty, which
+  // means the same thing. It is present so the request states where the fork
+  // lands rather than leaving it implied.
+  string to_org = 3;
+}
+message ForkRepoResponse {
+  Repo repo = 1;
 }
