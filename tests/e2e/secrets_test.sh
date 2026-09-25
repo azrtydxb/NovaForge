@@ -66,13 +66,23 @@ ORG_ID="$(curl -fsS "$API/orgs/$ORG" -H "Authorization: Bearer $TOKEN" |
 [ -n "$ORG_ID" ] || fail "could not resolve the organization id"
 ok "$ORG/$REPO ($ORG_ID)"
 
-echo "== 2. nothing is registered under the credential's name =="
-# The point of the assertion below is that the job's credential cannot have come
-# from anything the platform stored, so first establish that it stored nothing.
+echo "== 2. the credential is offered by a binding, and this run stores nothing =="
+# A listed name is not a stored value. The listing merges the provider's
+# bindings with the organization's stored secrets on purpose, so a member can
+# see what they may ask for; secrets.secret_values holds nothing for a name that
+# only a binding provides. This suite never registers a value, so whatever the
+# job receives below cannot have come from one.
 LISTED="$(curl -fsS "$API/orgs/$ORG/secrets" -H "Authorization: Bearer $TOKEN")" || fail "listing secrets failed"
-printf '%s' "$LISTED" | grep -q "$SECRET_NAME" &&
-	fail "a secret named $SECRET_NAME is registered; this suite proves the credential is minted, not stored: $LISTED"
-ok "no stored secret named $SECRET_NAME"
+printf '%s' "$LISTED" | grep -q "$SECRET_NAME" ||
+	fail "$SECRET_NAME is not offered in $ORG; the operator's binding is missing (see deploy/dev/openbao.yaml): $LISTED"
+printf '%s' "$LISTED" | python3 -c '
+import json, sys
+# Names only, never values: the listing is a catalogue, not a read.
+for s in json.load(sys.stdin)["secrets"]:
+    if set(s) - {"name", "environment"}:
+        raise SystemExit("listing returned more than a name and environment: %r" % s)
+' || fail "the secret listing returned more than names: $LISTED"
+ok "$SECRET_NAME is offered by a binding; this run registers no value"
 
 echo "== 3. a runner is registered into this organization =="
 IMG_TAG="$($KC get deploy "$REL-ci-runner" -o jsonpath='{.spec.template.spec.containers[0].image}' | sed 's/.*://')"
