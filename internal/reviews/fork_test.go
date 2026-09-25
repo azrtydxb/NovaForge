@@ -273,8 +273,22 @@ func TestCrossForkRun(t *testing.T) {
 	if err := store.SubmitReviewAt(scoped, uuid.MustParse(second.GetRun().GetId()), uuid.New(), "user", "approve", secondHead, "inspected"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := rv.MergeRun(ctx, &reviewsv1.MergeRunRequest{RunId: second.GetRun().GetId(), Method: "merge"}); err == nil {
+	_, err = rv.MergeRun(ctx, &reviewsv1.MergeRunRequest{RunId: second.GetRun().GetId(), Method: "merge"})
+	if err == nil {
 		t.Fatal("cross-fork run merged while the parent's required gate was unsatisfied")
+	}
+	// Refusal alone does not prove the parent's authority: a cross-fork run is
+	// refused for several reasons, and "the gates could not be read at all" looks
+	// identical from the outside to "the parent's gate was not satisfied". The
+	// refusal must therefore name the gate the PARENT declared, which is only
+	// possible if that definition was resolved and applied.
+	//
+	// Reading definitions from the fork instead was tried, by making the lookup
+	// report the fork as the run's repository. The merge was still refused — but
+	// with "unknown ref or path", the parent's gate never resolved at all. That is
+	// the failure this assertion distinguishes.
+	if !strings.Contains(err.Error(), "api-compatibility") {
+		t.Fatalf("the refusal does not name the gate the parent declared, so the parent's definition was never applied: %v", err)
 	}
 	if got := head(parent.GetRepo().GetId(), "main"); got != guarded {
 		t.Fatalf("parent main moved to %s while a required gate was unsatisfied, want %s", got, guarded)
