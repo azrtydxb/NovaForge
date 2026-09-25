@@ -25,6 +25,7 @@ func Handlers(cfg Config) map[string]http.HandlerFunc {
 		addWorkHandlers(h, cfg.Git, cfg.Work, cfg.Reviews)
 		addCIHandlers(h, cfg.Git, cfg.CI)
 		addReleaseHandlers(h, cfg.Git)
+		addCollaboratorHandlers(h, cfg.Git)
 		addAgentHandlers(h, cfg.Git, cfg.Agents, cfg.Identity)
 		addPlatformHandlers(h, cfg.Git, cfg.Graph, cfg.Gates)
 		addRunToolHandlers(h, cfg.Git, cfg.Reviews, cfg.Agents)

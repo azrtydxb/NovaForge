@@ -33,6 +33,7 @@ service IdentityService {
   rpc AddTeamMember(AddTeamMemberRequest) returns (AddTeamMemberResponse);
   rpc RemoveTeamMember(RemoveTeamMemberRequest) returns (RemoveTeamMemberResponse);
   rpc ListTeamsForUser(ListTeamsForUserRequest) returns (ListTeamsForUserResponse);
+  rpc ResolveUsername(ResolveUsernameRequest) returns (ResolveUsernameResponse);
   rpc AddSSHKey(AddSSHKeyRequest) returns (AddSSHKeyResponse);
   rpc ListSSHKeys(ListSSHKeysRequest) returns (ListSSHKeysResponse);
   rpc DeleteSSHKey(DeleteSSHKeyRequest) returns (DeleteSSHKeyResponse);
@@ -364,3 +365,18 @@ message RevokeGrantResponse { bool ok = 1; }
 // Revokes only the session presented in authorization metadata, never a PAT.
 message LogoutSessionRequest {}
 message LogoutSessionResponse { bool ok = 1; }
+
+// Turning a username into a user id, so a repository grant can name someone who is
+// not a member of the organization granting it — a name is what a person types, and
+// an interface that demanded a UUID would be unusable.
+//
+// This is deliberately not a user search: it answers one exact username or nothing,
+// and only for a caller who could act on the answer (an organization's owner or
+// admin, or an org-scoped platform service). Anything looser would let any
+// authenticated account enumerate the deployment's users.
+message ResolveUsernameRequest {
+  string username = 1;
+}
+message ResolveUsernameResponse {
+  string user_id = 1;
+}

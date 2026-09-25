@@ -228,6 +228,8 @@ func main() {
 	// resolved through Identity's RPC, because teams live in its schema.
 	collaborators := gitops.NewCollaboratorStore(pool, gitops.NewIdentityTeamLookup(identityClient, cfg.HMACSecret))
 	grpcServer.Collaborators = collaborators
+	// A grant may name a person by username, which only Identity can resolve.
+	grpcServer.Users = gitops.NewIdentityUserResolver(identityClient)
 	httpHandler := gitops.NewHTTPHandler(cfg.GitDataDir,
 		gitops.NewCredentialAuthFunc(identityClient, cfg.HMACSecret, collaborators), capFunc)
 

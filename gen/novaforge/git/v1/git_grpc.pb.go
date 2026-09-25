@@ -40,6 +40,9 @@ const (
 	GitService_SetHookSecret_FullMethodName                     = "/novaforge.git.v1.GitService/SetHookSecret"
 	GitService_ListHookDeliveries_FullMethodName                = "/novaforge.git.v1.GitService/ListHookDeliveries"
 	GitService_ListOrganizationsWithRepositories_FullMethodName = "/novaforge.git.v1.GitService/ListOrganizationsWithRepositories"
+	GitService_AddCollaborator_FullMethodName                   = "/novaforge.git.v1.GitService/AddCollaborator"
+	GitService_RemoveCollaborator_FullMethodName                = "/novaforge.git.v1.GitService/RemoveCollaborator"
+	GitService_ListCollaborators_FullMethodName                 = "/novaforge.git.v1.GitService/ListCollaborators"
 	GitService_CreateRelease_FullMethodName                     = "/novaforge.git.v1.GitService/CreateRelease"
 	GitService_ListReleases_FullMethodName                      = "/novaforge.git.v1.GitService/ListReleases"
 	GitService_DeleteRelease_FullMethodName                     = "/novaforge.git.v1.GitService/DeleteRelease"
@@ -80,6 +83,9 @@ type GitServiceClient interface {
 	// with organization ids. The worker re-enters each organization's scope with
 	// an org-scoped token before reading anything in it.
 	ListOrganizationsWithRepositories(ctx context.Context, in *ListOrganizationsWithRepositoriesRequest, opts ...grpc.CallOption) (*ListOrganizationsWithRepositoriesResponse, error)
+	AddCollaborator(ctx context.Context, in *AddCollaboratorRequest, opts ...grpc.CallOption) (*AddCollaboratorResponse, error)
+	RemoveCollaborator(ctx context.Context, in *RemoveCollaboratorRequest, opts ...grpc.CallOption) (*RemoveCollaboratorResponse, error)
+	ListCollaborators(ctx context.Context, in *ListCollaboratorsRequest, opts ...grpc.CallOption) (*ListCollaboratorsResponse, error)
 	CreateRelease(ctx context.Context, in *CreateReleaseRequest, opts ...grpc.CallOption) (*CreateReleaseResponse, error)
 	ListReleases(ctx context.Context, in *ListReleasesRequest, opts ...grpc.CallOption) (*ListReleasesResponse, error)
 	DeleteRelease(ctx context.Context, in *DeleteReleaseRequest, opts ...grpc.CallOption) (*DeleteReleaseResponse, error)
@@ -310,6 +316,36 @@ func (c *gitServiceClient) ListOrganizationsWithRepositories(ctx context.Context
 	return out, nil
 }
 
+func (c *gitServiceClient) AddCollaborator(ctx context.Context, in *AddCollaboratorRequest, opts ...grpc.CallOption) (*AddCollaboratorResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddCollaboratorResponse)
+	err := c.cc.Invoke(ctx, GitService_AddCollaborator_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gitServiceClient) RemoveCollaborator(ctx context.Context, in *RemoveCollaboratorRequest, opts ...grpc.CallOption) (*RemoveCollaboratorResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemoveCollaboratorResponse)
+	err := c.cc.Invoke(ctx, GitService_RemoveCollaborator_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gitServiceClient) ListCollaborators(ctx context.Context, in *ListCollaboratorsRequest, opts ...grpc.CallOption) (*ListCollaboratorsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListCollaboratorsResponse)
+	err := c.cc.Invoke(ctx, GitService_ListCollaborators_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *gitServiceClient) CreateRelease(ctx context.Context, in *CreateReleaseRequest, opts ...grpc.CallOption) (*CreateReleaseResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CreateReleaseResponse)
@@ -405,6 +441,9 @@ type GitServiceServer interface {
 	// with organization ids. The worker re-enters each organization's scope with
 	// an org-scoped token before reading anything in it.
 	ListOrganizationsWithRepositories(context.Context, *ListOrganizationsWithRepositoriesRequest) (*ListOrganizationsWithRepositoriesResponse, error)
+	AddCollaborator(context.Context, *AddCollaboratorRequest) (*AddCollaboratorResponse, error)
+	RemoveCollaborator(context.Context, *RemoveCollaboratorRequest) (*RemoveCollaboratorResponse, error)
+	ListCollaborators(context.Context, *ListCollaboratorsRequest) (*ListCollaboratorsResponse, error)
 	CreateRelease(context.Context, *CreateReleaseRequest) (*CreateReleaseResponse, error)
 	ListReleases(context.Context, *ListReleasesRequest) (*ListReleasesResponse, error)
 	DeleteRelease(context.Context, *DeleteReleaseRequest) (*DeleteReleaseResponse, error)
@@ -486,6 +525,15 @@ func (UnimplementedGitServiceServer) ListHookDeliveries(context.Context, *ListHo
 }
 func (UnimplementedGitServiceServer) ListOrganizationsWithRepositories(context.Context, *ListOrganizationsWithRepositoriesRequest) (*ListOrganizationsWithRepositoriesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListOrganizationsWithRepositories not implemented")
+}
+func (UnimplementedGitServiceServer) AddCollaborator(context.Context, *AddCollaboratorRequest) (*AddCollaboratorResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddCollaborator not implemented")
+}
+func (UnimplementedGitServiceServer) RemoveCollaborator(context.Context, *RemoveCollaboratorRequest) (*RemoveCollaboratorResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveCollaborator not implemented")
+}
+func (UnimplementedGitServiceServer) ListCollaborators(context.Context, *ListCollaboratorsRequest) (*ListCollaboratorsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListCollaborators not implemented")
 }
 func (UnimplementedGitServiceServer) CreateRelease(context.Context, *CreateReleaseRequest) (*CreateReleaseResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateRelease not implemented")
@@ -900,6 +948,60 @@ func _GitService_ListOrganizationsWithRepositories_Handler(srv interface{}, ctx 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GitService_AddCollaborator_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddCollaboratorRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GitServiceServer).AddCollaborator(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GitService_AddCollaborator_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GitServiceServer).AddCollaborator(ctx, req.(*AddCollaboratorRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GitService_RemoveCollaborator_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveCollaboratorRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GitServiceServer).RemoveCollaborator(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GitService_RemoveCollaborator_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GitServiceServer).RemoveCollaborator(ctx, req.(*RemoveCollaboratorRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GitService_ListCollaborators_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListCollaboratorsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GitServiceServer).ListCollaborators(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GitService_ListCollaborators_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GitServiceServer).ListCollaborators(ctx, req.(*ListCollaboratorsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _GitService_CreateRelease_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateReleaseRequest)
 	if err := dec(in); err != nil {
@@ -1062,6 +1164,18 @@ var GitService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListOrganizationsWithRepositories",
 			Handler:    _GitService_ListOrganizationsWithRepositories_Handler,
+		},
+		{
+			MethodName: "AddCollaborator",
+			Handler:    _GitService_AddCollaborator_Handler,
+		},
+		{
+			MethodName: "RemoveCollaborator",
+			Handler:    _GitService_RemoveCollaborator_Handler,
+		},
+		{
+			MethodName: "ListCollaborators",
+			Handler:    _GitService_ListCollaborators_Handler,
 		},
 		{
 			MethodName: "CreateRelease",

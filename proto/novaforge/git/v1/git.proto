@@ -31,6 +31,9 @@ service GitService {
   // with organization ids. The worker re-enters each organization's scope with
   // an org-scoped token before reading anything in it.
   rpc ListOrganizationsWithRepositories(ListOrganizationsWithRepositoriesRequest) returns (ListOrganizationsWithRepositoriesResponse);
+  rpc AddCollaborator(AddCollaboratorRequest) returns (AddCollaboratorResponse);
+  rpc RemoveCollaborator(RemoveCollaboratorRequest) returns (RemoveCollaboratorResponse);
+  rpc ListCollaborators(ListCollaboratorsRequest) returns (ListCollaboratorsResponse);
   rpc CreateRelease(CreateReleaseRequest) returns (CreateReleaseResponse);
   rpc ListReleases(ListReleasesRequest) returns (ListReleasesResponse);
   rpc DeleteRelease(DeleteReleaseRequest) returns (DeleteReleaseResponse);
@@ -393,4 +396,38 @@ message ListHookDeliveriesRequest {
 }
 message ListHookDeliveriesResponse {
   repeated HookDelivery deliveries = 1;
+}
+
+// --- Repository collaborators ---
+
+// A grant of one repository to a person or a team, without membership of the
+// organization that owns it. Exactly one of user or team is set: both would be
+// ambiguous about whose access it is, and neither grants nothing.
+message Collaborator {
+  // A username or a user id on the way in; always the id on the way out.
+  string user = 1;
+  string team_id = 2;
+  // "read" or "write".
+  string role = 3;
+}
+message AddCollaboratorRequest {
+  string repo = 1;
+  Collaborator grant = 2;
+}
+message AddCollaboratorResponse {
+  bool ok = 1;
+}
+message RemoveCollaboratorRequest {
+  string repo = 1;
+  string user = 2;
+  string team_id = 3;
+}
+message RemoveCollaboratorResponse {
+  bool ok = 1;
+}
+message ListCollaboratorsRequest {
+  string repo = 1;
+}
+message ListCollaboratorsResponse {
+  repeated Collaborator grants = 1;
 }

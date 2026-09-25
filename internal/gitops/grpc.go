@@ -60,6 +60,10 @@ type Server struct {
 	// tools execute.
 	// Collaborators resolves repository grants, for the RPCs that manage them.
 	Collaborators *CollaboratorStore
+	// Users turns a username into a user id. Users live in Identity's schema, so a
+	// grant naming a person by name is resolved through its RPC. Nil means a grant
+	// must name a user id, which the RPC says rather than failing obscurely.
+	Users UserResolver
 
 	RefGuard CapFunc
 

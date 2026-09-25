@@ -207,3 +207,37 @@ func (s *Server) ListTeamsForUser(ctx context.Context, req *identityv1.ListTeams
 	}
 	return &identityv1.ListTeamsForUserResponse{Teams: out}, nil
 }
+
+// ResolveUsername answers one exact username with its user id.
+//
+// It exists so a repository grant can name someone who is not a member of the
+// organization granting it: a name is what a person types. It is not a search — one
+// exact match or NotFound — and only an organization's owner or admin, or an
+// org-scoped service, may ask. Anything looser would let any authenticated account
+// enumerate the deployment's users one guess at a time.
+func (s *Server) ResolveUsername(ctx context.Context, req *identityv1.ResolveUsernameRequest) (*identityv1.ResolveUsernameResponse, error) {
+	scope, err := authz.FromContext(ctx)
+	if err != nil || scope.OrgID == uuid.Nil {
+		return nil, status.Error(codes.Unauthenticated, "authentication required")
+	}
+	switch {
+	case scope.ActorKind == "service":
+		// An org-scoped service asking on an administrator's behalf, which is how
+		// git-platform resolves a grant it was asked to make.
+	case scope.ActorKind == "user":
+		role, rerr := s.store.MemberRole(ctx, scope.OrgID, scope.ActorID)
+		if rerr != nil || (role != "owner" && role != "admin") {
+			return nil, status.Error(codes.PermissionDenied, "only an owner or admin may resolve a username")
+		}
+	default:
+		return nil, status.Error(codes.PermissionDenied, "only a person or an organization service may resolve a username")
+	}
+	if req.GetUsername() == "" {
+		return nil, status.Error(codes.InvalidArgument, "username is required")
+	}
+	u, err := s.store.UserByUsername(ctx, req.GetUsername())
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "no user named %q", req.GetUsername())
+	}
+	return &identityv1.ResolveUsernameResponse{UserId: u.ID.String()}, nil
+}
