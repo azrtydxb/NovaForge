@@ -91,6 +91,10 @@ mcp-server.
   standing in for the absent GUI.
 - [S-22] **Kubernetes deployment**: Helm charts deploying every service, with agent runs
   executing as pods in per-run namespaces.
+- [S-23] **Engineering activity overview** (section 24): the platform reports what each agent
+  is doing and how much work has just completed, so a product surface can lead with
+  engineering activity rather than repository browsing. The platform computes these; a client
+  deriving them again would be a second opinion about what is happening.
 
 ## Out of scope
 
@@ -328,5 +332,11 @@ agent logs expire after 90 days.
       inspects gates, and merges, with no GUI involved.
 - [ ] [S-22] `TestHelmDeploy`: the Helm chart deploys every service to a Kubernetes cluster and
       all services report healthy.
+- [ ] [S-23] `TestAgentActivityReported`: every agent in an organization is reported with the
+      Work Item key of the run it is currently executing, or as idle when it holds none, and an
+      agent whose run has ended is reported idle again.
+- [ ] [S-23] `TestWorkCompletedTodayCounted`: the dashboard reports how many Work Items reached
+      done since midnight UTC; an item that reached done earlier is not counted, and one that
+      has since moved back out of done is not counted.
 
 ## Open questions
