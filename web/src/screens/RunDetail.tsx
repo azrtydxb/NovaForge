@@ -14,6 +14,7 @@ import {
   StatePill,
 } from "../components/ui";
 import { RunReviews } from "../components/RunReviews";
+import { AgentReviewRequests } from "../components/AgentReviewRequests";
 import type { ApprovalList, EngineeringRun, ProofRecord } from "../lib/types";
 import { ApprovalRows } from "../components/Approvals";
 
@@ -57,6 +58,19 @@ export function RunDetail() {
     queryKey: ["run", w.org, repo, number],
     queryFn: () => api.get<EngineeringRun>(base),
     enabled: w.org !== null,
+  });
+
+  // An agent review is requested against inspected bytes, so the revision comes
+  // from the reviews endpoint rather than from the run's branch names. The key
+  // matches RunReviews' own query, so this shares its result instead of
+  // fetching twice.
+  const reviewed = useQuery({
+    queryKey: ["reviews", base],
+    queryFn: () =>
+      api.get<{ current_source_sha?: string }>(
+        `/api/v1/orgs/${enc(w.org ?? "")}/engineering-runs/${enc(run.data?.id ?? "")}/reviews`,
+      ),
+    enabled: Boolean(w.org) && Boolean(run.data?.id),
   });
 
   const merge = useMutation({
@@ -156,6 +170,14 @@ export function RunDetail() {
       {run.error ? <Failed error={run.error} /> : null}
       {w.org && run.data ? (
         <RunReviews base={base} org={w.org} repo={repo} run={run.data} />
+      ) : null}
+      {w.org && run.data ? (
+        <AgentReviewRequests
+          org={w.org}
+          runID={run.data.id}
+          sourceSHA={reviewed.data?.current_source_sha}
+          open={run.data.state === "open"}
+        />
       ) : null}
       {w.org !== null ? <RunApprovals org={w.org} base={base} /> : null}
 
