@@ -56,6 +56,7 @@ func Routes() []Route {
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/collaborators", "listCollaborators", "Who holds this repository without belonging to the organization"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/collaborators", "addCollaborator", "Grant one repository to a person or a team"},
 		{http.MethodDelete, "/api/v1/orgs/{org}/repos/{repo}/collaborators/{subject}", "removeCollaborator", "Revoke a repository grant"},
+		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/forks", "forkRepo", "Fork a repository, carrying its history into a repository of your own"},
 		{http.MethodDelete, "/api/v1/orgs/{org}/repos/{repo}", "deleteRepo", "Delete a repository"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/branches", "listBranches", "Branches"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/branches", "createBranch", "Create a branch"},

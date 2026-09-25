@@ -197,6 +197,10 @@ func addWorkHandlers(h map[string]http.HandlerFunc, g gitv1.GitServiceClient, w 
 				// and never passed on, so a run opened for a Work Item was
 				// connected to nothing.
 				WorkItem string `json:"work_item"`
+				// SourceRepo names the repository SourceRef lives in, when that is
+				// a fork of this one rather than this one. Omitted, the run is the
+				// ordinary branch run it has always been.
+				SourceRepo string `json:"source_repo"`
 			}
 			if err := decode(r, &req); err != nil {
 				WriteError(wr, http.StatusBadRequest, err)
@@ -216,18 +220,38 @@ func addWorkHandlers(h map[string]http.HandlerFunc, g gitv1.GitServiceClient, w 
 				target = repo.GetRepo().GetDefaultBranch()
 			}
 
+			// The source branch is looked for in the repository it is said to be
+			// in. For a cross-fork run that is the fork, and checking this
+			// repository instead would refuse every such run as having no source
+			// branch. The repository is resolved through the git service, which
+			// scopes it to the caller's organization, so naming one outside it is
+			// a not-found rather than a run pointing somewhere unexpected.
+			sourceRepoID := ""
+			sourceRepo := chi.URLParam(r, "repo")
+			if named := strings.TrimSpace(req.SourceRepo); named != "" {
+				src, err := g.GetRepo(r.Context(), &gitv1.GetRepoRequest{Name: named})
+				if err != nil {
+					WriteError(wr, StatusFromGRPC(err), err)
+					return
+				}
+				if src.GetRepo().GetId() != rid {
+					sourceRepoID = src.GetRepo().GetId()
+					sourceRepo = src.GetRepo().GetName()
+				}
+			}
+
 			// A source branch that does not exist can never be reviewed or
 			// merged. The target is not checked: a new repository's default
 			// branch has no commit yet, and is still the right place to merge.
 			source := strings.TrimPrefix(strings.TrimSpace(req.SourceRef), "refs/heads/")
 			if source != "" {
-				branches, err := g.ListBranches(r.Context(), &gitv1.ListBranchesRequest{Repo: chi.URLParam(r, "repo")})
+				branches, err := g.ListBranches(r.Context(), &gitv1.ListBranchesRequest{Repo: sourceRepo})
 				if err != nil {
 					WriteError(wr, StatusFromGRPC(err), err)
 					return
 				}
 				if !hasBranch(branches.GetRefs(), source) {
-					WriteError(wr, http.StatusBadRequest, fmt.Errorf("source branch %q does not exist in this repository", source))
+					WriteError(wr, http.StatusBadRequest, fmt.Errorf("source branch %q does not exist in %s", source, sourceRepo))
 					return
 				}
 			}
@@ -254,7 +278,7 @@ func addWorkHandlers(h map[string]http.HandlerFunc, g gitv1.GitServiceClient, w 
 			// person in the caller's scope.
 			resp, err := rv.CreateRun(r.Context(), &reviewsv1.CreateRunRequest{
 				RepoId: rid, Title: req.Title, WorkItemId: workItemID,
-				SourceRef: source, TargetRef: target,
+				SourceRef: source, TargetRef: target, SourceRepoId: sourceRepoID,
 			})
 			if err != nil {
 				WriteError(wr, StatusFromGRPC(err), err)
@@ -301,7 +325,11 @@ func addWorkHandlers(h map[string]http.HandlerFunc, g gitv1.GitServiceClient, w 
 			}
 			for _, rn := range list.GetRuns() {
 				if int(rn.GetNumber()) == n {
-					WriteJSON(wr, http.StatusOK, RunJSON(rn))
+					body := RunJSON(rn)
+					// One repository lookup, and only on the single-run screen: the
+					// run list must not make a request per row.
+					body["source_repo_name"] = sourceRepoName(r.Context(), g, rn.GetRepoId(), rn.GetSourceRepoId())
+					WriteJSON(wr, http.StatusOK, body)
 					return
 				}
 			}
@@ -629,6 +657,10 @@ func RunJSON(r *reviewsv1.Run) map[string]any {
 		"model_name": r.GetModelName(),
 		"author_id":  r.GetAuthorId(), "author_kind": r.GetAuthorKind(),
 		"work_item_id": r.GetWorkItemId(), "created_at": r.GetCreatedAt(),
+		// Both repositories are always present, and equal for a branch run: a
+		// client left to infer "same repository" from a missing field would show
+		// a cross-fork run as an ordinary one the moment the field was dropped.
+		"repo_id": r.GetRepoId(), "source_repo_id": r.GetSourceRepoId(),
 	}
 }
 

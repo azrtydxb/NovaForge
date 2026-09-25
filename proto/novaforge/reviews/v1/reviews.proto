@@ -59,6 +59,12 @@ message Run {
   string agent_name = 12;
   string model_name = 13;
   string created_at = 14;
+  // source_repo_id is the repository source_ref lives in: the run's own
+  // repository for a branch run, and a fork of the target for a cross-fork
+  // run. It is never empty on a run that was read back, because a run with no
+  // stored source repository reports its own — that is what makes every run
+  // created before forks existed still describe itself correctly.
+  string source_repo_id = 15;
 }
 
 message CreateRunRequest {
@@ -71,6 +77,9 @@ message CreateRunRequest {
   string author_kind = 7;
   string agent_name = 8;
   string model_name = 9;
+  // Empty means "this run's own repository", so every existing caller creates
+  // the same branch run it always did.
+  string source_repo_id = 10;
 }
 
 message CreateRunResponse {

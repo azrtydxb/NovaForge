@@ -1600,8 +1600,16 @@ type MergeRequest struct {
 	// Trusted policy baseline inspected by the gate owner. Both refs are checked
 	// in the same native Git transaction before publishing the merge.
 	ExpectedTargetSha string `protobuf:"bytes,7,opt,name=expected_target_sha,json=expectedTargetSha,proto3" json:"expected_target_sha,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// source_repo names the repository source_ref lives in, when that is not
+	// this one — a fork proposing a change to its parent. Empty means source_ref
+	// is a branch of repo, which is what every merge before forks existed meant,
+	// so an existing caller keeps working unchanged. It must name a repository in
+	// the caller's own organization: organizations are a hard boundary, and
+	// reading another organization's objects is not something either side
+	// authorized.
+	SourceRepo    string `protobuf:"bytes,8,opt,name=source_repo,json=sourceRepo,proto3" json:"source_repo,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *MergeRequest) Reset() {
@@ -1679,6 +1687,13 @@ func (x *MergeRequest) GetExpectedSourceSha() string {
 func (x *MergeRequest) GetExpectedTargetSha() string {
 	if x != nil {
 		return x.ExpectedTargetSha
+	}
+	return ""
+}
+
+func (x *MergeRequest) GetSourceRepo() string {
+	if x != nil {
+		return x.SourceRepo
 	}
 	return ""
 }
@@ -4319,6 +4334,117 @@ func (*DeleteMirrorResponse) Descriptor() ([]byte, []int) {
 	return file_novaforge_git_v1_git_proto_rawDescGZIP(), []int{76}
 }
 
+// ForkRepoRequest forks repo into a new repository named name. A fork is a
+// full repository carrying the parent's history and recording which repository
+// it came from — not a reference to the parent, which would empty the fork the
+// moment the parent was deleted.
+type ForkRepoRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Repo  string                 `protobuf:"bytes,1,opt,name=repo,proto3" json:"repo,omitempty"`
+	Name  string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// to_org must be the caller's own organization, or be left empty, which
+	// means the same thing. It is present so the request states where the fork
+	// lands rather than leaving it implied.
+	ToOrg         string `protobuf:"bytes,3,opt,name=to_org,json=toOrg,proto3" json:"to_org,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ForkRepoRequest) Reset() {
+	*x = ForkRepoRequest{}
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[77]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ForkRepoRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ForkRepoRequest) ProtoMessage() {}
+
+func (x *ForkRepoRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[77]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ForkRepoRequest.ProtoReflect.Descriptor instead.
+func (*ForkRepoRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_git_v1_git_proto_rawDescGZIP(), []int{77}
+}
+
+func (x *ForkRepoRequest) GetRepo() string {
+	if x != nil {
+		return x.Repo
+	}
+	return ""
+}
+
+func (x *ForkRepoRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ForkRepoRequest) GetToOrg() string {
+	if x != nil {
+		return x.ToOrg
+	}
+	return ""
+}
+
+type ForkRepoResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Repo          *Repo                  `protobuf:"bytes,1,opt,name=repo,proto3" json:"repo,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ForkRepoResponse) Reset() {
+	*x = ForkRepoResponse{}
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[78]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ForkRepoResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ForkRepoResponse) ProtoMessage() {}
+
+func (x *ForkRepoResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[78]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ForkRepoResponse.ProtoReflect.Descriptor instead.
+func (*ForkRepoResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_git_v1_git_proto_rawDescGZIP(), []int{78}
+}
+
+func (x *ForkRepoResponse) GetRepo() *Repo {
+	if x != nil {
+		return x.Repo
+	}
+	return nil
+}
+
 var File_novaforge_git_v1_git_proto protoreflect.FileDescriptor
 
 const file_novaforge_git_v1_git_proto_rawDesc = "" +
@@ -4414,7 +4540,7 @@ const file_novaforge_git_v1_git_proto_rawDesc = "" +
 	"\x0fGetDiffResponse\x12\x18\n" +
 	"\aunified\x18\x01 \x01(\tR\aunified\x12#\n" +
 	"\rchanged_paths\x18\x02 \x03(\tR\fchangedPaths\x12%\n" +
-	"\x0epaths_complete\x18\x03 \x01(\bR\rpathsComplete\"\xf2\x01\n" +
+	"\x0epaths_complete\x18\x03 \x01(\bR\rpathsComplete\"\x93\x02\n" +
 	"\fMergeRequest\x12\x12\n" +
 	"\x04repo\x18\x01 \x01(\tR\x04repo\x12\x1d\n" +
 	"\n" +
@@ -4424,7 +4550,9 @@ const file_novaforge_git_v1_git_proto_rawDesc = "" +
 	"\x06method\x18\x04 \x01(\tR\x06method\x12\x18\n" +
 	"\amessage\x18\x05 \x01(\tR\amessage\x12.\n" +
 	"\x13expected_source_sha\x18\x06 \x01(\tR\x11expectedSourceSha\x12.\n" +
-	"\x13expected_target_sha\x18\a \x01(\tR\x11expectedTargetSha\",\n" +
+	"\x13expected_target_sha\x18\a \x01(\tR\x11expectedTargetSha\x12\x1f\n" +
+	"\vsource_repo\x18\b \x01(\tR\n" +
+	"sourceRepo\",\n" +
 	"\rMergeResponse\x12\x1b\n" +
 	"\tmerge_sha\x18\x01 \x01(\tR\bmergeSha\"X\n" +
 	"\x13CreateBranchRequest\x12\x12\n" +
@@ -4602,7 +4730,13 @@ const file_novaforge_git_v1_git_proto_rawDesc = "" +
 	"\x06mirror\x18\x01 \x01(\v2\x18.novaforge.git.v1.MirrorR\x06mirror\")\n" +
 	"\x13DeleteMirrorRequest\x12\x12\n" +
 	"\x04repo\x18\x01 \x01(\tR\x04repo\"\x16\n" +
-	"\x14DeleteMirrorResponse2\xd6\x18\n" +
+	"\x14DeleteMirrorResponse\"P\n" +
+	"\x0fForkRepoRequest\x12\x12\n" +
+	"\x04repo\x18\x01 \x01(\tR\x04repo\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x15\n" +
+	"\x06to_org\x18\x03 \x01(\tR\x05toOrg\">\n" +
+	"\x10ForkRepoResponse\x12*\n" +
+	"\x04repo\x18\x01 \x01(\v2\x16.novaforge.git.v1.RepoR\x04repo2\xa9\x19\n" +
 	"\n" +
 	"GitService\x12W\n" +
 	"\n" +
@@ -4620,7 +4754,8 @@ const file_novaforge_git_v1_git_proto_rawDesc = "" +
 	"\aGetTree\x12 .novaforge.git.v1.GetTreeRequest\x1a!.novaforge.git.v1.GetTreeResponse\x12N\n" +
 	"\aGetBlob\x12 .novaforge.git.v1.GetBlobRequest\x1a!.novaforge.git.v1.GetBlobResponse\x12N\n" +
 	"\aGetDiff\x12 .novaforge.git.v1.GetDiffRequest\x1a!.novaforge.git.v1.GetDiffResponse\x12H\n" +
-	"\x05Merge\x12\x1e.novaforge.git.v1.MergeRequest\x1a\x1f.novaforge.git.v1.MergeResponse\x12]\n" +
+	"\x05Merge\x12\x1e.novaforge.git.v1.MergeRequest\x1a\x1f.novaforge.git.v1.MergeResponse\x12Q\n" +
+	"\bForkRepo\x12!.novaforge.git.v1.ForkRepoRequest\x1a\".novaforge.git.v1.ForkRepoResponse\x12]\n" +
 	"\fCreateBranch\x12%.novaforge.git.v1.CreateBranchRequest\x1a&.novaforge.git.v1.CreateBranchResponse\x12]\n" +
 	"\fCreateCommit\x12%.novaforge.git.v1.CreateCommitRequest\x1a&.novaforge.git.v1.CreateCommitResponse\x12W\n" +
 	"\n" +
@@ -4658,7 +4793,7 @@ func file_novaforge_git_v1_git_proto_rawDescGZIP() []byte {
 	return file_novaforge_git_v1_git_proto_rawDescData
 }
 
-var file_novaforge_git_v1_git_proto_msgTypes = make([]protoimpl.MessageInfo, 77)
+var file_novaforge_git_v1_git_proto_msgTypes = make([]protoimpl.MessageInfo, 79)
 var file_novaforge_git_v1_git_proto_goTypes = []any{
 	(*ListOrganizationsWithRepositoriesRequest)(nil),  // 0: novaforge.git.v1.ListOrganizationsWithRepositoriesRequest
 	(*ListOrganizationsWithRepositoriesResponse)(nil), // 1: novaforge.git.v1.ListOrganizationsWithRepositoriesResponse
@@ -4737,6 +4872,8 @@ var file_novaforge_git_v1_git_proto_goTypes = []any{
 	(*SetMirrorResponse)(nil),            // 74: novaforge.git.v1.SetMirrorResponse
 	(*DeleteMirrorRequest)(nil),          // 75: novaforge.git.v1.DeleteMirrorRequest
 	(*DeleteMirrorResponse)(nil),         // 76: novaforge.git.v1.DeleteMirrorResponse
+	(*ForkRepoRequest)(nil),              // 77: novaforge.git.v1.ForkRepoRequest
+	(*ForkRepoResponse)(nil),             // 78: novaforge.git.v1.ForkRepoResponse
 }
 var file_novaforge_git_v1_git_proto_depIdxs = []int32{
 	2,  // 0: novaforge.git.v1.CreateRepoResponse.repo:type_name -> novaforge.git.v1.Repo
@@ -4764,77 +4901,80 @@ var file_novaforge_git_v1_git_proto_depIdxs = []int32{
 	68, // 22: novaforge.git.v1.ImportRepoResponse.mirror:type_name -> novaforge.git.v1.Mirror
 	68, // 23: novaforge.git.v1.GetMirrorResponse.mirror:type_name -> novaforge.git.v1.Mirror
 	68, // 24: novaforge.git.v1.SetMirrorResponse.mirror:type_name -> novaforge.git.v1.Mirror
-	6,  // 25: novaforge.git.v1.GitService.CreateRepo:input_type -> novaforge.git.v1.CreateRepoRequest
-	12, // 26: novaforge.git.v1.GitService.GetRepo:input_type -> novaforge.git.v1.GetRepoRequest
-	14, // 27: novaforge.git.v1.GitService.ListRepos:input_type -> novaforge.git.v1.ListReposRequest
-	16, // 28: novaforge.git.v1.GitService.DeleteRepo:input_type -> novaforge.git.v1.DeleteRepoRequest
-	8,  // 29: novaforge.git.v1.GitService.UpdateRepo:input_type -> novaforge.git.v1.UpdateRepoRequest
-	10, // 30: novaforge.git.v1.GitService.TransferRepo:input_type -> novaforge.git.v1.TransferRepoRequest
-	18, // 31: novaforge.git.v1.GitService.ListBranches:input_type -> novaforge.git.v1.ListBranchesRequest
-	20, // 32: novaforge.git.v1.GitService.ListTags:input_type -> novaforge.git.v1.ListTagsRequest
-	22, // 33: novaforge.git.v1.GitService.ListCommits:input_type -> novaforge.git.v1.ListCommitsRequest
-	24, // 34: novaforge.git.v1.GitService.GetTree:input_type -> novaforge.git.v1.GetTreeRequest
-	26, // 35: novaforge.git.v1.GitService.GetBlob:input_type -> novaforge.git.v1.GetBlobRequest
-	28, // 36: novaforge.git.v1.GitService.GetDiff:input_type -> novaforge.git.v1.GetDiffRequest
-	30, // 37: novaforge.git.v1.GitService.Merge:input_type -> novaforge.git.v1.MergeRequest
-	32, // 38: novaforge.git.v1.GitService.CreateBranch:input_type -> novaforge.git.v1.CreateBranchRequest
-	35, // 39: novaforge.git.v1.GitService.CreateCommit:input_type -> novaforge.git.v1.CreateCommitRequest
-	51, // 40: novaforge.git.v1.GitService.CreateHook:input_type -> novaforge.git.v1.CreateHookRequest
-	53, // 41: novaforge.git.v1.GitService.ListHooks:input_type -> novaforge.git.v1.ListHooksRequest
-	55, // 42: novaforge.git.v1.GitService.DeleteHook:input_type -> novaforge.git.v1.DeleteHookRequest
-	57, // 43: novaforge.git.v1.GitService.SetHookSecret:input_type -> novaforge.git.v1.SetHookSecretRequest
-	59, // 44: novaforge.git.v1.GitService.ListHookDeliveries:input_type -> novaforge.git.v1.ListHookDeliveriesRequest
-	0,  // 45: novaforge.git.v1.GitService.ListOrganizationsWithRepositories:input_type -> novaforge.git.v1.ListOrganizationsWithRepositoriesRequest
-	62, // 46: novaforge.git.v1.GitService.AddCollaborator:input_type -> novaforge.git.v1.AddCollaboratorRequest
-	64, // 47: novaforge.git.v1.GitService.RemoveCollaborator:input_type -> novaforge.git.v1.RemoveCollaboratorRequest
-	66, // 48: novaforge.git.v1.GitService.ListCollaborators:input_type -> novaforge.git.v1.ListCollaboratorsRequest
-	39, // 49: novaforge.git.v1.GitService.CreateRelease:input_type -> novaforge.git.v1.CreateReleaseRequest
-	41, // 50: novaforge.git.v1.GitService.ListReleases:input_type -> novaforge.git.v1.ListReleasesRequest
-	43, // 51: novaforge.git.v1.GitService.DeleteRelease:input_type -> novaforge.git.v1.DeleteReleaseRequest
-	45, // 52: novaforge.git.v1.GitService.UploadReleaseAsset:input_type -> novaforge.git.v1.UploadReleaseAssetRequest
-	47, // 53: novaforge.git.v1.GitService.DownloadReleaseAsset:input_type -> novaforge.git.v1.DownloadReleaseAssetRequest
-	69, // 54: novaforge.git.v1.GitService.ImportRepo:input_type -> novaforge.git.v1.ImportRepoRequest
-	71, // 55: novaforge.git.v1.GitService.GetMirror:input_type -> novaforge.git.v1.GetMirrorRequest
-	73, // 56: novaforge.git.v1.GitService.SetMirror:input_type -> novaforge.git.v1.SetMirrorRequest
-	75, // 57: novaforge.git.v1.GitService.DeleteMirror:input_type -> novaforge.git.v1.DeleteMirrorRequest
-	7,  // 58: novaforge.git.v1.GitService.CreateRepo:output_type -> novaforge.git.v1.CreateRepoResponse
-	13, // 59: novaforge.git.v1.GitService.GetRepo:output_type -> novaforge.git.v1.GetRepoResponse
-	15, // 60: novaforge.git.v1.GitService.ListRepos:output_type -> novaforge.git.v1.ListReposResponse
-	17, // 61: novaforge.git.v1.GitService.DeleteRepo:output_type -> novaforge.git.v1.DeleteRepoResponse
-	9,  // 62: novaforge.git.v1.GitService.UpdateRepo:output_type -> novaforge.git.v1.UpdateRepoResponse
-	11, // 63: novaforge.git.v1.GitService.TransferRepo:output_type -> novaforge.git.v1.TransferRepoResponse
-	19, // 64: novaforge.git.v1.GitService.ListBranches:output_type -> novaforge.git.v1.ListBranchesResponse
-	21, // 65: novaforge.git.v1.GitService.ListTags:output_type -> novaforge.git.v1.ListTagsResponse
-	23, // 66: novaforge.git.v1.GitService.ListCommits:output_type -> novaforge.git.v1.ListCommitsResponse
-	25, // 67: novaforge.git.v1.GitService.GetTree:output_type -> novaforge.git.v1.GetTreeResponse
-	27, // 68: novaforge.git.v1.GitService.GetBlob:output_type -> novaforge.git.v1.GetBlobResponse
-	29, // 69: novaforge.git.v1.GitService.GetDiff:output_type -> novaforge.git.v1.GetDiffResponse
-	31, // 70: novaforge.git.v1.GitService.Merge:output_type -> novaforge.git.v1.MergeResponse
-	33, // 71: novaforge.git.v1.GitService.CreateBranch:output_type -> novaforge.git.v1.CreateBranchResponse
-	36, // 72: novaforge.git.v1.GitService.CreateCommit:output_type -> novaforge.git.v1.CreateCommitResponse
-	52, // 73: novaforge.git.v1.GitService.CreateHook:output_type -> novaforge.git.v1.CreateHookResponse
-	54, // 74: novaforge.git.v1.GitService.ListHooks:output_type -> novaforge.git.v1.ListHooksResponse
-	56, // 75: novaforge.git.v1.GitService.DeleteHook:output_type -> novaforge.git.v1.DeleteHookResponse
-	58, // 76: novaforge.git.v1.GitService.SetHookSecret:output_type -> novaforge.git.v1.SetHookSecretResponse
-	60, // 77: novaforge.git.v1.GitService.ListHookDeliveries:output_type -> novaforge.git.v1.ListHookDeliveriesResponse
-	1,  // 78: novaforge.git.v1.GitService.ListOrganizationsWithRepositories:output_type -> novaforge.git.v1.ListOrganizationsWithRepositoriesResponse
-	63, // 79: novaforge.git.v1.GitService.AddCollaborator:output_type -> novaforge.git.v1.AddCollaboratorResponse
-	65, // 80: novaforge.git.v1.GitService.RemoveCollaborator:output_type -> novaforge.git.v1.RemoveCollaboratorResponse
-	67, // 81: novaforge.git.v1.GitService.ListCollaborators:output_type -> novaforge.git.v1.ListCollaboratorsResponse
-	40, // 82: novaforge.git.v1.GitService.CreateRelease:output_type -> novaforge.git.v1.CreateReleaseResponse
-	42, // 83: novaforge.git.v1.GitService.ListReleases:output_type -> novaforge.git.v1.ListReleasesResponse
-	44, // 84: novaforge.git.v1.GitService.DeleteRelease:output_type -> novaforge.git.v1.DeleteReleaseResponse
-	46, // 85: novaforge.git.v1.GitService.UploadReleaseAsset:output_type -> novaforge.git.v1.UploadReleaseAssetResponse
-	48, // 86: novaforge.git.v1.GitService.DownloadReleaseAsset:output_type -> novaforge.git.v1.DownloadReleaseAssetResponse
-	70, // 87: novaforge.git.v1.GitService.ImportRepo:output_type -> novaforge.git.v1.ImportRepoResponse
-	72, // 88: novaforge.git.v1.GitService.GetMirror:output_type -> novaforge.git.v1.GetMirrorResponse
-	74, // 89: novaforge.git.v1.GitService.SetMirror:output_type -> novaforge.git.v1.SetMirrorResponse
-	76, // 90: novaforge.git.v1.GitService.DeleteMirror:output_type -> novaforge.git.v1.DeleteMirrorResponse
-	58, // [58:91] is the sub-list for method output_type
-	25, // [25:58] is the sub-list for method input_type
-	25, // [25:25] is the sub-list for extension type_name
-	25, // [25:25] is the sub-list for extension extendee
-	0,  // [0:25] is the sub-list for field type_name
+	2,  // 25: novaforge.git.v1.ForkRepoResponse.repo:type_name -> novaforge.git.v1.Repo
+	6,  // 26: novaforge.git.v1.GitService.CreateRepo:input_type -> novaforge.git.v1.CreateRepoRequest
+	12, // 27: novaforge.git.v1.GitService.GetRepo:input_type -> novaforge.git.v1.GetRepoRequest
+	14, // 28: novaforge.git.v1.GitService.ListRepos:input_type -> novaforge.git.v1.ListReposRequest
+	16, // 29: novaforge.git.v1.GitService.DeleteRepo:input_type -> novaforge.git.v1.DeleteRepoRequest
+	8,  // 30: novaforge.git.v1.GitService.UpdateRepo:input_type -> novaforge.git.v1.UpdateRepoRequest
+	10, // 31: novaforge.git.v1.GitService.TransferRepo:input_type -> novaforge.git.v1.TransferRepoRequest
+	18, // 32: novaforge.git.v1.GitService.ListBranches:input_type -> novaforge.git.v1.ListBranchesRequest
+	20, // 33: novaforge.git.v1.GitService.ListTags:input_type -> novaforge.git.v1.ListTagsRequest
+	22, // 34: novaforge.git.v1.GitService.ListCommits:input_type -> novaforge.git.v1.ListCommitsRequest
+	24, // 35: novaforge.git.v1.GitService.GetTree:input_type -> novaforge.git.v1.GetTreeRequest
+	26, // 36: novaforge.git.v1.GitService.GetBlob:input_type -> novaforge.git.v1.GetBlobRequest
+	28, // 37: novaforge.git.v1.GitService.GetDiff:input_type -> novaforge.git.v1.GetDiffRequest
+	30, // 38: novaforge.git.v1.GitService.Merge:input_type -> novaforge.git.v1.MergeRequest
+	77, // 39: novaforge.git.v1.GitService.ForkRepo:input_type -> novaforge.git.v1.ForkRepoRequest
+	32, // 40: novaforge.git.v1.GitService.CreateBranch:input_type -> novaforge.git.v1.CreateBranchRequest
+	35, // 41: novaforge.git.v1.GitService.CreateCommit:input_type -> novaforge.git.v1.CreateCommitRequest
+	51, // 42: novaforge.git.v1.GitService.CreateHook:input_type -> novaforge.git.v1.CreateHookRequest
+	53, // 43: novaforge.git.v1.GitService.ListHooks:input_type -> novaforge.git.v1.ListHooksRequest
+	55, // 44: novaforge.git.v1.GitService.DeleteHook:input_type -> novaforge.git.v1.DeleteHookRequest
+	57, // 45: novaforge.git.v1.GitService.SetHookSecret:input_type -> novaforge.git.v1.SetHookSecretRequest
+	59, // 46: novaforge.git.v1.GitService.ListHookDeliveries:input_type -> novaforge.git.v1.ListHookDeliveriesRequest
+	0,  // 47: novaforge.git.v1.GitService.ListOrganizationsWithRepositories:input_type -> novaforge.git.v1.ListOrganizationsWithRepositoriesRequest
+	62, // 48: novaforge.git.v1.GitService.AddCollaborator:input_type -> novaforge.git.v1.AddCollaboratorRequest
+	64, // 49: novaforge.git.v1.GitService.RemoveCollaborator:input_type -> novaforge.git.v1.RemoveCollaboratorRequest
+	66, // 50: novaforge.git.v1.GitService.ListCollaborators:input_type -> novaforge.git.v1.ListCollaboratorsRequest
+	39, // 51: novaforge.git.v1.GitService.CreateRelease:input_type -> novaforge.git.v1.CreateReleaseRequest
+	41, // 52: novaforge.git.v1.GitService.ListReleases:input_type -> novaforge.git.v1.ListReleasesRequest
+	43, // 53: novaforge.git.v1.GitService.DeleteRelease:input_type -> novaforge.git.v1.DeleteReleaseRequest
+	45, // 54: novaforge.git.v1.GitService.UploadReleaseAsset:input_type -> novaforge.git.v1.UploadReleaseAssetRequest
+	47, // 55: novaforge.git.v1.GitService.DownloadReleaseAsset:input_type -> novaforge.git.v1.DownloadReleaseAssetRequest
+	69, // 56: novaforge.git.v1.GitService.ImportRepo:input_type -> novaforge.git.v1.ImportRepoRequest
+	71, // 57: novaforge.git.v1.GitService.GetMirror:input_type -> novaforge.git.v1.GetMirrorRequest
+	73, // 58: novaforge.git.v1.GitService.SetMirror:input_type -> novaforge.git.v1.SetMirrorRequest
+	75, // 59: novaforge.git.v1.GitService.DeleteMirror:input_type -> novaforge.git.v1.DeleteMirrorRequest
+	7,  // 60: novaforge.git.v1.GitService.CreateRepo:output_type -> novaforge.git.v1.CreateRepoResponse
+	13, // 61: novaforge.git.v1.GitService.GetRepo:output_type -> novaforge.git.v1.GetRepoResponse
+	15, // 62: novaforge.git.v1.GitService.ListRepos:output_type -> novaforge.git.v1.ListReposResponse
+	17, // 63: novaforge.git.v1.GitService.DeleteRepo:output_type -> novaforge.git.v1.DeleteRepoResponse
+	9,  // 64: novaforge.git.v1.GitService.UpdateRepo:output_type -> novaforge.git.v1.UpdateRepoResponse
+	11, // 65: novaforge.git.v1.GitService.TransferRepo:output_type -> novaforge.git.v1.TransferRepoResponse
+	19, // 66: novaforge.git.v1.GitService.ListBranches:output_type -> novaforge.git.v1.ListBranchesResponse
+	21, // 67: novaforge.git.v1.GitService.ListTags:output_type -> novaforge.git.v1.ListTagsResponse
+	23, // 68: novaforge.git.v1.GitService.ListCommits:output_type -> novaforge.git.v1.ListCommitsResponse
+	25, // 69: novaforge.git.v1.GitService.GetTree:output_type -> novaforge.git.v1.GetTreeResponse
+	27, // 70: novaforge.git.v1.GitService.GetBlob:output_type -> novaforge.git.v1.GetBlobResponse
+	29, // 71: novaforge.git.v1.GitService.GetDiff:output_type -> novaforge.git.v1.GetDiffResponse
+	31, // 72: novaforge.git.v1.GitService.Merge:output_type -> novaforge.git.v1.MergeResponse
+	78, // 73: novaforge.git.v1.GitService.ForkRepo:output_type -> novaforge.git.v1.ForkRepoResponse
+	33, // 74: novaforge.git.v1.GitService.CreateBranch:output_type -> novaforge.git.v1.CreateBranchResponse
+	36, // 75: novaforge.git.v1.GitService.CreateCommit:output_type -> novaforge.git.v1.CreateCommitResponse
+	52, // 76: novaforge.git.v1.GitService.CreateHook:output_type -> novaforge.git.v1.CreateHookResponse
+	54, // 77: novaforge.git.v1.GitService.ListHooks:output_type -> novaforge.git.v1.ListHooksResponse
+	56, // 78: novaforge.git.v1.GitService.DeleteHook:output_type -> novaforge.git.v1.DeleteHookResponse
+	58, // 79: novaforge.git.v1.GitService.SetHookSecret:output_type -> novaforge.git.v1.SetHookSecretResponse
+	60, // 80: novaforge.git.v1.GitService.ListHookDeliveries:output_type -> novaforge.git.v1.ListHookDeliveriesResponse
+	1,  // 81: novaforge.git.v1.GitService.ListOrganizationsWithRepositories:output_type -> novaforge.git.v1.ListOrganizationsWithRepositoriesResponse
+	63, // 82: novaforge.git.v1.GitService.AddCollaborator:output_type -> novaforge.git.v1.AddCollaboratorResponse
+	65, // 83: novaforge.git.v1.GitService.RemoveCollaborator:output_type -> novaforge.git.v1.RemoveCollaboratorResponse
+	67, // 84: novaforge.git.v1.GitService.ListCollaborators:output_type -> novaforge.git.v1.ListCollaboratorsResponse
+	40, // 85: novaforge.git.v1.GitService.CreateRelease:output_type -> novaforge.git.v1.CreateReleaseResponse
+	42, // 86: novaforge.git.v1.GitService.ListReleases:output_type -> novaforge.git.v1.ListReleasesResponse
+	44, // 87: novaforge.git.v1.GitService.DeleteRelease:output_type -> novaforge.git.v1.DeleteReleaseResponse
+	46, // 88: novaforge.git.v1.GitService.UploadReleaseAsset:output_type -> novaforge.git.v1.UploadReleaseAssetResponse
+	48, // 89: novaforge.git.v1.GitService.DownloadReleaseAsset:output_type -> novaforge.git.v1.DownloadReleaseAssetResponse
+	70, // 90: novaforge.git.v1.GitService.ImportRepo:output_type -> novaforge.git.v1.ImportRepoResponse
+	72, // 91: novaforge.git.v1.GitService.GetMirror:output_type -> novaforge.git.v1.GetMirrorResponse
+	74, // 92: novaforge.git.v1.GitService.SetMirror:output_type -> novaforge.git.v1.SetMirrorResponse
+	76, // 93: novaforge.git.v1.GitService.DeleteMirror:output_type -> novaforge.git.v1.DeleteMirrorResponse
+	60, // [60:94] is the sub-list for method output_type
+	26, // [26:60] is the sub-list for method input_type
+	26, // [26:26] is the sub-list for extension type_name
+	26, // [26:26] is the sub-list for extension extendee
+	0,  // [0:26] is the sub-list for field type_name
 }
 
 func init() { file_novaforge_git_v1_git_proto_init() }
@@ -4848,7 +4988,7 @@ func file_novaforge_git_v1_git_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_novaforge_git_v1_git_proto_rawDesc), len(file_novaforge_git_v1_git_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   77,
+			NumMessages:   79,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

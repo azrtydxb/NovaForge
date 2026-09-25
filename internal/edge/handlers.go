@@ -34,6 +34,7 @@ func Handlers(cfg Config) map[string]http.HandlerFunc {
 		addWriteHandlers(h, cfg.Git, cfg.Work, cfg.CI, cfg.Identity, cfg.Agents)
 		addWebhookHandlers(h, cfg.Git)
 		addMirrorHandlers(h, cfg.Git)
+		addForkHandlers(h, cfg.Git)
 	}
 	if cfg.Gates != nil {
 		addGateConfigHandlers(h, cfg.Gates)

@@ -208,6 +208,11 @@ export function Repos() {
         </Panel>
       ) : (
         <>
+          <Forks
+            repo={w.repos.find((r) => r.name === active)}
+            repos={w.repos}
+            org={w.org!}
+          />
           {canDelete ? (
             <Administration
               repo={w.repos.find((r) => r.name === active)}
@@ -375,6 +380,95 @@ function Administration({
 
         {administer.error ? <Failed error={administer.error} /> : null}
         {transfer.error ? <Failed error={transfer.error} /> : null}
+      </div>
+    </Panel>
+  );
+}
+
+/** Forks shows where this repository came from, what has been forked off it, and
+ * lets someone take a fork of their own.
+ *
+ * Both directions are read from the repository list the workspace already holds:
+ * every repository reports the one it was forked from, so the forks of this
+ * repository are the ones pointing at it. Nothing here is inferred — a parent
+ * this organization cannot see (it was transferred away, or deleted) is shown as
+ * a parent that cannot be named, not as no parent at all. */
+function Forks({
+  repo,
+  repos,
+  org,
+}: {
+  repo: Repo | undefined;
+  repos: Repo[];
+  org: string;
+}) {
+  const [name, setName] = useState("");
+  const qc = useQueryClient();
+  const fork = useMutation({
+    mutationFn: () =>
+      api.post<Repo>(
+        `/api/v1/orgs/${enc(org)}/repos/${enc(repo!.name)}/forks`,
+        {
+          name,
+        },
+      ),
+    onSuccess: () => {
+      setName("");
+      void qc.invalidateQueries({ queryKey: ["repos"] });
+    },
+  });
+  if (!repo) return null;
+
+  const parent = repo.parent_repo_id
+    ? repos.find((r) => r.id === repo.parent_repo_id)
+    : undefined;
+  const children = repos.filter((r) => r.parent_repo_id === repo.id);
+
+  return (
+    <Panel style={{ marginBottom: 12 }}>
+      <PanelHead>FORKS</PanelHead>
+      <div style={{ padding: 12, display: "grid", gap: 10 }}>
+        <div style={adminRow}>
+          <span style={adminLabel}>Forked from</span>
+          <span style={{ font: "12px var(--sans)", color: "var(--fg-muted)" }}>
+            {repo.parent_repo_id === ""
+              ? "nothing — this repository is its own origin"
+              : parent
+                ? parent.name
+                : "a repository this organization can no longer see"}
+          </span>
+        </div>
+
+        <div style={adminRow}>
+          <span style={adminLabel}>Forks of it</span>
+          <span style={{ font: "12px var(--sans)", color: "var(--fg-muted)" }}>
+            {children.length === 0
+              ? "none in this organization"
+              : children.map((c) => c.name).join(", ")}
+          </span>
+        </div>
+
+        <label style={adminRow}>
+          <span style={adminLabel}>Fork it</span>
+          <input
+            value={name}
+            placeholder={`${repo.name}-fork`}
+            onChange={(e) => setName(e.target.value)}
+            style={adminInput}
+          />
+          <button
+            disabled={name === "" || fork.isPending}
+            onClick={() => fork.mutate()}
+            style={adminButton}
+          >
+            Fork
+          </button>
+          <span style={{ font: "11px var(--sans)", color: "var(--fg-faint)" }}>
+            a full copy of the history, in this organization
+          </span>
+        </label>
+
+        {fork.error ? <Failed error={fork.error} /> : null}
       </div>
     </Panel>
   );

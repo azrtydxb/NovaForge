@@ -170,21 +170,27 @@ func (x *GetRunImpactResponse) GetRiskReasons() []string {
 
 // Run mirrors a row in the reviews.runs table.
 type Run struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	OrgId         string                 `protobuf:"bytes,2,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
-	RepoId        string                 `protobuf:"bytes,3,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
-	WorkItemId    string                 `protobuf:"bytes,4,opt,name=work_item_id,json=workItemId,proto3" json:"work_item_id,omitempty"`
-	Number        int32                  `protobuf:"varint,5,opt,name=number,proto3" json:"number,omitempty"`
-	Title         string                 `protobuf:"bytes,6,opt,name=title,proto3" json:"title,omitempty"`
-	SourceRef     string                 `protobuf:"bytes,7,opt,name=source_ref,json=sourceRef,proto3" json:"source_ref,omitempty"`
-	TargetRef     string                 `protobuf:"bytes,8,opt,name=target_ref,json=targetRef,proto3" json:"target_ref,omitempty"`
-	State         string                 `protobuf:"bytes,9,opt,name=state,proto3" json:"state,omitempty"`
-	AuthorId      string                 `protobuf:"bytes,10,opt,name=author_id,json=authorId,proto3" json:"author_id,omitempty"`
-	AuthorKind    string                 `protobuf:"bytes,11,opt,name=author_kind,json=authorKind,proto3" json:"author_kind,omitempty"`
-	AgentName     string                 `protobuf:"bytes,12,opt,name=agent_name,json=agentName,proto3" json:"agent_name,omitempty"`
-	ModelName     string                 `protobuf:"bytes,13,opt,name=model_name,json=modelName,proto3" json:"model_name,omitempty"`
-	CreatedAt     string                 `protobuf:"bytes,14,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Id         string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	OrgId      string                 `protobuf:"bytes,2,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	RepoId     string                 `protobuf:"bytes,3,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	WorkItemId string                 `protobuf:"bytes,4,opt,name=work_item_id,json=workItemId,proto3" json:"work_item_id,omitempty"`
+	Number     int32                  `protobuf:"varint,5,opt,name=number,proto3" json:"number,omitempty"`
+	Title      string                 `protobuf:"bytes,6,opt,name=title,proto3" json:"title,omitempty"`
+	SourceRef  string                 `protobuf:"bytes,7,opt,name=source_ref,json=sourceRef,proto3" json:"source_ref,omitempty"`
+	TargetRef  string                 `protobuf:"bytes,8,opt,name=target_ref,json=targetRef,proto3" json:"target_ref,omitempty"`
+	State      string                 `protobuf:"bytes,9,opt,name=state,proto3" json:"state,omitempty"`
+	AuthorId   string                 `protobuf:"bytes,10,opt,name=author_id,json=authorId,proto3" json:"author_id,omitempty"`
+	AuthorKind string                 `protobuf:"bytes,11,opt,name=author_kind,json=authorKind,proto3" json:"author_kind,omitempty"`
+	AgentName  string                 `protobuf:"bytes,12,opt,name=agent_name,json=agentName,proto3" json:"agent_name,omitempty"`
+	ModelName  string                 `protobuf:"bytes,13,opt,name=model_name,json=modelName,proto3" json:"model_name,omitempty"`
+	CreatedAt  string                 `protobuf:"bytes,14,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	// source_repo_id is the repository source_ref lives in: the run's own
+	// repository for a branch run, and a fork of the target for a cross-fork
+	// run. It is never empty on a run that was read back, because a run with no
+	// stored source repository reports its own — that is what makes every run
+	// created before forks existed still describe itself correctly.
+	SourceRepoId  string `protobuf:"bytes,15,opt,name=source_repo_id,json=sourceRepoId,proto3" json:"source_repo_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -317,17 +323,27 @@ func (x *Run) GetCreatedAt() string {
 	return ""
 }
 
+func (x *Run) GetSourceRepoId() string {
+	if x != nil {
+		return x.SourceRepoId
+	}
+	return ""
+}
+
 type CreateRunRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RepoId        string                 `protobuf:"bytes,1,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
-	WorkItemId    string                 `protobuf:"bytes,2,opt,name=work_item_id,json=workItemId,proto3" json:"work_item_id,omitempty"`
-	Title         string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
-	SourceRef     string                 `protobuf:"bytes,4,opt,name=source_ref,json=sourceRef,proto3" json:"source_ref,omitempty"`
-	TargetRef     string                 `protobuf:"bytes,5,opt,name=target_ref,json=targetRef,proto3" json:"target_ref,omitempty"`
-	AuthorId      string                 `protobuf:"bytes,6,opt,name=author_id,json=authorId,proto3" json:"author_id,omitempty"`
-	AuthorKind    string                 `protobuf:"bytes,7,opt,name=author_kind,json=authorKind,proto3" json:"author_kind,omitempty"`
-	AgentName     string                 `protobuf:"bytes,8,opt,name=agent_name,json=agentName,proto3" json:"agent_name,omitempty"`
-	ModelName     string                 `protobuf:"bytes,9,opt,name=model_name,json=modelName,proto3" json:"model_name,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	RepoId     string                 `protobuf:"bytes,1,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	WorkItemId string                 `protobuf:"bytes,2,opt,name=work_item_id,json=workItemId,proto3" json:"work_item_id,omitempty"`
+	Title      string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
+	SourceRef  string                 `protobuf:"bytes,4,opt,name=source_ref,json=sourceRef,proto3" json:"source_ref,omitempty"`
+	TargetRef  string                 `protobuf:"bytes,5,opt,name=target_ref,json=targetRef,proto3" json:"target_ref,omitempty"`
+	AuthorId   string                 `protobuf:"bytes,6,opt,name=author_id,json=authorId,proto3" json:"author_id,omitempty"`
+	AuthorKind string                 `protobuf:"bytes,7,opt,name=author_kind,json=authorKind,proto3" json:"author_kind,omitempty"`
+	AgentName  string                 `protobuf:"bytes,8,opt,name=agent_name,json=agentName,proto3" json:"agent_name,omitempty"`
+	ModelName  string                 `protobuf:"bytes,9,opt,name=model_name,json=modelName,proto3" json:"model_name,omitempty"`
+	// Empty means "this run's own repository", so every existing caller creates
+	// the same branch run it always did.
+	SourceRepoId  string `protobuf:"bytes,10,opt,name=source_repo_id,json=sourceRepoId,proto3" json:"source_repo_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -421,6 +437,13 @@ func (x *CreateRunRequest) GetAgentName() string {
 func (x *CreateRunRequest) GetModelName() string {
 	if x != nil {
 		return x.ModelName
+	}
+	return ""
+}
+
+func (x *CreateRunRequest) GetSourceRepoId() string {
+	if x != nil {
+		return x.SourceRepoId
 	}
 	return ""
 }
@@ -2501,7 +2524,7 @@ const file_novaforge_reviews_v1_reviews_proto_rawDesc = "" +
 	"\tdeletions\x18\x03 \x01(\x05R\tdeletions\x12\x14\n" +
 	"\x05paths\x18\x04 \x03(\tR\x05paths\x12\x12\n" +
 	"\x04risk\x18\x05 \x01(\tR\x04risk\x12!\n" +
-	"\frisk_reasons\x18\x06 \x03(\tR\vriskReasons\"\x84\x03\n" +
+	"\frisk_reasons\x18\x06 \x03(\tR\vriskReasons\"\xaa\x03\n" +
 	"\x03Run\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x15\n" +
 	"\x06org_id\x18\x02 \x01(\tR\x05orgId\x12\x17\n" +
@@ -2524,7 +2547,8 @@ const file_novaforge_reviews_v1_reviews_proto_rawDesc = "" +
 	"\n" +
 	"model_name\x18\r \x01(\tR\tmodelName\x12\x1d\n" +
 	"\n" +
-	"created_at\x18\x0e \x01(\tR\tcreatedAt\"\x9d\x02\n" +
+	"created_at\x18\x0e \x01(\tR\tcreatedAt\x12$\n" +
+	"\x0esource_repo_id\x18\x0f \x01(\tR\fsourceRepoId\"\xc3\x02\n" +
 	"\x10CreateRunRequest\x12\x17\n" +
 	"\arepo_id\x18\x01 \x01(\tR\x06repoId\x12 \n" +
 	"\fwork_item_id\x18\x02 \x01(\tR\n" +
@@ -2540,7 +2564,9 @@ const file_novaforge_reviews_v1_reviews_proto_rawDesc = "" +
 	"\n" +
 	"agent_name\x18\b \x01(\tR\tagentName\x12\x1d\n" +
 	"\n" +
-	"model_name\x18\t \x01(\tR\tmodelName\"@\n" +
+	"model_name\x18\t \x01(\tR\tmodelName\x12$\n" +
+	"\x0esource_repo_id\x18\n" +
+	" \x01(\tR\fsourceRepoId\"@\n" +
 	"\x11CreateRunResponse\x12+\n" +
 	"\x03run\x18\x01 \x01(\v2\x19.novaforge.reviews.v1.RunR\x03run\"P\n" +
 	"\rGetRunRequest\x12\x0e\n" +

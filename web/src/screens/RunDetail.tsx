@@ -92,7 +92,16 @@ export function RunDetail() {
       }
       subtitle={
         run.data
-          ? `${run.data.source_ref} → ${run.data.target_ref} · ${
+          ? // A cross-fork run's source ref alone reads as a branch of this
+            // repository, which it is not, so the fork is named in front of it.
+            // The name comes from the platform: when it cannot name the source
+            // repository, the subtitle says it is a fork rather than inventing one.
+            `${
+              run.data.source_repo_id &&
+              run.data.source_repo_id !== run.data.repo_id
+                ? `${run.data.source_repo_name || "a fork"}:`
+                : ""
+            }${run.data.source_ref} → ${run.data.target_ref} · ${
               run.data.author_kind === "agent"
                 ? `${run.data.agent_name || "agent"} on ${run.data.model_name || "an unnamed model"}`
                 : "authored by a person"
@@ -473,6 +482,13 @@ function Changes({
   repo: string;
   run: EngineeringRun | undefined;
 }) {
+  // The diff endpoint compares two refs of one repository. A cross-fork run's
+  // source ref is a branch of the fork, so there is nothing here to compare
+  // against in this repository, and asking would answer "unknown ref" — which
+  // reads as a broken run rather than as a diff this deployment cannot draw.
+  const crossFork = Boolean(
+    run && run.source_repo_id && run.source_repo_id !== run.repo_id,
+  );
   const diff = useQuery({
     queryKey: ["diff", org, repo, run?.source_ref, run?.target_ref],
     queryFn: () =>
@@ -481,7 +497,7 @@ function Changes({
           run!.target_ref,
         )}&to=${enc(run!.source_ref)}&merge_base=true`,
       ),
-    enabled: org !== null && run !== undefined,
+    enabled: org !== null && run !== undefined && !crossFork,
   });
 
   if (!run) return <Loading />;
@@ -489,17 +505,30 @@ function Changes({
   return (
     <Panel>
       <PanelHead>
-        {run.target_ref} → {run.source_ref}
+        {run.target_ref} →{" "}
+        {run.source_repo_id && run.source_repo_id !== run.repo_id
+          ? `${run.source_repo_name || "a fork"}:`
+          : ""}
+        {run.source_ref}
       </PanelHead>
-      <Async query={diff}>
-        {(d) =>
-          !d.unified.trim() ? (
-            <Empty>These two refs are identical.</Empty>
-          ) : (
-            <DiffView unified={d.unified} />
-          )
-        }
-      </Async>
+      {crossFork ? (
+        <Empty>
+          This change lives in {run.source_repo_name || "another repository"}.
+          This deployment diffs refs within one repository, so the change is
+          reviewed from the fork itself — the gates and the approval it needs to
+          merge are unchanged.
+        </Empty>
+      ) : (
+        <Async query={diff}>
+          {(d) =>
+            !d.unified.trim() ? (
+              <Empty>These two refs are identical.</Empty>
+            ) : (
+              <DiffView unified={d.unified} />
+            )
+          }
+        </Async>
+      )}
     </Panel>
   );
 }

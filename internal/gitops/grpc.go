@@ -39,6 +39,10 @@ type repoRow struct {
 	Name          string
 	DefaultBranch string
 	Archived      bool
+	// ParentRepoID is the repository this one was forked from, or uuid.Nil when
+	// it was not forked from anything. It is a record, not a dependency: no read
+	// or write path consults the parent.
+	ParentRepoID uuid.UUID
 }
 
 // Server implements gitv1.GitServiceServer. Every RPC derives its
@@ -201,8 +205,13 @@ func (s *Server) ListRepos(ctx context.Context, req *gitv1.ListReposRequest) (*g
 	if err != nil {
 		return nil, err
 	}
+	// archived and parent_repo_id are selected here as well as in repoByName: the
+	// repository list is what the GUI's repository screen renders, and a column
+	// this query omits comes back as its zero value — every archived repository
+	// listed as ordinary, and every fork listed as if it had no parent. The REST
+	// shape has always promised both fields.
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, org_id, name, default_branch FROM gitplatform.repositories WHERE org_id = $1 ORDER BY name`,
+		`SELECT id, org_id, name, default_branch, archived, parent_repo_id FROM gitplatform.repositories WHERE org_id = $1 ORDER BY name`,
 		scope.OrgID,
 	)
 	if err != nil {
@@ -213,8 +222,12 @@ func (s *Server) ListRepos(ctx context.Context, req *gitv1.ListReposRequest) (*g
 	var repos []*gitv1.Repo
 	for rows.Next() {
 		var r repoRow
-		if err := rows.Scan(&r.ID, &r.OrgID, &r.Name, &r.DefaultBranch); err != nil {
+		var parent *uuid.UUID
+		if err := rows.Scan(&r.ID, &r.OrgID, &r.Name, &r.DefaultBranch, &r.Archived, &parent); err != nil {
 			return nil, status.Errorf(codes.Internal, "scan repository: %v", err)
+		}
+		if parent != nil {
+			r.ParentRepoID = *parent
 		}
 		repos = append(repos, toProtoRepo(r))
 	}
@@ -473,7 +486,26 @@ func (s *Server) Merge(ctx context.Context, req *gitv1.MergeRequest) (*gitv1.Mer
 		return nil, err
 	}
 
-	old, sha, err := mergeRefs(repo.Path(), req.GetSourceRef(), req.GetTargetRef(), req.GetMethod(), req.GetMessage(), req.GetExpectedSourceSha(), req.GetExpectedTargetSha())
+	// A cross-fork merge differs from a branch merge in exactly one place: where
+	// the source commits are fetched from. The repository is resolved from the
+	// caller's own organization scope, so a request naming a repository in
+	// another organization finds nothing rather than being believed.
+	sourceRepoPath := ""
+	if ref := req.GetSourceRepo(); ref != "" {
+		sourceRow, err := s.repoByName(ctx, scope.OrgID, ref)
+		if err != nil {
+			return nil, err
+		}
+		if sourceRow.ID != row.ID {
+			sourceRepo, err := Open(s.root, scope.OrgID, sourceRow.Name)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "resolve source repository path: %v", err)
+			}
+			sourceRepoPath = sourceRepo.Path()
+		}
+	}
+
+	old, sha, err := mergeRefs(repo.Path(), req.GetSourceRef(), req.GetTargetRef(), req.GetMethod(), req.GetMessage(), req.GetExpectedSourceSha(), req.GetExpectedTargetSha(), sourceRepoPath)
 	if err != nil {
 		if status.Code(err) == codes.Aborted || status.Code(err) == codes.InvalidArgument {
 			return nil, err
@@ -514,10 +546,17 @@ func (s *Server) repoByName(ctx context.Context, orgID uuid.UUID, ref string) (r
 		column, value = "id", any(id)
 	}
 	var r repoRow
+	// parent_repo_id is NULL for every repository that was not forked, which is
+	// most of them, so it is scanned through a pointer rather than into the
+	// uuid.UUID the rest of the code works with.
+	var parent *uuid.UUID
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, org_id, name, default_branch, archived FROM gitplatform.repositories WHERE org_id = $1 AND `+column+` = $2`,
+		`SELECT id, org_id, name, default_branch, archived, parent_repo_id FROM gitplatform.repositories WHERE org_id = $1 AND `+column+` = $2`,
 		orgID, value,
-	).Scan(&r.ID, &r.OrgID, &r.Name, &r.DefaultBranch, &r.Archived)
+	).Scan(&r.ID, &r.OrgID, &r.Name, &r.DefaultBranch, &r.Archived, &parent)
+	if parent != nil {
+		r.ParentRepoID = *parent
+	}
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return repoRow{}, status.Errorf(codes.NotFound, "repository %q not found", ref)
@@ -546,12 +585,19 @@ func (s *Server) openScopedRepo(ctx context.Context, name string) (Repo, error) 
 }
 
 func toProtoRepo(r repoRow) *gitv1.Repo {
-	return &gitv1.Repo{
+	repo := &gitv1.Repo{
 		Id:            r.ID.String(),
 		OrgId:         r.OrgID.String(),
 		Name:          r.Name,
 		DefaultBranch: r.DefaultBranch,
+		Archived:      r.Archived,
 	}
+	// An all-zero uuid would read as a real parent id in JSON, so "not a fork"
+	// stays the empty string.
+	if r.ParentRepoID != uuid.Nil {
+		repo.ParentRepoId = r.ParentRepoID.String()
+	}
+	return repo
 }
 
 func toProtoRefs(refs []Ref) []*gitv1.Ref {
@@ -649,7 +695,12 @@ func isMergeConflict(err error) bool {
 //
 // It returns targetRef's head before the merge alongside the merge result,
 // so the merge can be published as the push of targetRef it is.
-func mergeRefs(repoPath, sourceRef, targetRef, method, message, expectedSource, expectedTarget string) (oldSHA, newSHA string, err error) {
+// sourceRepoPath, when set, is the bare repository the source branch lives in —
+// a fork proposing a change to repoPath. Everything after the fetch below is the
+// one merge implementation both kinds of run go through; a second merge path for
+// forks is exactly the kind of near-duplicate where one side later grows a check
+// the other does not have.
+func mergeRefs(repoPath, sourceRef, targetRef, method, message, expectedSource, expectedTarget, sourceRepoPath string) (oldSHA, newSHA string, err error) {
 	sourceBranch := strings.TrimPrefix(sourceRef, refHeadsPrefix)
 	targetBranch := strings.TrimPrefix(targetRef, refHeadsPrefix)
 	for _, branch := range []string{sourceBranch, targetBranch} {
@@ -657,7 +708,10 @@ func mergeRefs(repoPath, sourceRef, targetRef, method, message, expectedSource, 
 			return "", "", status.Error(codes.InvalidArgument, "merge requires valid branch refs")
 		}
 	}
-	if sourceBranch == targetBranch {
+	// Two branches of one repository cannot be merged into each other, but a
+	// fork's "main" proposing a change to the parent's "main" is the ordinary
+	// case, so the names may match when the repositories differ.
+	if sourceBranch == targetBranch && sourceRepoPath == "" {
 		return "", "", status.Error(codes.InvalidArgument, "source and target must differ")
 	}
 	tmpDir, err := os.MkdirTemp("", "novaforge-merge-*")
@@ -668,6 +722,18 @@ func mergeRefs(repoPath, sourceRef, targetRef, method, message, expectedSource, 
 
 	if _, err := run("", "clone", "--no-hardlinks", repoPath, tmpDir); err != nil {
 		return "", "", err
+	}
+
+	// The fork's branch is fetched into the throwaway clone under the very
+	// remote-tracking name a branch of the target would have, so the rest of this
+	// function cannot tell the difference. Fetching into the bare target instead
+	// would publish a ref in it before any gate had authorized the merge, and the
+	// objects imported below are only ever the merge result.
+	if sourceRepoPath != "" {
+		if _, err := run(tmpDir, "fetch", "--no-write-fetch-head", "--no-tags", sourceRepoPath,
+			"+"+refHeadsPrefix+sourceBranch+":refs/remotes/origin/"+sourceBranch); err != nil {
+			return "", "", err
+		}
 	}
 
 	// A fresh clone only creates a local branch for the default branch
@@ -728,9 +794,24 @@ func mergeRefs(repoPath, sourceRef, targetRef, method, message, expectedSource, 
 	if _, err := run(repoPath, "fetch", "--no-write-fetch-head", "--no-tags", tmpDir, newSHA); err != nil {
 		return "", "", err
 	}
+	// The source is verified inside the same transaction as the target update, so
+	// a push landing on either ref between the merge and its publication loses
+	// the race rather than being silently merged past.
+	//
+	// A fork's branch is not a ref of this repository, so there is nothing here to
+	// verify — and asking git to verify a ref that does not exist would abort
+	// every cross-fork merge. What replaces it is the expected_source_sha check
+	// above, made against the sha actually fetched out of the fork a moment
+	// earlier: a fork that moved after its review is refused there, and the
+	// objects merged are the ones that comparison saw.
+	transaction := "start\n"
+	if sourceRepoPath == "" {
+		transaction += fmt.Sprintf("verify %s%s %s\n", refHeadsPrefix, sourceBranch, sourceRemoteRef)
+	}
+	transaction += fmt.Sprintf("update %s%s %s %s\nprepare\ncommit\n", refHeadsPrefix, targetBranch, newSHA, oldSHA)
 	cmd := exec.Command("git", "update-ref", "--stdin")
 	cmd.Dir = repoPath
-	cmd.Stdin = strings.NewReader(fmt.Sprintf("start\nverify %s%s %s\nupdate %s%s %s %s\nprepare\ncommit\n", refHeadsPrefix, sourceBranch, sourceRemoteRef, refHeadsPrefix, targetBranch, newSHA, oldSHA))
+	cmd.Stdin = strings.NewReader(transaction)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return "", "", status.Errorf(codes.Aborted, "merge ref transaction rejected: %s", strings.TrimSpace(string(out)))
 	}

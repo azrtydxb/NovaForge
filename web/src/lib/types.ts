@@ -228,6 +228,20 @@ export interface EngineeringRun {
   model_name: string;
   work_item_id: string;
   created_at: string;
+  /** The repository being merged into. */
+  repo_id: string;
+  /**
+   * The repository source_ref lives in. Equal to repo_id for an ordinary branch
+   * run; a fork of it for a cross-fork run.
+   */
+  source_repo_id: string;
+  /**
+   * The source repository's name, sent only by the single-run endpoint and only
+   * when it differs from the target's. Empty means either an ordinary branch run
+   * or a source repository the platform could no longer name — never "unknown
+   * so assume the same repository".
+   */
+  source_repo_name?: string;
 }
 
 export interface ProofRecord {

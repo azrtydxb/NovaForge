@@ -1170,6 +1170,30 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/orgs/{org}/repos/{repo}/forks:
+    post:
+      operationId: forkRepo
+      summary: Fork a repository, carrying its history into a repository of your own
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/orgs/{org}/repos/{repo}/gates:
     get:
       operationId: listGateConfig

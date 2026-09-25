@@ -17,20 +17,27 @@ import (
 
 // Run is a row in the reviews.runs table.
 type Run struct {
-	ID         uuid.UUID
-	OrgID      uuid.UUID
-	RepoID     uuid.UUID
-	WorkItemID uuid.UUID
-	Number     int
-	Title      string
-	SourceRef  string
-	TargetRef  string
-	State      string
-	AuthorID   uuid.UUID
-	AuthorKind string
-	AgentName  string
-	ModelName  string
-	CreatedAt  time.Time
+	ID     uuid.UUID
+	OrgID  uuid.UUID
+	RepoID uuid.UUID
+	// SourceRepoID is the repository SourceRef lives in. It equals RepoID for a
+	// branch run, and is a fork of RepoID for a cross-fork run. A run read back
+	// from the store never has it unset: a row with no stored source repository
+	// reports its own, which is what keeps every run created before forks
+	// existed — and every caller that does not set it — behaving exactly as it
+	// did.
+	SourceRepoID uuid.UUID
+	WorkItemID   uuid.UUID
+	Number       int
+	Title        string
+	SourceRef    string
+	TargetRef    string
+	State        string
+	AuthorID     uuid.UUID
+	AuthorKind   string
+	AgentName    string
+	ModelName    string
+	CreatedAt    time.Time
 }
 
 // PlanStep is a row in the reviews.run_plan_steps table.
@@ -104,20 +111,26 @@ func (s *Store) CreateRun(ctx context.Context, run Run) (Run, error) {
 		modelName = &run.ModelName
 	}
 
+	// A caller that named no source repository is opening a run in its own
+	// repository, which is what every run meant before forks existed.
+	if run.SourceRepoID == uuid.Nil {
+		run.SourceRepoID = run.RepoID
+	}
+
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO reviews.runs (
 			id, org_id, repo_id, work_item_id, number, title, source_ref, target_ref,
-			state, author_id, author_kind, agent_name, model_name
+			state, author_id, author_kind, agent_name, model_name, source_repo_id
 		)
 		VALUES (
 			$1, $2, $3, $4,
 			COALESCE((SELECT MAX(number) FROM reviews.runs WHERE repo_id = $3), 0) + 1,
-			$5, $6, $7, $8, $9, $10, $11, $12
+			$5, $6, $7, $8, $9, $10, $11, $12, $13
 		)
 		RETURNING number, created_at`,
 		run.ID, run.OrgID, run.RepoID, workItemID,
 		run.Title, run.SourceRef, run.TargetRef, run.State,
-		run.AuthorID, run.AuthorKind, agentName, modelName,
+		run.AuthorID, run.AuthorKind, agentName, modelName, run.SourceRepoID,
 	).Scan(&run.Number, &run.CreatedAt)
 	if err != nil {
 		return Run{}, fmt.Errorf("create run: %w", err)
@@ -134,14 +147,17 @@ func (s *Store) GetRun(ctx context.Context, id uuid.UUID) (Run, error) {
 	var run Run
 	var workItemID *uuid.UUID
 	var agentName, modelName *string
+	// COALESCE, not a plain column read: a row written before the source
+	// repository existed has NULL there and means "this run's own repository".
 	err = s.pool.QueryRow(ctx, `
 		SELECT id, org_id, repo_id, work_item_id, number, title, source_ref, target_ref,
-		       state, author_id, author_kind, agent_name, model_name, created_at
+		       state, author_id, author_kind, agent_name, model_name, created_at,
+		       COALESCE(source_repo_id, repo_id)
 		FROM reviews.runs WHERE org_id = $1 AND id = $2`,
 		scope.OrgID, id,
 	).Scan(&run.ID, &run.OrgID, &run.RepoID, &workItemID, &run.Number, &run.Title,
 		&run.SourceRef, &run.TargetRef, &run.State, &run.AuthorID, &run.AuthorKind,
-		&agentName, &modelName, &run.CreatedAt)
+		&agentName, &modelName, &run.CreatedAt, &run.SourceRepoID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return Run{}, fmt.Errorf("run %s not found: %w", id, err)
@@ -191,7 +207,8 @@ func (s *Store) ListRuns(ctx context.Context, orgID, repoID uuid.UUID, state str
 	}
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, org_id, repo_id, work_item_id, number, title, source_ref, target_ref,
-		       state, author_id, author_kind, agent_name, model_name, created_at
+		       state, author_id, author_kind, agent_name, model_name, created_at,
+		       COALESCE(source_repo_id, repo_id)
 		FROM reviews.runs
 		WHERE org_id = $1 AND repo_id = $2 AND ($3 = '' OR state = $3)
 		ORDER BY number`,
@@ -209,7 +226,7 @@ func (s *Store) ListRuns(ctx context.Context, orgID, repoID uuid.UUID, state str
 		var agentName, modelName *string
 		if err := rows.Scan(&run.ID, &run.OrgID, &run.RepoID, &workItemID, &run.Number, &run.Title,
 			&run.SourceRef, &run.TargetRef, &run.State, &run.AuthorID, &run.AuthorKind,
-			&agentName, &modelName, &run.CreatedAt); err != nil {
+			&agentName, &modelName, &run.CreatedAt, &run.SourceRepoID); err != nil {
 			return nil, fmt.Errorf("scan run: %w", err)
 		}
 		if workItemID != nil {

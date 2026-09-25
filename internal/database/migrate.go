@@ -11,6 +11,7 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -70,7 +71,12 @@ func migrate_(dbURL, schema, trackingName string, fsys fs.FS) error {
 	}
 	defer db.Close()
 
-	if _, err := db.Exec(fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", schema)); err != nil {
+	// IF NOT EXISTS is not atomic against a concurrent create: two services
+	// starting together against a virgin database both find the schema absent,
+	// and the loser gets a unique violation on pg_namespace rather than a no-op.
+	// The schema exists by then, which is all this statement wanted, so that one
+	// error is the success case. Anything else is a real failure.
+	if _, err := db.Exec(fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", schema)); err != nil && !isDuplicateSchema(err) {
 		return fmt.Errorf("create schema %s: %w", schema, err)
 	}
 
@@ -102,4 +108,17 @@ func migrate_(dbURL, schema, trackingName string, fsys fs.FS) error {
 		return fmt.Errorf("migrate up (schema %s): %w", schema, err)
 	}
 	return nil
+}
+
+// isDuplicateSchema reports whether err is Postgres' unique violation for a
+// schema another session created first. The code is matched rather than the
+// message, which is localized.
+func isDuplicateSchema(err error) bool {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return false
+	}
+	// 23505 unique_violation is what CREATE SCHEMA IF NOT EXISTS raises when it
+	// loses the race; 42P06 duplicate_schema is what a plain CREATE SCHEMA would.
+	return pgErr.Code == "23505" || pgErr.Code == "42P06"
 }

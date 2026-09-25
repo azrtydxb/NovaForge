@@ -5,14 +5,33 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
+
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
+// sourceHead resolves the run's source ref in the repository that ref actually
+// lives in — the run's own for a branch run, the fork for a cross-fork run.
+// Resolving it in run.RepoID regardless would have found nothing for a
+// cross-fork run, and every revision-pinned check (the reviewed sha, the
+// authorized merge pair) would then have been made against the wrong
+// repository's history.
 func sourceHead(ctx context.Context, git gitv1.GitServiceClient, run Run) (string, error) {
-	return refHead(ctx, git, run.RepoID.String(), run.SourceRef)
+	return refHead(ctx, git, run.sourceRepo().String(), run.SourceRef)
+}
+
+// sourceRepo is the repository SourceRef lives in, defaulting to the run's own.
+// The default is what makes every run that predates forks keep working: such a
+// row has no source repository of its own, and its source ref is a branch of
+// its own repository.
+func (r Run) sourceRepo() uuid.UUID {
+	if r.SourceRepoID == uuid.Nil {
+		return r.RepoID
+	}
+	return r.SourceRepoID
 }
 func refHead(ctx context.Context, git gitv1.GitServiceClient, repo, ref string) (string, error) {
 	if git == nil {
