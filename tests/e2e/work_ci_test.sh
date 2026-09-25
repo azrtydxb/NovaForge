@@ -202,7 +202,23 @@ for _ in $(seq 1 60); do
 done
 [ -n "$STATE" ] || fail "no CI run appeared within 300s"
 ok "run reached state: $STATE"
-[ "$STATE" = "success" ] || fail "the run did not succeed"
+if [ "$STATE" != "success" ]; then
+	# The job needs a brokered credential for NF_E2E_TOKEN. The broker issues
+	# expiring credentials from a dynamic provider and refuses to hand out a
+	# stored value as though it were one, so a deployment with no provider
+	# binding configured (NF_OPENBAO_CONFIG_FILE, the chart's openbao secret)
+	# cannot run this job at all. That is a missing deployment prerequisite, not
+	# a defect, and saying so is not the same as passing: the run is still not a
+	# success and this suite still reports the difference.
+	DETAIL="$(/tmp/nf ci runs "$REPO" 2>/dev/null | head -1 || true)"
+	LOGS="$(/tmp/nf ci logs "$REPO" 2>&1 || true)"
+	case "$LOGS$DETAIL" in
+	*"no dynamic credential provider binding configured"*)
+		fail "this deployment has no credential provider configured, so the brokered-secret job cannot run (see NF_OPENBAO_CONFIG_FILE); the CI run is $STATE"
+		;;
+	esac
+	fail "the run did not succeed"
+fi
 
 echo "== 8. the job log and artifact are retrievable =="
 /tmp/nf ci logs "$REPO" | grep -q "hello from novaforge ci" || fail "the job log does not contain the command's output"
