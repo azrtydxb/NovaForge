@@ -1,10 +1,22 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseMutationResult,
+} from "@tanstack/react-query";
 import { api, enc } from "../lib/api";
 import { useWorkspace } from "../lib/workspace";
 import { Async, Empty, Failed, Page, Panel, PanelHead } from "../components/ui";
 import { Confirm, Dialog } from "../components/Dialog";
-import type { Commit, OrgMember, Ref, TreeEntry, User } from "../lib/types";
+import type {
+  Commit,
+  OrgMember,
+  Ref,
+  Repo,
+  TreeEntry,
+  User,
+} from "../lib/types";
 
 /** Repos is the design's browser: a repository, its tree, and a file. The
  * tree is read one directory at a time, which is how git-platform serves it. */
@@ -32,6 +44,57 @@ export function Repos() {
     (m) => m.user_id === me.data?.id,
   )?.role;
   const canDelete = myRole === "owner" || myRole === "admin";
+
+  // Administration is a PATCH with only the field being changed, so renaming does
+  // not also reset the default branch and archiving does not also rename.
+  const administer = useMutation({
+    mutationFn: (patch: {
+      name?: string;
+      default_branch?: string;
+      archived?: boolean;
+    }) =>
+      api.patch<Repo>(
+        `/api/v1/orgs/${enc(w.org!)}/repos/${enc(active!)}`,
+        patch,
+      ),
+    onSuccess: (updated) => {
+      // A rename changes the name every other screen addresses it by.
+      if (w.repo === active && updated.name !== active) w.setRepo(updated.name);
+      setRepo(updated.name);
+      void qc.invalidateQueries({ queryKey: ["repos"] });
+    },
+  });
+
+  const transfer = useMutation({
+    mutationFn: (toOrg: string) =>
+      api.post<Repo>(
+        `/api/v1/orgs/${enc(w.org!)}/repos/${enc(active!)}/transfer`,
+        { to_org: toOrg },
+      ),
+    onSuccess: () => {
+      // It belongs to another organization now, so this workspace cannot show it.
+      if (w.repo === active) w.setRepo(null);
+      setRepo(null);
+      void qc.invalidateQueries({ queryKey: ["repos"] });
+    },
+  });
+
+  // The default branch can only be set to a branch that exists, so the choice is
+  // the repository's own branches rather than free text.
+  const branches = useQuery({
+    queryKey: ["branches", w.org, active],
+    queryFn: () =>
+      api.get<{ refs: Ref[] }>(
+        `/api/v1/orgs/${enc(w.org!)}/repos/${enc(active!)}/branches`,
+      ),
+    enabled: w.org !== null && active !== null,
+  });
+  const branchNames = (branches.data?.refs ?? []).map((r) => r.name);
+  // Only organizations this person belongs to: a transfer into one they do not
+  // would be refused, and offering it would invite the refusal.
+  const otherOrgs = w.orgs
+    .filter((o) => o.name !== w.org)
+    .map((o) => ({ id: o.id, name: o.name }));
 
   const remove = useMutation({
     mutationFn: (name: string) =>
@@ -112,18 +175,193 @@ export function Repos() {
           <Empty>This organization has no repositories yet.</Empty>
         </Panel>
       ) : (
-        <Browser
-          key={`${w.org}/${active}`}
-          org={w.org!}
-          repo={active}
-          defaultBranch={
-            w.repos.find((r) => r.name === active)?.default_branch ?? "main"
-          }
-        />
+        <>
+          {canDelete ? (
+            <Administration
+              repo={w.repos.find((r) => r.name === active)}
+              branches={branchNames}
+              orgs={otherOrgs}
+              administer={administer}
+              transfer={transfer}
+            />
+          ) : null}
+          <Browser
+            key={`${w.org}/${active}`}
+            org={w.org!}
+            repo={active}
+            defaultBranch={
+              w.repos.find((r) => r.name === active)?.default_branch ?? "main"
+            }
+          />
+        </>
       )}
     </Page>
   );
 }
+
+/** Administration of the selected repository. Archiving is shown as a state to
+ * move in and out of, next to but distinct from deleting: one is reversible and
+ * the other is not, and a control that made them look alike would invite the
+ * wrong one. */
+function Administration({
+  repo,
+  branches,
+  orgs,
+  administer,
+  transfer,
+}: {
+  repo: Repo | undefined;
+  branches: string[];
+  orgs: { id: string; name: string }[];
+  administer: UseMutationResult<
+    Repo,
+    unknown,
+    { name?: string; default_branch?: string; archived?: boolean }
+  >;
+  transfer: UseMutationResult<Repo, unknown, string>;
+}) {
+  const [name, setName] = useState("");
+  const [toOrg, setToOrg] = useState("");
+  if (!repo) return null;
+  return (
+    <Panel style={{ marginBottom: 12 }}>
+      <PanelHead>
+        ADMINISTRATION
+        <div style={{ flex: 1 }} />
+        {repo.archived ? (
+          <span style={{ font: "11px var(--mono)", color: "var(--warn)" }}>
+            archived — reads only
+          </span>
+        ) : null}
+      </PanelHead>
+      <div style={{ padding: 12, display: "grid", gap: 10 }}>
+        <label style={adminRow}>
+          <span style={adminLabel}>Rename</span>
+          <input
+            value={name}
+            placeholder={repo.name}
+            onChange={(e) => setName(e.target.value)}
+            style={adminInput}
+          />
+          <button
+            disabled={name === "" || name === repo.name || administer.isPending}
+            onClick={() => administer.mutate({ name })}
+            style={adminButton}
+          >
+            Rename
+          </button>
+        </label>
+
+        <label style={adminRow}>
+          <span style={adminLabel}>Default branch</span>
+          <select
+            value={repo.default_branch}
+            onChange={(e) =>
+              administer.mutate({ default_branch: e.target.value })
+            }
+            disabled={administer.isPending || branches.length === 0}
+            style={adminInput}
+          >
+            {branches.length === 0 ? (
+              <option value={repo.default_branch}>{repo.default_branch}</option>
+            ) : (
+              branches.map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))
+            )}
+          </select>
+          <span style={{ font: "11px var(--sans)", color: "var(--fg-faint)" }}>
+            a fresh clone checks this out
+          </span>
+        </label>
+
+        <div style={adminRow}>
+          <span style={adminLabel}>Archive</span>
+          <span
+            style={{
+              flex: 1,
+              font: "12px var(--sans)",
+              color: "var(--fg-muted)",
+            }}
+          >
+            {repo.archived
+              ? "Writes are refused. History stays readable."
+              : "Keep the history readable and stop it changing."}
+          </span>
+          <button
+            disabled={administer.isPending}
+            onClick={() => administer.mutate({ archived: !repo.archived })}
+            style={adminButton}
+          >
+            {repo.archived ? "Un-archive" : "Archive"}
+          </button>
+        </div>
+
+        <label style={adminRow}>
+          <span style={adminLabel}>Transfer</span>
+          <select
+            value={toOrg}
+            onChange={(e) => setToOrg(e.target.value)}
+            disabled={orgs.length === 0 || transfer.isPending}
+            style={adminInput}
+          >
+            <option value="">
+              {orgs.length === 0
+                ? "no other organization you belong to"
+                : "choose an organization"}
+            </option>
+            {orgs.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name}
+              </option>
+            ))}
+          </select>
+          <button
+            disabled={toOrg === "" || transfer.isPending}
+            onClick={() => transfer.mutate(toOrg)}
+            style={adminButton}
+          >
+            Transfer
+          </button>
+        </label>
+
+        {administer.error ? <Failed error={administer.error} /> : null}
+        {transfer.error ? <Failed error={transfer.error} /> : null}
+      </div>
+    </Panel>
+  );
+}
+
+const adminRow: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+};
+const adminLabel: React.CSSProperties = {
+  font: "600 11px var(--sans)",
+  color: "var(--fg-muted)",
+  minWidth: 110,
+};
+const adminInput: React.CSSProperties = {
+  padding: "5px 9px",
+  borderRadius: 6,
+  border: "1px solid var(--line)",
+  background: "transparent",
+  color: "var(--fg)",
+  font: "12px var(--sans)",
+  minWidth: 200,
+};
+const adminButton: React.CSSProperties = {
+  padding: "5px 11px",
+  borderRadius: 6,
+  border: "1px solid var(--line)",
+  background: "transparent",
+  color: "var(--fg)",
+  font: "500 12px var(--sans)",
+  cursor: "pointer",
+};
 
 function Browser({
   org,

@@ -382,6 +382,55 @@ func addGitHandlers(h map[string]http.HandlerFunc, c gitv1.GitServiceClient) {
 		WriteJSON(w, http.StatusOK, repoJSON(resp.GetRepo()))
 	}
 
+	h["updateRepo"] = func(w http.ResponseWriter, r *http.Request) {
+		// Each field is optional and applied only when present: a PATCH that
+		// omitted the default branch must not reset it, and an omitted archived
+		// must not un-archive, which is why archived travels with its own flag.
+		var body struct {
+			Name          *string `json:"name"`
+			DefaultBranch *string `json:"default_branch"`
+			Archived      *bool   `json:"archived"`
+		}
+		if err := decode(r, &body); err != nil {
+			WriteError(w, http.StatusBadRequest, err)
+			return
+		}
+		req := &gitv1.UpdateRepoRequest{Repo: chi.URLParam(r, "repo")}
+		if body.Name != nil {
+			req.Name = *body.Name
+		}
+		if body.DefaultBranch != nil {
+			req.DefaultBranch = *body.DefaultBranch
+		}
+		if body.Archived != nil {
+			req.Archived, req.SetArchived = *body.Archived, true
+		}
+		resp, err := c.UpdateRepo(r.Context(), req)
+		if err != nil {
+			WriteError(w, StatusFromGRPC(err), err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, repoJSON(resp.GetRepo()))
+	}
+
+	h["transferRepo"] = func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			ToOrg string `json:"to_org"`
+		}
+		if err := decode(r, &body); err != nil {
+			WriteError(w, http.StatusBadRequest, err)
+			return
+		}
+		resp, err := c.TransferRepo(r.Context(), &gitv1.TransferRepoRequest{
+			Repo: chi.URLParam(r, "repo"), ToOrg: body.ToOrg,
+		})
+		if err != nil {
+			WriteError(w, StatusFromGRPC(err), err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, repoJSON(resp.GetRepo()))
+	}
+
 	h["deleteRepo"] = func(w http.ResponseWriter, r *http.Request) {
 		if _, err := c.DeleteRepo(r.Context(), &gitv1.DeleteRepoRequest{Name: chi.URLParam(r, "repo")}); err != nil {
 			WriteError(w, StatusFromGRPC(err), err)
@@ -484,6 +533,11 @@ func repoJSON(r *gitv1.Repo) map[string]any {
 	return map[string]any{
 		"id": r.GetId(), "org_id": r.GetOrgId(),
 		"name": r.GetName(), "default_branch": r.GetDefaultBranch(),
+		// Always present so a screen renders the state rather than inferring it
+		// from a missing field, and so an archived repository reads as archived
+		// rather than as ordinary.
+		"archived":       r.GetArchived(),
+		"parent_repo_id": r.GetParentRepoId(),
 	}
 }
 

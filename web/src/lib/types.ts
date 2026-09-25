@@ -25,6 +25,10 @@ export interface Repo {
   name: string;
   org_id: string;
   default_branch: string;
+  /** An archived repository serves reads and refuses writes. */
+  archived: boolean;
+  /** Set when this repository was forked from another; empty otherwise. */
+  parent_repo_id: string;
 }
 
 export interface Ref {
