@@ -220,7 +220,8 @@ func loadAgents(ctx context.Context, git GitReader, repo, ref string) ([]AgentDe
 		}
 		def.Path = path
 		for _, tool := range def.Tools {
-			if !known[tool] {
+			_, external := tools.MCPToolSelection(tool)
+			if !known[tool] && !external {
 				return nil, fmt.Errorf("novaforge config: %s: agent %q names unknown tool %q", path, def.Name, tool)
 			}
 		}

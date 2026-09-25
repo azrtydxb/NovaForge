@@ -3,6 +3,7 @@ package agents
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"strings"
 	"sync"
@@ -22,9 +23,8 @@ import (
 
 const rfc3339 = "2006-01-02T15:04:05.999999999Z07:00"
 
-// defaultGrantTTL is how long a Start-issued capability grant remains
-// active. A run that outlives it is expected to have already finished
-// (WallclockLimit bounds every run well below this).
+// defaultGrantTTL is the existing maximum grant lifetime. A run must leave
+// room within it for the credential/evidence settlement allowance.
 const defaultGrantTTL = 24 * time.Hour
 
 // ExecuteFunc takes over a run once it has been created and issued its
@@ -32,12 +32,20 @@ const defaultGrantTTL = 24 * time.Hour
 // driving it to a terminal state. It is invoked in a fresh background
 // context (a running agent must outlive the StartRun request that
 // launched it) after the run's state has already moved to "running". When
-// nil, StartRun still transitions the run from queued to running — the
-// state change a caller subscribed via StreamRunEvents can rely on
-// seeing — but nothing then executes it further, which is the same
-// nil-safe degrade every other service in this codebase uses for an
-// optional dependency the caller has not wired up (compare graph.Assemble).
+// nil, StartRun refuses admission before issuing any authority.
 type ExecuteFunc func(ctx context.Context, run Run)
+
+// GrantAuthority is implemented by the grant owner's API adapter in production.
+// Agent-runtime never needs a transaction across the owner's schema and its own.
+type RunGrantAuthority interface {
+	IssueIntent(context.Context, capability.IssuanceIntent) (capability.Grant, error)
+	CancelIssuance(context.Context, capability.IssuanceIntent) error
+}
+
+type GrantAuthority interface {
+	Issue(context.Context, capability.Grant) (capability.Grant, error)
+	Revoke(context.Context, uuid.UUID) error
+}
 
 // GRPCServer implements agentsv1.AgentServiceServer. Every method derives
 // the caller's organization from authz.FromContext and passes it as an
@@ -47,7 +55,7 @@ type GRPCServer struct {
 	agentsv1.UnimplementedAgentServiceServer
 
 	Store   *Store
-	Grants  *capability.Store
+	Grants  GrantAuthority
 	RDB     *redis.Client
 	Work    workv1.WorkServiceClient
 	Execute ExecuteFunc
@@ -61,6 +69,10 @@ type GRPCServer struct {
 	// AI_MODEL_PRICES; nil when the deployment prices none, in which case
 	// StartRun refuses a cost limit it could never enforce.
 	Price *TokenPrice
+	// HasModelPrices permits admission when a repository may select a priced
+	// override even though the deployment default is unpriced. Runner still
+	// requires the exact effective model price before any model call.
+	HasModelPrices bool
 
 	// executing holds the cancel function of every run this process is
 	// executing, so CancelRun can abort an in-flight model or tool call
@@ -73,7 +85,13 @@ type GRPCServer struct {
 }
 
 // NewGRPCServer wraps the given dependencies as an agentsv1.AgentServiceServer.
-func NewGRPCServer(store *Store, grants *capability.Store, rdb *redis.Client, work workv1.WorkServiceClient, execute ExecuteFunc) *GRPCServer {
+func NewGRPCServer(store *Store, grants GrantAuthority, rdb *redis.Client, work workv1.WorkServiceClient, execute ExecuteFunc) *GRPCServer {
+	if grants != nil {
+		store.GrantRevoker = grants.Revoke
+		if issuer, ok := grants.(RunGrantAuthority); ok {
+			store.GrantIssuanceCanceller = issuer.CancelIssuance
+		}
+	}
 	return &GRPCServer{Store: store, Grants: grants, RDB: rdb, Work: work, Execute: execute}
 }
 
@@ -183,6 +201,9 @@ func (g *GRPCServer) StartRun(ctx context.Context, req *agentsv1.StartRunRequest
 	if err != nil {
 		return nil, err
 	}
+	if g.Grants == nil || g.Store.GrantRevoker == nil {
+		return nil, status.Error(codes.Unavailable, "grant authority and revoker are required to start a run")
+	}
 	if req.GetSponsorId() == "" {
 		return nil, status.Error(codes.PermissionDenied, "an agent run requires a human sponsor")
 	}
@@ -239,7 +260,7 @@ func (g *GRPCServer) StartRun(ctx context.Context, req *agentsv1.StartRunRequest
 	// A cost limit is enforced only against a token price. With none
 	// configured no cost ever accrues, so accepting the limit would record a
 	// bound that can never be reached; refusing says so to the person asking.
-	if req.GetCostLimitMicros() > 0 && g.Price == nil {
+	if req.GetCostLimitMicros() > 0 && g.Price == nil && !g.HasModelPrices {
 		return nil, status.Error(codes.InvalidArgument, "this deployment prices no model tokens, so a cost limit could never be reached; "+
 			"start the run without cost_limit_micros, or have the operator set the model's price in AI_MODEL_PRICES")
 	}
@@ -247,7 +268,17 @@ func (g *GRPCServer) StartRun(ctx context.Context, req *agentsv1.StartRunRequest
 		return nil, status.Errorf(codes.FailedPrecondition, "work item %q is a maintenance proposal awaiting approval; approve it before starting an agent on it", req.GetWorkItemKey())
 	}
 
+	wallclock, err := RunWallclockLimit(req.GetWallclockLimitSeconds())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	issuer, issueOK := g.Grants.(RunGrantAuthority)
+	if g.Execute == nil || !issueOK || g.Store.GrantRevoker == nil || g.Store.GrantIssuanceCanceller == nil || g.Store.WorkClaims == nil {
+		return nil, status.Error(codes.FailedPrecondition, "executor, Work claim and stable grant authority must be available before admission")
+	}
 	grant := capability.Grant{
+		ID:            uuid.New(),
 		OrgID:         orgID,
 		SubjectID:     agentID,
 		SubjectKind:   "agent",
@@ -256,27 +287,66 @@ func (g *GRPCServer) StartRun(ctx context.Context, req *agentsv1.StartRunRequest
 		SecretsProd:   false,
 		DeployStaging: false,
 		DeployProd:    false,
-		ExpiresAt:     time.Now().Add(defaultGrantTTL),
-	}
-	issued, err := g.Grants.Issue(ctx, grant)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "issue capability grant: %v", err)
+		ExpiresAt:     time.Now().Add(wallclock + OrphanGrace),
 	}
 
+	scope, _ := authz.FromContext(ctx)
+	intent := capability.IssuanceIntent{IssuerID: scope.ActorID, IssuerKind: scope.ActorKind, Grant: grant}
+
 	run, err := g.Store.CreateRun(ctx, Run{
-		OrgID:           orgID,
-		RepoID:          repoID,
-		AgentID:         agentID,
-		WorkItemID:      workItemID,
-		SponsorID:       sponsorID,
-		GrantID:         issued.ID,
-		Branch:          RunBranch(issued.WriteBranch),
-		WallclockLimit:  time.Duration(req.GetWallclockLimitSeconds()) * time.Second,
-		TokenLimit:      req.GetTokenLimit(),
-		CostLimitMicros: req.GetCostLimitMicros(),
+		OrgID:             orgID,
+		RepoID:            repoID,
+		AgentID:           agentID,
+		WorkItemID:        workItemID,
+		SponsorID:         sponsorID,
+		GrantID:           grant.ID,
+		GrantIntent:       &intent,
+		WorkClaimRequired: true,
+		Branch:            RunBranch(grant.WriteBranch),
+		WallclockLimit:    wallclock,
+		TokenLimit:        req.GetTokenLimit(),
+		CostLimitMicros:   req.GetCostLimitMicros(),
 	})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "create run: %v", err)
+	}
+
+	// Every remote side effect now has a durable identity and compensation
+	// obligation. Cancellation/timeout is ambiguous, never proof of no claim.
+	admissionCtx, stopAdmission := context.WithTimeout(ctx, 30*time.Second)
+	defer stopAdmission()
+	admissionErr := func() error {
+		var item *workv1.WorkItem
+		var err error
+		for attempt := 0; attempt < 2; attempt++ {
+			item, err = g.Store.WorkClaims.ClaimExecution(admissionCtx, run.ExecutionClaim())
+			if err == nil {
+				break
+			}
+		}
+		if err != nil {
+			return err
+		}
+		if err = g.Store.FreezeWorkItem(admissionCtx, run, item); err != nil {
+			return err
+		}
+		issued, err := issuer.IssueIntent(admissionCtx, *run.GrantIntent)
+		if err != nil {
+			return err
+		}
+		if issued.ID != grant.ID || issued.OrgID != grant.OrgID || issued.SubjectID != grant.SubjectID || issued.WriteBranch != grant.WriteBranch || !issued.ExpiresAt.Equal(grant.ExpiresAt) || issued.RepoRead != grant.RepoRead || issued.SubjectKind != grant.SubjectKind || issued.SecretsProd || issued.DeployProd || issued.DeployStaging {
+			return fmt.Errorf("grant owner returned mismatched issuance")
+		}
+		return nil
+	}()
+	if admissionErr != nil {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		defer cancel()
+		_ = g.Store.SetRunState(cleanupCtx, run.ID, "failed")
+		if err := g.Store.CleanupRunGrant(cleanupCtx, run.ID); err != nil {
+			log.Printf("agents: admission cleanup pending for %s: %v", run.ID, err)
+		}
+		return nil, status.Error(codes.FailedPrecondition, "run admission incomplete; durable cleanup pending")
 	}
 
 	g.publishStateChange(run.ID, "", "queued")
@@ -315,13 +385,24 @@ func (g *GRPCServer) driveToRunning(run Run) {
 			return
 		}
 		g.publishStateChange(run.ID, "queued", "failed")
+		if err := g.Store.CleanupRunGrant(ctx, run.ID); err != nil {
+			log.Printf("agents: grant cleanup pending for run %s: %v", run.ID, err)
+		}
 		return
 	}
 	g.publishStateChange(run.ID, "queued", "running")
 	run.State = "running"
 
 	if g.Execute != nil {
-		runCtx, cancel := context.WithCancel(ctx)
+		current, err := g.Store.GetRun(ctx, run.ID)
+		if err != nil {
+			log.Printf("agents: read acquired run %s: %v", run.ID, err)
+			return
+		}
+		run = current
+		deadlineCtx, stopClock := context.WithDeadlineCause(ctx, run.StartedAt.Add(run.WallclockLimit), ErrOverBudget)
+		defer stopClock()
+		runCtx, cancel := g.Store.WithRunCancellation(deadlineCtx, run.ID)
 		g.track(run.ID, cancel)
 		defer g.untrack(run.ID)
 		defer cancel()
@@ -391,11 +472,20 @@ func (g *GRPCServer) CancelRun(ctx context.Context, req *agentsv1.CancelRunReque
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "get run: %v", err)
 	}
+	if run.State == "cancelled" {
+		if err := g.Store.CleanupRunGrant(ctx, id); err != nil {
+			return nil, status.Error(codes.Unavailable, "run cancelled; grant cleanup pending")
+		}
+		return &agentsv1.CancelRunResponse{Ok: true}, nil
+	}
 	if err := g.Store.SetRunState(ctx, id, "cancelled"); err != nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "cancel run: %v", err)
 	}
 	g.abort(id)
 	g.publishStateChange(id, run.State, "cancelled")
+	if err := g.Store.CleanupRunGrant(ctx, id); err != nil {
+		return nil, status.Error(codes.Unavailable, "run cancelled; grant cleanup pending")
+	}
 	return &agentsv1.CancelRunResponse{Ok: true}, nil
 }
 

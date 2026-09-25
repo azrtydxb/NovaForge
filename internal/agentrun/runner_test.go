@@ -64,6 +64,9 @@ func (m *recordingModel) Generate(_ context.Context, call provider.Call) (*provi
 		content = append(content, tc)
 		finish = provider.FinishToolCalls
 	}
+	if r.totalTokens == 0 {
+		r.totalTokens = 1
+	}
 	return &provider.Response{Content: content, FinishReason: finish, Usage: provider.Usage{TotalTokens: r.totalTokens}}, nil
 }
 
@@ -267,7 +270,7 @@ func (p *platform) startRun(t *testing.T, o org, repoID uuid.UUID, agentName, go
 	}
 	run, err := p.agents.CreateRun(o.ctx, agents.Run{
 		OrgID: o.id, RepoID: repoID, AgentID: agent.ID, WorkItemID: uuid.MustParse(item.GetItem().GetId()),
-		SponsorID: uuid.New(), GrantID: uuid.New(), Branch: "agents/" + item.GetItem().GetKey() + "/work",
+		SponsorID: uuid.New(), GrantID: uuid.Nil, Branch: "agents/" + item.GetItem().GetKey() + "/work",
 		WallclockLimit: time.Hour, TokenLimit: 1_000_000,
 	})
 	if err != nil {
@@ -402,6 +405,9 @@ func TestRepoConfigGoverns(t *testing.T) {
 	}}
 	var requested []string
 	result := p.runner(model, &requested).Run(o.ctx, run, p.runtimeFor(run))
+	if result.Model != model.ModelID() {
+		t.Fatalf("effective model missing from result: %+v", result)
+	}
 
 	if got := model.offeredTools(t); strings.Join(got, ",") != "knowledge.record,work.get" {
 		t.Fatalf("the model was offered %v, want exactly the repository's [knowledge.record work.get]", got)
@@ -485,4 +491,41 @@ func repoName(t *testing.T, p *platform, o org, repoID uuid.UUID) string {
 		t.Fatalf("GetRepo: %v", err)
 	}
 	return resp.GetRepo().GetName()
+}
+
+func TestRepositoryCostLimitRequiresEffectiveModelPrice(t *testing.T) {
+	p := newPlatform(t)
+	o := p.newOrg(t)
+	name := "engineer-" + uuid.NewString()[:6]
+	repo := p.repo(t, o, map[string]string{".novaforge/agents/engineer.yaml": "name: " + name + "\nmodel: unpriced-override\nbudget:\n  cost_micros: 1\n"})
+	run := p.startRun(t, o, repo, name, "bounded run", nil)
+	model := &recordingModel{script: []stubResponse{{text: "done"}}}
+	var requested []string
+	runner := p.runner(model, &requested)
+	runner.Price = &agents.TokenPrice{InputMicrosPerMillion: 1000000, OutputMicrosPerMillion: 1000000}
+	result := runner.Run(o.ctx, run, p.runtimeFor(run))
+	if result.State != "failed" || !strings.Contains(result.Summary, "price") || len(model.calls) != 0 {
+		t.Fatalf("unpriced override was executed: %+v calls=%d", result, len(model.calls))
+	}
+}
+
+func TestRepositoryModelPriceIsResolved(t *testing.T) {
+	p := newPlatform(t)
+	o := p.newOrg(t)
+	name := "engineer-" + uuid.NewString()[:6]
+	repo := p.repo(t, o, map[string]string{".novaforge/agents/engineer.yaml": "name: " + name + "\nmodel: priced-override\nbudget:\n  cost_micros: 1\n"})
+	run := p.startRun(t, o, repo, name, "bounded run", nil)
+	model := &hangingModel{stubModel: &stubModel{script: []stubResponse{{text: "done"}}}, usage: provider.Usage{InputTokens: 2, OutputTokens: 1, TotalTokens: 3}}
+	runner := &agentrun.Runner{Git: p.git, Work: p.work, Runs: p.agents, Audit: p.audit,
+		NewModel: func(string) (provider.LanguageModel, error) { return model, nil },
+		PriceForModel: func(model string) *agents.TokenPrice {
+			if model != "priced-override" {
+				t.Fatalf("price for %q", model)
+			}
+			return &agents.TokenPrice{InputMicrosPerMillion: 1000000, OutputMicrosPerMillion: 2000000}
+		}}
+	result := runner.Run(o.ctx, run, p.runtimeFor(run))
+	if result.State != "over_budget" || result.CostMicros != 4 {
+		t.Fatalf("wrong effective price: %+v", result)
+	}
 }

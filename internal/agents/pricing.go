@@ -3,6 +3,9 @@ package agents
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"math"
+	"math/big"
 	"strings"
 )
 
@@ -23,11 +26,29 @@ type TokenPrice struct {
 // response is never free because it was small, which would let a run made
 // of many small calls creep past its limit.
 func (p TokenPrice) CostMicros(inputTokens, outputTokens int) int64 {
-	total := int64(inputTokens)*p.InputMicrosPerMillion + int64(outputTokens)*p.OutputMicrosPerMillion
-	if total <= 0 {
-		return 0
+	cost, _ := p.CostMicrosChecked(inputTokens, outputTokens)
+	return cost
+}
+
+// CostMicrosChecked retains overflow even when the display counter saturates.
+func (p TokenPrice) CostMicrosChecked(inputTokens, outputTokens int) (int64, bool) {
+	if inputTokens < 0 || outputTokens < 0 || p.InputMicrosPerMillion < 0 || p.OutputMicrosPerMillion < 0 {
+		return math.MaxInt64, true
 	}
-	return (total + 999_999) / 1_000_000
+	// Multiplication can overflow before division even for a representable
+	// cost. Exact integer arithmetic keeps a configured high price from
+	// wrapping around to a free response.
+	input := new(big.Int).Mul(big.NewInt(int64(inputTokens)), big.NewInt(p.InputMicrosPerMillion))
+	output := new(big.Int).Mul(big.NewInt(int64(outputTokens)), big.NewInt(p.OutputMicrosPerMillion))
+	total := input.Add(input, output)
+	if total.Sign() <= 0 {
+		return 0, false
+	}
+	total.Add(total, big.NewInt(999_999)).Quo(total, big.NewInt(1_000_000))
+	if !total.IsInt64() {
+		return math.MaxInt64, true
+	}
+	return total.Int64(), false
 }
 
 // ParseModelPrices reads AI_MODEL_PRICES: a JSON object from model name to
@@ -43,6 +64,9 @@ func ParseModelPrices(raw string) (map[string]TokenPrice, error) {
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&out); err != nil {
 		return nil, fmt.Errorf("AI_MODEL_PRICES is not a JSON object of model name to {input_micros_per_million_tokens, output_micros_per_million_tokens}: %w", err)
+	}
+	if err := dec.Decode(new(any)); err != io.EOF {
+		return nil, fmt.Errorf("AI_MODEL_PRICES must contain exactly one JSON object")
 	}
 	for model, p := range out {
 		if p.InputMicrosPerMillion < 0 || p.OutputMicrosPerMillion < 0 {
