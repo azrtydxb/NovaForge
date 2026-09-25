@@ -32,6 +32,7 @@ import (
 	"github.com/novaforge/novaforge/internal/service"
 	"github.com/novaforge/novaforge/internal/svcauth"
 	"github.com/novaforge/novaforge/internal/version"
+	"github.com/novaforge/novaforge/internal/webhooks"
 )
 
 // releasesBucket is the fixed bucket release assets live in. It is separate from
@@ -81,6 +82,12 @@ func main() {
 	// applied to the same "gitplatform" schema.
 	if err := database.MigrateAs(cfg.DatabaseURL, "gitplatform", "gitplatform_git", gitops.MigrationsFS); err != nil {
 		log.Fatalf("git-platform: migrate gitplatform (repositories) schema: %v", err)
+	}
+	// The webhook tables are a third such set, and must come after the
+	// repositories one: a hook references a repository, which is what removes a
+	// deleted repository's hooks.
+	if err := database.MigrateAs(cfg.DatabaseURL, "gitplatform", "gitplatform_webhooks", webhooks.MigrationsFS); err != nil {
+		log.Fatalf("git-platform: migrate gitplatform (webhooks) schema: %v", err)
 	}
 
 	ctx := context.Background()
@@ -186,6 +193,27 @@ func main() {
 		grpc.UnaryInterceptor(svcauth.UnaryServerInterceptor(identityClient, cfg.HMACSecret)),
 		grpc.StreamInterceptor(svcauth.StreamServerInterceptor(identityClient, cfg.HMACSecret)),
 	)
+	// --- webhooks ---
+	// Hooks belong to a repository, so this service owns them and delivers them.
+	// The worker is the whole feature: without it every push is consumed and
+	// acknowledged and no endpoint is ever called, which is indistinguishable
+	// from "nobody registered a hook" — the silence this repository has been
+	// caught by more than once. internal/webhooks asserts this call exists.
+	hooks := webhooks.NewStore(pool, []byte(cfg.SecretsKEK))
+	grpcServer.Hooks = hooks
+	if rdb != nil {
+		// The consumer name is the pod's, so each replica has a stable identity
+		// in the group and a crashed pod's in-flight message can be reclaimed.
+		worker := &webhooks.Worker{RDB: rdb, Store: hooks, Consumer: os.Getenv("HOSTNAME")}
+		go func() {
+			if err := worker.Run(ctx); err != nil {
+				log.Printf("git-platform: webhook delivery worker stopped: %v", err)
+			}
+		}()
+	} else {
+		log.Println("git-platform: REDIS_URL is unset; webhooks can be registered but nothing will be delivered")
+	}
+
 	gitv1.RegisterGitServiceServer(srv, grpcServer)
 
 	// --- smart-HTTP ---

@@ -34,6 +34,11 @@ const (
 	GitService_Merge_FullMethodName                             = "/novaforge.git.v1.GitService/Merge"
 	GitService_CreateBranch_FullMethodName                      = "/novaforge.git.v1.GitService/CreateBranch"
 	GitService_CreateCommit_FullMethodName                      = "/novaforge.git.v1.GitService/CreateCommit"
+	GitService_CreateHook_FullMethodName                        = "/novaforge.git.v1.GitService/CreateHook"
+	GitService_ListHooks_FullMethodName                         = "/novaforge.git.v1.GitService/ListHooks"
+	GitService_DeleteHook_FullMethodName                        = "/novaforge.git.v1.GitService/DeleteHook"
+	GitService_SetHookSecret_FullMethodName                     = "/novaforge.git.v1.GitService/SetHookSecret"
+	GitService_ListHookDeliveries_FullMethodName                = "/novaforge.git.v1.GitService/ListHookDeliveries"
 	GitService_ListOrganizationsWithRepositories_FullMethodName = "/novaforge.git.v1.GitService/ListOrganizationsWithRepositories"
 	GitService_CreateRelease_FullMethodName                     = "/novaforge.git.v1.GitService/CreateRelease"
 	GitService_ListReleases_FullMethodName                      = "/novaforge.git.v1.GitService/ListReleases"
@@ -65,6 +70,11 @@ type GitServiceClient interface {
 	Merge(ctx context.Context, in *MergeRequest, opts ...grpc.CallOption) (*MergeResponse, error)
 	CreateBranch(ctx context.Context, in *CreateBranchRequest, opts ...grpc.CallOption) (*CreateBranchResponse, error)
 	CreateCommit(ctx context.Context, in *CreateCommitRequest, opts ...grpc.CallOption) (*CreateCommitResponse, error)
+	CreateHook(ctx context.Context, in *CreateHookRequest, opts ...grpc.CallOption) (*CreateHookResponse, error)
+	ListHooks(ctx context.Context, in *ListHooksRequest, opts ...grpc.CallOption) (*ListHooksResponse, error)
+	DeleteHook(ctx context.Context, in *DeleteHookRequest, opts ...grpc.CallOption) (*DeleteHookResponse, error)
+	SetHookSecret(ctx context.Context, in *SetHookSecretRequest, opts ...grpc.CallOption) (*SetHookSecretResponse, error)
+	ListHookDeliveries(ctx context.Context, in *ListHookDeliveriesRequest, opts ...grpc.CallOption) (*ListHookDeliveriesResponse, error)
 	// ListOrganizationsWithRepositories is a platform-worker RPC: it answers
 	// only a caller presenting a platform token (svcauth.MintPlatform), and only
 	// with organization ids. The worker re-enters each organization's scope with
@@ -240,6 +250,56 @@ func (c *gitServiceClient) CreateCommit(ctx context.Context, in *CreateCommitReq
 	return out, nil
 }
 
+func (c *gitServiceClient) CreateHook(ctx context.Context, in *CreateHookRequest, opts ...grpc.CallOption) (*CreateHookResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateHookResponse)
+	err := c.cc.Invoke(ctx, GitService_CreateHook_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gitServiceClient) ListHooks(ctx context.Context, in *ListHooksRequest, opts ...grpc.CallOption) (*ListHooksResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListHooksResponse)
+	err := c.cc.Invoke(ctx, GitService_ListHooks_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gitServiceClient) DeleteHook(ctx context.Context, in *DeleteHookRequest, opts ...grpc.CallOption) (*DeleteHookResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteHookResponse)
+	err := c.cc.Invoke(ctx, GitService_DeleteHook_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gitServiceClient) SetHookSecret(ctx context.Context, in *SetHookSecretRequest, opts ...grpc.CallOption) (*SetHookSecretResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetHookSecretResponse)
+	err := c.cc.Invoke(ctx, GitService_SetHookSecret_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gitServiceClient) ListHookDeliveries(ctx context.Context, in *ListHookDeliveriesRequest, opts ...grpc.CallOption) (*ListHookDeliveriesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListHookDeliveriesResponse)
+	err := c.cc.Invoke(ctx, GitService_ListHookDeliveries_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *gitServiceClient) ListOrganizationsWithRepositories(ctx context.Context, in *ListOrganizationsWithRepositoriesRequest, opts ...grpc.CallOption) (*ListOrganizationsWithRepositoriesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListOrganizationsWithRepositoriesResponse)
@@ -335,6 +395,11 @@ type GitServiceServer interface {
 	Merge(context.Context, *MergeRequest) (*MergeResponse, error)
 	CreateBranch(context.Context, *CreateBranchRequest) (*CreateBranchResponse, error)
 	CreateCommit(context.Context, *CreateCommitRequest) (*CreateCommitResponse, error)
+	CreateHook(context.Context, *CreateHookRequest) (*CreateHookResponse, error)
+	ListHooks(context.Context, *ListHooksRequest) (*ListHooksResponse, error)
+	DeleteHook(context.Context, *DeleteHookRequest) (*DeleteHookResponse, error)
+	SetHookSecret(context.Context, *SetHookSecretRequest) (*SetHookSecretResponse, error)
+	ListHookDeliveries(context.Context, *ListHookDeliveriesRequest) (*ListHookDeliveriesResponse, error)
 	// ListOrganizationsWithRepositories is a platform-worker RPC: it answers
 	// only a caller presenting a platform token (svcauth.MintPlatform), and only
 	// with organization ids. The worker re-enters each organization's scope with
@@ -403,6 +468,21 @@ func (UnimplementedGitServiceServer) CreateBranch(context.Context, *CreateBranch
 }
 func (UnimplementedGitServiceServer) CreateCommit(context.Context, *CreateCommitRequest) (*CreateCommitResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateCommit not implemented")
+}
+func (UnimplementedGitServiceServer) CreateHook(context.Context, *CreateHookRequest) (*CreateHookResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateHook not implemented")
+}
+func (UnimplementedGitServiceServer) ListHooks(context.Context, *ListHooksRequest) (*ListHooksResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListHooks not implemented")
+}
+func (UnimplementedGitServiceServer) DeleteHook(context.Context, *DeleteHookRequest) (*DeleteHookResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteHook not implemented")
+}
+func (UnimplementedGitServiceServer) SetHookSecret(context.Context, *SetHookSecretRequest) (*SetHookSecretResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetHookSecret not implemented")
+}
+func (UnimplementedGitServiceServer) ListHookDeliveries(context.Context, *ListHookDeliveriesRequest) (*ListHookDeliveriesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListHookDeliveries not implemented")
 }
 func (UnimplementedGitServiceServer) ListOrganizationsWithRepositories(context.Context, *ListOrganizationsWithRepositoriesRequest) (*ListOrganizationsWithRepositoriesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListOrganizationsWithRepositories not implemented")
@@ -712,6 +792,96 @@ func _GitService_CreateCommit_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GitService_CreateHook_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateHookRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GitServiceServer).CreateHook(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GitService_CreateHook_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GitServiceServer).CreateHook(ctx, req.(*CreateHookRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GitService_ListHooks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListHooksRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GitServiceServer).ListHooks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GitService_ListHooks_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GitServiceServer).ListHooks(ctx, req.(*ListHooksRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GitService_DeleteHook_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteHookRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GitServiceServer).DeleteHook(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GitService_DeleteHook_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GitServiceServer).DeleteHook(ctx, req.(*DeleteHookRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GitService_SetHookSecret_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetHookSecretRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GitServiceServer).SetHookSecret(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GitService_SetHookSecret_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GitServiceServer).SetHookSecret(ctx, req.(*SetHookSecretRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GitService_ListHookDeliveries_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListHookDeliveriesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GitServiceServer).ListHookDeliveries(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GitService_ListHookDeliveries_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GitServiceServer).ListHookDeliveries(ctx, req.(*ListHookDeliveriesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _GitService_ListOrganizationsWithRepositories_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListOrganizationsWithRepositoriesRequest)
 	if err := dec(in); err != nil {
@@ -868,6 +1038,26 @@ var GitService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateCommit",
 			Handler:    _GitService_CreateCommit_Handler,
+		},
+		{
+			MethodName: "CreateHook",
+			Handler:    _GitService_CreateHook_Handler,
+		},
+		{
+			MethodName: "ListHooks",
+			Handler:    _GitService_ListHooks_Handler,
+		},
+		{
+			MethodName: "DeleteHook",
+			Handler:    _GitService_DeleteHook_Handler,
+		},
+		{
+			MethodName: "SetHookSecret",
+			Handler:    _GitService_SetHookSecret_Handler,
+		},
+		{
+			MethodName: "ListHookDeliveries",
+			Handler:    _GitService_ListHookDeliveries_Handler,
 		},
 		{
 			MethodName: "ListOrganizationsWithRepositories",

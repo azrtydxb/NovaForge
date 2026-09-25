@@ -61,6 +61,11 @@ func Routes() []Route {
 		{http.MethodDelete, "/api/v1/orgs/{org}/repos/{repo}/releases/{tag}", "deleteRelease", "Delete a release and the objects its assets hold"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/releases/{tag}/assets", "uploadReleaseAsset", "Upload an asset onto a release; the body is the file itself"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/releases/{tag}/assets/{name}", "downloadReleaseAsset", "Download one release asset"},
+		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/hooks", "listHooks", "Webhooks registered for a repository; a secret is never returned"},
+		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/hooks", "createHook", "Register a webhook endpoint, optionally with a signing secret"},
+		{http.MethodPatch, "/api/v1/orgs/{org}/repos/{repo}/hooks/{id}", "updateHook", "Rotate a webhook's secret or switch it on and off"},
+		{http.MethodDelete, "/api/v1/orgs/{org}/repos/{repo}/hooks/{id}", "deleteHook", "Remove a webhook and its delivery history"},
+		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/hooks/{id}/deliveries", "listHookDeliveries", "What a webhook's endpoint answered, attempt by attempt"},
 
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/work", "listWorkItems", "Work Items"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/work", "createWorkItem", "Create a Work Item"},

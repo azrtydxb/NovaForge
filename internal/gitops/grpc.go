@@ -20,6 +20,7 @@ import (
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	"github.com/novaforge/novaforge/internal/authz"
 	"github.com/novaforge/novaforge/internal/events"
+	"github.com/novaforge/novaforge/internal/webhooks"
 )
 
 // defaultCommitLimit caps ListCommits when the caller does not specify one.
@@ -74,6 +75,11 @@ type Server struct {
 	// so rather than answering Unimplemented — "not available in this
 	// deployment" and "this platform has no releases" are different answers.
 	Releases *ReleaseStore
+	// Hooks, when set, backs the webhook RPCs (see grpc_webhooks.go). Nil means
+	// this deployment has no webhook support, and those RPCs say so rather than
+	// answering with an empty list — which would read as "this repository has no
+	// hooks" and hide a deployment that cannot deliver any.
+	Hooks *webhooks.Store
 
 	repoDeleted RepoDeletedPublisher
 }
