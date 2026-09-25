@@ -48,6 +48,10 @@ const (
 	GitService_DeleteRelease_FullMethodName                     = "/novaforge.git.v1.GitService/DeleteRelease"
 	GitService_UploadReleaseAsset_FullMethodName                = "/novaforge.git.v1.GitService/UploadReleaseAsset"
 	GitService_DownloadReleaseAsset_FullMethodName              = "/novaforge.git.v1.GitService/DownloadReleaseAsset"
+	GitService_ImportRepo_FullMethodName                        = "/novaforge.git.v1.GitService/ImportRepo"
+	GitService_GetMirror_FullMethodName                         = "/novaforge.git.v1.GitService/GetMirror"
+	GitService_SetMirror_FullMethodName                         = "/novaforge.git.v1.GitService/SetMirror"
+	GitService_DeleteMirror_FullMethodName                      = "/novaforge.git.v1.GitService/DeleteMirror"
 )
 
 // GitServiceClient is the client API for GitService service.
@@ -96,6 +100,10 @@ type GitServiceClient interface {
 	// serving concurrent downloads.
 	UploadReleaseAsset(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadReleaseAssetRequest, UploadReleaseAssetResponse], error)
 	DownloadReleaseAsset(ctx context.Context, in *DownloadReleaseAssetRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DownloadReleaseAssetResponse], error)
+	ImportRepo(ctx context.Context, in *ImportRepoRequest, opts ...grpc.CallOption) (*ImportRepoResponse, error)
+	GetMirror(ctx context.Context, in *GetMirrorRequest, opts ...grpc.CallOption) (*GetMirrorResponse, error)
+	SetMirror(ctx context.Context, in *SetMirrorRequest, opts ...grpc.CallOption) (*SetMirrorResponse, error)
+	DeleteMirror(ctx context.Context, in *DeleteMirrorRequest, opts ...grpc.CallOption) (*DeleteMirrorResponse, error)
 }
 
 type gitServiceClient struct {
@@ -408,6 +416,46 @@ func (c *gitServiceClient) DownloadReleaseAsset(ctx context.Context, in *Downloa
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type GitService_DownloadReleaseAssetClient = grpc.ServerStreamingClient[DownloadReleaseAssetResponse]
 
+func (c *gitServiceClient) ImportRepo(ctx context.Context, in *ImportRepoRequest, opts ...grpc.CallOption) (*ImportRepoResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ImportRepoResponse)
+	err := c.cc.Invoke(ctx, GitService_ImportRepo_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gitServiceClient) GetMirror(ctx context.Context, in *GetMirrorRequest, opts ...grpc.CallOption) (*GetMirrorResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetMirrorResponse)
+	err := c.cc.Invoke(ctx, GitService_GetMirror_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gitServiceClient) SetMirror(ctx context.Context, in *SetMirrorRequest, opts ...grpc.CallOption) (*SetMirrorResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetMirrorResponse)
+	err := c.cc.Invoke(ctx, GitService_SetMirror_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gitServiceClient) DeleteMirror(ctx context.Context, in *DeleteMirrorRequest, opts ...grpc.CallOption) (*DeleteMirrorResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteMirrorResponse)
+	err := c.cc.Invoke(ctx, GitService_DeleteMirror_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // GitServiceServer is the server API for GitService service.
 // All implementations should embed UnimplementedGitServiceServer
 // for forward compatibility.
@@ -454,6 +502,10 @@ type GitServiceServer interface {
 	// serving concurrent downloads.
 	UploadReleaseAsset(grpc.ClientStreamingServer[UploadReleaseAssetRequest, UploadReleaseAssetResponse]) error
 	DownloadReleaseAsset(*DownloadReleaseAssetRequest, grpc.ServerStreamingServer[DownloadReleaseAssetResponse]) error
+	ImportRepo(context.Context, *ImportRepoRequest) (*ImportRepoResponse, error)
+	GetMirror(context.Context, *GetMirrorRequest) (*GetMirrorResponse, error)
+	SetMirror(context.Context, *SetMirrorRequest) (*SetMirrorResponse, error)
+	DeleteMirror(context.Context, *DeleteMirrorRequest) (*DeleteMirrorResponse, error)
 }
 
 // UnimplementedGitServiceServer should be embedded to have
@@ -549,6 +601,18 @@ func (UnimplementedGitServiceServer) UploadReleaseAsset(grpc.ClientStreamingServ
 }
 func (UnimplementedGitServiceServer) DownloadReleaseAsset(*DownloadReleaseAssetRequest, grpc.ServerStreamingServer[DownloadReleaseAssetResponse]) error {
 	return status.Error(codes.Unimplemented, "method DownloadReleaseAsset not implemented")
+}
+func (UnimplementedGitServiceServer) ImportRepo(context.Context, *ImportRepoRequest) (*ImportRepoResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ImportRepo not implemented")
+}
+func (UnimplementedGitServiceServer) GetMirror(context.Context, *GetMirrorRequest) (*GetMirrorResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetMirror not implemented")
+}
+func (UnimplementedGitServiceServer) SetMirror(context.Context, *SetMirrorRequest) (*SetMirrorResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetMirror not implemented")
+}
+func (UnimplementedGitServiceServer) DeleteMirror(context.Context, *DeleteMirrorRequest) (*DeleteMirrorResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteMirror not implemented")
 }
 func (UnimplementedGitServiceServer) testEmbeddedByValue() {}
 
@@ -1074,6 +1138,78 @@ func _GitService_DownloadReleaseAsset_Handler(srv interface{}, stream grpc.Serve
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type GitService_DownloadReleaseAssetServer = grpc.ServerStreamingServer[DownloadReleaseAssetResponse]
 
+func _GitService_ImportRepo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ImportRepoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GitServiceServer).ImportRepo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GitService_ImportRepo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GitServiceServer).ImportRepo(ctx, req.(*ImportRepoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GitService_GetMirror_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetMirrorRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GitServiceServer).GetMirror(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GitService_GetMirror_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GitServiceServer).GetMirror(ctx, req.(*GetMirrorRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GitService_SetMirror_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetMirrorRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GitServiceServer).SetMirror(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GitService_SetMirror_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GitServiceServer).SetMirror(ctx, req.(*SetMirrorRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GitService_DeleteMirror_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteMirrorRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GitServiceServer).DeleteMirror(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GitService_DeleteMirror_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GitServiceServer).DeleteMirror(ctx, req.(*DeleteMirrorRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // GitService_ServiceDesc is the grpc.ServiceDesc for GitService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1188,6 +1324,22 @@ var GitService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteRelease",
 			Handler:    _GitService_DeleteRelease_Handler,
+		},
+		{
+			MethodName: "ImportRepo",
+			Handler:    _GitService_ImportRepo_Handler,
+		},
+		{
+			MethodName: "GetMirror",
+			Handler:    _GitService_GetMirror_Handler,
+		},
+		{
+			MethodName: "SetMirror",
+			Handler:    _GitService_SetMirror_Handler,
+		},
+		{
+			MethodName: "DeleteMirror",
+			Handler:    _GitService_DeleteMirror_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

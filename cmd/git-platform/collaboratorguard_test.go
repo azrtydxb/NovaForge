@@ -40,7 +40,8 @@ func TestOutsideCollaboratorReachesOnlyItsRepository(t *testing.T) {
 	caps := newCapFunc(p.Grants,
 		func(context.Context, authz.Scope, uuid.UUID, string, []string) error { return nil },
 		newArchiveGuard(p.Pool),
-		newCollaboratorGuard(repoIDResolver(p.Pool)))
+		newCollaboratorGuard(repoIDResolver(p.Pool)),
+		gitops.NewMirrorCapFunc(p.Pool))
 	httpSrv := httptest.NewServer(gitops.NewHTTPHandler(p.GitRoot,
 		gitops.NewCredentialAuthFunc(p.Identity, platformtest.HMACSecret, p.Collaborators), caps))
 	defer httpSrv.Close()
