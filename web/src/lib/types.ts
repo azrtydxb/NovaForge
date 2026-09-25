@@ -20,6 +20,18 @@ export interface OrgMember {
   role: string;
 }
 
+/** A named group inside an organization carrying a role. The role is the team's
+ * own and bounds its members: a team granting "member" grants that much even to an
+ * owner, because a narrower grant that widened to its strongest member would not
+ * be narrower. */
+export interface Team {
+  id: string;
+  org_id: string;
+  name: string;
+  role: string;
+  member_ids: string[];
+}
+
 export interface Repo {
   id: string;
   name: string;

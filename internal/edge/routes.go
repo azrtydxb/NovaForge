@@ -37,6 +37,11 @@ func Routes() []Route {
 		{http.MethodDelete, "/api/v1/orgs/{org}", "deleteOrg", "Delete an organization and everything held for it (owner only, name confirmed)"},
 		{http.MethodGet, "/api/v1/orgs/{org}/members", "listOrgMembers", "Organization members"},
 		{http.MethodPost, "/api/v1/orgs/{org}/members", "addOrgMember", "Add an organization member"},
+		{http.MethodGet, "/api/v1/orgs/{org}/teams", "listTeams", "Teams in an organization, with their members"},
+		{http.MethodPost, "/api/v1/orgs/{org}/teams", "createTeam", "Create a team"},
+		{http.MethodDelete, "/api/v1/orgs/{org}/teams/{team}", "deleteTeam", "Delete a team and its memberships"},
+		{http.MethodPost, "/api/v1/orgs/{org}/teams/{team}/members", "addTeamMember", "Add an organization member to a team"},
+		{http.MethodDelete, "/api/v1/orgs/{org}/teams/{team}/members/{user}", "removeTeamMember", "Remove someone from a team"},
 
 		{http.MethodGet, "/api/v1/orgs/{org}/repos", "listRepos", "Repositories in an organization"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos", "createRepo", "Create a repository"},

@@ -324,6 +324,85 @@ func addIdentityHandlers(h map[string]http.HandlerFunc, c identityv1.IdentitySer
 		WriteJSON(w, http.StatusOK, map[string]any{"enabled": resp.GetEnabled()})
 	}
 
+	h["listTeams"] = func(w http.ResponseWriter, r *http.Request) {
+		resp, err := c.ListTeams(r.Context(), &identityv1.ListTeamsRequest{})
+		if err != nil {
+			WriteError(w, StatusFromGRPC(err), err)
+			return
+		}
+		out := make([]map[string]any, 0, len(resp.GetTeams()))
+		for _, t := range resp.GetTeams() {
+			out = append(out, map[string]any{
+				"id": t.GetId(), "org_id": t.GetOrgId(),
+				"name": t.GetName(), "role": t.GetRole(),
+				// Always a list, never absent, so a screen renders "no members"
+				// rather than treating a missing field as unknown.
+				"member_ids": append([]string{}, t.GetMemberIds()...),
+			})
+		}
+		WriteJSON(w, http.StatusOK, map[string]any{"teams": out})
+	}
+
+	h["createTeam"] = func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Name string `json:"name"`
+			Role string `json:"role"`
+		}
+		if err := decode(r, &req); err != nil {
+			WriteError(w, http.StatusBadRequest, err)
+			return
+		}
+		resp, err := c.CreateTeam(r.Context(), &identityv1.CreateTeamRequest{Name: req.Name, Role: req.Role})
+		if err != nil {
+			WriteError(w, StatusFromGRPC(err), err)
+			return
+		}
+		t := resp.GetTeam()
+		WriteJSON(w, http.StatusCreated, map[string]any{
+			"id": t.GetId(), "org_id": t.GetOrgId(), "name": t.GetName(), "role": t.GetRole(),
+			"member_ids": []string{},
+		})
+	}
+
+	h["deleteTeam"] = func(w http.ResponseWriter, r *http.Request) {
+		if _, err := c.DeleteTeam(r.Context(), &identityv1.DeleteTeamRequest{Id: chi.URLParam(r, "team")}); err != nil {
+			WriteError(w, StatusFromGRPC(err), err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+	}
+
+	h["addTeamMember"] = func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			// A username or a user id; Identity resolves either, because an
+			// interface carries names.
+			User string `json:"user"`
+		}
+		if err := decode(r, &req); err != nil {
+			WriteError(w, http.StatusBadRequest, err)
+			return
+		}
+		_, err := c.AddTeamMember(r.Context(), &identityv1.AddTeamMemberRequest{
+			TeamId: chi.URLParam(r, "team"), User: req.User,
+		})
+		if err != nil {
+			WriteError(w, StatusFromGRPC(err), err)
+			return
+		}
+		WriteJSON(w, http.StatusCreated, map[string]string{"status": "added"})
+	}
+
+	h["removeTeamMember"] = func(w http.ResponseWriter, r *http.Request) {
+		_, err := c.RemoveTeamMember(r.Context(), &identityv1.RemoveTeamMemberRequest{
+			TeamId: chi.URLParam(r, "team"), User: chi.URLParam(r, "user"),
+		})
+		if err != nil {
+			WriteError(w, StatusFromGRPC(err), err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, map[string]string{"status": "removed"})
+	}
+
 	h["addOrgMember"] = func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			UserID   string `json:"user_id"`
