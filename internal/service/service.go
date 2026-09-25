@@ -34,6 +34,16 @@ type Config struct {
 	HealthPort  int
 	GitDataDir  string
 
+	// GitTLSCertFile and GitTLSKeyFile are the PEM keypair git-platform serves
+	// the smart-HTTP transport with on its TLS port. cert-manager issues them
+	// and the kubelet mounts them read-only, so they are paths and not bytes:
+	// a renewed certificate must reach the process without a new Deployment.
+	// Both empty leaves the TLS port unbound — HTTPS is not enabled merely by
+	// rendering the chart — and one without the other is a misconfiguration
+	// git-platform refuses to start with rather than quietly serving plaintext.
+	GitTLSCertFile string
+	GitTLSKeyFile  string
+
 	IdentityAddr string
 	GitAddr      string
 	WorkAddr     string
@@ -101,6 +111,8 @@ func LoadConfig() Config {
 		SSHPort:                    envInt("SSH_PORT", 0),
 		HealthPort:                 envInt("HEALTH_PORT", 8090),
 		GitDataDir:                 env("GIT_DATA_DIR", "/data/repos"),
+		GitTLSCertFile:             env("NF_GIT_TLS_CERT_FILE", ""),
+		GitTLSKeyFile:              env("NF_GIT_TLS_KEY_FILE", ""),
 		IdentityAddr:               env("IDENTITY_ADDR", ""),
 		GitAddr:                    env("GIT_ADDR", ""),
 		WorkAddr:                   env("WORK_ADDR", ""),

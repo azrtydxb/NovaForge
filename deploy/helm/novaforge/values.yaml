@@ -105,6 +105,27 @@ operatorConfigs:
   mcpHTTP: { secretName: "", configKey: config.json }
   reviews: { secretName: "", configKey: config.json }
 
+# The certificate the git transport serves (templates/certificate.tpl). A clone
+# or push over the plaintext port sends its credential in the clear, so anything
+# outside the cluster must use the TLS port; the plaintext one stays bound for
+# in-cluster callers.
+#
+# cert-manager issues it. `issuer` names a ClusterIssuer the cluster already has
+# (cluster-ca here) rather than a self-signed one, so a client can verify the
+# chain against one CA instead of pinning a certificate per release.
+gitTLS:
+  enabled: true
+  issuer:
+    name: cluster-ca
+    kind: ClusterIssuer
+  # A client outside the cluster reaches git-platform at its LoadBalancer
+  # address, and an address is not covered by a DNS SAN. Either list the
+  # address here, or reach it by one of the certificate's names — the deploy
+  # e2e does the latter with git's http.curloptResolve, which needs nothing
+  # to be known at install time.
+  ipAddresses: []
+  extraDNSNames: []
+
 # Only services whose binary exists are listed. Entries are added as each
 # service's cmd/ package lands, so a deploy never references a missing image.
 services:
@@ -114,6 +135,10 @@ services:
   git-platform:
     grpcPort: 9092
     httpPort: 8081
+    # The TLS port for the git transport. It is not free to change: the binary
+    # serves gitops.DefaultHTTPSPort, and internal/gitops holds this value to
+    # it. See gitTLS below for the certificate it serves.
+    httpsPort: 8443
     sshPort: 2222
     schema: gitplatform
     needsRepos: true

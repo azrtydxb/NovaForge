@@ -192,7 +192,27 @@ func main() {
 	}
 
 	var wg sync.WaitGroup
-	errCh := make(chan error, 2)
+	errCh := make(chan error, 3)
+
+	// --- TLS smart-HTTP ---
+	// A clone or push over the plaintext port sends its credential in the clear,
+	// which is acceptable only between pods. The TLS port is the one published
+	// outside the cluster, and the plaintext one stays bound so nothing already
+	// dialling it in-cluster breaks. Both files or neither: one without the
+	// other means an operator asked for TLS and would otherwise get a service
+	// that silently serves only plaintext, which is the failure to avoid.
+	var tlsSrv *http.Server
+	switch {
+	case cfg.GitTLSCertFile != "" && cfg.GitTLSKeyFile != "":
+		tlsSrv, err = gitops.NewTLSServer(httpHandler, cfg.GitTLSCertFile, cfg.GitTLSKeyFile)
+		if err != nil {
+			log.Fatalf("git-platform: tls keypair: %v", err)
+		}
+	case cfg.GitTLSCertFile != "" || cfg.GitTLSKeyFile != "":
+		log.Fatal("git-platform: NF_GIT_TLS_CERT_FILE and NF_GIT_TLS_KEY_FILE must be set together")
+	default:
+		log.Printf("git-platform: NF_GIT_TLS_CERT_FILE is unset; the git transport is served in plaintext only")
+	}
 
 	httpListener, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.HTTPPort))
 	if err != nil {
@@ -207,6 +227,25 @@ func main() {
 			errCh <- fmt.Errorf("smart-http server: %w", err)
 		}
 	}()
+
+	var tlsListener net.Listener
+	if tlsSrv != nil {
+		tlsListener, err = net.Listen("tcp", fmt.Sprintf(":%d", gitops.DefaultHTTPSPort))
+		if err != nil {
+			log.Fatalf("git-platform: listen https: %v", err)
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			log.Printf("git-platform: smart-http listening on :%d over tls", gitops.DefaultHTTPSPort)
+			// The keypair is already bound to the server, so ServeTLS is given
+			// no paths; passing them again would reload them once and lose the
+			// per-handshake reload a renewed certificate needs.
+			if err := tlsSrv.ServeTLS(tlsListener, "", ""); err != nil {
+				errCh <- fmt.Errorf("smart-http tls server: %w", err)
+			}
+		}()
+	}
 
 	sshListener, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.SSHPort))
 	if err != nil {
@@ -232,6 +271,9 @@ func main() {
 	}
 
 	_ = httpListener.Close()
+	if tlsListener != nil {
+		_ = tlsListener.Close()
+	}
 	_ = sshListener.Close()
 	wg.Wait()
 }

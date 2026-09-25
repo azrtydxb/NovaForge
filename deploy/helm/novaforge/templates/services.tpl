@@ -24,6 +24,12 @@ copied: a fix to the probe or the env wiring lands in one place.
 {{- if and (eq $name "gates") $svc.analysisImage }}
 {{- if not (regexMatch "^[^[:space:]@]+@sha256:[a-f0-9]{64}$" $svc.analysisImage) }}{{ fail "gates analysisImage must be digest-pinned" }}{{ end }}
 {{- end }}
+{{- /*
+Only git-platform serves the git transport, so only it mounts the certificate
+cert-manager issues in certificate.tpl. The mount is what makes the TLS listener
+exist at all: git-platform binds its TLS port only when both files are named.
+*/ -}}
+{{- $gitTLS := and (eq $name "git-platform") $.Values.gitTLS.enabled $svc.httpsPort }}
 {{- $configs := dict }}
 {{- $mounts := dict }}
 {{- range $key, $binding := $bindings }}
@@ -54,9 +60,10 @@ spec:
         {{- include "novaforge.labels" $ | nindent 8 }}
         app.kubernetes.io/component: {{ $name }}
     spec:
-      {{- if len $mounts }}
+      {{- if or (len $mounts) $gitTLS }}
       # Distroless consumers run as 65532; group-readable Secrets must not
-      # become root-only just because a feature was enabled.
+      # become root-only just because a feature was enabled. The TLS keypair is
+      # one of them: unreadable, and git-platform refuses to start.
       securityContext:
         fsGroup: 65532
       {{- end }}
@@ -99,6 +106,14 @@ spec:
             {{- end }}
             - name: GIT_DATA_DIR
               value: /data/repos
+            {{- if $gitTLS }}
+            # Paths, not bytes: cert-manager renews in place and the kubelet
+            # swaps the files, which git-platform re-reads per handshake.
+            - name: NF_GIT_TLS_CERT_FILE
+              value: /etc/novaforge/git-tls/tls.crt
+            - name: NF_GIT_TLS_KEY_FILE
+              value: /etc/novaforge/git-tls/tls.key
+            {{- end }}
             {{- /*
             Peer addresses use the canonical names the services read, not names
             derived from the Helm keys: the deployment name is work-reviews but
@@ -160,6 +175,10 @@ spec:
             - name: http
               containerPort: {{ $svc.httpPort }}
             {{- end }}
+            {{- if $gitTLS }}
+            - name: https
+              containerPort: {{ $svc.httpsPort }}
+            {{- end }}
             {{- if $svc.sshPort }}
             - name: ssh
               containerPort: {{ $svc.sshPort }}
@@ -173,11 +192,16 @@ spec:
             initialDelaySeconds: 20
             periodSeconds: 20
           resources: {{- toYaml ($svc.resources | default $.Values.resources) | nindent 12 }}
-          {{- if or $svc.needsRepos (len $mounts) }}
+          {{- if or $svc.needsRepos (len $mounts) $gitTLS }}
           volumeMounts:
             {{- if $svc.needsRepos }}
             - name: repos
               mountPath: /data/repos
+            {{- end }}
+            {{- if $gitTLS }}
+            - name: git-tls
+              mountPath: /etc/novaforge/git-tls
+              readOnly: true
             {{- end }}
             {{- range $key, $cfg := $mounts }}
             - name: operator-{{ lower $key }}
@@ -185,12 +209,21 @@ spec:
               readOnly: true
             {{- end }}
           {{- end }}
-      {{- if or $svc.needsRepos (len $mounts) }}
+      {{- if or $svc.needsRepos (len $mounts) $gitTLS }}
       volumes:
         {{- if $svc.needsRepos }}
         - name: repos
           persistentVolumeClaim:
             claimName: {{ $.Release.Name }}-repos
+        {{- end }}
+        {{- if $gitTLS }}
+        # The Secret certificate.tpl's Certificate writes. A directory mount,
+        # not subPath items: a subPath does not see the kubelet's update when
+        # cert-manager renews, and the pod would serve the old keypair.
+        - name: git-tls
+          secret:
+            secretName: {{ $.Release.Name }}-git-platform-tls
+            defaultMode: 0440
         {{- end }}
         {{- range $key, $cfg := $mounts }}
         - name: operator-{{ lower $key }}
@@ -225,6 +258,11 @@ spec:
     - name: http
       port: {{ $svc.httpPort }}
       targetPort: http
+    {{- end }}
+    {{- if $gitTLS }}
+    - name: https
+      port: {{ $svc.httpsPort }}
+      targetPort: https
     {{- end }}
     {{- if $svc.sshPort }}
     - name: ssh
