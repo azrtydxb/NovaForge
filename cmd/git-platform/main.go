@@ -165,6 +165,11 @@ func main() {
 	}
 	grpcServer.Grants = grants
 
+	// lfsStore stays nil without object storage, and the LFS endpoints then
+	// answer "not available in this deployment" rather than 404ing as if the
+	// protocol were unheard of — the distinction a clone's error message needs.
+	var lfsStore *gitops.LFSStore
+
 	// Releases carry uploaded files, which live in object storage next to CI
 	// artifacts. A deployment without S3 configured still starts — releases
 	// themselves are rows — and the release RPCs then say object storage is
@@ -183,6 +188,12 @@ func main() {
 			log.Fatalf("git-platform: connect object storage: %v", err)
 		}
 		grpcServer.Releases = gitops.NewReleaseStore(pool, cfg.GitDataDir, blobs)
+		// LFS objects share the bucket with release assets, and for the same
+		// reason: both are published content whose whole value is still being
+		// there in a year, unlike a CI artifact. The per-object limit is passed
+		// rather than defaulted here — gitops.NewLFSStore holds the fallback, so
+		// an unset variable is a bounded deployment, not an unbounded one.
+		lfsStore = gitops.NewLFSStore(pool, blobs, int64(cfg.LFSMaxObjectBytes))
 	}
 
 	// Both interceptors, not just the unary one. The release asset RPCs stream,
@@ -230,8 +241,11 @@ func main() {
 	grpcServer.Collaborators = collaborators
 	// A grant may name a person by username, which only Identity can resolve.
 	grpcServer.Users = gitops.NewIdentityUserResolver(identityClient)
-	httpHandler := gitops.NewHTTPHandler(cfg.GitDataDir,
-		gitops.NewCredentialAuthFunc(identityClient, cfg.HMACSecret, collaborators), capFunc)
+	// LFS is served by this same handler, with this same AuthFunc and capFunc:
+	// an LFS object must be reachable exactly when the repository is, and a
+	// second handler with its own authenticator is how that stops being true.
+	httpHandler := gitops.NewHTTPHandlerWithLFS(cfg.GitDataDir,
+		gitops.NewCredentialAuthFunc(identityClient, cfg.HMACSecret, collaborators), capFunc, lfsStore)
 
 	// --- SSH ---
 	hostKey, ephemeral, err := loadOrGenerateHostKey()

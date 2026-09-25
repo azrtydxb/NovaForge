@@ -126,6 +126,20 @@ gitTLS:
   ipAddresses: []
   extraDNSNames: []
 
+# Git LFS. The pointer is committed to the repository and the payload goes to the
+# deployment's object storage, so LFS is available exactly when S3_ENDPOINT is
+# configured and git-platform says so on the batch endpoint when it is not.
+lfs:
+  # The largest single LFS object this deployment accepts, in bytes (5 GiB). An
+  # upload declaring more is refused at the batch call, before a byte is sent,
+  # and an upload that understates its length is cut off at the same limit.
+  #
+  # It is deliberately not optional: one unbounded push fills the object storage
+  # every organization shares. Removing this value does not lift the limit —
+  # internal/gitops falls back to the same 5 GiB — but it does break
+  # internal/service's chart test, which is what keeps the variable in the pod.
+  maxObjectBytes: 5368709120
+
 # Only services whose binary exists are listed. Entries are added as each
 # service's cmd/ package lands, so a deploy never references a missing image.
 services:

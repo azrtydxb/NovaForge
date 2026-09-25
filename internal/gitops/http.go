@@ -33,6 +33,11 @@ type httpHandler struct {
 	root string
 	auth AuthFunc
 	caps CapFunc
+	// lfs, when non-nil, serves the Git LFS batch API and object transfer under
+	// the same paths, the same auth and the same caps as the git protocol (see
+	// lfs.go). Nil means this deployment has no object storage, and the LFS
+	// endpoints then say so rather than 404ing as if LFS were unheard of.
+	lfs *LFSStore
 }
 
 // NewHTTPHandler returns an http.Handler serving the git smart-HTTP protocol
@@ -40,7 +45,17 @@ type httpHandler struct {
 // via auth and, for git-receive-pack, every requested ref update is checked
 // via caps before the git process starts.
 func NewHTTPHandler(root string, auth AuthFunc, caps CapFunc) http.Handler {
-	return &httpHandler{root: root, auth: auth, caps: caps}
+	return NewHTTPHandlerWithLFS(root, auth, caps, nil)
+}
+
+// NewHTTPHandlerWithLFS is NewHTTPHandler with Git LFS served alongside.
+//
+// LFS is wired into this handler rather than mounted as its own service on
+// purpose: it must authenticate and authorize through exactly the credential
+// path the git transport uses, or it becomes a way around repository access. A
+// nil lfs leaves the LFS endpoints answering "not available in this deployment".
+func NewHTTPHandlerWithLFS(root string, auth AuthFunc, caps CapFunc, lfs *LFSStore) http.Handler {
+	return &httpHandler{root: root, auth: auth, caps: caps, lfs: lfs}
 }
 
 // parsedPath is the {org}/{repo}.git/{op} decomposition of a request path.
@@ -108,6 +123,14 @@ func (h *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.rpc(w, r, scope, pp, path, "git-upload-pack")
 	case pp.op == "git-receive-pack" && r.Method == http.MethodPost:
 		h.rpc(w, r, scope, pp, path, "git-receive-pack")
+	// Git LFS rides here rather than on a service of its own, so an LFS object
+	// is reachable exactly when the repository is: same AuthFunc above, same
+	// CapFunc inside. The batch case comes first because "batch" would otherwise
+	// be read as an object id by the transfer case below.
+	case pp.op == lfsBatchPath && r.Method == http.MethodPost:
+		h.lfsBatch(w, r, scope, pp)
+	case strings.HasPrefix(pp.op, lfsObjectsPath) && (r.Method == http.MethodGet || r.Method == http.MethodPut):
+		h.lfsTransfer(w, r, scope, pp)
 	default:
 		http.Error(w, "not found", http.StatusNotFound)
 	}

@@ -31,6 +31,7 @@ func TestLoadConfigPopulatesEveryField(t *testing.T) {
 		"EMBED_ENDPOINT":  "http://m/v1", "EMBED_MODEL": "e",
 		"AUTO_MERGE_ENABLED": "true", "AUTO_MERGE_MAX_FILES_CHANGED": "7",
 		"MAINTENANCE_INTERVAL_HOURS":       "9",
+		"NF_LFS_MAX_OBJECT_BYTES":          "5368709120",
 		"NF_GATE_ANALYSIS_IMAGE":           "registry.example/analysis@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		"NF_OPENBAO_CONFIG_FILE":           "/etc/novaforge/openbao.json",
 		"NF_MCP_HTTP_CONFIG_FILE":          "/etc/novaforge/mcp.json",
