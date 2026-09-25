@@ -43,6 +43,7 @@ export function Runs() {
   });
 
   const loading = queries.some((q) => q.isLoading);
+  const listError = queries.find((q) => q.error)?.error;
   const rows = queries
     .flatMap((q, i) =>
       (q.data?.runs ?? []).map((run) => ({ run, repo: repos[i]!.name })),
@@ -107,6 +108,8 @@ export function Runs() {
         </PanelHead>
         {loading ? (
           <Loading />
+        ) : listError ? (
+          <Failed error={listError} />
         ) : rows.length === 0 ? (
           <Empty>
             No Engineering Runs in this scope.
@@ -197,10 +200,8 @@ function NewRun({
         target_ref: v.target,
         work_item: v.work_item?.trim() || undefined,
       }),
-    onSuccess: (run) => {
-      qc.invalidateQueries({ queryKey: ["runs"] });
-      onClose();
-      navigate(`/runs/${enc(repo.name)}/${run.number}`);
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["runs"] });
     },
   });
 
@@ -274,7 +275,14 @@ function NewRun({
       ]}
       busy={create.isPending}
       error={create.error}
-      onSubmit={(v) => create.mutate(v)}
+      onSubmit={(v) =>
+        create.mutate(v, {
+          onSuccess: (run) => {
+            onClose();
+            navigate(`/runs/${enc(repo.name)}/${run.number}`);
+          },
+        })
+      }
       onClose={onClose}
     />
   );

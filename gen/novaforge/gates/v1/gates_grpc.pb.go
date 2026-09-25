@@ -19,22 +19,24 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	GatesService_Evaluate_FullMethodName            = "/novaforge.gates.v1.GatesService/Evaluate"
-	GatesService_MayMerge_FullMethodName            = "/novaforge.gates.v1.GatesService/MayMerge"
-	GatesService_ListEvaluations_FullMethodName     = "/novaforge.gates.v1.GatesService/ListEvaluations"
-	GatesService_ListCoverageHistory_FullMethodName = "/novaforge.gates.v1.GatesService/ListCoverageHistory"
-	GatesService_RequestApproval_FullMethodName     = "/novaforge.gates.v1.GatesService/RequestApproval"
-	GatesService_ResolveApproval_FullMethodName     = "/novaforge.gates.v1.GatesService/ResolveApproval"
-	GatesService_IssueLease_FullMethodName          = "/novaforge.gates.v1.GatesService/IssueLease"
-	GatesService_RedeemLease_FullMethodName         = "/novaforge.gates.v1.GatesService/RedeemLease"
-	GatesService_ListSecrets_FullMethodName         = "/novaforge.gates.v1.GatesService/ListSecrets"
-	GatesService_ListLeases_FullMethodName          = "/novaforge.gates.v1.GatesService/ListLeases"
-	GatesService_ListApprovals_FullMethodName       = "/novaforge.gates.v1.GatesService/ListApprovals"
-	GatesService_PutSecret_FullMethodName           = "/novaforge.gates.v1.GatesService/PutSecret"
-	GatesService_IssueJobLease_FullMethodName       = "/novaforge.gates.v1.GatesService/IssueJobLease"
-	GatesService_RevokeLease_FullMethodName         = "/novaforge.gates.v1.GatesService/RevokeLease"
-	GatesService_ListGateConfig_FullMethodName      = "/novaforge.gates.v1.GatesService/ListGateConfig"
-	GatesService_ProposeGateChange_FullMethodName   = "/novaforge.gates.v1.GatesService/ProposeGateChange"
+	GatesService_Evaluate_FullMethodName                   = "/novaforge.gates.v1.GatesService/Evaluate"
+	GatesService_MayMerge_FullMethodName                   = "/novaforge.gates.v1.GatesService/MayMerge"
+	GatesService_ListEvaluations_FullMethodName            = "/novaforge.gates.v1.GatesService/ListEvaluations"
+	GatesService_ListCoverageHistory_FullMethodName        = "/novaforge.gates.v1.GatesService/ListCoverageHistory"
+	GatesService_RequestApproval_FullMethodName            = "/novaforge.gates.v1.GatesService/RequestApproval"
+	GatesService_ResolveApproval_FullMethodName            = "/novaforge.gates.v1.GatesService/ResolveApproval"
+	GatesService_IssueLease_FullMethodName                 = "/novaforge.gates.v1.GatesService/IssueLease"
+	GatesService_RedeemLease_FullMethodName                = "/novaforge.gates.v1.GatesService/RedeemLease"
+	GatesService_ListSecrets_FullMethodName                = "/novaforge.gates.v1.GatesService/ListSecrets"
+	GatesService_ListLeases_FullMethodName                 = "/novaforge.gates.v1.GatesService/ListLeases"
+	GatesService_ListApprovals_FullMethodName              = "/novaforge.gates.v1.GatesService/ListApprovals"
+	GatesService_PutSecret_FullMethodName                  = "/novaforge.gates.v1.GatesService/PutSecret"
+	GatesService_IssueJobLease_FullMethodName              = "/novaforge.gates.v1.GatesService/IssueJobLease"
+	GatesService_RevokeLease_FullMethodName                = "/novaforge.gates.v1.GatesService/RevokeLease"
+	GatesService_RevokeRunLeases_FullMethodName            = "/novaforge.gates.v1.GatesService/RevokeRunLeases"
+	GatesService_RetryCredentialRevocations_FullMethodName = "/novaforge.gates.v1.GatesService/RetryCredentialRevocations"
+	GatesService_ListGateConfig_FullMethodName             = "/novaforge.gates.v1.GatesService/ListGateConfig"
+	GatesService_ProposeGateChange_FullMethodName          = "/novaforge.gates.v1.GatesService/ProposeGateChange"
 )
 
 // GatesServiceClient is the client API for GatesService service.
@@ -60,6 +62,8 @@ type GatesServiceClient interface {
 	PutSecret(ctx context.Context, in *PutSecretRequest, opts ...grpc.CallOption) (*PutSecretResponse, error)
 	IssueJobLease(ctx context.Context, in *IssueJobLeaseRequest, opts ...grpc.CallOption) (*IssueJobLeaseResponse, error)
 	RevokeLease(ctx context.Context, in *RevokeLeaseRequest, opts ...grpc.CallOption) (*RevokeLeaseResponse, error)
+	RevokeRunLeases(ctx context.Context, in *RevokeRunLeasesRequest, opts ...grpc.CallOption) (*RevokeRunLeasesResponse, error)
+	RetryCredentialRevocations(ctx context.Context, in *RetryCredentialRevocationsRequest, opts ...grpc.CallOption) (*RetryCredentialRevocationsResponse, error)
 	ListGateConfig(ctx context.Context, in *ListGateConfigRequest, opts ...grpc.CallOption) (*ListGateConfigResponse, error)
 	ProposeGateChange(ctx context.Context, in *ProposeGateChangeRequest, opts ...grpc.CallOption) (*ProposeGateChangeResponse, error)
 }
@@ -212,6 +216,26 @@ func (c *gatesServiceClient) RevokeLease(ctx context.Context, in *RevokeLeaseReq
 	return out, nil
 }
 
+func (c *gatesServiceClient) RevokeRunLeases(ctx context.Context, in *RevokeRunLeasesRequest, opts ...grpc.CallOption) (*RevokeRunLeasesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RevokeRunLeasesResponse)
+	err := c.cc.Invoke(ctx, GatesService_RevokeRunLeases_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gatesServiceClient) RetryCredentialRevocations(ctx context.Context, in *RetryCredentialRevocationsRequest, opts ...grpc.CallOption) (*RetryCredentialRevocationsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RetryCredentialRevocationsResponse)
+	err := c.cc.Invoke(ctx, GatesService_RetryCredentialRevocations_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *gatesServiceClient) ListGateConfig(ctx context.Context, in *ListGateConfigRequest, opts ...grpc.CallOption) (*ListGateConfigResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListGateConfigResponse)
@@ -255,6 +279,8 @@ type GatesServiceServer interface {
 	PutSecret(context.Context, *PutSecretRequest) (*PutSecretResponse, error)
 	IssueJobLease(context.Context, *IssueJobLeaseRequest) (*IssueJobLeaseResponse, error)
 	RevokeLease(context.Context, *RevokeLeaseRequest) (*RevokeLeaseResponse, error)
+	RevokeRunLeases(context.Context, *RevokeRunLeasesRequest) (*RevokeRunLeasesResponse, error)
+	RetryCredentialRevocations(context.Context, *RetryCredentialRevocationsRequest) (*RetryCredentialRevocationsResponse, error)
 	ListGateConfig(context.Context, *ListGateConfigRequest) (*ListGateConfigResponse, error)
 	ProposeGateChange(context.Context, *ProposeGateChangeRequest) (*ProposeGateChangeResponse, error)
 }
@@ -307,6 +333,12 @@ func (UnimplementedGatesServiceServer) IssueJobLease(context.Context, *IssueJobL
 }
 func (UnimplementedGatesServiceServer) RevokeLease(context.Context, *RevokeLeaseRequest) (*RevokeLeaseResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RevokeLease not implemented")
+}
+func (UnimplementedGatesServiceServer) RevokeRunLeases(context.Context, *RevokeRunLeasesRequest) (*RevokeRunLeasesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RevokeRunLeases not implemented")
+}
+func (UnimplementedGatesServiceServer) RetryCredentialRevocations(context.Context, *RetryCredentialRevocationsRequest) (*RetryCredentialRevocationsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RetryCredentialRevocations not implemented")
 }
 func (UnimplementedGatesServiceServer) ListGateConfig(context.Context, *ListGateConfigRequest) (*ListGateConfigResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListGateConfig not implemented")
@@ -586,6 +618,42 @@ func _GatesService_RevokeLease_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GatesService_RevokeRunLeases_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RevokeRunLeasesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GatesServiceServer).RevokeRunLeases(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GatesService_RevokeRunLeases_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GatesServiceServer).RevokeRunLeases(ctx, req.(*RevokeRunLeasesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GatesService_RetryCredentialRevocations_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RetryCredentialRevocationsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GatesServiceServer).RetryCredentialRevocations(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GatesService_RetryCredentialRevocations_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GatesServiceServer).RetryCredentialRevocations(ctx, req.(*RetryCredentialRevocationsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _GatesService_ListGateConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListGateConfigRequest)
 	if err := dec(in); err != nil {
@@ -684,6 +752,14 @@ var GatesService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RevokeLease",
 			Handler:    _GatesService_RevokeLease_Handler,
+		},
+		{
+			MethodName: "RevokeRunLeases",
+			Handler:    _GatesService_RevokeRunLeases_Handler,
+		},
+		{
+			MethodName: "RetryCredentialRevocations",
+			Handler:    _GatesService_RetryCredentialRevocations_Handler,
 		},
 		{
 			MethodName: "ListGateConfig",

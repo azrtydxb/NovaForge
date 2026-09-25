@@ -55,6 +55,9 @@ func (m *stubModel) Generate(ctx context.Context, call provider.Call) (*provider
 		finish = provider.FinishToolCalls
 	}
 
+	if r.totalTokens == 0 {
+		r.totalTokens = 1
+	}
 	return &provider.Response{
 		Content:      content,
 		FinishReason: finish,

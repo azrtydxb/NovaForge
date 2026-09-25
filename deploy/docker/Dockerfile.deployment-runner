@@ -1,0 +1,24 @@
+# Build-time inputs are operator controlled. Supply digest-pinned base images,
+# an approved chart archive and its sha256. Publish/use the resulting image by
+# digest; that image digest binds wrapper version, chart bytes and Helm binary.
+ARG GO_IMAGE
+ARG HELM_IMAGE
+ARG RUNTIME_IMAGE
+FROM ${GO_IMAGE} AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -trimpath -o /deployment-runner ./cmd/deployment-runner
+
+FROM ${HELM_IMAGE} AS helm
+
+FROM ${RUNTIME_IMAGE}
+ARG CHART_ARCHIVE
+ARG CHART_SHA256
+COPY --from=build /deployment-runner /usr/local/bin/deployment-runner
+COPY --from=helm /usr/bin/helm /usr/local/bin/helm
+COPY ${CHART_ARCHIVE} /charts/approved.tgz
+RUN test -n "$CHART_SHA256" && echo "$CHART_SHA256  /charts/approved.tgz" | sha256sum -c -
+USER 65532:65532
+ENTRYPOINT ["/usr/local/bin/deployment-runner"]

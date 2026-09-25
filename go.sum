@@ -6,6 +6,8 @@ github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5 h1:0CwZNZbxp69SHPd
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5/go.mod h1:wHh0iHkYZB8zMSxRWpUBQtwG5a7fFgvEO+odwuTv2gs=
 github.com/azrtydxb/go-ai-sdk v0.4.1 h1:GjH3pkoV8g1eOcOmN4wVrWHi2z8aFVKk/L2vM0kH6is=
 github.com/azrtydxb/go-ai-sdk v0.4.1/go.mod h1:p0p1pIpaRC5Ackd8F+/Dqjs11t3oxRh1NBfESYq3nTM=
+github.com/azrtydxb/go-ai-sdk v0.5.0 h1:1xRelneLxLwPkgCXBtWUnEc17M5msPwKhvk4wy3CO04=
+github.com/azrtydxb/go-ai-sdk v0.5.0/go.mod h1:p0p1pIpaRC5Ackd8F+/Dqjs11t3oxRh1NBfESYq3nTM=
 github.com/bsm/ginkgo/v2 v2.12.0 h1:Ny8MWAHyOepLGlLKYmXG4IEkioBysk6GpaRTLC8zwWs=
 github.com/bsm/ginkgo/v2 v2.12.0/go.mod h1:SwYbGRRDovPVboqFv0tPTcG1sN61LM1Z4ARdbAV9g4c=
 github.com/bsm/gomega v1.27.10 h1:yeMWxP2pV2fG3FgAODIY8EiRE3dy0aeFYt4l7wh6yKA=

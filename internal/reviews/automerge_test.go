@@ -41,7 +41,7 @@ func TestAutoMergeRefusedWhenGateFails(t *testing.T) {
 	orgID := uuid.New()
 	ctx := scopedCtx(orgID)
 	run := newAutoMergeRun(t, store, ctx, orgID, "src")
-	if err := store.SubmitReview(ctx, run.ID, uuid.New(), "user", "approve"); err != nil {
+	if err := store.SubmitReviewAt(ctx, run.ID, uuid.New(), "user", "approve", reviewedSHA, "reviewed this revision"); err != nil {
 		t.Fatalf("SubmitReview: %v", err)
 	}
 
@@ -145,7 +145,7 @@ func TestAutoMergeRefusedWhenDisabled(t *testing.T) {
 	orgID := uuid.New()
 	ctx := scopedCtx(orgID)
 	run := newAutoMergeRun(t, store, ctx, orgID, "src")
-	if err := store.SubmitReview(ctx, run.ID, uuid.New(), "user", "approve"); err != nil {
+	if err := store.SubmitReviewAt(ctx, run.ID, uuid.New(), "user", "approve", reviewedSHA, "reviewed this revision"); err != nil {
 		t.Fatalf("SubmitReview: %v", err)
 	}
 
@@ -180,7 +180,7 @@ func TestAutoMergeUsesTheSameMergePath(t *testing.T) {
 	orgID := uuid.New()
 	ctx := scopedCtx(orgID)
 	run := newAutoMergeRun(t, store, ctx, orgID, "src")
-	if err := store.SubmitReview(ctx, run.ID, uuid.New(), "user", "approve"); err != nil {
+	if err := store.SubmitReviewAt(ctx, run.ID, uuid.New(), "user", "approve", reviewedSHA, "reviewed this revision"); err != nil {
 		t.Fatalf("SubmitReview: %v", err)
 	}
 

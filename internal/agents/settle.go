@@ -22,11 +22,6 @@ import (
 //
 // rdb may be nil, in which case nothing is published.
 func SettleRun(ctx context.Context, store *Store, rdb *redis.Client, run Run, state string) error {
-	// CancelRun already wrote "cancelled" and published it, and the state
-	// machine refuses cancelled -> cancelled.
-	if state == "cancelled" {
-		return nil
-	}
 	if !terminalStates[state] {
 		return fmt.Errorf("settle run %s: %q is not a terminal state", run.ID, state)
 	}
@@ -34,11 +29,22 @@ func SettleRun(ctx context.Context, store *Store, rdb *redis.Client, run Run, st
 	// under it would fail — so the terminal write detaches from it, acting as
 	// the run's agent inside the run's organization.
 	scoped := authz.WithScope(context.WithoutCancel(ctx), authz.Scope{OrgID: run.OrgID, ActorID: run.AgentID, ActorKind: "agent"})
+	// A local context cancellation may not have come through CancelRun, so
+	// persist it too. A retry or concurrent CancelRun must retain the earlier
+	// terminal intent while retrying only its grant cleanup.
+	current, err := store.GetRun(scoped, run.ID)
+	if err != nil {
+		return err
+	}
+	if current.State == state || current.State == "cancelled" {
+		publishStateChange(rdb, run.ID, "running", current.State)
+		return store.CleanupRunGrant(scoped, run.ID)
+	}
 	if err := store.SetRunState(scoped, run.ID, state); err != nil {
 		return fmt.Errorf("settle run %s as %s: %w", run.ID, state, err)
 	}
 	publishStateChange(rdb, run.ID, "running", state)
-	return nil
+	return store.CleanupRunGrant(scoped, run.ID)
 }
 
 // publishStateChange puts one run state change on the agent event stream,

@@ -122,6 +122,7 @@ func TestListRunsRequiresScope(t *testing.T) {
 // someone other than its author when they were the author.
 func TestSubmitReviewIsByTheCaller(t *testing.T) {
 	srv := newGRPCServer(t)
+	srv.Git = &stubMergeGitClient{}
 	orgID := uuid.New()
 	author := uuid.New()
 	authorCtx := authz.WithScope(context.Background(), authz.Scope{OrgID: orgID, ActorID: author, ActorKind: "user"})
@@ -136,7 +137,7 @@ func TestSubmitReviewIsByTheCaller(t *testing.T) {
 	// No reviewer_id, as the GUI sends it: recorded as the caller.
 	reviewer := uuid.New()
 	reviewerCtx := authz.WithScope(context.Background(), authz.Scope{OrgID: orgID, ActorID: reviewer, ActorKind: "user"})
-	if _, err := srv.SubmitReview(reviewerCtx, &reviewsv1.SubmitReviewRequest{RunId: run.ID.String(), Verdict: "approve"}); err != nil {
+	if _, err := srv.SubmitReview(reviewerCtx, &reviewsv1.SubmitReviewRequest{RunId: run.ID.String(), Verdict: "approve", ExpectedSourceSha: reviewedSHA}); err != nil {
 		t.Fatalf("SubmitReview without reviewer_id: %v", err)
 	}
 
@@ -148,7 +149,7 @@ func TestSubmitReviewIsByTheCaller(t *testing.T) {
 		t.Fatalf("author reviewing under another id: code = %v, want PermissionDenied", status.Code(err))
 	}
 	// And reviewing as themselves still hits the self-approval rule.
-	if _, err := srv.SubmitReview(authorCtx, &reviewsv1.SubmitReviewRequest{RunId: run.ID.String(), Verdict: "approve"}); err == nil {
+	if _, err := srv.SubmitReview(authorCtx, &reviewsv1.SubmitReviewRequest{RunId: run.ID.String(), Verdict: "approve", ExpectedSourceSha: reviewedSHA}); err == nil {
 		t.Fatal("the author approved their own run")
 	}
 }

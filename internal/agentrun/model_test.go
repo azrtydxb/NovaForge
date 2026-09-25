@@ -42,3 +42,11 @@ func TestNewModelClientRequiresModel(t *testing.T) {
 		t.Fatal("expected an error when Model is empty")
 	}
 }
+
+func TestNewModelClientRequiresExplicitGateway(t *testing.T) {
+	for _, endpoint := range []string{"", "not-a-url", "ftp://models.example/v1", "https://user:password@models.example/v1"} {
+		if _, err := agentrun.NewModelClient(agentrun.ModelConfig{Model: "local", Endpoint: endpoint}); err == nil {
+			t.Errorf("accepted implicit or invalid gateway %q", endpoint)
+		}
+	}
+}

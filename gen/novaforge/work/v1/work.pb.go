@@ -9,6 +9,7 @@ package workv1
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	fieldmaskpb "google.golang.org/protobuf/types/known/fieldmaskpb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -41,6 +42,10 @@ type WorkItem struct {
 	// Such an item must not be executed: agent-runtime refuses to start a run
 	// against it.
 	AwaitingApproval bool `protobuf:"varint,14,opt,name=awaiting_approval,json=awaitingApproval,proto3" json:"awaiting_approval,omitempty"`
+	// Scanner-owned intent remains immutable even after approval.
+	MaintenanceProposal bool `protobuf:"varint,15,opt,name=maintenance_proposal,json=maintenanceProposal,proto3" json:"maintenance_proposal,omitempty"`
+	// Historical admission: intent is no longer unstarted even after release.
+	ExecutionClaimed bool `protobuf:"varint,16,opt,name=execution_claimed,json=executionClaimed,proto3" json:"execution_claimed,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -169,6 +174,20 @@ func (x *WorkItem) GetCreatedAt() string {
 func (x *WorkItem) GetAwaitingApproval() bool {
 	if x != nil {
 		return x.AwaitingApproval
+	}
+	return false
+}
+
+func (x *WorkItem) GetMaintenanceProposal() bool {
+	if x != nil {
+		return x.MaintenanceProposal
+	}
+	return false
+}
+
+func (x *WorkItem) GetExecutionClaimed() bool {
+	if x != nil {
+		return x.ExecutionClaimed
 	}
 	return false
 }
@@ -1654,11 +1673,499 @@ func (x *ListMaintenanceProposalsResponse) GetProposals() []*MaintenanceProposal
 	return nil
 }
 
+// Only type, goal, acceptance, constraints and required_gates may be patched.
+// expected carries the previously read values of all five fields, so a stale
+// editor cannot silently replace another person's changes.
+type PatchItemRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	RepoId        string                 `protobuf:"bytes,2,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	Values        *WorkItem              `protobuf:"bytes,3,opt,name=values,proto3" json:"values,omitempty"`
+	Expected      *WorkItem              `protobuf:"bytes,4,opt,name=expected,proto3" json:"expected,omitempty"`
+	UpdateMask    *fieldmaskpb.FieldMask `protobuf:"bytes,5,opt,name=update_mask,json=updateMask,proto3" json:"update_mask,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PatchItemRequest) Reset() {
+	*x = PatchItemRequest{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PatchItemRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PatchItemRequest) ProtoMessage() {}
+
+func (x *PatchItemRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PatchItemRequest.ProtoReflect.Descriptor instead.
+func (*PatchItemRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *PatchItemRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *PatchItemRequest) GetRepoId() string {
+	if x != nil {
+		return x.RepoId
+	}
+	return ""
+}
+
+func (x *PatchItemRequest) GetValues() *WorkItem {
+	if x != nil {
+		return x.Values
+	}
+	return nil
+}
+
+func (x *PatchItemRequest) GetExpected() *WorkItem {
+	if x != nil {
+		return x.Expected
+	}
+	return nil
+}
+
+func (x *PatchItemRequest) GetUpdateMask() *fieldmaskpb.FieldMask {
+	if x != nil {
+		return x.UpdateMask
+	}
+	return nil
+}
+
+type PatchItemResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Item          *WorkItem              `protobuf:"bytes,1,opt,name=item,proto3" json:"item,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PatchItemResponse) Reset() {
+	*x = PatchItemResponse{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PatchItemResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PatchItemResponse) ProtoMessage() {}
+
+func (x *PatchItemResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PatchItemResponse.ProtoReflect.Descriptor instead.
+func (*PatchItemResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *PatchItemResponse) GetItem() *WorkItem {
+	if x != nil {
+		return x.Item
+	}
+	return nil
+}
+
+type TransitionItemRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	RepoId        string                 `protobuf:"bytes,2,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	ExpectedState string                 `protobuf:"bytes,3,opt,name=expected_state,json=expectedState,proto3" json:"expected_state,omitempty"`
+	ToState       string                 `protobuf:"bytes,4,opt,name=to_state,json=toState,proto3" json:"to_state,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TransitionItemRequest) Reset() {
+	*x = TransitionItemRequest{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TransitionItemRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TransitionItemRequest) ProtoMessage() {}
+
+func (x *TransitionItemRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TransitionItemRequest.ProtoReflect.Descriptor instead.
+func (*TransitionItemRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *TransitionItemRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *TransitionItemRequest) GetRepoId() string {
+	if x != nil {
+		return x.RepoId
+	}
+	return ""
+}
+
+func (x *TransitionItemRequest) GetExpectedState() string {
+	if x != nil {
+		return x.ExpectedState
+	}
+	return ""
+}
+
+func (x *TransitionItemRequest) GetToState() string {
+	if x != nil {
+		return x.ToState
+	}
+	return ""
+}
+
+type TransitionItemResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Item          *WorkItem              `protobuf:"bytes,1,opt,name=item,proto3" json:"item,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TransitionItemResponse) Reset() {
+	*x = TransitionItemResponse{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TransitionItemResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TransitionItemResponse) ProtoMessage() {}
+
+func (x *TransitionItemResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TransitionItemResponse.ProtoReflect.Descriptor instead.
+func (*TransitionItemResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *TransitionItemResponse) GetItem() *WorkItem {
+	if x != nil {
+		return x.Item
+	}
+	return nil
+}
+
+// Only the verified org-scoped agent-runtime service may call these RPCs.
+// Persist run_id before calling; replay the same binding after an uncertain
+// result. Active exact retries return the original immutable intent. Released
+// identities cannot be reused. No claim expires on a wall clock.
+type ClaimExecutionRequest struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	WorkItemId string                 `protobuf:"bytes,1,opt,name=work_item_id,json=workItemId,proto3" json:"work_item_id,omitempty"`
+	RepoId     string                 `protobuf:"bytes,2,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	RunId      string                 `protobuf:"bytes,3,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	AgentId    string                 `protobuf:"bytes,4,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	// Runtime-validated initiating human, retained for audit, not authorization.
+	SponsorId     string `protobuf:"bytes,5,opt,name=sponsor_id,json=sponsorId,proto3" json:"sponsor_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClaimExecutionRequest) Reset() {
+	*x = ClaimExecutionRequest{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClaimExecutionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClaimExecutionRequest) ProtoMessage() {}
+
+func (x *ClaimExecutionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClaimExecutionRequest.ProtoReflect.Descriptor instead.
+func (*ClaimExecutionRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *ClaimExecutionRequest) GetWorkItemId() string {
+	if x != nil {
+		return x.WorkItemId
+	}
+	return ""
+}
+
+func (x *ClaimExecutionRequest) GetRepoId() string {
+	if x != nil {
+		return x.RepoId
+	}
+	return ""
+}
+
+func (x *ClaimExecutionRequest) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *ClaimExecutionRequest) GetAgentId() string {
+	if x != nil {
+		return x.AgentId
+	}
+	return ""
+}
+
+func (x *ClaimExecutionRequest) GetSponsorId() string {
+	if x != nil {
+		return x.SponsorId
+	}
+	return ""
+}
+
+type ClaimExecutionResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Use this snapshot for both execution and verification, never GetItem later.
+	Item          *WorkItem `protobuf:"bytes,1,opt,name=item,proto3" json:"item,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClaimExecutionResponse) Reset() {
+	*x = ClaimExecutionResponse{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClaimExecutionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClaimExecutionResponse) ProtoMessage() {}
+
+func (x *ClaimExecutionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClaimExecutionResponse.ProtoReflect.Descriptor instead.
+func (*ClaimExecutionResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *ClaimExecutionResponse) GetItem() *WorkItem {
+	if x != nil {
+		return x.Item
+	}
+	return nil
+}
+
+type ReleaseExecutionRequest struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	WorkItemId string                 `protobuf:"bytes,1,opt,name=work_item_id,json=workItemId,proto3" json:"work_item_id,omitempty"`
+	RepoId     string                 `protobuf:"bytes,2,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	RunId      string                 `protobuf:"bytes,3,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	// succeeded -> review; failed/cancelled/over_budget -> blocked.
+	// admission_failed -> open only for an existing claim; if absent it writes
+	// a cancellation tombstone without changing the Work Item.
+	Outcome string `protobuf:"bytes,4,opt,name=outcome,proto3" json:"outcome,omitempty"`
+	// Only admission_failed requires true. The runtime must have durably fenced
+	// this run terminal with no execution begun and no live execution authority
+	// BEFORE asserting this; an ambiguous admission must remain claimed.
+	NoExecutionStarted bool `protobuf:"varint,5,opt,name=no_execution_started,json=noExecutionStarted,proto3" json:"no_execution_started,omitempty"`
+	// Binds cancellation tombstones even when ClaimExecution never arrived.
+	AgentId       string `protobuf:"bytes,6,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReleaseExecutionRequest) Reset() {
+	*x = ReleaseExecutionRequest{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReleaseExecutionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReleaseExecutionRequest) ProtoMessage() {}
+
+func (x *ReleaseExecutionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReleaseExecutionRequest.ProtoReflect.Descriptor instead.
+func (*ReleaseExecutionRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *ReleaseExecutionRequest) GetWorkItemId() string {
+	if x != nil {
+		return x.WorkItemId
+	}
+	return ""
+}
+
+func (x *ReleaseExecutionRequest) GetRepoId() string {
+	if x != nil {
+		return x.RepoId
+	}
+	return ""
+}
+
+func (x *ReleaseExecutionRequest) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *ReleaseExecutionRequest) GetOutcome() string {
+	if x != nil {
+		return x.Outcome
+	}
+	return ""
+}
+
+func (x *ReleaseExecutionRequest) GetNoExecutionStarted() bool {
+	if x != nil {
+		return x.NoExecutionStarted
+	}
+	return false
+}
+
+func (x *ReleaseExecutionRequest) GetAgentId() string {
+	if x != nil {
+		return x.AgentId
+	}
+	return ""
+}
+
+type ReleaseExecutionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReleaseExecutionResponse) Reset() {
+	*x = ReleaseExecutionResponse{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReleaseExecutionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReleaseExecutionResponse) ProtoMessage() {}
+
+func (x *ReleaseExecutionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReleaseExecutionResponse.ProtoReflect.Descriptor instead.
+func (*ReleaseExecutionResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{35}
+}
+
 var File_novaforge_work_v1_work_proto protoreflect.FileDescriptor
 
 const file_novaforge_work_v1_work_proto_rawDesc = "" +
 	"\n" +
-	"\x1cnovaforge/work/v1/work.proto\x12\x11novaforge.work.v1\"\x95\x03\n" +
+	"\x1cnovaforge/work/v1/work.proto\x12\x11novaforge.work.v1\x1a google/protobuf/field_mask.proto\"\xf5\x03\n" +
 	"\bWorkItem\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x15\n" +
 	"\x06org_id\x18\x02 \x01(\tR\x05orgId\x12\x17\n" +
@@ -1678,7 +2185,9 @@ const file_novaforge_work_v1_work_proto_rawDesc = "" +
 	"\x05state\x18\f \x01(\tR\x05state\x12\x1d\n" +
 	"\n" +
 	"created_at\x18\r \x01(\tR\tcreatedAt\x12+\n" +
-	"\x11awaiting_approval\x18\x0e \x01(\bR\x10awaitingApproval\"\xbd\x01\n" +
+	"\x11awaiting_approval\x18\x0e \x01(\bR\x10awaitingApproval\x121\n" +
+	"\x14maintenance_proposal\x18\x0f \x01(\bR\x13maintenanceProposal\x12+\n" +
+	"\x11execution_claimed\x18\x10 \x01(\bR\x10executionClaimed\"\xbd\x01\n" +
 	"\x11CreateItemRequest\x12\x17\n" +
 	"\arepo_id\x18\x01 \x01(\tR\x06repoId\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x12\n" +
@@ -1779,14 +2288,53 @@ const file_novaforge_work_v1_work_proto_rawDesc = "" +
 	"\x1fListMaintenanceProposalsRequest\x12\x17\n" +
 	"\arepo_id\x18\x01 \x01(\tR\x06repoId\"h\n" +
 	" ListMaintenanceProposalsResponse\x12D\n" +
-	"\tproposals\x18\x01 \x03(\v2&.novaforge.work.v1.MaintenanceProposalR\tproposals2\xf3\t\n" +
+	"\tproposals\x18\x01 \x03(\v2&.novaforge.work.v1.MaintenanceProposalR\tproposals\"\xe6\x01\n" +
+	"\x10PatchItemRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
+	"\arepo_id\x18\x02 \x01(\tR\x06repoId\x123\n" +
+	"\x06values\x18\x03 \x01(\v2\x1b.novaforge.work.v1.WorkItemR\x06values\x127\n" +
+	"\bexpected\x18\x04 \x01(\v2\x1b.novaforge.work.v1.WorkItemR\bexpected\x12;\n" +
+	"\vupdate_mask\x18\x05 \x01(\v2\x1a.google.protobuf.FieldMaskR\n" +
+	"updateMask\"D\n" +
+	"\x11PatchItemResponse\x12/\n" +
+	"\x04item\x18\x01 \x01(\v2\x1b.novaforge.work.v1.WorkItemR\x04item\"\x82\x01\n" +
+	"\x15TransitionItemRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
+	"\arepo_id\x18\x02 \x01(\tR\x06repoId\x12%\n" +
+	"\x0eexpected_state\x18\x03 \x01(\tR\rexpectedState\x12\x19\n" +
+	"\bto_state\x18\x04 \x01(\tR\atoState\"I\n" +
+	"\x16TransitionItemResponse\x12/\n" +
+	"\x04item\x18\x01 \x01(\v2\x1b.novaforge.work.v1.WorkItemR\x04item\"\xa3\x01\n" +
+	"\x15ClaimExecutionRequest\x12 \n" +
+	"\fwork_item_id\x18\x01 \x01(\tR\n" +
+	"workItemId\x12\x17\n" +
+	"\arepo_id\x18\x02 \x01(\tR\x06repoId\x12\x15\n" +
+	"\x06run_id\x18\x03 \x01(\tR\x05runId\x12\x19\n" +
+	"\bagent_id\x18\x04 \x01(\tR\aagentId\x12\x1d\n" +
+	"\n" +
+	"sponsor_id\x18\x05 \x01(\tR\tsponsorId\"I\n" +
+	"\x16ClaimExecutionResponse\x12/\n" +
+	"\x04item\x18\x01 \x01(\v2\x1b.novaforge.work.v1.WorkItemR\x04item\"\xd2\x01\n" +
+	"\x17ReleaseExecutionRequest\x12 \n" +
+	"\fwork_item_id\x18\x01 \x01(\tR\n" +
+	"workItemId\x12\x17\n" +
+	"\arepo_id\x18\x02 \x01(\tR\x06repoId\x12\x15\n" +
+	"\x06run_id\x18\x03 \x01(\tR\x05runId\x12\x18\n" +
+	"\aoutcome\x18\x04 \x01(\tR\aoutcome\x120\n" +
+	"\x14no_execution_started\x18\x05 \x01(\bR\x12noExecutionStarted\x12\x19\n" +
+	"\bagent_id\x18\x06 \x01(\tR\aagentId\"\x1a\n" +
+	"\x18ReleaseExecutionResponse2\x86\r\n" +
 	"\vWorkService\x12Y\n" +
 	"\n" +
 	"CreateItem\x12$.novaforge.work.v1.CreateItemRequest\x1a%.novaforge.work.v1.CreateItemResponse\x12P\n" +
 	"\aGetItem\x12!.novaforge.work.v1.GetItemRequest\x1a\".novaforge.work.v1.GetItemResponse\x12V\n" +
 	"\tListItems\x12#.novaforge.work.v1.ListItemsRequest\x1a$.novaforge.work.v1.ListItemsResponse\x12Y\n" +
 	"\n" +
-	"AssignItem\x12$.novaforge.work.v1.AssignItemRequest\x1a%.novaforge.work.v1.AssignItemResponse\x12_\n" +
+	"AssignItem\x12$.novaforge.work.v1.AssignItemRequest\x1a%.novaforge.work.v1.AssignItemResponse\x12V\n" +
+	"\tPatchItem\x12#.novaforge.work.v1.PatchItemRequest\x1a$.novaforge.work.v1.PatchItemResponse\x12e\n" +
+	"\x0eTransitionItem\x12(.novaforge.work.v1.TransitionItemRequest\x1a).novaforge.work.v1.TransitionItemResponse\x12e\n" +
+	"\x0eClaimExecution\x12(.novaforge.work.v1.ClaimExecutionRequest\x1a).novaforge.work.v1.ClaimExecutionResponse\x12k\n" +
+	"\x10ReleaseExecution\x12*.novaforge.work.v1.ReleaseExecutionRequest\x1a+.novaforge.work.v1.ReleaseExecutionResponse\x12_\n" +
 	"\fListSubtasks\x12&.novaforge.work.v1.ListSubtasksRequest\x1a'.novaforge.work.v1.ListSubtasksResponse\x12b\n" +
 	"\rDecomposeEpic\x12'.novaforge.work.v1.DecomposeEpicRequest\x1a(.novaforge.work.v1.DecomposeEpicResponse\x12Y\n" +
 	"\n" +
@@ -1810,7 +2358,7 @@ func file_novaforge_work_v1_work_proto_rawDescGZIP() []byte {
 	return file_novaforge_work_v1_work_proto_rawDescData
 }
 
-var file_novaforge_work_v1_work_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
+var file_novaforge_work_v1_work_proto_msgTypes = make([]protoimpl.MessageInfo, 36)
 var file_novaforge_work_v1_work_proto_goTypes = []any{
 	(*WorkItem)(nil),                           // 0: novaforge.work.v1.WorkItem
 	(*CreateItemRequest)(nil),                  // 1: novaforge.work.v1.CreateItemRequest
@@ -1840,6 +2388,15 @@ var file_novaforge_work_v1_work_proto_goTypes = []any{
 	(*ScanRepositoryResponse)(nil),             // 25: novaforge.work.v1.ScanRepositoryResponse
 	(*ListMaintenanceProposalsRequest)(nil),    // 26: novaforge.work.v1.ListMaintenanceProposalsRequest
 	(*ListMaintenanceProposalsResponse)(nil),   // 27: novaforge.work.v1.ListMaintenanceProposalsResponse
+	(*PatchItemRequest)(nil),                   // 28: novaforge.work.v1.PatchItemRequest
+	(*PatchItemResponse)(nil),                  // 29: novaforge.work.v1.PatchItemResponse
+	(*TransitionItemRequest)(nil),              // 30: novaforge.work.v1.TransitionItemRequest
+	(*TransitionItemResponse)(nil),             // 31: novaforge.work.v1.TransitionItemResponse
+	(*ClaimExecutionRequest)(nil),              // 32: novaforge.work.v1.ClaimExecutionRequest
+	(*ClaimExecutionResponse)(nil),             // 33: novaforge.work.v1.ClaimExecutionResponse
+	(*ReleaseExecutionRequest)(nil),            // 34: novaforge.work.v1.ReleaseExecutionRequest
+	(*ReleaseExecutionResponse)(nil),           // 35: novaforge.work.v1.ReleaseExecutionResponse
+	(*fieldmaskpb.FieldMask)(nil),              // 36: google.protobuf.FieldMask
 }
 var file_novaforge_work_v1_work_proto_depIdxs = []int32{
 	0,  // 0: novaforge.work.v1.CreateItemResponse.item:type_name -> novaforge.work.v1.WorkItem
@@ -1854,35 +2411,49 @@ var file_novaforge_work_v1_work_proto_depIdxs = []int32{
 	19, // 9: novaforge.work.v1.ApproveMaintenanceProposalResponse.proposal:type_name -> novaforge.work.v1.MaintenanceProposal
 	19, // 10: novaforge.work.v1.DismissMaintenanceProposalResponse.proposal:type_name -> novaforge.work.v1.MaintenanceProposal
 	19, // 11: novaforge.work.v1.ListMaintenanceProposalsResponse.proposals:type_name -> novaforge.work.v1.MaintenanceProposal
-	1,  // 12: novaforge.work.v1.WorkService.CreateItem:input_type -> novaforge.work.v1.CreateItemRequest
-	3,  // 13: novaforge.work.v1.WorkService.GetItem:input_type -> novaforge.work.v1.GetItemRequest
-	5,  // 14: novaforge.work.v1.WorkService.ListItems:input_type -> novaforge.work.v1.ListItemsRequest
-	7,  // 15: novaforge.work.v1.WorkService.AssignItem:input_type -> novaforge.work.v1.AssignItemRequest
-	10, // 16: novaforge.work.v1.WorkService.ListSubtasks:input_type -> novaforge.work.v1.ListSubtasksRequest
-	12, // 17: novaforge.work.v1.WorkService.DecomposeEpic:input_type -> novaforge.work.v1.DecomposeEpicRequest
-	15, // 18: novaforge.work.v1.WorkService.AddComment:input_type -> novaforge.work.v1.AddCommentRequest
-	17, // 19: novaforge.work.v1.WorkService.ListComments:input_type -> novaforge.work.v1.ListCommentsRequest
-	26, // 20: novaforge.work.v1.WorkService.ListMaintenanceProposals:input_type -> novaforge.work.v1.ListMaintenanceProposalsRequest
-	20, // 21: novaforge.work.v1.WorkService.ApproveMaintenanceProposal:input_type -> novaforge.work.v1.ApproveMaintenanceProposalRequest
-	22, // 22: novaforge.work.v1.WorkService.DismissMaintenanceProposal:input_type -> novaforge.work.v1.DismissMaintenanceProposalRequest
-	24, // 23: novaforge.work.v1.WorkService.ScanRepository:input_type -> novaforge.work.v1.ScanRepositoryRequest
-	2,  // 24: novaforge.work.v1.WorkService.CreateItem:output_type -> novaforge.work.v1.CreateItemResponse
-	4,  // 25: novaforge.work.v1.WorkService.GetItem:output_type -> novaforge.work.v1.GetItemResponse
-	6,  // 26: novaforge.work.v1.WorkService.ListItems:output_type -> novaforge.work.v1.ListItemsResponse
-	8,  // 27: novaforge.work.v1.WorkService.AssignItem:output_type -> novaforge.work.v1.AssignItemResponse
-	11, // 28: novaforge.work.v1.WorkService.ListSubtasks:output_type -> novaforge.work.v1.ListSubtasksResponse
-	13, // 29: novaforge.work.v1.WorkService.DecomposeEpic:output_type -> novaforge.work.v1.DecomposeEpicResponse
-	16, // 30: novaforge.work.v1.WorkService.AddComment:output_type -> novaforge.work.v1.AddCommentResponse
-	18, // 31: novaforge.work.v1.WorkService.ListComments:output_type -> novaforge.work.v1.ListCommentsResponse
-	27, // 32: novaforge.work.v1.WorkService.ListMaintenanceProposals:output_type -> novaforge.work.v1.ListMaintenanceProposalsResponse
-	21, // 33: novaforge.work.v1.WorkService.ApproveMaintenanceProposal:output_type -> novaforge.work.v1.ApproveMaintenanceProposalResponse
-	23, // 34: novaforge.work.v1.WorkService.DismissMaintenanceProposal:output_type -> novaforge.work.v1.DismissMaintenanceProposalResponse
-	25, // 35: novaforge.work.v1.WorkService.ScanRepository:output_type -> novaforge.work.v1.ScanRepositoryResponse
-	24, // [24:36] is the sub-list for method output_type
-	12, // [12:24] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	0,  // 12: novaforge.work.v1.PatchItemRequest.values:type_name -> novaforge.work.v1.WorkItem
+	0,  // 13: novaforge.work.v1.PatchItemRequest.expected:type_name -> novaforge.work.v1.WorkItem
+	36, // 14: novaforge.work.v1.PatchItemRequest.update_mask:type_name -> google.protobuf.FieldMask
+	0,  // 15: novaforge.work.v1.PatchItemResponse.item:type_name -> novaforge.work.v1.WorkItem
+	0,  // 16: novaforge.work.v1.TransitionItemResponse.item:type_name -> novaforge.work.v1.WorkItem
+	0,  // 17: novaforge.work.v1.ClaimExecutionResponse.item:type_name -> novaforge.work.v1.WorkItem
+	1,  // 18: novaforge.work.v1.WorkService.CreateItem:input_type -> novaforge.work.v1.CreateItemRequest
+	3,  // 19: novaforge.work.v1.WorkService.GetItem:input_type -> novaforge.work.v1.GetItemRequest
+	5,  // 20: novaforge.work.v1.WorkService.ListItems:input_type -> novaforge.work.v1.ListItemsRequest
+	7,  // 21: novaforge.work.v1.WorkService.AssignItem:input_type -> novaforge.work.v1.AssignItemRequest
+	28, // 22: novaforge.work.v1.WorkService.PatchItem:input_type -> novaforge.work.v1.PatchItemRequest
+	30, // 23: novaforge.work.v1.WorkService.TransitionItem:input_type -> novaforge.work.v1.TransitionItemRequest
+	32, // 24: novaforge.work.v1.WorkService.ClaimExecution:input_type -> novaforge.work.v1.ClaimExecutionRequest
+	34, // 25: novaforge.work.v1.WorkService.ReleaseExecution:input_type -> novaforge.work.v1.ReleaseExecutionRequest
+	10, // 26: novaforge.work.v1.WorkService.ListSubtasks:input_type -> novaforge.work.v1.ListSubtasksRequest
+	12, // 27: novaforge.work.v1.WorkService.DecomposeEpic:input_type -> novaforge.work.v1.DecomposeEpicRequest
+	15, // 28: novaforge.work.v1.WorkService.AddComment:input_type -> novaforge.work.v1.AddCommentRequest
+	17, // 29: novaforge.work.v1.WorkService.ListComments:input_type -> novaforge.work.v1.ListCommentsRequest
+	26, // 30: novaforge.work.v1.WorkService.ListMaintenanceProposals:input_type -> novaforge.work.v1.ListMaintenanceProposalsRequest
+	20, // 31: novaforge.work.v1.WorkService.ApproveMaintenanceProposal:input_type -> novaforge.work.v1.ApproveMaintenanceProposalRequest
+	22, // 32: novaforge.work.v1.WorkService.DismissMaintenanceProposal:input_type -> novaforge.work.v1.DismissMaintenanceProposalRequest
+	24, // 33: novaforge.work.v1.WorkService.ScanRepository:input_type -> novaforge.work.v1.ScanRepositoryRequest
+	2,  // 34: novaforge.work.v1.WorkService.CreateItem:output_type -> novaforge.work.v1.CreateItemResponse
+	4,  // 35: novaforge.work.v1.WorkService.GetItem:output_type -> novaforge.work.v1.GetItemResponse
+	6,  // 36: novaforge.work.v1.WorkService.ListItems:output_type -> novaforge.work.v1.ListItemsResponse
+	8,  // 37: novaforge.work.v1.WorkService.AssignItem:output_type -> novaforge.work.v1.AssignItemResponse
+	29, // 38: novaforge.work.v1.WorkService.PatchItem:output_type -> novaforge.work.v1.PatchItemResponse
+	31, // 39: novaforge.work.v1.WorkService.TransitionItem:output_type -> novaforge.work.v1.TransitionItemResponse
+	33, // 40: novaforge.work.v1.WorkService.ClaimExecution:output_type -> novaforge.work.v1.ClaimExecutionResponse
+	35, // 41: novaforge.work.v1.WorkService.ReleaseExecution:output_type -> novaforge.work.v1.ReleaseExecutionResponse
+	11, // 42: novaforge.work.v1.WorkService.ListSubtasks:output_type -> novaforge.work.v1.ListSubtasksResponse
+	13, // 43: novaforge.work.v1.WorkService.DecomposeEpic:output_type -> novaforge.work.v1.DecomposeEpicResponse
+	16, // 44: novaforge.work.v1.WorkService.AddComment:output_type -> novaforge.work.v1.AddCommentResponse
+	18, // 45: novaforge.work.v1.WorkService.ListComments:output_type -> novaforge.work.v1.ListCommentsResponse
+	27, // 46: novaforge.work.v1.WorkService.ListMaintenanceProposals:output_type -> novaforge.work.v1.ListMaintenanceProposalsResponse
+	21, // 47: novaforge.work.v1.WorkService.ApproveMaintenanceProposal:output_type -> novaforge.work.v1.ApproveMaintenanceProposalResponse
+	23, // 48: novaforge.work.v1.WorkService.DismissMaintenanceProposal:output_type -> novaforge.work.v1.DismissMaintenanceProposalResponse
+	25, // 49: novaforge.work.v1.WorkService.ScanRepository:output_type -> novaforge.work.v1.ScanRepositoryResponse
+	34, // [34:50] is the sub-list for method output_type
+	18, // [18:34] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_novaforge_work_v1_work_proto_init() }
@@ -1896,7 +2467,7 @@ func file_novaforge_work_v1_work_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_novaforge_work_v1_work_proto_rawDesc), len(file_novaforge_work_v1_work_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   28,
+			NumMessages:   36,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

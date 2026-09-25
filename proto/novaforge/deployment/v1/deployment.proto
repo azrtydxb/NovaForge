@@ -1,0 +1,63 @@
+syntax = "proto3";
+package novaforge.deployment.v1;
+
+// DeploymentService is hosted by gates. All organization authority comes from
+// verified caller scope; target configuration and approvals remain server-owned.
+service DeploymentService {
+  rpc RequestDeployment(RequestDeploymentRequest) returns (RequestDeploymentResponse);
+  rpc GetDeployment(GetDeploymentRequest) returns (GetDeploymentResponse);
+  rpc ExecuteDeployment(ExecuteDeploymentRequest) returns (ExecuteDeploymentResponse);
+  rpc RetryDeployment(RetryDeploymentRequest) returns (RetryDeploymentResponse);
+  rpc ReconcileDeployment(ReconcileDeploymentRequest) returns (ReconcileDeploymentResponse);
+}
+message RequestDeploymentRequest {
+  string id = 1;
+  string run_id = 2;
+  string repo_id = 3;
+  string target = 4;
+  string artifact = 5;
+}
+message RequestDeploymentResponse { Operation operation = 1; }
+message GetDeploymentRequest { string id = 1; }
+message GetDeploymentResponse { Operation operation = 1; }
+message ExecuteDeploymentRequest { string id = 1; }
+message ExecuteDeploymentResponse { Operation operation = 1; }
+message RetryDeploymentRequest { string id = 1; }
+message RetryDeploymentResponse { Operation operation = 1; }
+message ReconcileDeploymentRequest { string id = 1; }
+message ReconcileDeploymentResponse { Operation operation = 1; }
+message Operation {
+  string id = 1;
+  string run_id = 2;
+  string repo_id = 3;
+  string target = 4;
+  string artifact = 5;
+  string org_id = 6;
+  string actor_id = 7;
+  string actor_kind = 8;
+  string environment = 9;
+  string target_revision = 10;
+  string destination = 11;
+  string state = 12;
+  string created_at = 13;
+  repeated Attempt attempts = 14;
+  repeated CredentialObligation credentials = 15;
+}
+message Attempt {
+  string actor_id = 1;
+  string actor_kind = 2;
+  string kind = 3;
+  int32 number = 4;
+  string state = 5;
+  string started_at = 6;
+  string finished_at = 7;
+  string external_id = 8;
+  string summary = 9;
+  string error = 10;
+}
+message CredentialObligation {
+  int32 attempt = 1;
+  string provider_binding = 2;
+  string phase = 3;
+  string resolved_at = 4;
+}

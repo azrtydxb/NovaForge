@@ -69,7 +69,8 @@ func newGRPCServer(t *testing.T, work *stubWorkClient) (*agents.GRPCServer, *age
 	store := newStore(t)
 	grants := capability.NewStore(grantsPool(t))
 	rdb := agentsRedis(t)
-	return agents.NewGRPCServer(store, grants, rdb, work, nil), store
+	store.WorkClaims = &workClaimsFixture{item: work.item}
+	return agents.NewGRPCServer(store, ownerFixture{grants}, rdb, work, func(context.Context, agents.Run) {}), store
 }
 
 // TestStartRunIssuesScopedGrant starts a run for Work Item "NF-1" and

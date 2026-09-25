@@ -164,6 +164,13 @@ func (g *GRPCServer) IssueLease(ctx context.Context, req *gatesv1.IssueLeaseRequ
 	if err != nil {
 		return nil, err
 	}
+	scope, err := authz.FromContext(ctx)
+	if err != nil || scope.ActorID == uuid.Nil || (scope.ActorKind != "user" && scope.ActorKind != "agent") {
+		return nil, status.Error(codes.PermissionDenied, "a capability lease requires its authenticated user or agent subject")
+	}
+	if g.Grants == nil || g.Secrets == nil {
+		return nil, status.Error(codes.FailedPrecondition, "credential dependencies not configured")
+	}
 	grant, err := g.Grants.Resolve(ctx, grantID)
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "resolve grant: %v", err)
@@ -171,13 +178,16 @@ func (g *GRPCServer) IssueLease(ctx context.Context, req *gatesv1.IssueLeaseRequ
 	if grant.OrgID != orgID {
 		return nil, status.Error(codes.PermissionDenied, "grant does not belong to this organization")
 	}
+	if grant.SubjectID != scope.ActorID || grant.SubjectKind != scope.ActorKind {
+		return nil, status.Error(codes.PermissionDenied, "grant belongs to another subject")
+	}
 	ttl := time.Duration(req.GetTtlSeconds()) * time.Second
 	if ttl <= 0 {
 		ttl = 15 * time.Minute
 	}
 	lease, err := g.Secrets.Issue(ctx, runID, grant, req.GetName(), ttl)
 	if err != nil {
-		return nil, status.Errorf(codes.PermissionDenied, "issue lease: %v", err)
+		return nil, CredentialStatus(err)
 	}
 	return &gatesv1.IssueLeaseResponse{
 		LeaseId:   lease.ID.String(),
@@ -197,10 +207,20 @@ func (g *GRPCServer) RedeemLease(ctx context.Context, req *gatesv1.RedeemLeaseRe
 	if err != nil {
 		return nil, err
 	}
+	if g.Secrets == nil {
+		return nil, status.Error(codes.FailedPrecondition, "credential broker not configured")
+	}
+	scope, err := authz.FromContext(ctx)
+	if err != nil {
+		return nil, status.Error(codes.PermissionDenied, "no authorization scope")
+	}
+	if scope.ActorKind == "service" && scope.ServiceName != "ci-credentials" {
+		return nil, status.Error(codes.PermissionDenied, "service cannot redeem CI credentials")
+	}
 	scoped := secrets.WithRunID(ctx, runID)
 	value, err := g.Secrets.Redeem(scoped, req.GetToken())
 	if err != nil {
-		return nil, status.Errorf(codes.PermissionDenied, "redeem lease: %v", err)
+		return nil, CredentialStatus(err)
 	}
 	return &gatesv1.RedeemLeaseResponse{Value: value}, nil
 }
