@@ -37,6 +37,12 @@ const (
 	IdentityService_GetOrg_FullMethodName             = "/novaforge.identity.v1.IdentityService/GetOrg"
 	IdentityService_DeleteOrg_FullMethodName          = "/novaforge.identity.v1.IdentityService/DeleteOrg"
 	IdentityService_ListOrgMembers_FullMethodName     = "/novaforge.identity.v1.IdentityService/ListOrgMembers"
+	IdentityService_ListTeams_FullMethodName          = "/novaforge.identity.v1.IdentityService/ListTeams"
+	IdentityService_CreateTeam_FullMethodName         = "/novaforge.identity.v1.IdentityService/CreateTeam"
+	IdentityService_DeleteTeam_FullMethodName         = "/novaforge.identity.v1.IdentityService/DeleteTeam"
+	IdentityService_AddTeamMember_FullMethodName      = "/novaforge.identity.v1.IdentityService/AddTeamMember"
+	IdentityService_RemoveTeamMember_FullMethodName   = "/novaforge.identity.v1.IdentityService/RemoveTeamMember"
+	IdentityService_ListTeamsForUser_FullMethodName   = "/novaforge.identity.v1.IdentityService/ListTeamsForUser"
 	IdentityService_AddSSHKey_FullMethodName          = "/novaforge.identity.v1.IdentityService/AddSSHKey"
 	IdentityService_ListSSHKeys_FullMethodName        = "/novaforge.identity.v1.IdentityService/ListSSHKeys"
 	IdentityService_DeleteSSHKey_FullMethodName       = "/novaforge.identity.v1.IdentityService/DeleteSSHKey"
@@ -76,6 +82,12 @@ type IdentityServiceClient interface {
 	// is announced first, and every service removes that organization's data.
 	DeleteOrg(ctx context.Context, in *DeleteOrgRequest, opts ...grpc.CallOption) (*DeleteOrgResponse, error)
 	ListOrgMembers(ctx context.Context, in *ListOrgMembersRequest, opts ...grpc.CallOption) (*ListOrgMembersResponse, error)
+	ListTeams(ctx context.Context, in *ListTeamsRequest, opts ...grpc.CallOption) (*ListTeamsResponse, error)
+	CreateTeam(ctx context.Context, in *CreateTeamRequest, opts ...grpc.CallOption) (*CreateTeamResponse, error)
+	DeleteTeam(ctx context.Context, in *DeleteTeamRequest, opts ...grpc.CallOption) (*DeleteTeamResponse, error)
+	AddTeamMember(ctx context.Context, in *AddTeamMemberRequest, opts ...grpc.CallOption) (*AddTeamMemberResponse, error)
+	RemoveTeamMember(ctx context.Context, in *RemoveTeamMemberRequest, opts ...grpc.CallOption) (*RemoveTeamMemberResponse, error)
+	ListTeamsForUser(ctx context.Context, in *ListTeamsForUserRequest, opts ...grpc.CallOption) (*ListTeamsForUserResponse, error)
 	AddSSHKey(ctx context.Context, in *AddSSHKeyRequest, opts ...grpc.CallOption) (*AddSSHKeyResponse, error)
 	ListSSHKeys(ctx context.Context, in *ListSSHKeysRequest, opts ...grpc.CallOption) (*ListSSHKeysResponse, error)
 	DeleteSSHKey(ctx context.Context, in *DeleteSSHKeyRequest, opts ...grpc.CallOption) (*DeleteSSHKeyResponse, error)
@@ -274,6 +286,66 @@ func (c *identityServiceClient) ListOrgMembers(ctx context.Context, in *ListOrgM
 	return out, nil
 }
 
+func (c *identityServiceClient) ListTeams(ctx context.Context, in *ListTeamsRequest, opts ...grpc.CallOption) (*ListTeamsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListTeamsResponse)
+	err := c.cc.Invoke(ctx, IdentityService_ListTeams_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) CreateTeam(ctx context.Context, in *CreateTeamRequest, opts ...grpc.CallOption) (*CreateTeamResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateTeamResponse)
+	err := c.cc.Invoke(ctx, IdentityService_CreateTeam_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) DeleteTeam(ctx context.Context, in *DeleteTeamRequest, opts ...grpc.CallOption) (*DeleteTeamResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteTeamResponse)
+	err := c.cc.Invoke(ctx, IdentityService_DeleteTeam_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) AddTeamMember(ctx context.Context, in *AddTeamMemberRequest, opts ...grpc.CallOption) (*AddTeamMemberResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddTeamMemberResponse)
+	err := c.cc.Invoke(ctx, IdentityService_AddTeamMember_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) RemoveTeamMember(ctx context.Context, in *RemoveTeamMemberRequest, opts ...grpc.CallOption) (*RemoveTeamMemberResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemoveTeamMemberResponse)
+	err := c.cc.Invoke(ctx, IdentityService_RemoveTeamMember_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) ListTeamsForUser(ctx context.Context, in *ListTeamsForUserRequest, opts ...grpc.CallOption) (*ListTeamsForUserResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListTeamsForUserResponse)
+	err := c.cc.Invoke(ctx, IdentityService_ListTeamsForUser_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *identityServiceClient) AddSSHKey(ctx context.Context, in *AddSSHKeyRequest, opts ...grpc.CallOption) (*AddSSHKeyResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AddSSHKeyResponse)
@@ -383,6 +455,12 @@ type IdentityServiceServer interface {
 	// is announced first, and every service removes that organization's data.
 	DeleteOrg(context.Context, *DeleteOrgRequest) (*DeleteOrgResponse, error)
 	ListOrgMembers(context.Context, *ListOrgMembersRequest) (*ListOrgMembersResponse, error)
+	ListTeams(context.Context, *ListTeamsRequest) (*ListTeamsResponse, error)
+	CreateTeam(context.Context, *CreateTeamRequest) (*CreateTeamResponse, error)
+	DeleteTeam(context.Context, *DeleteTeamRequest) (*DeleteTeamResponse, error)
+	AddTeamMember(context.Context, *AddTeamMemberRequest) (*AddTeamMemberResponse, error)
+	RemoveTeamMember(context.Context, *RemoveTeamMemberRequest) (*RemoveTeamMemberResponse, error)
+	ListTeamsForUser(context.Context, *ListTeamsForUserRequest) (*ListTeamsForUserResponse, error)
 	AddSSHKey(context.Context, *AddSSHKeyRequest) (*AddSSHKeyResponse, error)
 	ListSSHKeys(context.Context, *ListSSHKeysRequest) (*ListSSHKeysResponse, error)
 	DeleteSSHKey(context.Context, *DeleteSSHKeyRequest) (*DeleteSSHKeyResponse, error)
@@ -453,6 +531,24 @@ func (UnimplementedIdentityServiceServer) DeleteOrg(context.Context, *DeleteOrgR
 }
 func (UnimplementedIdentityServiceServer) ListOrgMembers(context.Context, *ListOrgMembersRequest) (*ListOrgMembersResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListOrgMembers not implemented")
+}
+func (UnimplementedIdentityServiceServer) ListTeams(context.Context, *ListTeamsRequest) (*ListTeamsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListTeams not implemented")
+}
+func (UnimplementedIdentityServiceServer) CreateTeam(context.Context, *CreateTeamRequest) (*CreateTeamResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateTeam not implemented")
+}
+func (UnimplementedIdentityServiceServer) DeleteTeam(context.Context, *DeleteTeamRequest) (*DeleteTeamResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteTeam not implemented")
+}
+func (UnimplementedIdentityServiceServer) AddTeamMember(context.Context, *AddTeamMemberRequest) (*AddTeamMemberResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddTeamMember not implemented")
+}
+func (UnimplementedIdentityServiceServer) RemoveTeamMember(context.Context, *RemoveTeamMemberRequest) (*RemoveTeamMemberResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveTeamMember not implemented")
+}
+func (UnimplementedIdentityServiceServer) ListTeamsForUser(context.Context, *ListTeamsForUserRequest) (*ListTeamsForUserResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListTeamsForUser not implemented")
 }
 func (UnimplementedIdentityServiceServer) AddSSHKey(context.Context, *AddSSHKeyRequest) (*AddSSHKeyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddSSHKey not implemented")
@@ -822,6 +918,114 @@ func _IdentityService_ListOrgMembers_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IdentityService_ListTeams_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListTeamsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).ListTeams(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_ListTeams_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).ListTeams(ctx, req.(*ListTeamsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_CreateTeam_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateTeamRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).CreateTeam(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_CreateTeam_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).CreateTeam(ctx, req.(*CreateTeamRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_DeleteTeam_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteTeamRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).DeleteTeam(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_DeleteTeam_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).DeleteTeam(ctx, req.(*DeleteTeamRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_AddTeamMember_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddTeamMemberRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).AddTeamMember(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_AddTeamMember_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).AddTeamMember(ctx, req.(*AddTeamMemberRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_RemoveTeamMember_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveTeamMemberRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).RemoveTeamMember(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_RemoveTeamMember_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).RemoveTeamMember(ctx, req.(*RemoveTeamMemberRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_ListTeamsForUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListTeamsForUserRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).ListTeamsForUser(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_ListTeamsForUser_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).ListTeamsForUser(ctx, req.(*ListTeamsForUserRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _IdentityService_AddSSHKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AddSSHKeyRequest)
 	if err := dec(in); err != nil {
@@ -1044,6 +1248,30 @@ var IdentityService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListOrgMembers",
 			Handler:    _IdentityService_ListOrgMembers_Handler,
+		},
+		{
+			MethodName: "ListTeams",
+			Handler:    _IdentityService_ListTeams_Handler,
+		},
+		{
+			MethodName: "CreateTeam",
+			Handler:    _IdentityService_CreateTeam_Handler,
+		},
+		{
+			MethodName: "DeleteTeam",
+			Handler:    _IdentityService_DeleteTeam_Handler,
+		},
+		{
+			MethodName: "AddTeamMember",
+			Handler:    _IdentityService_AddTeamMember_Handler,
+		},
+		{
+			MethodName: "RemoveTeamMember",
+			Handler:    _IdentityService_RemoveTeamMember_Handler,
+		},
+		{
+			MethodName: "ListTeamsForUser",
+			Handler:    _IdentityService_ListTeamsForUser_Handler,
 		},
 		{
 			MethodName: "AddSSHKey",

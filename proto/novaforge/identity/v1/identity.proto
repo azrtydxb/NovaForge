@@ -27,6 +27,12 @@ service IdentityService {
   // is announced first, and every service removes that organization's data.
   rpc DeleteOrg(DeleteOrgRequest) returns (DeleteOrgResponse);
   rpc ListOrgMembers(ListOrgMembersRequest) returns (ListOrgMembersResponse);
+  rpc ListTeams(ListTeamsRequest) returns (ListTeamsResponse);
+  rpc CreateTeam(CreateTeamRequest) returns (CreateTeamResponse);
+  rpc DeleteTeam(DeleteTeamRequest) returns (DeleteTeamResponse);
+  rpc AddTeamMember(AddTeamMemberRequest) returns (AddTeamMemberResponse);
+  rpc RemoveTeamMember(RemoveTeamMemberRequest) returns (RemoveTeamMemberResponse);
+  rpc ListTeamsForUser(ListTeamsForUserRequest) returns (ListTeamsForUserResponse);
   rpc AddSSHKey(AddSSHKeyRequest) returns (AddSSHKeyResponse);
   rpc ListSSHKeys(ListSSHKeysRequest) returns (ListSSHKeysResponse);
   rpc DeleteSSHKey(DeleteSSHKeyRequest) returns (DeleteSSHKeyResponse);
@@ -86,6 +92,59 @@ message DeleteOrgRequest {
 }
 message DeleteOrgResponse {
   Org org = 1;
+}
+
+// A team is a named group inside an organization carrying a role. The role is the
+// team's own and bounds its members: a team granting "member" grants that much to
+// an owner too, because a narrower grant that widened to its strongest member
+// would not be narrower.
+message Team {
+  string id = 1;
+  string org_id = 2;
+  string name = 3;
+  string role = 4;
+  repeated string member_ids = 5;
+}
+message ListTeamsRequest {}
+message ListTeamsResponse {
+  repeated Team teams = 1;
+}
+message CreateTeamRequest {
+  string name = 1;
+  string role = 2;
+}
+message CreateTeamResponse {
+  Team team = 1;
+}
+message DeleteTeamRequest {
+  string id = 1;
+}
+message DeleteTeamResponse {
+  bool ok = 1;
+}
+message AddTeamMemberRequest {
+  string team_id = 1;
+  // A username or a user id; resolved here so a caller does not have to look it
+  // up first, the same way adding an organization member works.
+  string user = 2;
+}
+message AddTeamMemberResponse {
+  bool ok = 1;
+}
+message RemoveTeamMemberRequest {
+  string team_id = 1;
+  string user = 2;
+}
+message RemoveTeamMemberResponse {
+  bool ok = 1;
+}
+// Which teams a person belongs to. This is what a repository grant naming a team
+// resolves through, so git-platform asks for it rather than reading the schema.
+message ListTeamsForUserRequest {
+  string user_id = 1;
+}
+message ListTeamsForUserResponse {
+  repeated Team teams = 1;
 }
 
 message ListOrgMembersRequest {

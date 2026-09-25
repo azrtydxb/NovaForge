@@ -726,3 +726,72 @@ criteria:
       - ./internal/work TestDoneAtRecordsWhenAnItemCompleted
       - ./internal/work TestCompletedSinceCountsOnlyItemsThatAreDoneNow
       - ./internal/work TestCompletedSinceIsOrganizationScoped
+  S-24/TestWebhookDelivered:
+    status: uncovered
+    note: >-
+      Not built. Task 4 of .procoder/plans/git-parity.md.
+  S-24/TestWebhookSecretNeverReadBack:
+    status: uncovered
+    note: >-
+      Not built. Task 4 of .procoder/plans/git-parity.md.
+  S-25/TestLFSRoundTrip:
+    status: uncovered
+    note: >-
+      Not built. Task 6 of .procoder/plans/git-parity.md.
+  S-25/TestLFSQuotaAndOwnership:
+    status: uncovered
+    note: >-
+      Not built. Task 6 of .procoder/plans/git-parity.md.
+  S-26/TestRepositoryAdministration:
+    status: covered
+    note: >-
+      Rename, default branch, archive and transfer, each applied only when the
+      caller asked for it so a partial update does not silently reset what it did
+      not mention. A repository's directory is root/<org>/<name>.git, so rename and
+      transfer move files as well as rows: each moves the directory then commits
+      and moves it back if the commit fails. Changing the default branch sets the
+      repository's own HEAD, and refuses a branch that does not exist. Archiving
+      refuses writes over both transports through the CapFunc they already share,
+      proven red-green — with the guard unwired an archived repository accepts a
+      real push.
+    go_tests:
+      - ./internal/gitops TestRepositoryAdministration
+      - ./cmd/git-platform TestArchivedRepositoryRefusesAPush
+  S-26/TestRepositoryCollaborator:
+    status: uncovered
+    note: >-
+      Not built. Task 3 of .procoder/plans/git-parity.md.
+  S-27/TestImportFromRemote:
+    status: uncovered
+    note: >-
+      Not built. Task 7 of .procoder/plans/git-parity.md.
+  S-27/TestMirrorRefresh:
+    status: uncovered
+    note: >-
+      Not built. Task 7 of .procoder/plans/git-parity.md.
+  S-28/TestReleaseWithAssets:
+    status: uncovered
+    note: >-
+      Not built. Task 5 of .procoder/plans/git-parity.md.
+  S-29/TestGitOverHTTPS:
+    status: uncovered
+    note: >-
+      Not built. Task 9 of .procoder/plans/git-parity.md.
+  S-30/TestForkAndCrossForkRun:
+    status: uncovered
+    note: >-
+      Not built. Task 8 of .procoder/plans/git-parity.md.
+  S-31/TestTeamAccess:
+    status: covered
+    note: >-
+      Teams are named groups inside an organization carrying a role, which the
+      spec has claimed in S-1 and its Data section since the beginning with nothing
+      implementing them. A team's role is its own and bounds its members: a team
+      granting "member" grants that much to an owner too, because a narrower grant
+      that widened to its strongest member would not be narrower. Names are unique
+      per organization, so two organizations may each have a "reviewers" team.
+      Adding someone twice succeeds and does not duplicate, so a caller retrying
+      after a lost response is not told a failure. A person must already belong to
+      the organization: a team is a narrower grant within it, not a way into it.
+    go_tests:
+      - ./internal/identity TestTeamAccess
