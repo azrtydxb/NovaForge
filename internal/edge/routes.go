@@ -56,6 +56,11 @@ func Routes() []Route {
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/tree/{ref}/*", "getTree", "Tree listing at a path"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/blob/{ref}/*", "getBlob", "File contents"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/diff", "getDiff", "Unified diff between two refs"},
+		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/hooks", "listHooks", "Webhooks registered for a repository; a secret is never returned"},
+		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/hooks", "createHook", "Register a webhook endpoint, optionally with a signing secret"},
+		{http.MethodPatch, "/api/v1/orgs/{org}/repos/{repo}/hooks/{id}", "updateHook", "Rotate a webhook's secret or switch it on and off"},
+		{http.MethodDelete, "/api/v1/orgs/{org}/repos/{repo}/hooks/{id}", "deleteHook", "Remove a webhook and its delivery history"},
+		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/hooks/{id}/deliveries", "listHookDeliveries", "What a webhook's endpoint answered, attempt by attempt"},
 
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/work", "listWorkItems", "Work Items"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/work", "createWorkItem", "Create a Work Item"},

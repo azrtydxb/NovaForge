@@ -21,6 +21,11 @@ service GitService {
   rpc Merge(MergeRequest) returns (MergeResponse);
   rpc CreateBranch(CreateBranchRequest) returns (CreateBranchResponse);
   rpc CreateCommit(CreateCommitRequest) returns (CreateCommitResponse);
+  rpc CreateHook(CreateHookRequest) returns (CreateHookResponse);
+  rpc ListHooks(ListHooksRequest) returns (ListHooksResponse);
+  rpc DeleteHook(DeleteHookRequest) returns (DeleteHookResponse);
+  rpc SetHookSecret(SetHookSecretRequest) returns (SetHookSecretResponse);
+  rpc ListHookDeliveries(ListHookDeliveriesRequest) returns (ListHookDeliveriesResponse);
   // ListOrganizationsWithRepositories is a platform-worker RPC: it answers
   // only a caller presenting a platform token (svcauth.MintPlatform), and only
   // with organization ids. The worker re-enters each organization's scope with
@@ -221,4 +226,84 @@ message CreateCommitRequest {
 }
 message CreateCommitResponse {
   string sha = 1;
+}
+
+// --- Webhooks ---
+// A webhook is an endpoint outside the platform, told when something happens in
+// a repository. The shared secret is write-only: it travels in on CreateHook and
+// SetHookSecret and no response carries it, so has_secret is how a reader learns
+// whether one is set.
+message Hook {
+  string id = 1;
+  string repo_id = 2;
+  string url = 3;
+  // The event names this hook asked for. Empty means every event.
+  repeated string events = 4;
+  bool active = 5;
+  bool has_secret = 6;
+  string created_at = 7;
+}
+
+// HookDelivery is one attempt to call one endpoint. status_code is 0 when there
+// was no HTTP response at all — a refused connection, a timeout — and error then
+// says why.
+message HookDelivery {
+  string id = 1;
+  string hook_id = 2;
+  string event = 3;
+  int32 status_code = 4;
+  string error = 5;
+  int32 attempt = 6;
+  string at = 7;
+}
+
+message CreateHookRequest {
+  string repo = 1;
+  string url = 2;
+  repeated string events = 3;
+  string secret = 4;
+}
+message CreateHookResponse {
+  Hook hook = 1;
+}
+
+message ListHooksRequest {
+  string repo = 1;
+}
+message ListHooksResponse {
+  repeated Hook hooks = 1;
+}
+
+message DeleteHookRequest {
+  string repo = 1;
+  string id = 2;
+}
+message DeleteHookResponse {}
+
+// SetHookSecretRequest rotates the shared secret. An empty secret removes it,
+// which is how a hook is deliberately made unsigned again.
+message SetHookSecretRequest {
+  string repo = 1;
+  string id = 2;
+  string secret = 3;
+  // active is applied only when set_active is true, for the same reason
+  // UpdateRepoRequest carries its own flag: false is indistinguishable from
+  // unset, and rotating a secret must not also switch the hook off.
+  bool active = 4;
+  bool set_active = 5;
+  // set_secret distinguishes "leave the secret alone" from "remove it". Without
+  // it, switching a hook off would silently strip its signature.
+  bool set_secret = 6;
+}
+message SetHookSecretResponse {
+  Hook hook = 1;
+}
+
+message ListHookDeliveriesRequest {
+  string repo = 1;
+  string hook_id = 2;
+  int32 limit = 3;
+}
+message ListHookDeliveriesResponse {
+  repeated HookDelivery deliveries = 1;
 }

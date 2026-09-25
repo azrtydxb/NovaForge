@@ -7,10 +7,20 @@ import {
 } from "@tanstack/react-query";
 import { api, enc } from "../lib/api";
 import { useWorkspace } from "../lib/workspace";
-import { Async, Empty, Failed, Page, Panel, PanelHead } from "../components/ui";
+import {
+  Async,
+  Empty,
+  Failed,
+  mono,
+  Page,
+  Panel,
+  PanelHead,
+} from "../components/ui";
 import { Confirm, Dialog } from "../components/Dialog";
 import type {
   Commit,
+  Hook,
+  HookDelivery,
   OrgMember,
   Ref,
   Repo,
@@ -185,6 +195,7 @@ export function Repos() {
               transfer={transfer}
             />
           ) : null}
+          <Hooks key={`hooks:${w.org}/${active}`} org={w.org!} repo={active} />
           <Browser
             key={`${w.org}/${active}`}
             org={w.org!}
@@ -362,6 +373,258 @@ const adminButton: React.CSSProperties = {
   font: "500 12px var(--sans)",
   cursor: "pointer",
 };
+
+/** Hooks is the webhook panel: the endpoints this repository notifies, and what
+ * each one answered.
+ *
+ * The delivery history is the point of it. A webhook that is quietly failing is
+ * the most common integration complaint there is, and the platform knows exactly
+ * why — a status, or the connection error when there was no response at all — so
+ * the screen shows that rather than a green dot per hook. */
+function Hooks({ org, repo }: { org: string; repo: string }) {
+  const base = `/api/v1/orgs/${enc(org)}/repos/${enc(repo)}/hooks`;
+  const qc = useQueryClient();
+  const [url, setUrl] = useState("");
+  const [events, setEvents] = useState("push");
+  const [secret, setSecret] = useState("");
+  const [open, setOpen] = useState<string | null>(null);
+
+  const hooks = useQuery({
+    queryKey: ["hooks", org, repo],
+    queryFn: () => api.get<{ hooks: Hook[] }>(base),
+  });
+  const invalidate = () =>
+    void qc.invalidateQueries({ queryKey: ["hooks", org, repo] });
+
+  const create = useMutation({
+    mutationFn: () =>
+      api.post<Hook>(base, {
+        url,
+        // An empty field means every event, which is what the platform means by
+        // an empty list — not a hook subscribed to the event named "".
+        events: events
+          .split(",")
+          .map((e) => e.trim())
+          .filter((e) => e !== ""),
+        secret,
+      }),
+    onSuccess: () => {
+      setUrl("");
+      setSecret("");
+      invalidate();
+    },
+  });
+
+  // Switching a hook off sends only `active`, and rotating sends only `secret`:
+  // the edge applies exactly the fields present, so a rotation cannot silently
+  // switch the hook off and switching it off cannot strip its signature.
+  const update = useMutation({
+    mutationFn: (v: { id: string; active?: boolean; secret?: string }) =>
+      api.patch<Hook>(`${base}/${enc(v.id)}`, {
+        ...(v.active === undefined ? {} : { active: v.active }),
+        ...(v.secret === undefined ? {} : { secret: v.secret }),
+      }),
+    onSuccess: invalidate,
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => api.del(`${base}/${enc(id)}`),
+    onSuccess: (_d, id) => {
+      if (open === id) setOpen(null);
+      invalidate();
+    },
+  });
+
+  return (
+    <Panel style={{ marginBottom: 12 }}>
+      <PanelHead>
+        WEBHOOKS
+        <div style={{ flex: 1 }} />
+        <span style={{ font: "11px var(--sans)", color: "var(--fg-faint)" }}>
+          signed with HMAC-SHA256 in X-NovaForge-Signature
+        </span>
+      </PanelHead>
+      <div style={{ padding: 12, display: "grid", gap: 10 }}>
+        <div style={adminRow}>
+          <span style={adminLabel}>Endpoint</span>
+          <input
+            value={url}
+            placeholder="https://example.com/novaforge"
+            onChange={(e) => setUrl(e.target.value)}
+            style={{ ...adminInput, flex: 1 }}
+          />
+          <input
+            value={events}
+            placeholder="push (blank = every event)"
+            onChange={(e) => setEvents(e.target.value)}
+            style={adminInput}
+          />
+          <input
+            value={secret}
+            type="password"
+            placeholder="signing secret (optional)"
+            onChange={(e) => setSecret(e.target.value)}
+            style={adminInput}
+          />
+          <button
+            disabled={url === "" || create.isPending}
+            onClick={() => create.mutate()}
+            style={adminButton}
+          >
+            Add
+          </button>
+        </div>
+        {create.error ? <Failed error={create.error} /> : null}
+        {update.error ? <Failed error={update.error} /> : null}
+        {remove.error ? <Failed error={remove.error} /> : null}
+
+        <Async
+          query={hooks}
+          empty="No webhooks are registered for this repository."
+        >
+          {(data) =>
+            data.hooks.length === 0 ? (
+              <Empty>No webhooks are registered for this repository.</Empty>
+            ) : (
+              <div style={{ display: "grid", gap: 8 }}>
+                {data.hooks.map((h) => (
+                  <div
+                    key={h.id}
+                    style={{
+                      border: "1px solid var(--line)",
+                      borderRadius: 8,
+                      padding: 10,
+                      display: "grid",
+                      gap: 6,
+                    }}
+                  >
+                    <div
+                      style={{ display: "flex", alignItems: "center", gap: 10 }}
+                    >
+                      <span
+                        style={{ ...mono, flex: 1, wordBreak: "break-all" }}
+                      >
+                        {h.url}
+                      </span>
+                      <span
+                        style={{
+                          font: "11px var(--sans)",
+                          color: h.active ? "var(--fg-muted)" : "var(--warn)",
+                        }}
+                      >
+                        {h.active ? "active" : "off"}
+                      </span>
+                      <button
+                        disabled={update.isPending}
+                        onClick={() =>
+                          update.mutate({ id: h.id, active: !h.active })
+                        }
+                        style={adminButton}
+                      >
+                        {h.active ? "Disable" : "Enable"}
+                      </button>
+                      <button
+                        disabled={remove.isPending}
+                        onClick={() => remove.mutate(h.id)}
+                        style={adminButton}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        font: "11px var(--sans)",
+                        color: "var(--fg-faint)",
+                      }}
+                    >
+                      <span>
+                        {h.events.length === 0
+                          ? "every event"
+                          : h.events.join(", ")}
+                      </span>
+                      {/* Whether a secret is set is all the platform will say
+                          about it: it is never sent back, so a rotation is the
+                          only way to know one again. */}
+                      <span>{h.has_secret ? "signed" : "unsigned"}</span>
+                      <div style={{ flex: 1 }} />
+                      <button
+                        onClick={() => setOpen(open === h.id ? null : h.id)}
+                        style={adminButton}
+                      >
+                        {open === h.id ? "Hide deliveries" : "Deliveries"}
+                      </button>
+                    </div>
+                    {open === h.id ? (
+                      <Deliveries org={org} repo={repo} hookID={h.id} />
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            )
+          }
+        </Async>
+      </div>
+    </Panel>
+  );
+}
+
+/** Deliveries is one hook's attempt history, newest first. Each row says what the
+ * endpoint answered; a failure that never reached it at all has no status, so the
+ * error is shown in its place rather than a fabricated 0. */
+function Deliveries({
+  org,
+  repo,
+  hookID,
+}: {
+  org: string;
+  repo: string;
+  hookID: string;
+}) {
+  const deliveries = useQuery({
+    queryKey: ["hook-deliveries", org, repo, hookID],
+    queryFn: () =>
+      api.get<{ deliveries: HookDelivery[] }>(
+        `/api/v1/orgs/${enc(org)}/repos/${enc(repo)}/hooks/${enc(hookID)}/deliveries`,
+      ),
+  });
+  return (
+    <Async query={deliveries} empty="This endpoint has not been called yet.">
+      {(data) =>
+        data.deliveries.length === 0 ? (
+          <Empty>This endpoint has not been called yet.</Empty>
+        ) : (
+          <div style={{ display: "grid", gap: 4 }}>
+            {data.deliveries.map((d) => (
+              <div
+                key={d.id}
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  alignItems: "baseline",
+                  font: "11px var(--mono)",
+                  color: d.delivered ? "var(--fg-muted)" : "var(--bad)",
+                }}
+              >
+                <span style={{ minWidth: 150 }}>{d.at}</span>
+                <span style={{ minWidth: 60 }}>{d.event}</span>
+                <span style={{ minWidth: 70 }}>
+                  {d.status_code === 0 ? "no response" : d.status_code}
+                </span>
+                <span style={{ minWidth: 70 }}>attempt {d.attempt}</span>
+                <span style={{ flex: 1, wordBreak: "break-word" }}>
+                  {d.error}
+                </span>
+              </div>
+            ))}
+          </div>
+        )
+      }
+    </Async>
+  );
+}
 
 function Browser({
   org,

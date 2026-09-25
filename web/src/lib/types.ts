@@ -65,6 +65,34 @@ export interface TreeEntry {
   size: number;
 }
 
+/** A registered endpoint outside the platform, told when something happens in a
+ * repository. There is no secret field on purpose: the platform never sends one
+ * back, so `has_secret` is all a reader can be told about it. */
+export interface Hook {
+  id: string;
+  repo_id: string;
+  url: string;
+  /** The events this hook asked for. Empty means every event. */
+  events: string[];
+  active: boolean;
+  has_secret: boolean;
+  created_at: string;
+}
+
+/** One attempt to call one endpoint. `status_code` is 0 when there was no HTTP
+ * response at all — a refused connection, a timeout — and `error` then says why,
+ * which is why `delivered` is sent rather than left to the screen to infer. */
+export interface HookDelivery {
+  id: string;
+  hook_id: string;
+  event: string;
+  status_code: number;
+  error: string;
+  attempt: number;
+  at: string;
+  delivered: boolean;
+}
+
 export interface WorkItem {
   id: string;
   key: string;
