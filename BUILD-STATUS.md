@@ -897,11 +897,18 @@ These are real and are not worked around:
   bytes and Helm binary together. Until an operator supplies one and configures
   it, deploy-to-staging and deploy-to-production remain `approvals.Decide` rules
   that nothing follows. No deployment has been executed on this cluster.
-- **A brokered credential is short-lived only as a lease.** The lease that
-  hands a job its secret is single-use and expires, but the value it carries is
-  the stored secret itself, not a rotated or scoped credential; a job that
-  leaks it leaks the real thing. Production values go to a production job on
-  the default branch, and any member can push to the default branch directly.
+- **Brokered credentials need a dynamic provider this cluster does not have.**
+  The broker no longer hands out a stored value dressed as an expiring
+  credential: without a provider binding it refuses, with "no dynamic credential
+  provider binding configured". That is the right behaviour and it means the
+  path is unavailable rather than weak — but it is also unavailable here. The
+  binding is operator-owned (`NF_OPENBAO_CONFIG_FILE`, the chart's `openbao`
+  secret, empty by default), no OpenBao is deployed on kw, and so the
+  brokered-secret job in `work_ci` cannot run. That suite fails and names this
+  prerequisite rather than reporting a bare CI failure. S-12 itself is covered
+  by Go tests against a real OpenBao HTTP fixture, not by this e2e step.
+  Production values still go to a production job on the default branch, and any
+  member can push to the default branch directly.
 - **Dependency detection reads four manifest kinds.** go.mod, package.json,
   requirements*.txt and Cargo.toml; a dependency added any other way is not
   seen by the approval policy. The advisory database is no longer a network
