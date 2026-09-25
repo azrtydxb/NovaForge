@@ -207,7 +207,7 @@ func (vs *VectorStore) Upsert(ctx context.Context, orgID, repoID uuid.UUID, path
 		}
 	}
 
-	tx, err := vs.pool.Begin(ctx)
+	tx, err := beginIndexWrite(ctx, vs.pool, orgID, repoID)
 	if err != nil {
 		return fmt.Errorf("begin: %w", err)
 	}

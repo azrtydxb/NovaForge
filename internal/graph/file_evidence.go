@@ -5,14 +5,17 @@ import (
 	"fmt"
 )
 
-// FileEvidence binds parsed graph data to exact source and root module bytes.
+// FileEvidence binds parsed graph data to exact source and nearest module bytes.
 // Missing evidence (including legacy rows) cannot support absence-based scans.
 // Complete means extraction succeeded, not that static references capture all
 // dynamic behavior or external consumers.
 type FileEvidence struct {
 	ContentHash string
 	ModuleHash  string
-	Complete    bool
+	// ModulePath is the literal repository-relative nearest ancestor go.mod;
+	// empty means known absent. Hash alone cannot detect a moved go.mod.
+	ModulePath string
+	Complete   bool
 }
 
 // SourceDigest fingerprints bytes without storing another copy of source code.
