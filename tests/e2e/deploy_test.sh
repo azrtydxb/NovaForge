@@ -129,6 +129,50 @@ PUSHED="$(git rev-parse HEAD)"
 cd - >/dev/null
 ok "pushed $PUSHED with a standard git client"
 
+echo "== 4b. the same clone and push work over HTTPS, and plaintext on the TLS port is refused =="
+# Step 4 uses the plaintext port, which is in-cluster only: a credential on it
+# crosses the network in the clear. This step is the one that proves the
+# transport an external client is given.
+#
+# The certificate cert-manager issues carries DNS names, not the LoadBalancer
+# address, so the URL uses the in-cluster service name and git's
+# http.curloptResolve sends the connection to the address. That verifies the
+# real chain against the real name — GIT_SSL_CAINFO is the issuing CA and
+# sslVerify stays on — without the install having to know its own IP.
+TLS_PORT=8443
+GIT_DNS="$REL-git-platform.$NS.svc"
+CA="$(mktemp)"
+$KC get secret "$REL-git-platform-tls" -o jsonpath='{.data.ca\.crt}' | base64 -d >"$CA" ||
+	fail "the git-platform TLS Secret has no ca.crt; is the cert-manager Certificate issued?"
+[ -s "$CA" ] || fail "the git-platform TLS Secret's ca.crt is empty"
+TLSWORK="$(mktemp -d)"
+git -c "http.curloptResolve=$GIT_DNS:$TLS_PORT:$GIT_IP" -c "http.sslCAInfo=$CA" \
+	clone "https://$USER:$TOKEN@$GIT_DNS:$TLS_PORT/$ORG/$REPO.git" "$TLSWORK/repo" ||
+	fail "git clone over HTTPS failed"
+grep -q "end-to-end test" "$TLSWORK/repo/README.md" || fail "the HTTPS clone did not carry the pushed content"
+cd "$TLSWORK/repo"
+git config user.email e2e@example.com
+git config user.name "E2E"
+echo "third commit over https" >>README.md
+git add README.md
+git commit -q -m "e2e: pushed over https"
+git -c "http.curloptResolve=$GIT_DNS:$TLS_PORT:$GIT_IP" -c "http.sslCAInfo=$CA" push origin HEAD:main ||
+	fail "git push over HTTPS failed"
+TLS_PUSHED="$(git rev-parse HEAD)"
+cd - >/dev/null
+ok "cloned and pushed $TLS_PUSHED over HTTPS against the served certificate"
+
+# A plaintext request on the TLS port must be refused, not answered: a client
+# that is downgraded — or one that never tried TLS — would otherwise hand over
+# its token in the clear and see the push succeed.
+if curl -fsS --max-time 15 "http://$GIT_IP:$TLS_PORT/$ORG/$REPO.git/info/refs?service=git-upload-pack" >/dev/null 2>&1; then
+	fail "the TLS port answered a plaintext HTTP request: a client can be silently downgraded"
+fi
+if git -c http.sslVerify=false clone "http://$USER:$TOKEN@$GIT_IP:$TLS_PORT/$ORG/$REPO.git" "$TLSWORK/plain" >/dev/null 2>&1; then
+	fail "git cloned over plaintext http:// from the TLS port"
+fi
+ok "plaintext on the TLS port is refused"
+
 echo "== 5. the same repository works over SSH =="
 SSH_IP="$GIT_IP"
 KEYDIR="$(mktemp -d)"
@@ -156,6 +200,7 @@ ok "cloned and pushed $SSH_PUSHED over SSH"
 
 echo "== 6. the pushed commit is readable through the REST API =="
 /tmp/nf repo log "$REPO" main | grep -q "${PUSHED:0:8}" || fail "HTTPS-pushed commit not visible through the API"
+/tmp/nf repo log "$REPO" main | grep -q "${TLS_PUSHED:0:8}" || fail "HTTPS-pushed commit not visible through the API"
 /tmp/nf repo log "$REPO" main | grep -q "${SSH_PUSHED:0:8}" || fail "SSH-pushed commit not visible through the API"
 /tmp/nf repo branches "$REPO" | grep -q main || fail "main branch not listed"
 ok "commit and branch visible through the API"
