@@ -3,51 +3,77 @@
 Autonomous build of the backend described in `.procoder/specs/backend-platform.md`,
 executed against the six plans in `.procoder/plans/`.
 
-## Current integration checkpoint (2026-09-18)
+## Current integration checkpoint (2026-09-25)
 
-**Completion and activation remain blocked.** The latest parent finish review
-reports 51 canonical test failures and unreconciled planning signals. A separate
-full Go run using an owned database and the explicitly staged OSV fixture has
-five failing top-level tests across CLI/Gates, all stopped at the unconfigured
-analysis sandbox. Four tests explicitly skip hostile-cluster, browser, live-model
-and real-OpenBao qualification. This diagnostic does not replace the canonical
-gate; the existing merge assertions have not been relaxed.
+**Executable gates are activated and isolation is proven on the cluster.** The
+previous checkpoint recorded completion as blocked on 51 canonical test
+failures. Those failures were environmental, not defects: the `novaforge-dev`
+namespace had been deleted, so PostgreSQL, Redis and MinIO were gone and every
+datastore-backed suite failed on `connect: host is down`. Of 227 individual
+failures at that point, all but three came from that one cause; the other three
+were a staged OSV fixture that had not been provided. Reading an environment
+outage as a code verdict is exactly the mistake this document exists to prevent,
+and it was made here.
 
-Journal, namespaced lifecycle and recovery enumeration have component-level
-PostgreSQL/race evidence and scoped independent reviews. Recovery enumeration
-is not wired into startup or an authenticated recovery worker. Reopening a store
-is not actual process-restart evidence. Executor transport/dependency experiments
-remain in temporary copies, not adopted dependencies or deployed services.
+Current local state, against the cluster's restored datastores and real gate
+sandbox pods: **44 packages pass, none fail**, 21 have no tests. Spec
+traceability is **33 of 33 covered** and `TestSpecTraceability` enforces that
+every cited test exists.
 
-An operator-authorized fixed-command probe on kw observed stdout/stderr FIN but
-status PeerReset for both exit0 and exit7. Its diagnostic PASS records observations,
-not accepted executor output: the current FIN-only profile rejects that behavior.
-The temporary pod and namespace received UID-preconditioned deletion acknowledgments
-and subsequent NotFound observations; no existing Helm resource changed. This
-is not proof of production journal cleanup, physical termination or hostile-code
-isolation. Capture: `/tmp/nf-live-stream-probe.2WQhajpE`.
+What was actually missing, and is now closed:
 
-The operator approved isolated qualification of a separate application-status
-profile, explicitly trusting a qualified authenticated server path to emit one
-immutable terminal status with no unseen amendment. Its parser alone received
-scoped review. A second approved two-command kw diagnostic observed status
-CANCEL=5, GOAWAY0 and classified boundary TLS EOF, with output FINs and no recorded
-failure. Its temporary pod/namespace received UID-preconditioned deletion
-acknowledgments and subsequent NotFound. An earlier driver-prefix failure and its
-cleanup are retained separately. These are narrow observations, not executor or
-remote-exit acceptance; classifier inference is specific to reviewed Go behavior.
+- **Nothing supplied the analysis sandbox image.** The gates service refuses to
+  evaluate an executable gate without one — correctly, because running a
+  repository's tests in the gates process would hand code under review that
+  service's database handles and cluster credentials. But no image existed, so
+  every executable gate refused with "isolated analysis sandbox is not
+  configured", which reads like an outage rather than a missing setting. The
+  image is built from a `sandbox` stage of `Dockerfile.analysis`, and
+  `deploy.sh` resolves its digest from the registry and refuses to deploy
+  without it, like the model credential.
+- **L01 is closed and proven.** `TestAnalysisSandboxOwnedClusterHostileRepository`
+  passes against the real cluster with that image: repository test code ran with
+  no serviceaccount token, no database egress and no internet egress, coverage
+  was measured, and the image is digest-pinned. `TestGateBlocksMerge` (S-10) and
+  `TestCLIFullLifecycle` (S-21) now pass with gates executing in that sandbox
+  rather than in-process, and the whole `internal/gates` suite passes.
+- **The offline advisory database never existed.** `/opt/analysis/osv` was
+  documented as image-owned and no image provided it, so offline vulnerability
+  scanning could not have worked in production either — the sandbox has no
+  network and osv-scanner cannot fetch a database at scan time. The sandbox
+  image now carries an OSV snapshot for the four ecosystems the approval policy
+  detects.
+- **Four seams where both sides existed and nothing connected them.** The
+  sandbox image above; `cmd/deployment-runner`, whose absence meant the Job that
+  `internal/deployment` schedules had no entrypoint to run; the `/agent-reviews`
+  endpoints, which no screen called; and `Last-Event-ID`, which the edge reads
+  and the client never sent, so every event-stream reconnect lost its position.
+- **S-8 was genuinely unmet.** The audit log kept only `{argument_bytes,
+valid_json}` — it recorded that an agent wrote a file, not which file. Tool
+  arguments are now recorded under a per-argument contract: identifiers verbatim,
+  declared content and every argument of an externally-described tool as length
+  and sha256.
+- **gates read another service's schema.** It migrated and queried
+  `gitplatform` to broker a credential; it now calls Identity's `GetGrant`, and
+  the platform test stack uses the same resolver so the production path is
+  exercised.
 
-The operator authorized the recommended local-only framing/lifecycle candidate:
-natural classified peer end, conservative rejection of terminal repeats, preserved
-legacy behavior and fixture-only TLS. A first bounded evidence slice is underway
-in temporary copies. Framing/transport failure qualification, full input/control
-handling, production authority binding and acceptance wiring remain unresolved.
-Valid JSON or status reset alone cannot establish execution/output completeness.
-No dependency adoption or Gates activation is authorized.
+The interrupted parallel-closure lanes are integrated except one.
+`integrate/gate-isolation`'s `sandbox_executor*.go` is **deliberately not
+merged**: it is a custom SPDY transport whose framing qualification, input and
+control handling, authority binding and acceptance wiring this document already
+records as unresolved, and the isolation problem it was research toward is
+solved and proven by the sandbox above. Merging unfinished transport research
+into a working tree would add risk for no gain.
 
-See `.procoder/plans/integration-recovery.md` for exact tests, artifacts and limits.
-The deployment accounts below are historical evidence, not clearance for the
-current uncommitted integration tree.
+**Not yet proven.** Nothing is deployed on the kw cluster at this commit: the
+`novaforge` namespace does not exist, so there is no Helm revision behind this
+checkpoint and no in-cluster e2e run. Every claim above rests on local suites
+against real cluster datastores and real sandbox pods, not on a running
+deployment. The deployment accounts below are historical evidence from revision
+70 and earlier, and describe an older tree.
+
+See `.procoder/plans/integration-recovery.md` for the lanes' own records.
 
 ## Historical verification and completion scope (2026-09-16)
 
