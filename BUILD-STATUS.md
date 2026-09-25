@@ -93,18 +93,29 @@ did not use it — none of them reachable from a local suite:
 Admission failures are now logged. The reason was discarded, which is why the
 first of these took two deploy cycles to identify rather than one.
 
-**Not proven, and why.** Two suites do not pass, neither for a defect in this
-tree:
+**In-cluster result: nine of twelve suites pass** — airgap, deploy, gui, search,
+graph, agent_ci, merge, cli and crossorg. `merge`, `cli` and `agent_ci` are the
+ones that matter most here: they exercise a real gate evaluation inside the
+sandbox, a full Agent Run, and a CI-sponsored Agent Run.
+
+**The three that do not pass, and why none is a defect in this tree:**
 
 - `work_ci` needs a dynamic credential provider to broker its job's secret.
   None is deployed (see the limitation below). The suite now names that
   prerequisite instead of reporting a bare CI failure.
-- `agent` needs several sequential model calls. The FastLLM gateway is flapping:
-  one of three identical requests succeeded and the others returned "no healthy
-  backend", while the upstream served the model directly in 12ms. The run failed
-  honestly — the model error is its recorded summary — rather than being marked
-  succeeded, which is the verification behaviour working. This is model
-  infrastructure, outside this repository.
+- `factory` and `agent` both need model calls, and the FastLLM gateway is
+  flapping. One of three identical requests succeeded and the others returned
+  502 "no healthy backend for model cacheaffinity-qwen3-6-35b-a3b-nvfp4", while
+  the upstream served the same model directly in 12ms. Both suites have passed
+  on this deployment when the backend was healthy — `factory` passed in an
+  earlier run of this same tree and failed in a later one with that exact error,
+  which is what distinguishes infrastructure from code. An Agent Run needs
+  several sequential calls, so it fails more reliably than a single
+  decomposition.
+
+  The failure is recorded honestly rather than hidden: the run's summary is the
+  model error and its state is failed, not succeeded. That is the verification
+  behaviour working — a run that did nothing is not a success.
 
 The deployment accounts below are historical evidence from revision 70 and
 earlier, and describe an older tree.
