@@ -57,7 +57,12 @@ func TestRunRefreshesLegacyEvidenceWithoutPush(t *testing.T) {
 			t.Error("Run did not cancel refresh")
 		}
 	}()
-	deadline := time.Now().Add(6 * time.Second)
+	// What is asserted is that startup refreshes legacy evidence at all, without
+	// a push — not how quickly. The bound was 6 seconds, which this refresh has
+	// taken on its own against the cluster's database, so under the rest of the
+	// suite it failed for being slow rather than for never happening. A generous
+	// bound costs nothing when the refresh works and still fails when it does not.
+	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
 		var valid bool
 		err := pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM graph.graph_nodes WHERE org_id=$1 AND repo_id=$2 AND kind='file' AND attrs->>'path'='a.go' AND attrs->>'source_hash'=$3) AND EXISTS(SELECT 1 FROM graph.graph_nodes WHERE org_id=$1 AND repo_id=$2 AND key=$2::text AND attrs->>'sha'=$4 AND attrs ? 'extraction_version')`, org, repoID, graph.SourceDigest([]byte(goSrc)), sha).Scan(&valid)
