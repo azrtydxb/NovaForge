@@ -3,6 +3,78 @@
 Autonomous build of the backend described in `.procoder/specs/backend-platform.md`,
 executed against the six plans in `.procoder/plans/`.
 
+## Git-parity checkpoint (2026-09-26) — built and tested, NOT deployed
+
+The nine parity tasks in `.procoder/plans/git-parity.md` are all merged to `main`.
+Spec traceability is now **42 of 47 covered, 5 partial, none uncovered**, and
+`TestSpecTraceability` enforces that every cited test exists. `go test ./...`
+reports no failures; `go build`, `go vet`, `gofmt`, `tsc -b` and the web build are
+clean.
+
+**None of it has run on the cluster, and that is the headline.** The deployment
+still serves `b84ffec`. Images could not be pushed: the Nexus registry answers
+every blob upload with HTTP 500 —
+
+```
+POST https://192.168.10.131:5000/v2/novaforge/<svc>/blobs/uploads/
+  -> 500 {"errors":[{"code":"UNKNOWN","message":"unknown","detail":null}]}
+```
+
+Reads from the registry are fine (catalog and tag lists answer, nodes can still
+pull), so this is the registry host's write path, not NovaForge code and not
+BuildKit — the builds themselves succeed and fail only at export. Until that is
+fixed, everything from tasks 4 through 9 is **built and unit-proven, not
+platform-proven**, which by this document's own standard means not proven. Nothing
+below should be read as "works on the cluster".
+
+What landed, and how much each is actually worth:
+
+- **Webhooks (S-24)** — partial: pushes only. Runs and CI results are not published
+  on any stream, so there is nothing to route.
+- **Releases and assets (S-28)** — covered locally. Assets stream at the store, RPC
+  and edge layers; keys are org-scoped.
+- **Git LFS (S-25)** — partial: HTTP only. There is no `git-lfs-authenticate` over
+  SSH, so a clone over `ssh://` will not fetch LFS objects.
+- **Repository collaborators and teams (S-26, S-31)** — covered locally.
+  `authz.RequireOrg` now refuses a repository-limited scope, so the thirty-five
+  call sites that authorize with it fail closed without being touched.
+- **Import and mirroring (S-27)** — partial. Import works from an in-cluster
+  remote; `git-platform` is in `networkPolicy.airGapped`, so an import from GitHub
+  or a public Gitea fails at connect until an operator removes it from that list.
+- **HTTPS on the Git endpoint (S-29)** — partial. The Go tests cover a clone and
+  push over TLS, refusal of plaintext on the TLS port, refusal of an unreadable
+  keypair, and certificate renewal without a restart. The e2e HTTPS step in
+  `tests/e2e/deploy_test.sh` is written and **has never executed**.
+- **Forks and cross-fork runs (S-30)** — partial. A cross-fork run is judged by the
+  parent's gates and approval rules with no path around them, but it cannot
+  _satisfy_ a gate that reads the change's tree: a gate runner materializes the
+  workspace from the target repository, where the fork's objects are absent until
+  the merge fetches them. Such a run is refused, never waved through.
+
+Three gaps were found by breaking the implementation rather than by reading it,
+and each is now pinned by a test that was seen red:
+
+- **The LFS blob key was scoped by org and repository for a stated security
+  reason, and nothing pinned it.** Replacing the key with `lfs/<oid>` broke no
+  test — what actually refuses a request is the org-scoped row lookup.
+- **`COALESCE(source_repo_id, repo_id)` was load-bearing and untested.** Removing
+  it from both read queries broke nothing, because the Go-side default masked it.
+  The case it protects is a rolling deploy, where an older binary inserts a run
+  without the column; a nil source repository then makes the gate lookup resolve a
+  repository that does not exist, breaking every legacy run's gate evaluation.
+- **`TestCrossForkRun` asserted refusal, which proves nothing about authority.** A
+  cross-fork run is refused for several reasons, and "the gates could not be read
+  at all" looks identical from outside to "the parent's gate was not satisfied".
+  Naming the fork as the run's repository still refused the merge. The refusal must
+  now name the gate the parent declared.
+
+One real defect was found by the merge itself, in code neither lane wrote:
+`database.Migrate` used `CREATE SCHEMA IF NOT EXISTS`, which is not atomic against
+a concurrent create. Two services migrating a virgin database together both found
+the schema absent and the loser got a unique violation on `pg_namespace`. It
+presented as `internal/gitops` failing **only on the first run against a freshly
+created database** — which reads exactly like a broken migration and is not one.
+
 ## Current integration checkpoint (2026-09-25)
 
 **Executable gates are activated and isolation is proven on the cluster.** The
@@ -17,8 +89,8 @@ and it was made here.
 
 Current local state, against the cluster's restored datastores and real gate
 sandbox pods: **44 packages pass, none fail**, 21 have no tests. Spec
-traceability is **33 of 33 covered** and `TestSpecTraceability` enforces that
-every cited test exists.
+traceability was **33 of 33 covered** at that point; the spec has since grown to
+47 criteria (see the 2026-09-26 checkpoint above).
 
 What was actually missing, and is now closed:
 
@@ -914,6 +986,40 @@ two-factor. Four of those needed edge routes that were never written.
 ## Known limitations
 
 These are real and are not worked around:
+
+- **The registry will not accept a push, so nothing since `b84ffec` is deployed.**
+  Nexus answers every blob upload with HTTP 500 and an error body of
+  `{"code":"UNKNOWN"}`; reads are unaffected. Builds succeed and fail only at
+  export. Everything from git-parity tasks 4 through 9 is therefore built and
+  unit-proven and **not platform-proven**. This is the registry host, outside this
+  repository.
+- **A repository cannot be imported from a host outside the cluster.**
+  `git-platform` is in `networkPolicy.airGapped`, so import and mirror refresh
+  reach in-cluster remotes only; an import from GitHub or a public Gitea fails at
+  connect. `values.yaml` was deliberately not changed — removing a service from
+  that list is the operator's egress decision, not a configuration oversight. So
+  "import works" here does not mean "you can migrate off github.com".
+- **Deleting a repository leaves its LFS payloads in the bucket.** The rows go and
+  the objects stay, matching the existing behaviour for release assets. Neither is
+  reclaimed by anything today.
+- **LFS works over HTTP and not over SSH.** There is no `git-lfs-authenticate` on
+  the SSH transport, so a clone reaching the platform over `ssh://` will not fetch
+  LFS objects, and the failure is git-lfs's own rather than a message from here.
+- **A cross-fork run cannot satisfy a gate that reads the change's tree.** A gate
+  runner materializes the workspace from the target repository, where a fork's
+  objects are absent until the merge fetches them. The run is refused — fail-closed,
+  never waved through — so a fork's change can be reviewed and merged only in a
+  target whose required gates do not need the source tree.
+- **Forking into another organization is refused.** Copying one organization's
+  entire history into another is authorized by neither side, so `to_org` is
+  validated rather than ignored. Cross-fork runs stay within one organization. This
+  deviates from the plan, which implied cross-org forks.
+- **HTTPS on the Git endpoint has never been exercised in a pod.** The e2e step is
+  written and has not run, so the interaction with a real cert-manager certificate
+  — renewal in particular — is unproven, whatever the Go tests show.
+- **Neither `nf` nor any e2e script covers forks, import or mirroring.** They are
+  reachable through the REST API and the GUI only, which by this document's standard
+  means the CLI path is untested rather than working.
 
 - **The model gateway needs a credential this repository does not carry.**
   `hack/env.local.sh` is untracked and holds `AI_API_KEY` and

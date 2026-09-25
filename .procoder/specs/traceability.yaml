@@ -856,13 +856,48 @@ criteria:
       - ./internal/gitops TestRepositoryCollaboratorGrants
       - ./internal/authz TestRepoLimitedScopeIsRefusedByRequireOrg
   S-27/TestImportFromRemote:
-    status: uncovered
+    status: partial
     note: >-
-      Not built. Task 7 of .procoder/plans/git-parity.md.
+      An imported repository carries the remote's commits, branches and tags. The
+      clone lands in a throwaway directory moved into place only once complete, so a
+      failed import leaves no row and no directory — verified red by removing the
+      cleanup. That assertion had to be strengthened: git removes its own target
+      directory when a clone fails, so the obvious test passed with no cleanup at all;
+      what catches the leak is a clone that succeeds and an insert that is then
+      refused as a duplicate name.
+
+      Partial, not covered: git-platform is in the chart's networkPolicy.airGapped,
+      so its egress is cluster-only and an import from GitHub or a public Gitea fails
+      at connect until an operator removes it from that list. Import works from an
+      in-cluster remote. values.yaml was deliberately left alone — that is the
+      operator's trade-off. No e2e suite, no nf CLI support, never run in a pod.
+    go_tests:
+      - ./internal/gitops TestImportFromRemote
   S-27/TestMirrorRefresh:
-    status: uncovered
+    status: covered
     note: >-
-      Not built. Task 7 of .procoder/plans/git-parity.md.
+      A mirror picks up a new upstream commit when the mirrorer runs, and a push to a
+      mirror is refused naming upstream as the owner of its history — refused through
+      newCapFunc, so both the HTTP and SSH transports are covered from one place.
+
+      The upstream credential reaches git through GIT_ASKPASS, never argv, a file or a
+      URL; validateRemote refuses a remote carrying userinfo rather than stripping it,
+      so a pasted token is reported and can be revoked. It is stored AES-GCM under the
+      service KEK, and the test greps the stored remote and credential columns, the
+      value read back through GetMirror, the mirrorer's log on a failing refresh and
+      the recorded last_error — verified red by storing it in plain text.
+
+      The seam is asserted, not assumed: TestGitPlatformStartsTheMirrorer type-checks
+      cmd/git-platform and insists on a call to (*gitops.Mirrorer).Run, because a
+      mirror nobody refreshes presents as silence — an imported repository that never
+      changes, indistinguishable from an upstream nobody has pushed to. Verified red
+      by replacing the goroutine with "_ = mirrorer".
+
+      Not proven on the cluster: never run in a pod.
+    go_tests:
+      - ./internal/gitops TestMirrorRefresh
+      - ./internal/gitops TestMirrorCredentialIsEncryptedAndNeverLogged
+      - ./internal/gitops TestGitPlatformStartsTheMirrorer
   S-28/TestReleaseWithAssets:
     status: covered
     note: >-
@@ -884,13 +919,60 @@ criteria:
       - ./internal/gitops TestReleaseAssetKeysAreOrgScoped
       - ./internal/gitops TestReleaseAssetStreamsThroughTheRPC
   S-29/TestGitOverHTTPS:
-    status: uncovered
+    status: partial
     note: >-
-      Not built. Task 9 of .procoder/plans/git-parity.md.
+      A clone and a push complete over HTTPS, including by the certificate's DNS name;
+      a plaintext request on the TLS port is refused; an unreadable keypair refuses at
+      construction rather than serving without TLS; and a renewed certificate is
+      picked up without a restart — verified red by loading the keypair once, which is
+      what a naive implementation does and what would break every clone at renewal.
+      TestChartTLSPortMatchesTheServedPort pins the chart's port to the served one.
+
+      Partial, not covered: the e2e HTTPS step in tests/e2e/deploy_test.sh is written
+      and has never executed, so nothing here has been exercised against a real
+      cert-manager certificate in a pod. A test never run proves nothing.
+    go_tests:
+      - ./internal/gitops TestCloneAndPushOverHTTPS
+      - ./internal/gitops TestCloneOverHTTPSByTheCertificateDNSName
+      - ./internal/gitops TestPlaintextRequestOnTheTLSPortIsRefused
+      - ./internal/gitops TestNewTLSServerRefusesAnUnreadableKeypair
+      - ./internal/gitops TestTLSServerPicksUpARenewedCertificate
   S-30/TestForkAndCrossForkRun:
-    status: uncovered
+    status: partial
     note: >-
-      Not built. Task 8 of .procoder/plans/git-parity.md.
+      A fork carries the parent's history, records its parent id, and a push to the
+      fork leaves the parent's refs unchanged. It is a real clone with no alternates,
+      and its origin remote is removed — a bare clone leaves a remote whose refspec
+      lets a plain git fetch overwrite the fork's own refs from upstream.
+
+      A cross-fork run merges through the one existing merge path: mergeRefs gained a
+      single sourceRepoPath parameter and fetches the fork's ref into the throwaway
+      clone, never into the bare target, which would publish a ref before any gate had
+      authorized it. Verified red by dropping SourceRepo from the MergeRequest.
+
+      Gate authority is the criterion that mattered most and the one the first test
+      did not earn: refusal alone does not distinguish "the parent's gate was not
+      satisfied" from "the gates could not be read at all", and naming the fork as the
+      run's repository still refused the merge. The test now requires the refusal to
+      name the gate the PARENT declared. Resolve is given the target branch's SHA
+      rather than a ref name, so definitions are pinned by content address and a fork
+      cannot substitute its own.
+
+      The default is pinned at the layer that can regress it. Removing
+      COALESCE(source_repo_id, repo_id) from both read queries broke no test, because
+      the Go-side default masked it; the case it protects is a rolling deploy where an
+      older binary inserts a run without the column, and a nil source repository makes
+      the gate lookup resolve a repository that does not exist.
+
+      Partial, not covered: a cross-fork run cannot SATISFY a gate that reads the
+      change's tree, because a gate runner materializes the workspace from the target
+      repository, where a fork's objects are absent until the merge fetches them. Such
+      a run is refused, never waved through. Forking into another organization is
+      refused outright. No e2e suite, no nf CLI support, never run in a pod.
+    go_tests:
+      - ./internal/gitops TestForkCarriesHistoryAndIsolatesWrites
+      - ./internal/reviews TestCrossForkRun
+      - ./internal/reviews TestRunWithNoSourceRepositoryReadsAsItsOwn
   S-31/TestTeamAccess:
     status: covered
     note: >-

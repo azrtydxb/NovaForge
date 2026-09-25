@@ -194,3 +194,66 @@ func TestGetRunByNumber(t *testing.T) {
 		t.Fatal("another organization resolved this repository's run by number")
 	}
 }
+
+// TestRunWithNoSourceRepositoryReadsAsItsOwn pins the default at the layer that
+// can actually regress it.
+//
+// CreateRun fills source_repo_id in Go, so no row this binary writes is ever
+// NULL, and the migration backfilled every row that existed before the column
+// did. The reads still apply COALESCE(source_repo_id, repo_id), and removing
+// that COALESCE broke no test — the Go-side default masked it. The case it
+// protects is a rolling deploy: an older binary, still running against the
+// migrated schema, inserts a run without the column. Such a row must read back
+// as a run in its own repository, not as the nil UUID — a nil source repository
+// makes the gate lookup try to resolve a repository that does not exist, so
+// every legacy run's gate evaluation would fail.
+//
+// The row is therefore inserted with raw SQL, because CreateRun cannot produce
+// the state under test.
+func TestRunWithNoSourceRepositoryReadsAsItsOwn(t *testing.T) {
+	pool := storePool(t)
+	store := reviews.NewStore(pool)
+	orgID := uuid.New()
+	repoID := uuid.New()
+	runID := uuid.New()
+	ctx := scopedCtx(orgID)
+
+	_, err := pool.Exec(context.Background(), `
+		INSERT INTO reviews.runs (
+			id, org_id, repo_id, number, title, source_ref, target_ref,
+			state, author_id, author_kind, source_repo_id
+		) VALUES ($1, $2, $3, 1, 'written by an older binary', 'feature', 'main',
+			'open', $4, 'user', NULL)`,
+		runID, orgID, repoID, uuid.New())
+	if err != nil {
+		t.Fatalf("insert a run with no source repository: %v", err)
+	}
+
+	run, err := store.GetRun(ctx, runID)
+	if err != nil {
+		t.Fatalf("GetRun on a row with a NULL source repository: %v", err)
+	}
+	if run.SourceRepoID != repoID {
+		t.Fatalf("source repository = %s, want the run's own repository %s", run.SourceRepoID, repoID)
+	}
+
+	// ListRuns reads the same column through its own query, so it is asserted too
+	// rather than assumed to share GetRun's.
+	runs, err := store.ListRuns(ctx, orgID, repoID, "")
+	if err != nil {
+		t.Fatalf("ListRuns: %v", err)
+	}
+	var found bool
+	for _, r := range runs {
+		if r.ID != runID {
+			continue
+		}
+		found = true
+		if r.SourceRepoID != repoID {
+			t.Fatalf("listed source repository = %s, want the run's own repository %s", r.SourceRepoID, repoID)
+		}
+	}
+	if !found {
+		t.Fatalf("run %s was not listed for its repository", runID)
+	}
+}
