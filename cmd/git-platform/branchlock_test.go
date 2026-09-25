@@ -149,7 +149,7 @@ func TestAgentBranchLockedDuringRun(t *testing.T) {
 
 	root, repoName := p.GitRoot, repo.Name
 	gitSrv := gitops.NewGRPCServer(p.Pool, root)
-	caps := newCapFunc(p.Grants, newBranchLockGuard(p.Agents, platformtest.HMACSecret, repoIDResolver(p.Pool)), newArchiveGuard(p.Pool))
+	caps := newCapFunc(p.Grants, newBranchLockGuard(p.Agents, platformtest.HMACSecret, repoIDResolver(p.Pool)), newArchiveGuard(p.Pool), newCollaboratorGuard(repoIDResolver(p.Pool)))
 
 	// --- HTTPS transport ---
 	auth := func(ctx context.Context, user, pass, orgRef string) (authz.Scope, error) {

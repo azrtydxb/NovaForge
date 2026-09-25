@@ -25,7 +25,7 @@ func TestArchivedRepositoryRefusesAPush(t *testing.T) {
 	repo := p.NewRepo(t, owner, org, "frozen", nil)
 	orgID := uuid.MustParse(org.ID)
 
-	caps := newCapFunc(p.Grants, func(context.Context, authz.Scope, uuid.UUID, string, []string) error { return nil }, newArchiveGuard(p.Pool))
+	caps := newCapFunc(p.Grants, func(context.Context, authz.Scope, uuid.UUID, string, []string) error { return nil }, newArchiveGuard(p.Pool), newCollaboratorGuard(repoIDResolver(p.Pool)))
 	auth := func(ctx context.Context, user, pass, orgRef string) (authz.Scope, error) {
 		return authz.Scope{OrgID: orgID, ActorID: uuid.MustParse(owner.ID), ActorKind: "user"}, nil
 	}

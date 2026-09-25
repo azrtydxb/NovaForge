@@ -33,7 +33,7 @@ func TestRepoLimitedScopeIsRefusedByRequireOrg(t *testing.T) {
 
 	collaborator := authz.WithScope(context.Background(), authz.Scope{
 		OrgID: org, ActorID: uuid.New(), ActorKind: "user",
-		RepoLimited: true, Repos: []uuid.UUID{repo},
+		RepoLimited: true, Repos: map[uuid.UUID]string{repo: "write"},
 	})
 	if err := authz.RequireOrg(collaborator, org); err == nil {
 		t.Fatal("a repository-limited scope passed RequireOrg; every org-scoped path would admit it")
@@ -57,6 +57,23 @@ func TestRepoLimitedScopeIsRefusedByRequireOrg(t *testing.T) {
 		// organization is theirs to reach as before.
 		if err := authz.RequireRepo(member, org, uuid.New()); err != nil {
 			t.Fatalf("a member was refused a repository in their organization: %v", err)
+		}
+	})
+
+	t.Run("the role rides with the grant", func(t *testing.T) {
+		s, err := authz.FromContext(collaborator)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if s.RepoRole(repo) != "write" {
+			t.Fatalf("RepoRole = %q, want write", s.RepoRole(repo))
+		}
+		if s.RepoRole(uuid.New()) != "" {
+			t.Fatal("a repository that was not granted reports a role")
+		}
+		m, _ := authz.FromContext(member)
+		if m.RepoRole(repo) != "" {
+			t.Fatal("a member reports a repository role; their access is not repository-limited")
 		}
 	})
 

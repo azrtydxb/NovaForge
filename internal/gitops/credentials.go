@@ -23,10 +23,29 @@ import (
 // ResolveSubject resolves a person's credential — a personal access token or a
 // session token, which a transport cannot tell apart — within orgRef.
 func ResolveSubject(ctx context.Context, identity identityv1.IdentityServiceClient, credential, orgRef string) (*identityv1.Subject, error) {
-	if resp, err := identity.ResolveToken(ctx, &identityv1.ResolveTokenRequest{Token: credential, Org: orgRef}); err == nil {
+	return resolveSubject(ctx, identity, credential, orgRef, false)
+}
+
+// ResolveSubjectAllowingNonMember is the Git transports' resolution. A repository
+// may be granted to someone outside the organization that owns it, and they have to
+// authenticate before that grant can be checked, so this accepts a non-member and
+// reports them as one. The resulting scope is repository-limited: it holds no
+// membership and every org-scoped path refuses it.
+//
+// Only the transports use this. The REST edge resolves as a member or not at all.
+func ResolveSubjectAllowingNonMember(ctx context.Context, identity identityv1.IdentityServiceClient, credential, orgRef string) (*identityv1.Subject, error) {
+	return resolveSubject(ctx, identity, credential, orgRef, true)
+}
+
+func resolveSubject(ctx context.Context, identity identityv1.IdentityServiceClient, credential, orgRef string, allowNonMember bool) (*identityv1.Subject, error) {
+	if resp, err := identity.ResolveToken(ctx, &identityv1.ResolveTokenRequest{
+		Token: credential, Org: orgRef, AllowNonMember: allowNonMember,
+	}); err == nil {
 		return resp.GetSubject(), nil
 	}
-	resp, err := identity.ResolveSession(ctx, &identityv1.ResolveSessionRequest{Token: credential, Org: orgRef})
+	resp, err := identity.ResolveSession(ctx, &identityv1.ResolveSessionRequest{
+		Token: credential, Org: orgRef, AllowNonMember: allowNonMember,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -45,6 +64,13 @@ func SubjectToScope(subject *identityv1.Subject) authz.Scope {
 	if scope.ActorKind == "" {
 		scope.ActorKind = "user"
 	}
+	// An organization resolved for someone who is not a member of it reaches only
+	// the repositories they were granted. Repos is left empty here and filled by
+	// whoever knows the grants; empty means nothing, so a caller that forgets to
+	// fill it denies rather than admits.
+	if scope.OrgID != uuid.Nil && !subject.GetOrgMember() {
+		scope.RepoLimited = true
+	}
 	return scope
 }
 
@@ -56,7 +82,9 @@ func SubjectToScope(subject *identityv1.Subject) authz.Scope {
 // verified locally and carries its own organization; anything else is a
 // person's credential and is resolved through identity, which checks
 // membership of the organization named in the URL.
-func NewCredentialAuthFunc(identity identityv1.IdentityServiceClient, hmacSecret string) AuthFunc {
+// grants may be nil, in which case a non-member is refused: without knowing the
+// grants the safe answer is no access, never all access.
+func NewCredentialAuthFunc(identity identityv1.IdentityServiceClient, hmacSecret string, grants *CollaboratorStore) AuthFunc {
 	return func(ctx context.Context, _, pass, orgRef string) (authz.Scope, error) {
 		if strings.HasPrefix(pass, svcauth.Prefix) {
 			scope, err := svcauth.ScopeFromToken(hmacSecret, pass)
@@ -65,11 +93,27 @@ func NewCredentialAuthFunc(identity identityv1.IdentityServiceClient, hmacSecret
 			}
 			return scope, nil
 		}
-		subject, err := ResolveSubject(ctx, identity, pass, orgRef)
+		subject, err := ResolveSubjectAllowingNonMember(ctx, identity, pass, orgRef)
 		if err != nil {
 			return authz.Scope{}, fmt.Errorf("resolve credential: %w", err)
 		}
-		return SubjectToScope(subject), nil
+		scope := SubjectToScope(subject)
+		if scope.RepoLimited && grants != nil {
+			// A non-member reaches exactly the repositories they were granted. An
+			// empty set is refused here rather than passed on: a scope that reaches
+			// nothing would otherwise get as far as a confusing per-repository
+			// refusal, when the honest answer is that this credential has no
+			// business in this organization at all.
+			access, err := grants.ReposForUser(ctx, scope.OrgID, scope.ActorID)
+			if err != nil {
+				return authz.Scope{}, fmt.Errorf("resolve repository grants: %w", err)
+			}
+			if len(access) == 0 {
+				return authz.Scope{}, fmt.Errorf("not a member of this organization and granted no repository in it")
+			}
+			scope.Repos = access
+		}
+		return scope, nil
 	}
 }
 

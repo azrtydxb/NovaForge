@@ -76,6 +76,8 @@ type Platform struct {
 	Pool   *pgxpool.Pool
 	Redis  *redis.Client
 	Grants *capability.Store
+	// Collaborators resolves repository grants, as git-platform does.
+	Collaborators *gitops.CollaboratorStore
 	// GitRoot is where git-platform keeps bare repositories.
 	GitRoot string
 
@@ -223,7 +225,11 @@ func StartWithExecutor(t testing.TB, factory func(*Platform) agents.ExecuteFunc)
 	gitSrv.Grants = p.Grants
 	p.GitAddr = serve(t, func(s *grpc.Server) { gitv1.RegisterGitServiceServer(s, gitSrv) }, interceptor)
 	capFunc := gitops.NewGrantCapFunc(p.Grants)
-	httpSrv := httptest.NewServer(gitops.NewHTTPHandler(p.GitRoot, gitops.NewCredentialAuthFunc(p.Identity, HMACSecret), capFunc))
+	// The stack resolves repository grants the way git-platform does, so a test
+	// exercising an outside collaborator goes through the real path.
+	p.Collaborators = gitops.NewCollaboratorStore(pool, gitops.NewIdentityTeamLookup(p.Identity, HMACSecret))
+	httpSrv := httptest.NewServer(gitops.NewHTTPHandler(p.GitRoot,
+		gitops.NewCredentialAuthFunc(p.Identity, HMACSecret, p.Collaborators), capFunc))
 	t.Cleanup(httpSrv.Close)
 	p.GitHTTPURL = httpSrv.URL
 	sshSrv := gitops.NewSSHServer(p.GitRoot, hostKey(t), gitops.NewFingerprintFunc(p.Identity), capFunc).

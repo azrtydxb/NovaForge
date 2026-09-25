@@ -154,11 +154,19 @@ func main() {
 	gitv1.RegisterGitServiceServer(srv, grpcServer)
 
 	// --- smart-HTTP ---
-	capFunc := newCapFunc(grants, newBranchLockGuard(agentsClient, cfg.HMACSecret, repoIDResolver(pool)), newArchiveGuard(pool))
+	capFunc := newCapFunc(grants,
+		newBranchLockGuard(agentsClient, cfg.HMACSecret, repoIDResolver(pool)),
+		newArchiveGuard(pool),
+		newCollaboratorGuard(repoIDResolver(pool)))
 	// Branches written through the API answer to the same rules as a push.
 	grpcServer.RefGuard = capFunc
+	// Repository grants are resolved here so someone outside the organization can
+	// authenticate against a repository they were granted. A grant naming a team is
+	// resolved through Identity's RPC, because teams live in its schema.
+	collaborators := gitops.NewCollaboratorStore(pool, gitops.NewIdentityTeamLookup(identityClient, cfg.HMACSecret))
+	grpcServer.Collaborators = collaborators
 	httpHandler := gitops.NewHTTPHandler(cfg.GitDataDir,
-		gitops.NewCredentialAuthFunc(identityClient, cfg.HMACSecret), capFunc)
+		gitops.NewCredentialAuthFunc(identityClient, cfg.HMACSecret, collaborators), capFunc)
 
 	// --- SSH ---
 	hostKey, ephemeral, err := loadOrGenerateHostKey()
@@ -252,9 +260,16 @@ func loadOrGenerateHostKey() (ssh.Signer, bool, error) {
 // newCapFunc is the capability check every write surface applies: a branch an
 // Agent Run holds is refused to everyone but that run's agent, and an agent is
 // held to its capability grant.
-func newCapFunc(grants *capability.Store, locks gitops.CapFunc, archived gitops.CapFunc) gitops.CapFunc {
+func newCapFunc(grants *capability.Store, locks, archived, collaborator gitops.CapFunc) gitops.CapFunc {
 	byGrant := gitops.NewGrantCapFunc(grants)
 	return func(ctx context.Context, s authz.Scope, orgID uuid.UUID, repo string, refs []string) error {
+		// An outside collaborator is checked for reads as well as writes, so this
+		// runs before the early return for an empty ref set: CapFunc is called with
+		// no refs for git-upload-pack, which is exactly the read that has to be
+		// confined to the repositories they hold.
+		if err := collaborator(ctx, s, orgID, repo, refs); err != nil {
+			return err
+		}
 		if len(refs) == 0 {
 			return nil
 		}

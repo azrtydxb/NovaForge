@@ -253,6 +253,16 @@ func (s *SSHServer) runGitCommand(sconn *ssh.ServerConn, channel ssh.Channel, co
 		return
 	}
 
+	// A read is authorized too: CapFunc is called with no refs, which is where a
+	// credential confined to certain repositories is confined for reads as well as
+	// writes. Without this an outside collaborator could clone every repository in
+	// the organization over SSH while being refused over HTTP.
+	if err := s.caps(context.Background(), scope, orgID, repoName, nil); err != nil {
+		fmt.Fprintf(channel.Stderr(), "novaforge: %v\n", err)
+		writeExitStatus(channel, 1)
+		return
+	}
+
 	s.runGit(channel, path, service, channel, scope, orgID, repoName, nil, false)
 }
 

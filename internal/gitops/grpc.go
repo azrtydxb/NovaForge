@@ -57,6 +57,9 @@ type Server struct {
 	// an agent run's tool calls, the gate proposer) are not subject to it;
 	// an agent run's writes are bounded by its capability grant where its
 	// tools execute.
+	// Collaborators resolves repository grants, for the RPCs that manage them.
+	Collaborators *CollaboratorStore
+
 	RefGuard CapFunc
 
 	// Grants, when set, is consulted for every write an agent asks for over

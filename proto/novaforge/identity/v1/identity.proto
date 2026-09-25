@@ -221,6 +221,12 @@ message Subject {
   string actor_kind = 3;
   repeated string scopes = 4;
   string role = 5;
+  // Whether the subject is a member of org_id. False with org_id set means the
+  // caller was resolved for an organization they do not belong to, which only the
+  // Git transports ask for: such a subject may reach the repositories it was
+  // granted and nothing else in that organization. role is empty for them,
+  // because they hold no membership role.
+  bool org_member = 6;
 }
 
 message Grant {
@@ -266,6 +272,8 @@ message ResolveSessionRequest {
   // Optional organization the caller is acting in, by name or id. See
   // ResolveTokenRequest.org.
   string org = 2;
+  // See ResolveTokenRequest.allow_non_member.
+  bool allow_non_member = 3;
 }
 message ResolveSessionResponse {
   Subject subject = 1;
@@ -277,6 +285,12 @@ message ResolveTokenRequest {
   // the response's org_id is populated only if the caller is a member, so a
   // service can derive an org scope it can trust.
   string org = 2;
+  // Resolve the organization even when the caller is not a member, reporting
+  // org_member false. Only the Git transports set this, because a repository may
+  // be granted to someone outside the organization that owns it and they must be
+  // able to authenticate before that grant can be checked. A subject resolved
+  // this way is not a member and every org-scoped path refuses it.
+  bool allow_non_member = 3;
 }
 message ResolveTokenResponse {
   Subject subject = 1;

@@ -116,7 +116,7 @@ func (s *Server) ResolveSession(ctx context.Context, req *identityv1.ResolveSess
 		return nil, credentialError(err)
 	}
 	subj := &identityv1.Subject{UserId: userID.String(), ActorKind: "user"}
-	if err := s.attachOrg(ctx, subj, userID, req.GetOrg()); err != nil {
+	if err := s.attachOrg(ctx, subj, userID, req.GetOrg(), req.GetAllowNonMember()); err != nil {
 		return nil, err
 	}
 	return &identityv1.ResolveSessionResponse{Subject: subj}, nil
@@ -133,7 +133,7 @@ func (s *Server) ResolveToken(ctx context.Context, req *identityv1.ResolveTokenR
 		return nil, credentialError(err)
 	}
 	subj := &identityv1.Subject{UserId: t.UserID.String(), ActorKind: "user", Scopes: t.Scopes}
-	if err := s.attachOrg(ctx, subj, t.UserID, req.GetOrg()); err != nil {
+	if err := s.attachOrg(ctx, subj, t.UserID, req.GetOrg(), req.GetAllowNonMember()); err != nil {
 		return nil, err
 	}
 	return &identityv1.ResolveTokenResponse{Subject: subj}, nil
@@ -143,18 +143,34 @@ func (s *Server) ResolveToken(ctx context.Context, req *identityv1.ResolveTokenR
 // refusing a non-member. A credential alone says who you are, not which
 // organization you are acting in, so the org travels with the request and is
 // verified here rather than trusted from it.
-func (s *Server) attachOrg(ctx context.Context, subj *identityv1.Subject, userID uuid.UUID, ref string) error {
+func (s *Server) attachOrg(ctx context.Context, subj *identityv1.Subject, userID uuid.UUID, ref string, allowNonMember bool) error {
 	if ref == "" {
 		return nil
 	}
 	org, err := s.store.ResolveOrgScope(ctx, userID, ref)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, ErrNotMember) {
+			// A repository may be granted to someone outside the organization that
+			// owns it, and they have to authenticate before that grant can be
+			// checked. Only the Git transports ask for this, and what comes back is
+			// explicitly not a member: org_member stays false and role stays empty,
+			// so every org-scoped path refuses it and only a repository-level check
+			// admits it.
+			if allowNonMember {
+				byName, lookupErr := s.store.OrgByNameOrID(ctx, ref)
+				if lookupErr != nil {
+					return status.Error(codes.PermissionDenied, "organization membership required")
+				}
+				subj.OrgId = byName.ID.String()
+				subj.OrgMember = false
+				return nil
+			}
 			return status.Error(codes.PermissionDenied, "organization membership required")
 		}
 		return status.Error(codes.Internal, "identity datastore unavailable")
 	}
 	subj.OrgId = org.ID.String()
+	subj.OrgMember = true
 	// The role rides with the verified membership so a service deciding an
 	// owner-only action — deleting a repository — can read it from the
 	// caller's scope instead of reaching into this service's schema.
@@ -183,7 +199,7 @@ func (s *Server) ResolveFingerprint(ctx context.Context, req *identityv1.Resolve
 		return nil, status.Error(codes.Internal, "identity datastore unavailable")
 	}
 	subj := &identityv1.Subject{UserId: userID.String(), ActorKind: "user"}
-	if err := s.attachOrg(ctx, subj, userID, req.GetOrg()); err != nil {
+	if err := s.attachOrg(ctx, subj, userID, req.GetOrg(), false); err != nil {
 		return nil, err
 	}
 	return &identityv1.ResolveFingerprintResponse{Subject: subj}, nil
@@ -434,7 +450,7 @@ func (s *Server) resolveCallerScope(ctx context.Context) (authz.Scope, bool, err
 	md, _ := metadata.FromIncomingContext(ctx)
 	if refs := md.Get("x-novaforge-org"); len(refs) > 0 && refs[0] != "" {
 		subject := &identityv1.Subject{}
-		if err := s.attachOrg(ctx, subject, user, refs[0]); err != nil {
+		if err := s.attachOrg(ctx, subject, user, refs[0], false); err != nil {
 			return authz.Scope{}, false, err
 		}
 		scope.OrgID, _ = uuid.Parse(subject.OrgId)

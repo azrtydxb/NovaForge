@@ -2064,12 +2064,18 @@ func (x *Verify2FAResponse) GetEnabled() bool {
 // the membership, so a service deciding an owner-only action reads it here
 // rather than reaching into the identity schema.
 type Subject struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	OrgId         string                 `protobuf:"bytes,2,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
-	ActorKind     string                 `protobuf:"bytes,3,opt,name=actor_kind,json=actorKind,proto3" json:"actor_kind,omitempty"`
-	Scopes        []string               `protobuf:"bytes,4,rep,name=scopes,proto3" json:"scopes,omitempty"`
-	Role          string                 `protobuf:"bytes,5,opt,name=role,proto3" json:"role,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	UserId    string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	OrgId     string                 `protobuf:"bytes,2,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	ActorKind string                 `protobuf:"bytes,3,opt,name=actor_kind,json=actorKind,proto3" json:"actor_kind,omitempty"`
+	Scopes    []string               `protobuf:"bytes,4,rep,name=scopes,proto3" json:"scopes,omitempty"`
+	Role      string                 `protobuf:"bytes,5,opt,name=role,proto3" json:"role,omitempty"`
+	// Whether the subject is a member of org_id. False with org_id set means the
+	// caller was resolved for an organization they do not belong to, which only the
+	// Git transports ask for: such a subject may reach the repositories it was
+	// granted and nothing else in that organization. role is empty for them,
+	// because they hold no membership role.
+	OrgMember     bool `protobuf:"varint,6,opt,name=org_member,json=orgMember,proto3" json:"org_member,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2137,6 +2143,13 @@ func (x *Subject) GetRole() string {
 		return x.Role
 	}
 	return ""
+}
+
+func (x *Subject) GetOrgMember() bool {
+	if x != nil {
+		return x.OrgMember
+	}
+	return false
 }
 
 type Grant struct {
@@ -2536,9 +2549,11 @@ type ResolveSessionRequest struct {
 	Token string                 `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
 	// Optional organization the caller is acting in, by name or id. See
 	// ResolveTokenRequest.org.
-	Org           string `protobuf:"bytes,2,opt,name=org,proto3" json:"org,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Org string `protobuf:"bytes,2,opt,name=org,proto3" json:"org,omitempty"`
+	// See ResolveTokenRequest.allow_non_member.
+	AllowNonMember bool `protobuf:"varint,3,opt,name=allow_non_member,json=allowNonMember,proto3" json:"allow_non_member,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ResolveSessionRequest) Reset() {
@@ -2583,6 +2598,13 @@ func (x *ResolveSessionRequest) GetOrg() string {
 		return x.Org
 	}
 	return ""
+}
+
+func (x *ResolveSessionRequest) GetAllowNonMember() bool {
+	if x != nil {
+		return x.AllowNonMember
+	}
+	return false
 }
 
 type ResolveSessionResponse struct {
@@ -2635,9 +2657,15 @@ type ResolveTokenRequest struct {
 	// Optional organization the caller is acting in, by name or id. When set,
 	// the response's org_id is populated only if the caller is a member, so a
 	// service can derive an org scope it can trust.
-	Org           string `protobuf:"bytes,2,opt,name=org,proto3" json:"org,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Org string `protobuf:"bytes,2,opt,name=org,proto3" json:"org,omitempty"`
+	// Resolve the organization even when the caller is not a member, reporting
+	// org_member false. Only the Git transports set this, because a repository may
+	// be granted to someone outside the organization that owns it and they must be
+	// able to authenticate before that grant can be checked. A subject resolved
+	// this way is not a member and every org-scoped path refuses it.
+	AllowNonMember bool `protobuf:"varint,3,opt,name=allow_non_member,json=allowNonMember,proto3" json:"allow_non_member,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ResolveTokenRequest) Reset() {
@@ -2682,6 +2710,13 @@ func (x *ResolveTokenRequest) GetOrg() string {
 		return x.Org
 	}
 	return ""
+}
+
+func (x *ResolveTokenRequest) GetAllowNonMember() bool {
+	if x != nil {
+		return x.AllowNonMember
+	}
+	return false
 }
 
 type ResolveTokenResponse struct {
@@ -3793,14 +3828,16 @@ const file_novaforge_identity_v1_identity_proto_rawDesc = "" +
 	"\x10Verify2FARequest\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\tR\x04code\"-\n" +
 	"\x11Verify2FAResponse\x12\x18\n" +
-	"\aenabled\x18\x01 \x01(\bR\aenabled\"\x84\x01\n" +
+	"\aenabled\x18\x01 \x01(\bR\aenabled\"\xa3\x01\n" +
 	"\aSubject\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x15\n" +
 	"\x06org_id\x18\x02 \x01(\tR\x05orgId\x12\x1d\n" +
 	"\n" +
 	"actor_kind\x18\x03 \x01(\tR\tactorKind\x12\x16\n" +
 	"\x06scopes\x18\x04 \x03(\tR\x06scopes\x12\x12\n" +
-	"\x04role\x18\x05 \x01(\tR\x04role\"\xba\x02\n" +
+	"\x04role\x18\x05 \x01(\tR\x04role\x12\x1d\n" +
+	"\n" +
+	"org_member\x18\x06 \x01(\bR\torgMember\"\xba\x02\n" +
 	"\x05Grant\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x15\n" +
 	"\x06org_id\x18\x02 \x01(\tR\x05orgId\x12\x1d\n" +
@@ -3832,15 +3869,17 @@ const file_novaforge_identity_v1_identity_proto_rawDesc = "" +
 	"\rLoginResponse\x12#\n" +
 	"\rsession_token\x18\x01 \x01(\tR\fsessionToken\x12#\n" +
 	"\rrequires_totp\x18\x02 \x01(\bR\frequiresTotp\x12\x17\n" +
-	"\auser_id\x18\x03 \x01(\tR\x06userId\"?\n" +
+	"\auser_id\x18\x03 \x01(\tR\x06userId\"i\n" +
 	"\x15ResolveSessionRequest\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\x12\x10\n" +
-	"\x03org\x18\x02 \x01(\tR\x03org\"R\n" +
+	"\x03org\x18\x02 \x01(\tR\x03org\x12(\n" +
+	"\x10allow_non_member\x18\x03 \x01(\bR\x0eallowNonMember\"R\n" +
 	"\x16ResolveSessionResponse\x128\n" +
-	"\asubject\x18\x01 \x01(\v2\x1e.novaforge.identity.v1.SubjectR\asubject\"=\n" +
+	"\asubject\x18\x01 \x01(\v2\x1e.novaforge.identity.v1.SubjectR\asubject\"g\n" +
 	"\x13ResolveTokenRequest\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\x12\x10\n" +
-	"\x03org\x18\x02 \x01(\tR\x03org\"P\n" +
+	"\x03org\x18\x02 \x01(\tR\x03org\x12(\n" +
+	"\x10allow_non_member\x18\x03 \x01(\bR\x0eallowNonMember\"P\n" +
 	"\x14ResolveTokenResponse\x128\n" +
 	"\asubject\x18\x01 \x01(\v2\x1e.novaforge.identity.v1.SubjectR\asubject\"O\n" +
 	"\x19ResolveFingerprintRequest\x12 \n" +

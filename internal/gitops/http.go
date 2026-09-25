@@ -119,11 +119,16 @@ func (h *httpHandler) infoRefs(w http.ResponseWriter, r *http.Request, scope aut
 		http.Error(w, "unsupported service", http.StatusBadRequest)
 		return
 	}
-	if service == "git-receive-pack" {
-		if err := h.caps(r.Context(), scope, scope.OrgID, pp.repo, nil); err != nil {
-			http.Error(w, err.Error(), http.StatusForbidden)
-			return
-		}
+	// Both services are authorized here, not only the write. CapFunc's contract
+	// has always said it is called with no refs for git-upload-pack "where it may
+	// still deny read access", and it was not: reads were gated by organization
+	// membership alone, so a credential that reaches one repository would have
+	// cloned every repository in the organization. Authorizers that only care about
+	// writes already return early on an empty ref set, so this denies nothing that
+	// worked before.
+	if err := h.caps(r.Context(), scope, scope.OrgID, pp.repo, nil); err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
 	}
 
 	cmd := exec.Command("git", service[len("git-"):], "--stateless-rpc", "--advertise-refs", path)
@@ -155,6 +160,11 @@ func (h *httpHandler) rpc(w http.ResponseWriter, r *http.Request, scope authz.Sc
 			h.rejectPush(w, refs, err)
 			return
 		}
+	} else if err := h.caps(r.Context(), scope, scope.OrgID, pp.repo, nil); err != nil {
+		// The advertisement was authorized above; the fetch itself is authorized
+		// again because a client may reach this without it.
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
 	}
 
 	cmd := exec.Command("git", service[len("git-"):], "--stateless-rpc", path)

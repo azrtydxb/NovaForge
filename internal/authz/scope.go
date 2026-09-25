@@ -46,10 +46,12 @@ type Scope struct {
 	// without being touched. A path that should admit a collaborator says so by
 	// calling RequireRepo instead.
 	RepoLimited bool
-	// Repos is the set this scope may touch, and is meaningful only when
-	// RepoLimited. An empty set with RepoLimited set reaches nothing, which is
-	// the safe reading of "granted nothing".
-	Repos []uuid.UUID
+	// Repos maps each repository this scope may touch to the role it holds there
+	// ("read" or "write"), and is meaningful only when RepoLimited. An empty map
+	// with RepoLimited set reaches nothing, which is the safe reading of "granted
+	// nothing". The role rides along because a read grant must not write, and
+	// deciding that from a bare id list would need a second query at every push.
+	Repos map[uuid.UUID]string
 }
 
 // IsPlatformWorker reports whether the scope is a platform worker with no
@@ -121,10 +123,19 @@ func RequireRepo(ctx context.Context, orgID, repoID uuid.UUID) error {
 	if !s.RepoLimited {
 		return nil
 	}
-	for _, r := range s.Repos {
-		if r == repoID {
-			return nil
-		}
+	if _, ok := s.Repos[repoID]; ok {
+		return nil
 	}
 	return fmt.Errorf("repository access denied: this credential was not granted repository %s", repoID)
+}
+
+// RepoRole is the role this scope holds on one repository: "read" or "write" for a
+// repository-limited scope that was granted it, and empty otherwise. A member is not
+// repository-limited, so their access is decided by RequireRepo rather than by a
+// role here.
+func (s Scope) RepoRole(repoID uuid.UUID) string {
+	if !s.RepoLimited {
+		return ""
+	}
+	return s.Repos[repoID]
 }

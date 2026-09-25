@@ -8,8 +8,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"google.golang.org/grpc/metadata"
 
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
+	"github.com/novaforge/novaforge/internal/svcauth"
 )
 
 // Collaborator is access to one repository, held by a person or by a team.
@@ -32,8 +34,18 @@ type Collaborator struct {
 type TeamLookup func(ctx context.Context, orgID, userID uuid.UUID) ([]uuid.UUID, error)
 
 // NewIdentityTeamLookup resolves a person's teams through Identity's RPC.
-func NewIdentityTeamLookup(client identityv1.IdentityServiceClient) TeamLookup {
+//
+// It presents git-platform's own service credential rather than forwarding the
+// caller's: this runs while the caller is still being authenticated, and an outside
+// collaborator has no standing in the organization to ask Identity anything. The
+// organization comes from the repository being reached, not from the credential.
+func NewIdentityTeamLookup(client identityv1.IdentityServiceClient, hmacSecret string) TeamLookup {
 	return func(ctx context.Context, orgID, userID uuid.UUID) ([]uuid.UUID, error) {
+		token, err := svcauth.Mint(hmacSecret, "git-platform", orgID, svcauth.DefaultTTL)
+		if err != nil {
+			return nil, fmt.Errorf("mint team lookup credential: %w", err)
+		}
+		ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs("authorization", "Bearer "+token))
 		resp, err := client.ListTeamsForUser(ctx, &identityv1.ListTeamsForUserRequest{UserId: userID.String()})
 		if err != nil {
 			return nil, fmt.Errorf("list teams for user: %w", err)
