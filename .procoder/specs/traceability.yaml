@@ -788,9 +788,38 @@ criteria:
       - ./internal/gitops TestRepositoryAdministration
       - ./cmd/git-platform TestArchivedRepositoryRefusesAPush
   S-26/TestRepositoryCollaborator:
-    status: uncovered
+    status: covered
     note: >-
-      Not built. Task 3 of .procoder/plans/git-parity.md.
+      A person who is not a member of an organization can be granted one repository in
+      it and reaches only that repository, proven over the real HTTP transport with an
+      unmodified git client: no grant cannot clone, the granted repository clones and
+      pushes, a second repository in the same organization is refused, a read grant
+      cannot push, and revoking removes access. A grant may name a team, which is what
+      makes teams load-bearing.
+
+      Identity refused a non-member at credential resolution, so it now resolves one
+      when the Git transports ask and reports org_member false with an empty role. The
+      resulting scope is repository-limited, and authz.RequireOrg refuses it — so the
+      35 files that authorize on the organization alone fail closed without being
+      edited, because one missed call site there is a data leak rather than a bug.
+
+      Two defects this uncovered. CapFunc's contract said it is called with no refs for
+      git-upload-pack "where it may still deny read access" and it was not: reads were
+      gated by membership alone, so a credential confined to one repository would have
+      cloned every repository in the organization over both transports. And the team
+      lookup presented no credential, so every collaborator failed to authenticate,
+      which made the negative cases pass for the wrong reason until the positive case
+      exposed it.
+
+      A collaborator can neither grant nor list grants. ResolveUsername answers one
+      exact username or NotFound and only for an owner, an admin or an org-scoped
+      service, because a looser lookup lets any authenticated account enumerate users.
+
+      Not proven on the cluster: no e2e suite and no nf CLI support.
+    go_tests:
+      - ./cmd/git-platform TestOutsideCollaboratorReachesOnlyItsRepository
+      - ./internal/gitops TestRepositoryCollaboratorGrants
+      - ./internal/authz TestRepoLimitedScopeIsRefusedByRequireOrg
   S-27/TestImportFromRemote:
     status: uncovered
     note: >-
