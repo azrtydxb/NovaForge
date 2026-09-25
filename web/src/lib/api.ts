@@ -23,13 +23,16 @@ export class ApiError extends Error {
   /** unavailable reports a feature the deployment has not configured, which
    * a screen shows as an explanation rather than as an error. */
   get unavailable(): boolean {
-    return this.status === 501 || this.status === 404;
+    return this.status === 501;
   }
 }
 
 const TOKEN_KEY = "novaforge.token";
+// Persistence is optional; blocked site data must not break this page’s session.
+let memoryToken: string | null | undefined;
 
 export function storedToken(): string | null {
+  if (memoryToken !== undefined) return memoryToken;
   try {
     return window.localStorage.getItem(TOKEN_KEY);
   } catch {
@@ -39,6 +42,7 @@ export function storedToken(): string | null {
 }
 
 export function setStoredToken(token: string | null): void {
+  memoryToken = token;
   try {
     if (token === null) window.localStorage.removeItem(TOKEN_KEY);
     else window.localStorage.setItem(TOKEN_KEY, token);
@@ -69,6 +73,8 @@ async function request<T>(
     try {
       parsed = JSON.parse(text);
     } catch {
+      if (res.ok)
+        throw new ApiError(res.status, "The server returned invalid JSON.");
       parsed = null;
     }
   }
@@ -164,10 +170,85 @@ async function download(path: string, filename: string): Promise<void> {
   }
 }
 
+/** Events use fetch, not EventSource: bearer credentials never enter a URL.
+ * Cancellation tears down the reader when the route or principal changes. */
+async function events(
+  path: string,
+  signal: AbortSignal,
+  receive: (event: string, data: unknown, cursor?: string) => void,
+  afterCursor = "",
+): Promise<void> {
+  const token = storedToken();
+  const res = await fetch(path, {
+    headers: {
+      Accept: "text/event-stream",
+      ...(afterCursor ? { "Last-Event-ID": afterCursor } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    signal,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = null;
+    }
+    throw new ApiError(
+      res.status,
+      errorMessage(parsed) || text || res.statusText,
+    );
+  }
+  if (
+    !res.headers.get("Content-Type")?.includes("text/event-stream") ||
+    !res.body
+  )
+    throw new Error("The server did not return an event stream.");
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let pending = "";
+  try {
+    while (!signal.aborted) {
+      const { done, value } = await reader.read();
+      pending += decoder.decode(value, { stream: !done });
+      let delimiter: RegExpExecArray | null;
+      while ((delimiter = /\r?\n\r?\n/.exec(pending))) {
+        const frame = pending.slice(0, delimiter.index);
+        pending = pending.slice(delimiter.index + delimiter[0].length);
+        if (frame.length > 1_048_576)
+          throw new Error("Event exceeds the 1 MiB frame limit.");
+        let event = "message";
+        let cursor: string | undefined;
+        const data: string[] = [];
+        for (const line of frame.split(/\r?\n/)) {
+          if (line.startsWith("event:")) event = line.slice(6).trim();
+          if (line.startsWith("id:")) {
+            const id = line.slice(3).replace(/^ /, "");
+            if (id && !id.includes("\0")) cursor = id;
+          }
+          if (line.startsWith("data:"))
+            data.push(line.slice(5).replace(/^ /, ""));
+        }
+        if (data.length && !signal.aborted)
+          receive(event, JSON.parse(data.join("\n")), cursor);
+      }
+      if (pending.length > 1_048_576)
+        throw new Error("Event exceeds the 1 MiB frame limit.");
+      if (done) return;
+    }
+  } finally {
+    await reader.cancel();
+    reader.releaseLock();
+  }
+}
+
 export const api = {
   get: <T>(path: string) => request<T>("GET", path),
   text,
   download,
+  events,
+  patch: <T>(path: string, body: unknown) => request<T>("PATCH", path, body),
   post: <T>(path: string, body?: unknown) => request<T>("POST", path, body),
   del: <T>(path: string, body?: unknown) => request<T>("DELETE", path, body),
 };

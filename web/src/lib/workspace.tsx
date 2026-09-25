@@ -3,9 +3,10 @@ import {
   useCallback,
   useContext,
   useMemo,
+  useState,
   type ReactNode,
 } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { api, enc } from "./api";
 import type { Org, Repo } from "./types";
 
@@ -25,6 +26,8 @@ export interface Workspace {
   setOrg: (org: string) => void;
   setRepo: (repo: string | null) => void;
   loading: boolean;
+  error: unknown;
+  retry: () => void;
 }
 
 const Ctx = createContext<Workspace | null>(null);
@@ -50,7 +53,8 @@ function remember(key: string, value: string | null): void {
 }
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
-  const qc = useQueryClient();
+  const [selectedOrg, selectOrg] = useState(() => remembered(ORG_KEY));
+  const [selectedRepo, selectRepo] = useState(() => remembered(REPO_KEY));
 
   const orgsQ = useQuery({
     queryKey: ["orgs"],
@@ -62,7 +66,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   // belongs to: membership can be revoked between visits, and a stale scope
   // would make every screen fail with a denial rather than simply showing the
   // organizations they do have.
-  const stored = remembered(ORG_KEY);
+  const stored = selectedOrg;
   const org =
     orgs.find((o) => o.name === stored)?.name ?? orgs[0]?.name ?? null;
 
@@ -74,25 +78,20 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   });
   const repos = reposQ.data?.repos ?? [];
 
-  const storedRepo = remembered(REPO_KEY);
+  const storedRepo = selectedRepo;
   const repo = repos.some((r) => r.name === storedRepo) ? storedRepo : null;
 
-  const setOrg = useCallback(
-    (next: string) => {
-      remember(ORG_KEY, next);
-      remember(REPO_KEY, null);
-      qc.invalidateQueries();
-    },
-    [qc],
-  );
+  const setOrg = useCallback((next: string) => {
+    remember(ORG_KEY, next);
+    remember(REPO_KEY, null);
+    selectOrg(next);
+    selectRepo(null);
+  }, []);
 
-  const setRepo = useCallback(
-    (next: string | null) => {
-      remember(REPO_KEY, next);
-      qc.invalidateQueries();
-    },
-    [qc],
-  );
+  const setRepo = useCallback((next: string | null) => {
+    remember(REPO_KEY, next);
+    selectRepo(next);
+  }, []);
 
   const value = useMemo<Workspace>(
     () => ({
@@ -103,6 +102,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setOrg,
       setRepo,
       loading: orgsQ.isLoading || reposQ.isLoading,
+      error: orgsQ.error || reposQ.error,
+      retry: () => {
+        void orgsQ.refetch();
+        void reposQ.refetch();
+      },
     }),
     [
       orgs,
@@ -113,6 +117,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setRepo,
       orgsQ.isLoading,
       reposQ.isLoading,
+      orgsQ.error,
+      reposQ.error,
+      orgsQ.refetch,
+      reposQ.refetch,
     ],
   );
 

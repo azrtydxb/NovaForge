@@ -33,10 +33,10 @@ func TestSummaryCountsEachCategoryOnce(t *testing.T) {
 
 	// ready_to_automerge (healthy): a passing gate plus an independent approval.
 	healthy := newExceptionRun(t, store, orgID, "user")
-	if err := store.RecordProof(ctx, healthy.ID, "tests", "pass", "all tests passed"); err != nil {
+	if err := store.RecordProof(proofServiceContext(t, ctx, "gates"), healthy.ID, "tests", "pass", "all tests passed"); err != nil {
 		t.Fatalf("RecordProof healthy: %v", err)
 	}
-	if err := store.SubmitReview(ctx, healthy.ID, uuid.New(), "user", "approve"); err != nil {
+	if err := store.SubmitReviewAt(ctx, healthy.ID, uuid.New(), "user", "approve", reviewedSHA, ""); err != nil {
 		t.Fatalf("SubmitReview healthy: %v", err)
 	}
 
@@ -45,23 +45,23 @@ func TestSummaryCountsEachCategoryOnce(t *testing.T) {
 
 	// architecture_decision: a pending architecture-decision marker.
 	arch := newExceptionRun(t, store, orgID, "user")
-	if err := store.RecordProof(ctx, arch.ID, "architecture-decision", "pending", "needs an ADR for the new service boundary"); err != nil {
+	if err := store.RecordProof(proofServiceContext(t, ctx, "gates"), arch.ID, "architecture-decision", "pending", "needs an ADR for the new service boundary"); err != nil {
 		t.Fatalf("RecordProof arch: %v", err)
 	}
 
 	// gate_failure: a failing tests gate.
 	failing := newExceptionRun(t, store, orgID, "user")
-	if err := store.RecordProof(ctx, failing.ID, "tests", "fail", "2 tests failed"); err != nil {
+	if err := store.RecordProof(proofServiceContext(t, ctx, "gates"), failing.ID, "tests", "fail", "2 tests failed"); err != nil {
 		t.Fatalf("RecordProof failing: %v", err)
 	}
 
 	// agent_blocked: an agent-authored run whose agent-blocked marker failed.
 	blocked := newExceptionRun(t, store, orgID, "agent")
-	if err := store.RecordProof(ctx, blocked.ID, "agent-blocked", "fail", "wall-clock budget exceeded"); err != nil {
+	if err := store.RecordProof(proofServiceContext(t, ctx, "agent-runtime"), blocked.ID, "agent-blocked", "fail", "wall-clock budget exceeded"); err != nil {
 		t.Fatalf("RecordProof blocked: %v", err)
 	}
 
-	summary, _, err := store.Exceptions(ctx, orgID)
+	summary, _, err := store.Exceptions(ctx, orgID, &revisionGit{head: reviewedSHA})
 	if err != nil {
 		t.Fatalf("Exceptions: %v", err)
 	}
@@ -91,11 +91,11 @@ func TestRunWithFailedGateIsAnException(t *testing.T) {
 	ctx := scopedCtx(orgID)
 
 	run := newExceptionRun(t, store, orgID, "user")
-	if err := store.RecordProof(ctx, run.ID, "tests", "fail", "TestFoo failed"); err != nil {
+	if err := store.RecordProof(proofServiceContext(t, ctx, "gates"), run.ID, "tests", "fail", "TestFoo failed"); err != nil {
 		t.Fatalf("RecordProof: %v", err)
 	}
 
-	summary, items, err := store.Exceptions(ctx, orgID)
+	summary, items, err := store.Exceptions(ctx, orgID, &revisionGit{head: reviewedSHA})
 	if err != nil {
 		t.Fatalf("Exceptions: %v", err)
 	}
@@ -116,14 +116,14 @@ func TestHealthyAutoMergeableRunIsNotAnException(t *testing.T) {
 	ctx := scopedCtx(orgID)
 
 	run := newExceptionRun(t, store, orgID, "user")
-	if err := store.RecordProof(ctx, run.ID, "tests", "pass", "all tests passed"); err != nil {
+	if err := store.RecordProof(proofServiceContext(t, ctx, "gates"), run.ID, "tests", "pass", "all tests passed"); err != nil {
 		t.Fatalf("RecordProof: %v", err)
 	}
-	if err := store.SubmitReview(ctx, run.ID, uuid.New(), "user", "approve"); err != nil {
+	if err := store.SubmitReviewAt(ctx, run.ID, uuid.New(), "user", "approve", reviewedSHA, ""); err != nil {
 		t.Fatalf("SubmitReview: %v", err)
 	}
 
-	summary, items, err := store.Exceptions(ctx, orgID)
+	summary, items, err := store.Exceptions(ctx, orgID, &revisionGit{head: reviewedSHA})
 	if err != nil {
 		t.Fatalf("Exceptions: %v", err)
 	}
@@ -148,15 +148,15 @@ func TestSummaryIsOrgScoped(t *testing.T) {
 	ctxB := scopedCtx(orgB)
 
 	runA := newExceptionRun(t, store, orgA, "user")
-	if err := store.RecordProof(ctxA, runA.ID, "tests", "fail", "org A failure"); err != nil {
+	if err := store.RecordProof(proofServiceContext(t, ctxA, "gates"), runA.ID, "tests", "fail", "org A failure"); err != nil {
 		t.Fatalf("RecordProof A: %v", err)
 	}
 	runB := newExceptionRun(t, store, orgB, "user")
-	if err := store.RecordProof(ctxB, runB.ID, "tests", "fail", "org B failure"); err != nil {
+	if err := store.RecordProof(proofServiceContext(t, ctxB, "gates"), runB.ID, "tests", "fail", "org B failure"); err != nil {
 		t.Fatalf("RecordProof B: %v", err)
 	}
 
-	summary, items, err := store.Exceptions(ctxA, orgA)
+	summary, items, err := store.Exceptions(ctxA, orgA, &revisionGit{head: reviewedSHA})
 	if err != nil {
 		t.Fatalf("Exceptions: %v", err)
 	}

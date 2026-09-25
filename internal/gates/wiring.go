@@ -8,11 +8,13 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
 	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
-	"github.com/novaforge/novaforge/internal/analysis"
+	"github.com/novaforge/novaforge/internal/authz"
 )
 
 // NewController composes the controller exactly as the gates service runs it:
@@ -20,14 +22,25 @@ import (
 // checked out through git-platform, and proof is recorded back on the run. It
 // lives here, not in cmd/gates, so a test can build the controller the
 // deployment runs.
-func NewController(store *Store, gitClient gitv1.GitServiceClient, reviewsClient reviewsv1.ReviewsServiceClient, workClient workv1.WorkServiceClient, semgrepRules string) *Controller {
+func NewController(store *Store, gitClient gitv1.GitServiceClient, reviewsClient reviewsv1.ReviewsServiceClient, workClient workv1.WorkServiceClient, semgrepRules string, options ...ControllerOption) *Controller {
+	var config controllerConfig
+	for _, option := range options {
+		option(&config)
+	}
 	return &Controller{
 		Store:      store,
 		Git:        gitClient,
 		Runs:       NewServiceRunLookup(reviewsClient, workClient, gitClient),
-		BuildInput: NewWorkspaceInputBuilder(gitClient, semgrepRules),
+		BuildInput: NewWorkspaceInputBuilder(gitClient, semgrepRules, config.sandbox),
 		Proof: func(ctx context.Context, runID uuid.UUID, gate, status, detail string) error {
-			_, err := reviewsClient.RecordProof(ctx, &reviewsv1.RecordProofRequest{
+			if config.proofContext == nil {
+				return fmt.Errorf("gate proof service authentication is not configured")
+			}
+			proofCtx, err := config.proofContext(ctx)
+			if err != nil {
+				return err
+			}
+			_, err = reviewsClient.RecordProof(proofCtx, &reviewsv1.RecordProofRequest{
 				RunId: runID.String(), Gate: gate, Status: status, Detail: detail,
 			})
 			return err
@@ -105,6 +118,7 @@ func NewServiceRunLookup(reviewsClient reviewsv1.ReviewsServiceClient, workClien
 			OrgID:         orgID,
 			RepoID:        repoID,
 			TargetRef:     run.GetTargetRef(),
+			TargetSHA:     heads[target],
 			HeadSHA:       headSHA,
 			WorkItemGates: requiredGates,
 			SourceRef:     run.GetSourceRef(),
@@ -135,8 +149,20 @@ func resolveRepoName(ctx context.Context, gitClient gitv1.GitServiceClient, repo
 // runner running analysis tools sees a real checkout on disk. The workspace
 // is removed once ctx (the RPC's own context, which stays live for the whole
 // Evaluate call) is done. semgrepRules is the security gate's ruleset path.
-func NewWorkspaceInputBuilder(gitClient gitv1.GitServiceClient, semgrepRules string) InputBuilder {
+func NewWorkspaceInputBuilder(gitClient gitv1.GitServiceClient, semgrepRules string, sandboxes ...*AnalysisSandbox) InputBuilder {
 	return func(ctx context.Context, runID uuid.UUID, head RunHead, gate string, params map[string]any) (Input, error) {
+		if len(sandboxes) != 1 || sandboxes[0] == nil {
+			return Input{}, fmt.Errorf("isolated analysis sandbox is not configured")
+		}
+		if !gateRevision.MatchString(head.TargetSHA) {
+			return Input{}, fmt.Errorf("immutable gate policy revision is missing")
+		}
+		if head.OrgID == uuid.Nil {
+			return Input{}, fmt.Errorf("gate organization is missing")
+		}
+		if err := authz.RequireOrg(ctx, head.OrgID); err != nil {
+			return Input{}, err
+		}
 		repoName, err := resolveRepoName(ctx, gitClient, head.RepoID)
 		if err != nil {
 			return Input{}, err
@@ -152,10 +178,50 @@ func NewWorkspaceInputBuilder(gitClient gitv1.GitServiceClient, semgrepRules str
 		}()
 
 		if err := materializeTree(ctx, gitClient, repoName, head.HeadSHA, "", workdir); err != nil {
+			_ = os.RemoveAll(workdir)
 			return Input{}, fmt.Errorf("materialize workspace for %s@%s: %w", repoName, head.HeadSHA, err)
 		}
 
+		run, err := sandboxes[0].bind(ctx, workdir, runID, head)
+		if err != nil {
+			_ = os.RemoveAll(workdir)
+			return Input{}, err
+		}
+
+		sandboxExec := run
+		run = func(execCtx context.Context, dir, name string, args ...string) ([]byte, int, error) {
+			// Git history is read through its owner RPC at the frozen revisions,
+			// not reconstructed in the tenant pod or queried by a local process.
+			if name != "git" {
+				return sandboxExec(execCtx, dir, name, args...)
+			}
+			if err := authz.RequireOrg(execCtx, head.OrgID); err != nil {
+				return nil, 0, err
+			}
+			if dir != workdir || len(args) != 2 || args[0] != "show" {
+				return nil, 0, fmt.Errorf("unsupported gate Git read")
+			}
+			sha, path, ok := strings.Cut(args[1], ":")
+			if !ok || (sha != head.HeadSHA && sha != head.TargetSHA) || path != openapiSpecPath {
+				return nil, 0, fmt.Errorf("unbound gate Git read")
+			}
+			if _, err := gitClient.GetTree(execCtx, &gitv1.GetTreeRequest{Repo: repoName, Ref: sha}); err != nil {
+				return nil, 0, fmt.Errorf("verify API evidence revision: %w", err)
+			}
+			blob, err := gitClient.GetBlob(execCtx, &gitv1.GetBlobRequest{Repo: repoName, Ref: sha, Path: path})
+			if status.Code(err) == codes.NotFound {
+				return nil, 44, nil
+			}
+			if err != nil {
+				return nil, 0, err
+			}
+			if len(blob.GetContent()) > sandboxOutputLimit {
+				return nil, 0, fmt.Errorf("OpenAPI evidence exceeds bound")
+			}
+			return blob.GetContent(), 0, nil
+		}
 		return Input{
+			PolicySHA: head.TargetSHA,
 			OrgID:     head.OrgID,
 			RepoID:    head.RepoID,
 			RunID:     runID,
@@ -163,7 +229,7 @@ func NewWorkspaceInputBuilder(gitClient gitv1.GitServiceClient, semgrepRules str
 			TargetSHA: head.HeadSHA,
 			SourceSHA: head.HeadSHA,
 			Params:    params,
-			Exec:      analysis.DefaultExec,
+			Exec:      run,
 			SASTRules: semgrepRules,
 		}, nil
 	}
@@ -172,11 +238,28 @@ func NewWorkspaceInputBuilder(gitClient gitv1.GitServiceClient, semgrepRules str
 // materializeTree recursively checks out ref's tree at path into destDir by
 // walking GetTree and fetching each blob's content with GetBlob.
 func materializeTree(ctx context.Context, gitClient gitv1.GitServiceClient, repo, ref, path, destDir string) error {
+	budget := &gateTreeBudget{}
+	return materializeGateTree(ctx, gitClient, repo, ref, path, destDir, budget)
+}
+
+type gateTreeBudget struct{ entries, bytes int }
+
+func materializeGateTree(ctx context.Context, gitClient gitv1.GitServiceClient, repo, ref, path, destDir string, budget *gateTreeBudget) error {
+	if strings.Count(path, "/") > 128 {
+		return fmt.Errorf("gate source tree exceeds depth bound")
+	}
 	treeResp, err := gitClient.GetTree(ctx, &gitv1.GetTreeRequest{Repo: repo, Ref: ref, Path: path})
 	if err != nil {
 		return fmt.Errorf("get tree %q: %w", path, err)
 	}
 	for _, entry := range treeResp.GetEntries() {
+		budget.entries++
+		if budget.entries > 10000 {
+			return fmt.Errorf("gate source tree exceeds entry bound")
+		}
+		if entry.GetName() == "" || entry.GetName() == "." || entry.GetName() == ".." || strings.ContainsAny(entry.GetName(), "/\\") {
+			return fmt.Errorf("invalid gate tree entry name")
+		}
 		entryPath := entry.GetName()
 		if path != "" {
 			entryPath = path + "/" + entry.GetName()
@@ -192,7 +275,7 @@ func materializeTree(ctx context.Context, gitClient gitv1.GitServiceClient, repo
 			if err := os.MkdirAll(destPath, 0o755); err != nil {
 				return fmt.Errorf("mkdir %q: %w", entryPath, err)
 			}
-			if err := materializeTree(ctx, gitClient, repo, ref, entryPath, destDir); err != nil {
+			if err := materializeGateTree(ctx, gitClient, repo, ref, entryPath, destDir, budget); err != nil {
 				return err
 			}
 		case "blob":
@@ -203,9 +286,15 @@ func materializeTree(ctx context.Context, gitClient gitv1.GitServiceClient, repo
 			if err != nil {
 				return fmt.Errorf("get blob %q: %w", entryPath, err)
 			}
+			budget.bytes += len(blobResp.GetContent())
+			if budget.bytes > sandboxSourceLimit {
+				return fmt.Errorf("gate source tree exceeds byte bound")
+			}
 			if err := os.WriteFile(destPath, blobResp.GetContent(), 0o644); err != nil {
 				return fmt.Errorf("write %q: %w", entryPath, err)
 			}
+		default:
+			return fmt.Errorf("unsupported gate tree entry kind %q", entry.GetKind())
 		}
 	}
 	return nil

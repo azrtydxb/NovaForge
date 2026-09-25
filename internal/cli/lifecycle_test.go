@@ -66,6 +66,11 @@ func TestCLIFullLifecycle(t *testing.T) {
 	}, "credit a balance")
 	platformtest.Git(t, work, nil, "push", "-q", "origin", "feature/credit")
 
+	sourceSHA := strings.TrimSpace(platformtest.Git(t, work, nil, "rev-parse", "HEAD"))
+	if diff := platformtest.Git(t, work, nil, "diff", "main..."+sourceSHA); !strings.Contains(diff, "Credit") {
+		t.Fatal("inspected diff has no Credit change")
+	}
+
 	created := nf(t, "work", "create", "ledger", "--type", "feature", "--goal", "credit a balance",
 		"--acceptance", "Credit adds to a balance", "--gate", "documentation")
 	key := regexp.MustCompile(`[A-Z]+-\d+`).FindString(created)
@@ -95,7 +100,7 @@ func TestCLIFullLifecycle(t *testing.T) {
 	if _, errOut, code := nfTry("run", "merge", "ledger", number); code == 0 || !strings.Contains(errOut, "independent") {
 		t.Fatalf("an unreviewed run merged or was refused for another reason: exit %d, %s", code, errOut)
 	}
-	if _, errOut, code := nfTry("run", "review", "ledger", number, "--verdict", "approve"); code == 0 {
+	if _, errOut, code := nfTry("run", "review", "ledger", number, "--verdict", "approve", "--source-sha", sourceSHA); code == 0 {
 		t.Fatalf("the author approved their own run: %s", errOut)
 	}
 
@@ -110,7 +115,7 @@ func TestCLIFullLifecycle(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", reviewerHome)
 	nf(t, "login", "--server", p.EdgeURL, "--username", reviewer.Username, "--password", reviewer.Password)
 	nf(t, "org", "use", org)
-	nf(t, "run", "review", "ledger", number, "--verdict", "approve", "--summary", "documented and small")
+	nf(t, "run", "review", "ledger", number, "--verdict", "approve", "--source-sha", sourceSHA, "--summary", "documented and small")
 
 	t.Setenv("XDG_CONFIG_HOME", authorHome)
 	merged := nf(t, "run", "merge", "ledger", number)

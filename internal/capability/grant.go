@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/novaforge/novaforge/internal/authz"
 )
 
 // Grant is a scoped capability issued to a user or an agent within an
@@ -134,4 +135,23 @@ func (s *Store) ListActive(ctx context.Context, orgID, subjectID uuid.UUID) ([]G
 		return nil, fmt.Errorf("list active capability grants: %w", err)
 	}
 	return grants, nil
+}
+
+// Revoke expires exactly one grant in the caller's organization. Missing or
+// already expired grants are success: retry after a lost RPC response must
+// not resurrect authority or require knowing whether the first call landed.
+// Resolve and ListActive both consult this persisted expiry on each call.
+func (s *Store) Revoke(ctx context.Context, id uuid.UUID) error {
+	scope, err := authz.FromContext(ctx)
+	if err != nil {
+		return err
+	}
+	if err := authz.RequireOrg(ctx, scope.OrgID); err != nil {
+		return err
+	}
+	_, err = s.pool.Exec(ctx, `UPDATE gitplatform.capability_grants SET expires_at=LEAST(expires_at,'epoch'::timestamptz) WHERE id=$1 AND org_id=$2`, id, scope.OrgID)
+	if err != nil {
+		return fmt.Errorf("revoke capability grant: %w", err)
+	}
+	return nil
 }

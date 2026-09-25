@@ -172,6 +172,7 @@ export function Empty({ children }: { children: ReactNode }) {
 export function Loading() {
   return (
     <div
+      role="status"
       style={{
         padding: "28px 16px",
         textAlign: "center",
@@ -194,6 +195,7 @@ export function Failed({ error }: { error: unknown }) {
   const unavailable = apiErr?.unavailable ?? false;
   return (
     <div
+      role={unavailable ? "status" : "alert"}
       style={{
         padding: "20px 16px",
         border: `1px solid ${unavailable ? "var(--line-2)" : "#e5534b44"}`,

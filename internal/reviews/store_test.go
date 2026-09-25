@@ -94,10 +94,10 @@ func TestProofRecordsAccumulate(t *testing.T) {
 		t.Fatalf("CreateRun: %v", err)
 	}
 
-	if err := store.RecordProof(ctx, run.ID, "tests", "passed", "all green"); err != nil {
+	if err := store.RecordProof(proofServiceContext(t, ctx, "gates"), run.ID, "tests", "passed", "all green"); err != nil {
 		t.Fatalf("RecordProof tests: %v", err)
 	}
-	if err := store.RecordProof(ctx, run.ID, "security", "passed", "no findings"); err != nil {
+	if err := store.RecordProof(proofServiceContext(t, ctx, "gates"), run.ID, "security", "passed", "no findings"); err != nil {
 		t.Fatalf("RecordProof security: %v", err)
 	}
 

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, enc } from "../lib/api";
 import { useWorkspace } from "../lib/workspace";
-import { Async, Empty, Page, Panel, PanelHead } from "../components/ui";
+import { Async, Empty, Failed, Page, Panel, PanelHead } from "../components/ui";
 import { Confirm, Dialog } from "../components/Dialog";
 import type { Commit, OrgMember, Ref, TreeEntry, User } from "../lib/types";
 
@@ -113,6 +113,7 @@ export function Repos() {
         </Panel>
       ) : (
         <Browser
+          key={`${w.org}/${active}`}
           org={w.org!}
           repo={active}
           defaultBranch={
@@ -181,7 +182,9 @@ function Browser({
   const tree = useQuery({
     queryKey: ["tree", org, repo, head, path],
     queryFn: () =>
-      api.get<{ entries: TreeEntry[] }>(`${base}/tree/${enc(head)}/${path}`),
+      api.get<{ entries: TreeEntry[] }>(
+        `${base}/tree/${enc(head)}/${path.split("/").map(enc).join("/")}`,
+      ),
     enabled: branches.data !== undefined && !empty,
   });
 
@@ -189,7 +192,10 @@ function Browser({
   // in JSON would mean base64 and a size limit.
   const blob = useQuery({
     queryKey: ["blob", org, repo, head, file],
-    queryFn: () => api.text(`${base}/blob/${enc(head)}/${file}`),
+    queryFn: () =>
+      api.text(
+        `${base}/blob/${enc(head)}/${file!.split("/").map(enc).join("/")}`,
+      ),
     enabled: file !== null,
   });
 
@@ -254,6 +260,7 @@ function Browser({
               new branch
             </button>
             <select
+              aria-label="Branch or tag"
               value={head}
               onChange={(e) => {
                 setBranch(e.target.value);
@@ -320,7 +327,9 @@ function Browser({
               </button>
             ))}
           </div>
-          {empty ? (
+          {branches.error || tagList.error ? (
+            <Failed error={branches.error || tagList.error} />
+          ) : empty ? (
             <Empty>
               This repository is empty. Push a first commit to {defaultBranch}.
             </Empty>
@@ -476,6 +485,7 @@ function Compare({
   const names = Array.from(new Set(refs.map((r) => r.name)));
   const picker = (value: string, onChange: (v: string) => void) => (
     <select
+      aria-label={onChange === setFrom ? "Compare from ref" : "Compare to ref"}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       style={selectStyle}

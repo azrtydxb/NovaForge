@@ -87,6 +87,7 @@ printf '# Ledger\n\nTracks balances.\n' >README.md
 git commit -qam "describe what the ledger does"
 git push -q origin feature/balance || fail "push feature failed"
 FEATURE_SHA="$(git rev-parse HEAD)"
+git diff "main...$FEATURE_SHA" | grep -q "Tracks balances" || fail "reviewed diff missing balance change"
 cd - >/dev/null
 ok "pushed feature/balance at $FEATURE_SHA"
 
@@ -97,7 +98,7 @@ NUMBER="$(echo "${res#* }" | python3 -c 'import json,sys; print(json.load(sys.st
 ok "opened run #$NUMBER"
 
 echo "== 4. the author cannot approve their own run, nor merge it unapproved =="
-res="$(call POST "/orgs/$ORG/repos/$REPO/runs/$NUMBER/reviews" "$A_TOKEN" '{"verdict":"approve"}')"
+res="$(call POST "/orgs/$ORG/repos/$REPO/runs/$NUMBER/reviews" "$A_TOKEN" "{\"verdict\":\"approve\",\"expected_source_sha\":\"$FEATURE_SHA\"}")"
 case "$res" in 2*) fail "the author approved their own run: $res" ;; esac
 res="$(call POST "/orgs/$ORG/repos/$REPO/runs/$NUMBER/merge" "$A_TOKEN" '{"method":"merge"}')"
 case "$res" in
@@ -108,7 +109,7 @@ case "$res" in
 esac
 
 echo "== 5. another member approves, and the merge lands =="
-res="$(call POST "/orgs/$ORG/repos/$REPO/runs/$NUMBER/reviews" "$B_TOKEN" '{"verdict":"approve"}')"
+res="$(call POST "/orgs/$ORG/repos/$REPO/runs/$NUMBER/reviews" "$B_TOKEN" "{\"verdict\":\"approve\",\"expected_source_sha\":\"$FEATURE_SHA\"}")"
 case "$res" in 2*) ;; *) fail "the reviewer's approval was refused: $res" ;; esac
 res="$(call POST "/orgs/$ORG/repos/$REPO/runs/$NUMBER/merge" "$A_TOKEN" '{"method":"merge"}')"
 case "$res" in 2*) ;; *) fail "an approved run with no failing gate did not merge: $res" ;; esac

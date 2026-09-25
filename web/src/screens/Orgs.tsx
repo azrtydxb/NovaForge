@@ -62,9 +62,11 @@ export function Orgs() {
     queryKey: ["user"],
     queryFn: () => api.get<User>("/api/v1/user"),
   });
-  const isOwner =
-    members.data?.members.find((m) => m.user_id === me.data?.id)?.role ===
-    "owner";
+  const role = members.data?.members.find(
+    (m) => m.user_id === me.data?.id,
+  )?.role;
+  const isOwner = role === "owner";
+  const canManageMembers = isOwner || role === "admin";
   const [confirmName, setConfirmName] = useState("");
   const deleteOrg = useMutation({
     mutationFn: (name: string) =>
@@ -194,7 +196,19 @@ export function Orgs() {
         </Panel>
 
         <Panel>
-          <PanelHead>MEMBERS</PanelHead>
+          <PanelHead>
+            MEMBERS
+            <div style={{ flex: 1 }} />
+            {canManageMembers ? (
+              <NewButton
+                label="Add member"
+                onClick={() => {
+                  addMember.reset();
+                  setCreating("member");
+                }}
+              />
+            ) : null}
+          </PanelHead>
           <Async query={members}>
             {(d) =>
               d.members.length === 0 ? (

@@ -18,7 +18,9 @@ type Input struct {
 	OrgID, RepoID, RunID uuid.UUID
 	WorkDir              string
 	TargetSHA, SourceSHA string
-	Params               map[string]any
+	// PolicySHA is the immutable target commit used to resolve gate policy.
+	PolicySHA string
+	Params    map[string]any
 
 	// Exec runs the analysis tools the gates use. It is injected so a test
 	// can drive a gate without a toolchain, but the checks themselves live in

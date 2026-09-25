@@ -71,12 +71,13 @@ func TestAuthorAgentExcludedFromReviewers(t *testing.T) {
 	store := newStore(t)
 	orgID := uuid.New()
 	authorAgentID := uuid.New()
-	ctx := scopedCtx(orgID)
+	ctx := proofServiceContext(t, scopedCtx(orgID), "work-reviews")
 
 	run := runWithAuthorAgent(t, store, ctx, orgID, authorAgentID)
 
 	securityAgentID := uuid.New()
 	r := &reviews.AgentReviewer{
+		Git:   &stubMergeGitClient{},
 		Store: store,
 		RoleAgent: map[string]agents.Agent{
 			"reviewer": {ID: authorAgentID, Name: "backend-agent", Role: "reviewer"},
@@ -103,7 +104,7 @@ func TestReviewersUseDistinctModelsWhenAvailable(t *testing.T) {
 	store := newStore(t)
 	orgID := uuid.New()
 	authorID := uuid.New()
-	ctx := scopedCtx(orgID)
+	ctx := proofServiceContext(t, scopedCtx(orgID), "work-reviews")
 
 	run, err := store.CreateRun(ctx, reviews.Run{
 		OrgID: orgID, RepoID: uuid.New(), Title: "r", SourceRef: "src", TargetRef: "main",
@@ -114,6 +115,7 @@ func TestReviewersUseDistinctModelsWhenAvailable(t *testing.T) {
 	}
 
 	r := &reviews.AgentReviewer{
+		Git:   &stubMergeGitClient{},
 		Store: store,
 		RoleAgent: map[string]agents.Agent{
 			"reviewer": {ID: uuid.New(), Name: "reviewer-agent", Role: "reviewer"},
@@ -138,7 +140,7 @@ func TestRequestChangesBlocksMerge(t *testing.T) {
 	store := newStore(t)
 	orgID := uuid.New()
 	authorID := uuid.New()
-	ctx := scopedCtx(orgID)
+	ctx := proofServiceContext(t, scopedCtx(orgID), "work-reviews")
 
 	run, err := store.CreateRun(ctx, reviews.Run{
 		OrgID: orgID, RepoID: uuid.New(), Title: "r", SourceRef: "src", TargetRef: "main",
@@ -149,6 +151,7 @@ func TestRequestChangesBlocksMerge(t *testing.T) {
 	}
 
 	r := &reviews.AgentReviewer{
+		Git:   &stubMergeGitClient{},
 		Store: store,
 		RoleAgent: map[string]agents.Agent{
 			"reviewer": {ID: uuid.New(), Name: "reviewer-agent", Role: "reviewer"},
@@ -212,7 +215,7 @@ func TestAllApprovalsStillRequireGates(t *testing.T) {
 	store := newStore(t)
 	orgID := uuid.New()
 	authorID := uuid.New()
-	ctx := scopedCtx(orgID)
+	ctx := proofServiceContext(t, scopedCtx(orgID), "work-reviews")
 
 	run, err := store.CreateRun(ctx, reviews.Run{
 		OrgID: orgID, RepoID: uuid.New(), Title: "r", SourceRef: "src", TargetRef: "main",
@@ -223,6 +226,7 @@ func TestAllApprovalsStillRequireGates(t *testing.T) {
 	}
 
 	r := &reviews.AgentReviewer{
+		Git:   &stubMergeGitClient{},
 		Store: store,
 		RoleAgent: map[string]agents.Agent{
 			"reviewer":     {ID: uuid.New(), Name: "reviewer-agent", Role: "reviewer"},
@@ -273,7 +277,7 @@ func TestReviewVerdictsRecordedAsProof(t *testing.T) {
 	store := newStore(t)
 	orgID := uuid.New()
 	authorID := uuid.New()
-	ctx := scopedCtx(orgID)
+	ctx := proofServiceContext(t, scopedCtx(orgID), "work-reviews")
 
 	run, err := store.CreateRun(ctx, reviews.Run{
 		OrgID: orgID, RepoID: uuid.New(), Title: "r", SourceRef: "src", TargetRef: "main",
@@ -284,6 +288,7 @@ func TestReviewVerdictsRecordedAsProof(t *testing.T) {
 	}
 
 	r := &reviews.AgentReviewer{
+		Git:   &stubMergeGitClient{},
 		Store: store,
 		RoleAgent: map[string]agents.Agent{
 			"reviewer": {ID: uuid.New(), Name: "reviewer-agent", Role: "reviewer"},

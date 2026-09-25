@@ -26,7 +26,12 @@ func (c *Controller) changeRequirements(ctx context.Context, head RunHead) ([]Re
 	if c.Approvals == nil || head.SourceRef == "" {
 		return nil, nil
 	}
-	reqs, err := ClassifyChange(ctx, c.Git, head.RepoID, head.TargetRef, head.SourceRef)
+	target, source := head.TargetRef, head.SourceRef
+	if head.TargetSHA != "" {
+		target = head.TargetSHA
+		source = head.HeadSHA
+	}
+	reqs, err := ClassifyChange(ctx, c.Git, head.RepoID, target, source)
 	if err != nil {
 		return nil, fmt.Errorf("classify change: %w", err)
 	}

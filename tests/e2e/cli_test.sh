@@ -81,6 +81,8 @@ printf 'package ledger\n\n// Credit adds cents to a balance.\nfunc Credit(b Bala
 git add credit.go
 git commit -qm "credit a balance"
 git push -q origin feature/credit || fail "push feature failed"
+FEATURE_SHA="$(git rev-parse HEAD)"
+git diff "main...$FEATURE_SHA" | grep -q "Credit" || fail "reviewed diff missing Credit change"
 cd - >/dev/null
 ok "pushed main and feature/credit"
 
@@ -108,14 +110,14 @@ as_author run proof "$REPO" "$NUMBER" | grep -q "documentation	pass" || fail "no
 ok "run #$NUMBER gates: $(echo "$GATES" | tr '\t\n' ' ')"
 
 echo "== 5. nf refuses a self-approval and an unreviewed merge, then records an independent review =="
-if as_author run review "$REPO" "$NUMBER" --verdict approve >/dev/null 2>&1; then
+if as_author run review "$REPO" "$NUMBER" --verdict approve --source-sha "$FEATURE_SHA" >/dev/null 2>&1; then
 	fail "the author approved their own run"
 fi
 if OUT="$(as_author run merge "$REPO" "$NUMBER" 2>&1)"; then
 	fail "an unreviewed run merged: $OUT"
 fi
 echo "$OUT" | grep -q "independent" || fail "the merge was refused for an unexpected reason: $OUT"
-as_reviewer run review "$REPO" "$NUMBER" --verdict approve --summary "documented and small" >/dev/null ||
+as_reviewer run review "$REPO" "$NUMBER" --verdict approve --source-sha "$FEATURE_SHA" --summary "documented and small" >/dev/null ||
 	fail "the reviewer's approval was refused"
 ok "independent approval recorded"
 

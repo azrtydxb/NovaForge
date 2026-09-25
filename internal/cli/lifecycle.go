@@ -131,15 +131,16 @@ func cmdRun(args []string, stdout, stderr io.Writer) error {
 	case "review":
 		fs := flag.NewFlagSet("run review", flag.ContinueOnError)
 		fs.SetOutput(stderr)
-		verdict := fs.String("verdict", "", "approve, request_changes or reject")
+		verdict := fs.String("verdict", "", "approve, request_changes or comment")
+		sourceSHA := fs.String("source-sha", "", "exact source commit inspected (required; never resolves latest)")
 		summary := fs.String("summary", "", "why")
 		if err := fs.Parse(args[3:]); err != nil {
 			return err
 		}
-		if *verdict == "" {
-			return fmt.Errorf("--verdict is required")
+		if *verdict == "" || *sourceSHA == "" {
+			return fmt.Errorf("--verdict and --source-sha are required; inspect the source revision before reviewing")
 		}
-		if err := c.Do("POST", run+"/reviews", map[string]string{"verdict": *verdict, "summary": *summary}, nil); err != nil {
+		if err := c.Do("POST", run+"/reviews", map[string]string{"verdict": *verdict, "summary": *summary, "expected_source_sha": *sourceSHA}, nil); err != nil {
 			return err
 		}
 		fmt.Fprintf(stdout, "recorded %s on #%s\n", *verdict, args[2])

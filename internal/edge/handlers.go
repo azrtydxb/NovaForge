@@ -44,6 +44,9 @@ func Handlers(cfg Config) map[string]http.HandlerFunc {
 	h["healthz"] = func(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	}
+	// Wrappers must run last so older key-only operations cannot replace the
+	// repository checks or discard revision-bound review input.
+	AddGUIHandlers(h, cfg.Git, cfg.Work, cfg.Reviews, cfg.Agents)
 	return h
 }
 

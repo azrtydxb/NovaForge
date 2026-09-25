@@ -27,6 +27,8 @@ func (g *GRPCServer) ListProof(ctx context.Context, req *reviewsv1.ListProofRequ
 	for _, p := range records {
 		out = append(out, &reviewsv1.ProofRecord{
 			Gate:       p.Gate,
+			Producer:   p.Producer,
+			ActorId:    p.ActorID.String(),
 			Status:     p.Status,
 			Detail:     p.Detail,
 			RecordedAt: p.RecordedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),

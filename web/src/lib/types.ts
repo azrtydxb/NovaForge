@@ -65,6 +65,8 @@ export interface WorkItem {
   /** Sent only when one Work Item is read: a maintenance proposal no person
    * has approved. Agent-runtime refuses to start a run against it. */
   awaiting_approval?: boolean;
+  maintenance_proposal?: boolean;
+  execution_claimed?: boolean;
 }
 
 /** MaintenanceProposal is a scanner finding that became a Work Item. decision
@@ -152,6 +154,8 @@ export interface EngineeringRun {
 }
 
 export interface ProofRecord {
+  producer: string;
+  actor_id: string;
   gate: string;
   status: string;
   detail: string;

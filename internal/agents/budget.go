@@ -3,6 +3,7 @@ package agents
 import (
 	"errors"
 	"fmt"
+	"math"
 	"sync/atomic"
 	"time"
 )
@@ -23,6 +24,7 @@ type Budget struct {
 
 	tokensUsed atomic.Int64
 	costUsed   atomic.Int64
+	overflow   atomic.Bool
 }
 
 // NewBudget builds a Budget whose wall-clock window starts now.
@@ -37,14 +39,37 @@ func NewBudget(wallclock time.Duration, tokens int64, costMicros int64) *Budget 
 
 // AddTokens atomically accounts n more tokens against the budget.
 func (b *Budget) AddTokens(n int64) {
-	b.tokensUsed.Add(n)
+	b.add(&b.tokensUsed, n)
 }
 
 // AddCostMicros atomically accounts n more micros of cost against the
 // budget.
 func (b *Budget) AddCostMicros(n int64) {
-	b.costUsed.Add(n)
+	b.add(&b.costUsed, n)
 }
+
+// Counters saturate rather than wrapping and overflow fails closed. A
+// malformed negative usage delta cannot refund earlier measured spend.
+func (b *Budget) add(counter *atomic.Int64, n int64) {
+	if n < 0 {
+		b.overflow.Store(true)
+		return
+	}
+	for {
+		old := counter.Load()
+		next := old + n
+		if n > math.MaxInt64-old {
+			next = math.MaxInt64
+			b.overflow.Store(true)
+		}
+		if counter.CompareAndSwap(old, next) {
+			return
+		}
+	}
+}
+
+// MarkOverflow records overflow that happened before a saturated delta arrived.
+func (b *Budget) MarkOverflow() { b.overflow.Store(true) }
 
 // Deadline is the instant the wall-clock limit is reached. The run loop puts
 // it on the context of every model and tool call: compared only between
@@ -65,6 +90,9 @@ func (b *Budget) CostMicrosUsed() int64 { return b.costUsed.Load() }
 // in a deployment that prices no tokens, so a zero here is a run nobody asked
 // to bound by cost — not a limit that would trip on the first priced token.
 func (b *Budget) Check() error {
+	if b.overflow.Load() {
+		return fmt.Errorf("%w: usage counter overflow or invalid delta", ErrOverBudget)
+	}
 	if elapsed := time.Since(b.started); elapsed > b.wallclock {
 		return fmt.Errorf("%w: wallclock limit exceeded (%s > %s)", ErrOverBudget, elapsed.Round(time.Millisecond), b.wallclock)
 	}

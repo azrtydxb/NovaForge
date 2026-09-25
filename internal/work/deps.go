@@ -37,21 +37,22 @@ func (s *Store) SetParent(ctx context.Context, id, parentID uuid.UUID) error {
 // SetState transitions id to newState, scoped to the caller's org. Neither
 // store.go nor the wider work service currently exposes a general state
 // transition, so this is used by the swarm scheduler (Task 3) and by tests
-// that need to drive an item to "done" or "blocked" directly.
+// that need to drive an item to "done" or "blocked" directly. Active runtime
+// claims must settle through ReleaseExecution, never this generic setter.
 func (s *Store) SetState(ctx context.Context, id uuid.UUID, newState string) error {
 	scope, err := authz.FromContext(ctx)
 	if err != nil {
 		return err
 	}
 	tag, err := s.pool.Exec(ctx, `
-		UPDATE work.work_items SET state = $1 WHERE org_id = $2 AND id = $3`,
+		UPDATE work.work_items SET state = $1 WHERE org_id = $2 AND id = $3 AND active_execution_run_id IS NULL`,
 		newState, scope.OrgID, id,
 	)
 	if err != nil {
 		return fmt.Errorf("set state: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("work item %s not found", id)
+		return fmt.Errorf("work item %s not found or has active execution", id)
 	}
 	return nil
 }
@@ -66,7 +67,7 @@ func (s *Store) TransitionState(ctx context.Context, id uuid.UUID, from, to stri
 	}
 	tag, err := s.pool.Exec(ctx, `
 		UPDATE work.work_items SET state = $1
-		WHERE id = $2 AND org_id = $3 AND state = $4`,
+		WHERE id = $2 AND org_id = $3 AND state = $4 AND active_execution_run_id IS NULL`,
 		to, id, scope.OrgID, from,
 	)
 	if err != nil {
@@ -87,7 +88,7 @@ func (s *Store) ClaimOpen(ctx context.Context, id uuid.UUID) (claimed bool, err 
 	var claimedID uuid.UUID
 	err = s.pool.QueryRow(ctx, `
 		UPDATE work.work_items SET state = 'in_progress'
-		WHERE id = $1 AND org_id = $2 AND state = 'open'
+		WHERE id = $1 AND org_id = $2 AND state = 'open' AND active_execution_run_id IS NULL
 		RETURNING id`,
 		id, scope.OrgID,
 	).Scan(&claimedID)
@@ -170,7 +171,7 @@ func (s *Store) Dependencies(ctx context.Context, id uuid.UUID) ([]Item, error) 
 	rows, err := s.pool.Query(ctx, `
 		SELECT w.id, w.org_id, w.repo_id, w.key, w.type, w.goal, w.acceptance,
 		       w.constraints, w.required_gates, w.assignee_id, w.assignee_kind,
-		       w.state, w.created_at
+		       w.state, w.created_at, w.execution_claimed
 		FROM work.work_items w
 		JOIN work.work_item_deps d ON d.blocker_id = w.id
 		WHERE d.blocked_id = $1 AND w.org_id = $2
@@ -194,7 +195,7 @@ func (s *Store) Dependents(ctx context.Context, id uuid.UUID) ([]Item, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT w.id, w.org_id, w.repo_id, w.key, w.type, w.goal, w.acceptance,
 		       w.constraints, w.required_gates, w.assignee_id, w.assignee_kind,
-		       w.state, w.created_at
+		       w.state, w.created_at, w.execution_claimed
 		FROM work.work_items w
 		JOIN work.work_item_deps d ON d.blocked_id = w.id
 		WHERE d.blocker_id = $1 AND w.org_id = $2
@@ -220,7 +221,7 @@ func (s *Store) Ready(ctx context.Context, orgID, epicID uuid.UUID) ([]Item, err
 	rows, err := s.pool.Query(ctx, `
 		SELECT w.id, w.org_id, w.repo_id, w.key, w.type, w.goal, w.acceptance,
 		       w.constraints, w.required_gates, w.assignee_id, w.assignee_kind,
-		       w.state, w.created_at
+		       w.state, w.created_at, w.execution_claimed
 		FROM work.work_items w
 		WHERE w.org_id = $1 AND w.parent_id = $2 AND w.state = 'open'
 		  AND NOT EXISTS (
@@ -249,7 +250,7 @@ func scanItems(rows pgx.Rows) ([]Item, error) {
 		var assigneeKind *string
 		if err := rows.Scan(&item.ID, &item.OrgID, &item.RepoID, &item.Key, &item.Type, &item.Goal,
 			&item.Acceptance, &item.Constraints, &item.RequiredGates,
-			&assigneeID, &assigneeKind, &item.State, &item.CreatedAt); err != nil {
+			&assigneeID, &assigneeKind, &item.State, &item.CreatedAt, &item.ExecutionClaimed); err != nil {
 			return nil, fmt.Errorf("scan work item: %w", err)
 		}
 		if assigneeID != nil {

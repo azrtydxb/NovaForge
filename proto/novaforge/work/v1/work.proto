@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package novaforge.work.v1;
 
+import "google/protobuf/field_mask.proto";
+
 // WorkService manages Work Items: typed engineering intent that can be
 // assigned to a human or an agent. Every RPC derives its organization from
 // the caller's resolved scope, never from a field of the request message.
@@ -10,6 +12,10 @@ service WorkService {
   rpc GetItem(GetItemRequest) returns (GetItemResponse);
   rpc ListItems(ListItemsRequest) returns (ListItemsResponse);
   rpc AssignItem(AssignItemRequest) returns (AssignItemResponse);
+  rpc PatchItem(PatchItemRequest) returns (PatchItemResponse);
+  rpc TransitionItem(TransitionItemRequest) returns (TransitionItemResponse);
+  rpc ClaimExecution(ClaimExecutionRequest) returns (ClaimExecutionResponse);
+  rpc ReleaseExecution(ReleaseExecutionRequest) returns (ReleaseExecutionResponse);
   rpc ListSubtasks(ListSubtasksRequest) returns (ListSubtasksResponse);
   rpc DecomposeEpic(DecomposeEpicRequest) returns (DecomposeEpicResponse);
   rpc AddComment(AddCommentRequest) returns (AddCommentResponse);
@@ -39,6 +45,10 @@ message WorkItem {
   // Such an item must not be executed: agent-runtime refuses to start a run
   // against it.
   bool awaiting_approval = 14;
+  // Scanner-owned intent remains immutable even after approval.
+  bool maintenance_proposal = 15;
+  // Historical admission: intent is no longer unstarted even after release.
+  bool execution_claimed = 16;
 }
 
 message CreateItemRequest {
@@ -195,3 +205,59 @@ message ListMaintenanceProposalsRequest {
 message ListMaintenanceProposalsResponse {
   repeated MaintenanceProposal proposals = 1;
 }
+
+// Only type, goal, acceptance, constraints and required_gates may be patched.
+// expected carries the previously read values of all five fields, so a stale
+// editor cannot silently replace another person's changes.
+message PatchItemRequest {
+  string id = 1;
+  string repo_id = 2;
+  WorkItem values = 3;
+  WorkItem expected = 4;
+  google.protobuf.FieldMask update_mask = 5;
+}
+message PatchItemResponse {
+  WorkItem item = 1;
+}
+message TransitionItemRequest {
+  string id = 1;
+  string repo_id = 2;
+  string expected_state = 3;
+  string to_state = 4;
+}
+message TransitionItemResponse {
+  WorkItem item = 1;
+}
+
+// Only the verified org-scoped agent-runtime service may call these RPCs.
+// Persist run_id before calling; replay the same binding after an uncertain
+// result. Active exact retries return the original immutable intent. Released
+// identities cannot be reused. No claim expires on a wall clock.
+message ClaimExecutionRequest {
+  string work_item_id = 1;
+  string repo_id = 2;
+  string run_id = 3;
+  string agent_id = 4;
+  // Runtime-validated initiating human, retained for audit, not authorization.
+  string sponsor_id = 5;
+}
+message ClaimExecutionResponse {
+  // Use this snapshot for both execution and verification, never GetItem later.
+  WorkItem item = 1;
+}
+message ReleaseExecutionRequest {
+  string work_item_id = 1;
+  string repo_id = 2;
+  string run_id = 3;
+  // succeeded -> review; failed/cancelled/over_budget -> blocked.
+  // admission_failed -> open only for an existing claim; if absent it writes
+  // a cancellation tombstone without changing the Work Item.
+  string outcome = 4;
+  // Only admission_failed requires true. The runtime must have durably fenced
+  // this run terminal with no execution begun and no live execution authority
+  // BEFORE asserting this; an ambiguous admission must remain claimed.
+  bool no_execution_started = 5;
+  // Binds cancellation tombstones even when ClaimExecution never arrived.
+  string agent_id = 6;
+}
+message ReleaseExecutionResponse {}

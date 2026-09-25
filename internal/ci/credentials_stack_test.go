@@ -38,6 +38,7 @@ type credentialStack struct {
 	pool      *pgxpool.Pool
 	store     *ci.Store
 	broker    *secrets.Broker
+	provider  *credentialProvider
 	gatesSrv  *grpc.Server
 	org, repo uuid.UUID
 	runnerID  uuid.UUID
@@ -90,7 +91,7 @@ func newCredentialStack(t *testing.T) *credentialStack {
 	}
 	s.repo = uuid.MustParse(repo.GetRepo().GetId())
 
-	s.broker = secrets.NewBroker(pool, []byte("credential-stack-kek"))
+	s.setupProvider(t)
 	t.Cleanup(func() {
 		pool.Exec(context.Background(), "DELETE FROM secrets.secret_values WHERE org_id = $1", s.org)
 		pool.Exec(context.Background(), "DELETE FROM secrets.secret_leases WHERE org_id = $1", s.org)
@@ -199,10 +200,10 @@ func TestShortLivedCredential(t *testing.T) {
 	ctx := context.Background()
 	staging := secretValue("staging")
 	prod := secretValue("prod")
-	if err := s.broker.PutValue(ctx, s.org, "DEPLOY_TOKEN", "staging", staging); err != nil {
+	if err := s.putDynamicSecret("DEPLOY_TOKEN", "staging", staging); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.broker.PutValue(ctx, s.org, "PROD_KEY", "production", prod); err != nil {
+	if err := s.putDynamicSecret("PROD_KEY", "production", prod); err != nil {
 		t.Fatal(err)
 	}
 
@@ -290,4 +291,8 @@ func TestBrokerDownFailsClosed(t *testing.T) {
 	if j.Status != "pending" || !strings.Contains(j.Detail, "broker") {
 		t.Fatalf("credential-needing job: %s %q, want pending and blocked naming the broker", j.Status, j.Detail)
 	}
+}
+
+func (s *credentialStack) secretContext() context.Context {
+	return authz.WithScope(context.Background(), authz.Scope{OrgID: s.org, ActorKind: "service"})
 }

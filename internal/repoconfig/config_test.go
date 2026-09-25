@@ -151,3 +151,14 @@ tools:
 		t.Fatalf("error = %q, want it to contain %q", err.Error(), "unknown tool")
 	}
 }
+
+func TestExactMCPToolSyntax(t *testing.T) {
+	for _, name := range []string{"mcp.safe.lookup", "mcp.safe.repo.read", "mcp..lookup", "mcp.safe.", "mcp.safe.*", "mcp.safe..lookup", "work.gte"} {
+		client := &stubGitClient{blobs: map[string][]byte{".novaforge/agents/test.yaml": []byte("name: test\nrole: engineer\ntools: [\"" + name + "\"]\n")}, trees: map[string][]*gitv1.TreeEntry{".novaforge/agents": {{Kind: "blob", Name: "test.yaml"}}}}
+		_, err := repoconfig.Load(context.Background(), client, uuid.New(), uuid.New(), "main")
+		valid := name == "mcp.safe.lookup" || name == "mcp.safe.repo.read"
+		if (err == nil) != valid {
+			t.Errorf("%s: valid=%v err=%v", name, valid, err)
+		}
+	}
+}

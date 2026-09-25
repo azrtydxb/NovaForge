@@ -2,11 +2,14 @@ syntax = "proto3";
 
 package novaforge.agents.v1;
 
+import "novaforge/identity/v1/identity.proto";
+
 // AgentService manages agent identities and their runs: isolated,
 // budget-bounded executions against a Work Item, with a live event stream
 // of state changes and tool calls. Every RPC derives its organization from
 // the caller's resolved scope, never from a field of the request message.
 service AgentService {
+  rpc GetGrantIntent(GetGrantIntentRequest) returns (GetGrantIntentResponse);
   rpc CreateAgent(CreateAgentRequest) returns (CreateAgentResponse);
   rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
   rpc StartRun(StartRunRequest) returns (StartRunResponse);
@@ -65,6 +68,16 @@ message Run {
   // Why a run that did not succeed ended: which budget limit stopped it, or
   // what failed. Empty for a run still going or one that succeeded.
   string end_reason = 16;
+  bool tokens_available = 17;
+  bool cost_available = 18;
+  bool grant_cleanup_pending = 19;
+  string grant_cleanup_error = 20;
+  bool work_release_pending = 21;
+  string work_release_error = 22;
+  bool workspace_cleanup_pending = 23;
+  string workspace_cleanup_error = 24;
+  bool execution_finished = 25;
+  string repo_id = 26;
 }
 
 // StartRunRequest starts a new agent run against a Work Item, identified by
@@ -103,11 +116,14 @@ message CancelRunResponse {
 
 message StreamRunEventsRequest {
   string run_id = 1;
+  string after_cursor = 2;
 }
 
 // RunEvent is one message on the run's event stream: either a state change
 // or a recorded tool call.
 message StreamRunEventsResponse {
+  string cursor = 5;
+  string tool_call_id = 6;
   string run_id = 1;
   string at = 2;
   oneof payload {
@@ -186,3 +202,7 @@ message CheckBranchLockResponse {
   string agent_id = 3;
   string prefix = 4;
 }
+
+// Only Identity's org-scoped service credential may inspect this receipt.
+message GetGrantIntentRequest { string run_id = 1; }
+message GetGrantIntentResponse { novaforge.identity.v1.GrantIntent intent = 1; }

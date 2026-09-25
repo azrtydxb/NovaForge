@@ -197,6 +197,54 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/orgs/{org}/agent-runs/{id}/events:
+    get:
+      operationId: streamAgentRunEvents
+      summary: Authenticated Agent Run events (SSE, no replay)
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/orgs/{org}/agent-runs/{id}/tools:
+    get:
+      operationId: getAgentRunTools
+      summary: Persisted observable Agent Run tool calls
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/orgs/{org}/agents:
     get:
       operationId: listAgents
@@ -302,6 +350,77 @@ paths:
       summary: What needs human attention
       parameters:
         - name: org
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/orgs/{org}/engineering-runs/{run_id}/agent-reviews:
+    get:
+      operationId: listAgentReviewRequests
+      summary: Durable independent review requests and role outcomes
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: run_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      operationId: requestAgentReview
+      summary: Queue an independent agent review of the inspected revision
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: run_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/orgs/{org}/engineering-runs/{run_id}/reviews:
+    get:
+      operationId: listEngineeringRunReviews
+      summary: Durable review history by canonical run identity
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: run_id
           in: path
           required: true
           schema:
@@ -1438,6 +1557,34 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
   /api/v1/orgs/{org}/repos/{repo}/runs/{number}/reviews:
+    get:
+      operationId: listRunReviews
+      summary: Revision-bound independent reviews
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: number
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
     post:
       operationId: submitReview
       summary: Submit a review verdict
@@ -1653,6 +1800,34 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: patchWorkItem
+      summary: Edit open Work Item intent with expected values
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/orgs/{org}/repos/{repo}/work/{key}/agent-runs:
     get:
       operationId: listWorkItemAgentRuns
@@ -1801,6 +1976,35 @@ paths:
     get:
       operationId: listSubtasks
       summary: An epic's subtasks and their readiness
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/orgs/{org}/repos/{repo}/work/{key}/transitions:
+    post:
+      operationId: transitionWorkItem
+      summary: Block or reopen eligible human work
       parameters:
         - name: org
           in: path
