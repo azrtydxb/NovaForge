@@ -176,7 +176,16 @@ for org in "$ORG_B" "$ORG_A"; do
 	refused POST "/orgs/$org/repos/$REPO_B/work/$B_KEY/comments" "$A_TOKEN" '{"body":"from A"}'
 	refused POST "/orgs/$org/repos/$REPO_B/work/$B_KEY/assign" "$A_TOKEN" '{"assignee_id":"'"$B_ITEM_ID"'","assignee_kind":"user"}'
 	refused GET "/orgs/$org/repos/$REPO_B/runs/$B_RUN" "$A_TOKEN"
-	refused POST "/orgs/$org/repos/$REPO_B/runs/$B_RUN/reviews" "$A_TOKEN" '{"verdict":"approve"}'
+	# This must be refused for crossing an organization. "refused" accepts any
+	# refusal, so a review rejected merely for not naming the revision it was
+	# formed against would pass it while proving nothing about isolation.
+	review_res="$(call POST "/orgs/$org/repos/$REPO_B/runs/$B_RUN/reviews" "$A_TOKEN" '{"verdict":"approve"}')"
+	case "$review_res" in
+	2*) fail "LEAK: $USER_A reviewed a run in $org: $review_res" ;;
+	*expected_source_sha*) fail "the cross-organization review was refused for a missing revision, not for isolation: $review_res" ;;
+	40[1349]* | 422*) ;;
+	*) fail "the cross-organization review was not refused as a refusal: $review_res" ;;
+	esac
 	refused POST "/orgs/$org/repos/$REPO_B/runs/$B_RUN/merge" "$A_TOKEN" '{"method":"merge"}'
 	refused GET "/orgs/$org/agent-runs/$B_AGENT_RUN" "$A_TOKEN"
 	refused DELETE "/orgs/$org/agent-runs/$B_AGENT_RUN" "$A_TOKEN"

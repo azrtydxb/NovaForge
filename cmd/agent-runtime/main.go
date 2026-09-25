@@ -210,6 +210,11 @@ func main() {
 		log.Printf("agent-runtime: AI_MODEL_PRICES has no price for %q; runs are bounded by wall clock and tokens, and a cost limit is refused", cfg.AIModel)
 	}
 
+	// A run is admitted only once the Work Item's execution claim is taken, so
+	// the same item cannot be executed by two runs. Nothing set this outside the
+	// tests, so every run this service was asked to start was refused.
+	store.WorkClaims = agents.WorkServiceClaims{Client: workClient}
+
 	execute := newExecuteFunc(store, grants, audit, rdb, price, provisioner, gitClient, graphClient, workClient, reviewsClient, ciClient, mcpClient, cfg)
 	grpcServer := agents.NewGRPCServer(store, grants, rdb, workClient, execute)
 	grpcServer.Audit = audit

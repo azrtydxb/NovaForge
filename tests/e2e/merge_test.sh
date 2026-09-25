@@ -97,7 +97,9 @@ NUMBER="$(echo "${res#* }" | python3 -c 'import json,sys; print(json.load(sys.st
 ok "opened run #$NUMBER"
 
 echo "== 4. the author cannot approve their own run, nor merge it unapproved =="
-res="$(call POST "/orgs/$ORG/repos/$REPO/runs/$NUMBER/reviews" "$A_TOKEN" '{"verdict":"approve"}')"
+# A verdict names the revision it was formed against, or the server refuses it:
+# an approval must not carry over to work pushed after it was read.
+res="$(call POST "/orgs/$ORG/repos/$REPO/runs/$NUMBER/reviews" "$A_TOKEN" "{\"verdict\":\"approve\",\"expected_source_sha\":\"$FEATURE_SHA\"}")"
 case "$res" in 2*) fail "the author approved their own run: $res" ;; esac
 res="$(call POST "/orgs/$ORG/repos/$REPO/runs/$NUMBER/merge" "$A_TOKEN" '{"method":"merge"}')"
 case "$res" in
@@ -108,7 +110,7 @@ case "$res" in
 esac
 
 echo "== 5. another member approves, and the merge lands =="
-res="$(call POST "/orgs/$ORG/repos/$REPO/runs/$NUMBER/reviews" "$B_TOKEN" '{"verdict":"approve"}')"
+res="$(call POST "/orgs/$ORG/repos/$REPO/runs/$NUMBER/reviews" "$B_TOKEN" "{\"verdict\":\"approve\",\"expected_source_sha\":\"$FEATURE_SHA\"}")"
 case "$res" in 2*) ;; *) fail "the reviewer's approval was refused: $res" ;; esac
 res="$(call POST "/orgs/$ORG/repos/$REPO/runs/$NUMBER/merge" "$A_TOKEN" '{"method":"merge"}')"
 case "$res" in 2*) ;; *) fail "an approved run with no failing gate did not merge: $res" ;; esac
