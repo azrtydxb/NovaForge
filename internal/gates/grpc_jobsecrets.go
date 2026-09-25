@@ -67,7 +67,7 @@ func (g *GRPCServer) IssueJobLease(ctx context.Context, req *gatesv1.IssueJobLea
 	if err != nil {
 		return nil, status.Error(codes.PermissionDenied, "no authorization scope for this call")
 	}
-	if scope.ActorKind != "service" {
+	if scope.ActorKind != "service" || scope.ServiceName != "ci-credentials" {
 		return nil, status.Error(codes.PermissionDenied, "job credentials are brokered only to the platform's CI service")
 	}
 	if g.Secrets == nil {
@@ -77,6 +77,14 @@ func (g *GRPCServer) IssueJobLease(ctx context.Context, req *gatesv1.IssueJobLea
 	if err != nil {
 		return nil, err
 	}
+	attemptID, err := parseUUID("attempt_id", req.GetAttemptId())
+	if err != nil {
+		return nil, err
+	}
+	if attemptID == uuid.Nil {
+		return nil, status.Error(codes.InvalidArgument, "attempt_id must be nonzero")
+	}
+	ctx = secrets.WithAttemptID(ctx, attemptID)
 	repoID, err := parseUUID("repo_id", req.GetRepoId())
 	if err != nil {
 		return nil, err
@@ -122,7 +130,7 @@ func (g *GRPCServer) IssueJobLease(ctx context.Context, req *gatesv1.IssueJobLea
 	}
 	lease, err := g.Secrets.IssueFor(ctx, jobID, grant, req.GetName(), env, ttl)
 	if err != nil {
-		return nil, status.Errorf(codes.PermissionDenied, "issue lease: %v", err)
+		return nil, CredentialStatus(err)
 	}
 	return &gatesv1.IssueJobLeaseResponse{
 		LeaseId: lease.ID.String(), Token: lease.Token, Name: lease.Name,

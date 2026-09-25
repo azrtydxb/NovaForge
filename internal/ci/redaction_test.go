@@ -21,14 +21,36 @@ import (
 // the value masked. The runner redacts too, but a runner is the part of CI an
 // organization runs itself, so the platform does not rely on it.
 func TestJobLogNeverCarriesItsCredential(t *testing.T) {
+	for _, tc := range []struct{ name, binding, value, leaked string }{
+		{"scalar", "DEPLOY_TOKEN", "scalar-sensitive-token", "scalar-sensitive-token"},
+		{"json", "JSON_LOGIN", `{"password":"sensitive-password","username":"sensitive-user"}`, "sensitive-password"},
+		{"json-unicode-metadata", "JSON_LOGIN", `{"note":"\ud83d\ude00","password":"sensitive-password"}`, "sensitive-password"},
+		{"json-unicode-short", "JSON_LOGIN", `{"note":"\ud83d\ude00","password":"pw"}`, "pw"},
+		{"json-unicode-number", "JSON_LOGIN", `{"note":"\ud83d\ude00","password":9007199254740993}`, "9007199254740993"},
+		{"json-multiline", "JSON_LOGIN", `{"password":"first-sensitive-line\nsecond-sensitive-line","username":"sensitive-user"}`, "second-sensitive-line"},
+		{"kubeconfig", "DEPLOY_TOKEN", "users:\n- name: ci-user\n  user:\n    token: kube-sensitive-token\n", "kube-sensitive-token"},
+	} {
+		t.Run(tc.name, func(t *testing.T) { testJobCredentialRedaction(t, tc.binding, tc.value, tc.leaked) })
+	}
+}
+
+func testJobCredentialRedaction(t *testing.T, binding, value, leaked string) {
+	t.Helper()
 	s := newCredentialStack(t)
-	value := secretValue("logged")
-	if err := s.broker.PutValue(context.Background(), s.org, "DEPLOY_TOKEN", "staging", value); err != nil {
+	if err := s.putDynamicSecret(binding, "staging", value); err != nil {
 		t.Fatal(err)
 	}
-	jobID := s.job("refs/heads/main", "prints-its-token", "staging", "DEPLOY_TOKEN")
+	jobID := s.job("refs/heads/main", "prints-its-token", "staging", binding)
 
-	logs := ci.NewLogSink(ciRedis(t), nil)
+	rdb := ciRedis(t)
+	// This fixture intentionally has no sealed object store. Remove only its
+	// randomly identified live stream; never flush the shared Redis database.
+	t.Cleanup(func() {
+		if err := rdb.Del(context.Background(), "joblog:"+jobID.String()).Err(); err != nil {
+			t.Error(err)
+		}
+	})
+	logs := ci.NewLogSink(rdb, nil)
 	srv := ci.NewServer(s.store, s.dispatcher)
 	srv.SetLogSink(logs)
 	srv.SetRedactions(s.redactions)
@@ -43,7 +65,7 @@ func TestJobLogNeverCarriesItsCredential(t *testing.T) {
 
 	s.start()
 	got := s.waitDispatched(20*time.Second, 1)
-	if got[jobID.String()].GetSecretEnv()["DEPLOY_TOKEN"] != value {
+	if got[jobID.String()].GetSecretEnv()[binding] != value {
 		t.Fatalf("job was not dispatched with its credential: %v", got)
 	}
 
@@ -58,7 +80,7 @@ func TestJobLogNeverCarriesItsCredential(t *testing.T) {
 		t.Fatal(err)
 	}
 	runner := s.runnerID.String()
-	line := "deploying with token " + value + " now"
+	line := "deploying with token " + leaked + " now"
 	for _, msg := range []*civ1.ConnectRequest{
 		{RunnerId: runner, Token: s.runnerToken, Payload: &civ1.ConnectRequest_Heartbeat{Heartbeat: &civ1.Heartbeat{}}},
 		{RunnerId: runner, Token: s.runnerToken, Payload: &civ1.ConnectRequest_LogChunk{LogChunk: &civ1.LogChunk{JobId: jobID.String(), Line: line}}},
@@ -80,17 +102,17 @@ func TestJobLogNeverCarriesItsCredential(t *testing.T) {
 	if len(stored) != 1 {
 		t.Fatalf("stored log = %q, want the one line", stored)
 	}
-	if strings.Contains(stored[0], value) || !strings.Contains(stored[0], "***") {
-		t.Fatalf("stored log line %q carries the credential or was not masked", stored[0])
+	if strings.Contains(stored[0], leaked) || !strings.Contains(stored[0], "***") {
+		t.Errorf("stored log line carries the credential or was not masked")
 	}
 
 	// A terminal status's detail is stored too, and is masked the same way.
 	if _, err := client.ReportStatus(context.Background(), &civ1.ReportStatusRequest{
-		RunnerId: runner, Token: s.runnerToken, JobId: jobID.String(), Status: "failure", Detail: "exit 1: bad token " + value,
+		RunnerId: runner, Token: s.runnerToken, JobId: jobID.String(), Status: "failure", Detail: "exit 1: bad token " + leaked,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if j := s.jobState(jobID); strings.Contains(j.Detail, value) {
+	if j := s.jobState(jobID); strings.Contains(j.Detail, leaked) || !strings.Contains(j.Detail, "***") {
 		t.Fatalf("job detail %q carries the credential", j.Detail)
 	}
 }
