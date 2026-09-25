@@ -53,6 +53,7 @@ source hack/env.sh          # BuildKit, registry, kube context, test datastores
 ./hack/deploy.sh            # helm upgrade --install, with an image preflight
 bash tests/e2e/deploy_test.sh     # git round trip over HTTPS and SSH
 bash tests/e2e/work_ci_test.sh    # Work Item, push, CI run in a pod, log and artifact
+bash tests/e2e/secrets_test.sh    # a CI job gets a credential minted by the provider, never a stored one
 bash tests/e2e/factory_test.sh    # epic decomposition by the real model, dependency ordering
 bash tests/e2e/agent_test.sh      # an Agent Run executes and commits its work
 bash tests/e2e/agent_ci_test.sh   # a CI job with an agent role runs as an Agent Run

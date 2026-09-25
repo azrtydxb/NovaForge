@@ -437,10 +437,15 @@ criteria:
       spent and expires within 15 minutes, a staging job asking for a
       production-only secret fails naming production, and a production job
       gets production material only on the default branch. The value is
-      masked in the stored log. The underlying secret value is static: the
-      lease is short-lived, the credential it hands out is not rotated.
-      work_ci_test.sh step 8 proves a job reads a secret registered through
-      the API; it has not been run on the cluster in this change.
+      masked in the stored log. The credential is minted by the configured
+      dynamic provider, not the stored secret handed back: the broker refuses
+      to issue at all when no provider binding covers the organization,
+      environment and name. secrets_test.sh proves this on the cluster — a job
+      receives a credential whose name nothing is stored under, the credential
+      does not appear in the stored log, and a lease is recorded for the job.
+      It is a separate suite because a binding is operator-owned and read at
+      startup, so it cannot exist for the throwaway organization the other
+      suites create.
     go_tests:
       - ./internal/ci TestShortLivedCredential
       - ./internal/ci TestJobLogNeverCarriesItsCredential
@@ -453,8 +458,10 @@ criteria:
     e2e:
       - script: tests/e2e/work_ci_test.sh
         step: "4. a secret is registered through the API, and no read returns it"
-      - script: tests/e2e/work_ci_test.sh
-        step: "10. the secret job read its brokered credential, and its log never shows it"
+      - script: tests/e2e/secrets_test.sh
+        step: "5. the job runs and reports what it got"
+      - script: tests/e2e/secrets_test.sh
+        step: "6. the credential is masked in the stored log, and its lease is recorded"
 
   S-12/TestBrokerDownFailsClosed:
     status: covered

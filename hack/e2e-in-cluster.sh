@@ -26,7 +26,7 @@ KUBECTL_VERSION="v1.34.4"
 HELM_VERSION="v3.19.0"
 suites=("$@")
 if [ ${#suites[@]} -eq 0 ]; then
-	suites=(airgap deploy work_ci gui search graph factory agent agent_ci merge cli crossorg)
+	suites=(airgap deploy work_ci secrets gui search graph factory agent agent_ci merge cli crossorg)
 fi
 k() { kubectl --context "$KUBE_CONTEXT" "$@"; }
 
@@ -128,7 +128,10 @@ for s in $list; do
 	fi
 done
 echo DONE >>/tmp/e2e/results
-' >/dev/null 2>&1 &" || { echo "could not start the suites in the pod" >&2; exit 1; }
+' >/dev/null 2>&1 &" || {
+	echo "could not start the suites in the pod" >&2
+	exit 1
+}
 
 # A poll that reaches the pod and finds the suites unfinished is not a failure
 # to retry; only a poll that could not reach the pod is.
