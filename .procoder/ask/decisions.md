@@ -600,3 +600,42 @@ against a real OpenBao HTTP fixture).
 - Supply an admin token and decide the TLS question yourself; I prepare
   everything else and apply it.
 - Leave it. Record the prerequisite, accept work_ci failing, and move on.
+
+## Open decisions after the closure run (2026-09-25)
+
+State: 44/44 local packages pass, 12 of 13 in-cluster suites pass, traceability
+33/33, deployed on kw, 25 commits, tree clean.
+
+### 1. `integrate/gate-isolation`'s SPDY executor
+
+`sandbox_executor*.go` (7 files) is a custom `v4.channel.k8s.io` transport. It is
+not merged. BUILD-STATUS records its framing qualification, input/control
+handling, authority binding and acceptance wiring as unresolved, and the isolation
+problem it was research toward is solved and proven — the hostile-repository test
+passes against the real sandbox.
+
+- Leave it unmerged; delete the branch once its findings are recorded.
+- Leave it unmerged but keep the branch indefinitely.
+- Finish and qualify it now.
+
+### 2. The FastLLM gateway
+
+Its three proxy replicas rebuild backend registries independently (observed
+7 → 9 → 10) and the configured MoE model intermittently exceeds the 120-second
+upstream header timeout. One of three identical completions succeeded. This is a
+separate project's infrastructure; `agent` is the only suite it blocks.
+
+- Leave it; it is not NovaForge's, and the limitation is documented.
+- Investigate and fix the gateway.
+- Raise or remove the header timeout in the gateway's configuration.
+
+### 3. OpenBao unseal material
+
+`novaforge-bao/openbao-init` holds the single unseal key and the root token in a
+Secret in the same namespace as the OpenBao it unseals, so anything that can read
+that namespace's secrets can unseal and own it. That is convenient for a
+self-hosted dev platform and wrong for anything else.
+
+- Acceptable for this cluster; record it as a limitation.
+- Move the unseal key and root token out of the cluster now.
+- Re-key with more shares and a threshold above one.

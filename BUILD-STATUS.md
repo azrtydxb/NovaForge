@@ -114,6 +114,35 @@ success, which is the verification behaviour working.
 The deployment accounts below are historical evidence from revision 70 and
 earlier, and describe an older tree.
 
+**The executor research is closed, not adopted.** `integrate/gate-isolation` held
+a custom `v4.channel.k8s.io` SPDY transport for the sandbox — seven files:
+`sandbox_executor.go` and its `_stream`, `_transport` and `_evidence` parts with
+their tests. It is deliberately not merged and the branch has been deleted
+(it was `74f9234`); the code is gone, so what it established is recorded here and
+in `.procoder/plans/integration-recovery.md`, which keeps the probe observations.
+
+What it was for: the client-go executor's behaviour under an operator-authorized
+fixed-command probe on kw was unsatisfying — stdout and stderr reached FIN while
+the status channel reported PeerReset for both exit 0 and exit 7, and a later
+two-command diagnostic saw status CANCEL=5, GOAWAY0 and a classified boundary TLS
+EOF. The FIN-only profile rejects that, so a run's exit code could not be taken
+from the stream with confidence.
+
+Why it is closed anyway: the problem it was research toward — repository code
+running with the gates service's authority — is solved and proven by the sandbox
+that did ship. `TestAnalysisSandboxOwnedClusterHostileRepository` passes against
+the real cluster, and the full `internal/gates` suite passes with executable
+gates running in it. The remaining question was about reading an exit status
+reliably, not about isolation, and the shipped path answers it well enough that
+every gate suite passes. Its own framing/transport failure qualification, input
+and control handling, authority binding and acceptance wiring were never
+finished, so merging it would have put unqualified transport code in the path
+that every merge gate depends on.
+
+If the exit-status profile becomes a problem again, the observations in the plan
+are the starting point, and the work would have to be redone against a current
+client-go rather than resurrected.
+
 See `.procoder/plans/integration-recovery.md` for the lanes' own records.
 
 ## Historical verification and completion scope (2026-09-16)
@@ -891,6 +920,14 @@ These are real and are not worked around:
   `REGISTRY_PASSWORD`; `hack/deploy.sh` refuses to deploy without the first,
   because a deployment with no gateway credential looks configured and is not.
   A fresh clone must create that file before deploying.
+- **The provider's unseal material lives beside it.** `novaforge-bao/openbao-init`
+  holds the single unseal key and the root token in a Secret in the same
+  namespace as the OpenBao it unseals, so anything that can read that namespace's
+  secrets can unseal and own the provider. That is a deliberate convenience for a
+  self-hosted development cluster where a restart must not need a person, and it
+  is not acceptable for anything holding real production material: a deployment
+  that does should re-key with several shares and a threshold above one, and keep
+  the shares off the cluster.
 - **Model choice is not free on this cluster, and the gateway is not steady.**
   The 27B dense model takes over 120 seconds to first token for a planner-sized
   prompt, past the gateway's upstream header timeout, so every such call 502s.
