@@ -66,6 +66,12 @@ type Server struct {
 	// and the API disagreed about what the same credential could write.
 	Grants GrantLister
 
+	// Releases serves the release RPCs (see grpc_releases.go). It is nil in a
+	// deployment with no object storage configured, and the release RPCs then say
+	// so rather than answering Unimplemented — "not available in this
+	// deployment" and "this platform has no releases" are different answers.
+	Releases *ReleaseStore
+
 	repoDeleted RepoDeletedPublisher
 }
 

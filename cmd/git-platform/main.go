@@ -24,6 +24,7 @@ import (
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
 	"github.com/novaforge/novaforge/internal/authz"
+	"github.com/novaforge/novaforge/internal/blobstore"
 	"github.com/novaforge/novaforge/internal/capability"
 	"github.com/novaforge/novaforge/internal/cleanup"
 	"github.com/novaforge/novaforge/internal/database"
@@ -32,6 +33,13 @@ import (
 	"github.com/novaforge/novaforge/internal/svcauth"
 	"github.com/novaforge/novaforge/internal/version"
 )
+
+// releasesBucket is the fixed bucket release assets live in. It is separate from
+// ci-runner's artifacts bucket on purpose: an artifact is evidence of one job and
+// is expected to be reaped, while a release asset is a published download whose
+// whole value is that it is still there in a year. Sharing one bucket would put
+// both under one retention policy.
+const releasesBucket = "novaforge-releases"
 
 const (
 	defaultGRPCPort = 9092
@@ -149,8 +157,35 @@ func main() {
 		log.Println("git-platform: REDIS_URL is unset; repositories cannot be deleted and organization deletions are not consumed")
 	}
 	grpcServer.Grants = grants
-	srv := grpc.NewServer(grpc.UnaryInterceptor(
-		svcauth.UnaryServerInterceptor(identityClient, cfg.HMACSecret)))
+
+	// Releases carry uploaded files, which live in object storage next to CI
+	// artifacts. A deployment without S3 configured still starts — releases
+	// themselves are rows — and the release RPCs then say object storage is
+	// unconfigured instead of failing obscurely. Refusing to start would take the
+	// git transports down with it, which is a worse trade for an optional surface.
+	if cfg.S3Endpoint == "" {
+		log.Println("git-platform: S3_ENDPOINT is unset; release assets cannot be stored or served")
+	} else {
+		blobs, err := blobstore.New(ctx, blobstore.Options{
+			Endpoint:  cfg.S3Endpoint,
+			AccessKey: cfg.S3AccessKey,
+			SecretKey: cfg.S3SecretKey,
+			Bucket:    releasesBucket,
+		})
+		if err != nil {
+			log.Fatalf("git-platform: connect object storage: %v", err)
+		}
+		grpcServer.Releases = gitops.NewReleaseStore(pool, cfg.GitDataDir, blobs)
+	}
+
+	// Both interceptors, not just the unary one. The release asset RPCs stream,
+	// and a streaming RPC served without the stream interceptor sees no caller at
+	// all: every upload and download would be refused as unauthenticated, which
+	// reads as a permissions problem rather than a missing interceptor.
+	srv := grpc.NewServer(
+		grpc.UnaryInterceptor(svcauth.UnaryServerInterceptor(identityClient, cfg.HMACSecret)),
+		grpc.StreamInterceptor(svcauth.StreamServerInterceptor(identityClient, cfg.HMACSecret)),
+	)
 	gitv1.RegisterGitServiceServer(srv, grpcServer)
 
 	// --- smart-HTTP ---

@@ -35,6 +35,11 @@ const (
 	GitService_CreateBranch_FullMethodName                      = "/novaforge.git.v1.GitService/CreateBranch"
 	GitService_CreateCommit_FullMethodName                      = "/novaforge.git.v1.GitService/CreateCommit"
 	GitService_ListOrganizationsWithRepositories_FullMethodName = "/novaforge.git.v1.GitService/ListOrganizationsWithRepositories"
+	GitService_CreateRelease_FullMethodName                     = "/novaforge.git.v1.GitService/CreateRelease"
+	GitService_ListReleases_FullMethodName                      = "/novaforge.git.v1.GitService/ListReleases"
+	GitService_DeleteRelease_FullMethodName                     = "/novaforge.git.v1.GitService/DeleteRelease"
+	GitService_UploadReleaseAsset_FullMethodName                = "/novaforge.git.v1.GitService/UploadReleaseAsset"
+	GitService_DownloadReleaseAsset_FullMethodName              = "/novaforge.git.v1.GitService/DownloadReleaseAsset"
 )
 
 // GitServiceClient is the client API for GitService service.
@@ -65,6 +70,16 @@ type GitServiceClient interface {
 	// with organization ids. The worker re-enters each organization's scope with
 	// an org-scoped token before reading anything in it.
 	ListOrganizationsWithRepositories(ctx context.Context, in *ListOrganizationsWithRepositoriesRequest, opts ...grpc.CallOption) (*ListOrganizationsWithRepositoriesResponse, error)
+	CreateRelease(ctx context.Context, in *CreateReleaseRequest, opts ...grpc.CallOption) (*CreateReleaseResponse, error)
+	ListReleases(ctx context.Context, in *ListReleasesRequest, opts ...grpc.CallOption) (*ListReleasesResponse, error)
+	DeleteRelease(ctx context.Context, in *DeleteReleaseRequest, opts ...grpc.CallOption) (*DeleteReleaseResponse, error)
+	// UploadReleaseAsset and DownloadReleaseAsset stream in both directions. A
+	// release asset is a build output, routinely hundreds of megabytes, so neither
+	// side can hold one in a single message: gRPC's default limit is 4 MiB, and
+	// raising it would only move the point at which the service runs out of memory
+	// serving concurrent downloads.
+	UploadReleaseAsset(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadReleaseAssetRequest, UploadReleaseAssetResponse], error)
+	DownloadReleaseAsset(ctx context.Context, in *DownloadReleaseAssetRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DownloadReleaseAssetResponse], error)
 }
 
 type gitServiceClient struct {
@@ -235,6 +250,68 @@ func (c *gitServiceClient) ListOrganizationsWithRepositories(ctx context.Context
 	return out, nil
 }
 
+func (c *gitServiceClient) CreateRelease(ctx context.Context, in *CreateReleaseRequest, opts ...grpc.CallOption) (*CreateReleaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateReleaseResponse)
+	err := c.cc.Invoke(ctx, GitService_CreateRelease_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gitServiceClient) ListReleases(ctx context.Context, in *ListReleasesRequest, opts ...grpc.CallOption) (*ListReleasesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListReleasesResponse)
+	err := c.cc.Invoke(ctx, GitService_ListReleases_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gitServiceClient) DeleteRelease(ctx context.Context, in *DeleteReleaseRequest, opts ...grpc.CallOption) (*DeleteReleaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteReleaseResponse)
+	err := c.cc.Invoke(ctx, GitService_DeleteRelease_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gitServiceClient) UploadReleaseAsset(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadReleaseAssetRequest, UploadReleaseAssetResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &GitService_ServiceDesc.Streams[0], GitService_UploadReleaseAsset_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[UploadReleaseAssetRequest, UploadReleaseAssetResponse]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type GitService_UploadReleaseAssetClient = grpc.ClientStreamingClient[UploadReleaseAssetRequest, UploadReleaseAssetResponse]
+
+func (c *gitServiceClient) DownloadReleaseAsset(ctx context.Context, in *DownloadReleaseAssetRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DownloadReleaseAssetResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &GitService_ServiceDesc.Streams[1], GitService_DownloadReleaseAsset_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[DownloadReleaseAssetRequest, DownloadReleaseAssetResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type GitService_DownloadReleaseAssetClient = grpc.ServerStreamingClient[DownloadReleaseAssetResponse]
+
 // GitServiceServer is the server API for GitService service.
 // All implementations should embed UnimplementedGitServiceServer
 // for forward compatibility.
@@ -263,6 +340,16 @@ type GitServiceServer interface {
 	// with organization ids. The worker re-enters each organization's scope with
 	// an org-scoped token before reading anything in it.
 	ListOrganizationsWithRepositories(context.Context, *ListOrganizationsWithRepositoriesRequest) (*ListOrganizationsWithRepositoriesResponse, error)
+	CreateRelease(context.Context, *CreateReleaseRequest) (*CreateReleaseResponse, error)
+	ListReleases(context.Context, *ListReleasesRequest) (*ListReleasesResponse, error)
+	DeleteRelease(context.Context, *DeleteReleaseRequest) (*DeleteReleaseResponse, error)
+	// UploadReleaseAsset and DownloadReleaseAsset stream in both directions. A
+	// release asset is a build output, routinely hundreds of megabytes, so neither
+	// side can hold one in a single message: gRPC's default limit is 4 MiB, and
+	// raising it would only move the point at which the service runs out of memory
+	// serving concurrent downloads.
+	UploadReleaseAsset(grpc.ClientStreamingServer[UploadReleaseAssetRequest, UploadReleaseAssetResponse]) error
+	DownloadReleaseAsset(*DownloadReleaseAssetRequest, grpc.ServerStreamingServer[DownloadReleaseAssetResponse]) error
 }
 
 // UnimplementedGitServiceServer should be embedded to have
@@ -319,6 +406,21 @@ func (UnimplementedGitServiceServer) CreateCommit(context.Context, *CreateCommit
 }
 func (UnimplementedGitServiceServer) ListOrganizationsWithRepositories(context.Context, *ListOrganizationsWithRepositoriesRequest) (*ListOrganizationsWithRepositoriesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListOrganizationsWithRepositories not implemented")
+}
+func (UnimplementedGitServiceServer) CreateRelease(context.Context, *CreateReleaseRequest) (*CreateReleaseResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateRelease not implemented")
+}
+func (UnimplementedGitServiceServer) ListReleases(context.Context, *ListReleasesRequest) (*ListReleasesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListReleases not implemented")
+}
+func (UnimplementedGitServiceServer) DeleteRelease(context.Context, *DeleteReleaseRequest) (*DeleteReleaseResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteRelease not implemented")
+}
+func (UnimplementedGitServiceServer) UploadReleaseAsset(grpc.ClientStreamingServer[UploadReleaseAssetRequest, UploadReleaseAssetResponse]) error {
+	return status.Error(codes.Unimplemented, "method UploadReleaseAsset not implemented")
+}
+func (UnimplementedGitServiceServer) DownloadReleaseAsset(*DownloadReleaseAssetRequest, grpc.ServerStreamingServer[DownloadReleaseAssetResponse]) error {
+	return status.Error(codes.Unimplemented, "method DownloadReleaseAsset not implemented")
 }
 func (UnimplementedGitServiceServer) testEmbeddedByValue() {}
 
@@ -628,6 +730,78 @@ func _GitService_ListOrganizationsWithRepositories_Handler(srv interface{}, ctx 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GitService_CreateRelease_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateReleaseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GitServiceServer).CreateRelease(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GitService_CreateRelease_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GitServiceServer).CreateRelease(ctx, req.(*CreateReleaseRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GitService_ListReleases_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListReleasesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GitServiceServer).ListReleases(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GitService_ListReleases_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GitServiceServer).ListReleases(ctx, req.(*ListReleasesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GitService_DeleteRelease_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteReleaseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GitServiceServer).DeleteRelease(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GitService_DeleteRelease_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GitServiceServer).DeleteRelease(ctx, req.(*DeleteReleaseRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GitService_UploadReleaseAsset_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(GitServiceServer).UploadReleaseAsset(&grpc.GenericServerStream[UploadReleaseAssetRequest, UploadReleaseAssetResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type GitService_UploadReleaseAssetServer = grpc.ClientStreamingServer[UploadReleaseAssetRequest, UploadReleaseAssetResponse]
+
+func _GitService_DownloadReleaseAsset_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(DownloadReleaseAssetRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(GitServiceServer).DownloadReleaseAsset(m, &grpc.GenericServerStream[DownloadReleaseAssetRequest, DownloadReleaseAssetResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type GitService_DownloadReleaseAssetServer = grpc.ServerStreamingServer[DownloadReleaseAssetResponse]
+
 // GitService_ServiceDesc is the grpc.ServiceDesc for GitService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -699,7 +873,30 @@ var GitService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "ListOrganizationsWithRepositories",
 			Handler:    _GitService_ListOrganizationsWithRepositories_Handler,
 		},
+		{
+			MethodName: "CreateRelease",
+			Handler:    _GitService_CreateRelease_Handler,
+		},
+		{
+			MethodName: "ListReleases",
+			Handler:    _GitService_ListReleases_Handler,
+		},
+		{
+			MethodName: "DeleteRelease",
+			Handler:    _GitService_DeleteRelease_Handler,
+		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "UploadReleaseAsset",
+			Handler:       _GitService_UploadReleaseAsset_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "DownloadReleaseAsset",
+			Handler:       _GitService_DownloadReleaseAsset_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "novaforge/git/v1/git.proto",
 }

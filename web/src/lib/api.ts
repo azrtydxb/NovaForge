@@ -170,6 +170,36 @@ async function download(path: string, filename: string): Promise<void> {
   }
 }
 
+/** upload sends a file as the request body itself, not as multipart form data.
+ * The endpoints that take a file — a release asset — stream the body straight
+ * through to object storage, so wrapping it in a form would mean the edge had to
+ * parse and buffer it to find the part again. The file's name and type travel in
+ * the query string and the Content-Type header instead. */
+async function upload<T>(path: string, file: File): Promise<T> {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  const token = storedToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  // A browser leaves type empty for an extension it does not recognize, and an
+  // empty Content-Type must not become the literal string "".
+  headers["Content-Type"] = file.type || "application/octet-stream";
+
+  const res = await fetch(path, { method: "POST", headers, body: file });
+  const body = await res.text();
+  let parsed: unknown = null;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    parsed = null;
+  }
+  if (!res.ok) {
+    throw new ApiError(
+      res.status,
+      errorMessage(parsed) || body || res.statusText,
+    );
+  }
+  return parsed as T;
+}
+
 /** Events use fetch, not EventSource: bearer credentials never enter a URL.
  * Cancellation tears down the reader when the route or principal changes. */
 /** A stream is resumed from the last event the caller actually handled, so a
@@ -250,6 +280,7 @@ export const api = {
   get: <T>(path: string) => request<T>("GET", path),
   text,
   download,
+  upload,
   events,
   patch: <T>(path: string, body: unknown) => request<T>("PATCH", path, body),
   post: <T>(path: string, body?: unknown) => request<T>("POST", path, body),

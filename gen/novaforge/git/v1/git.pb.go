@@ -2023,6 +2023,716 @@ func (x *CreateCommitResponse) GetSha() string {
 	return ""
 }
 
+// Release is a tag published for download: a version a team hands out, with the
+// files published alongside it. It is not a CI artifact — an artifact belongs to
+// one job and is evidence of a run, while a release belongs to a version.
+type Release struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	RepoId        string                 `protobuf:"bytes,2,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	Tag           string                 `protobuf:"bytes,3,opt,name=tag,proto3" json:"tag,omitempty"`
+	Name          string                 `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
+	Body          string                 `protobuf:"bytes,5,opt,name=body,proto3" json:"body,omitempty"`
+	CreatedAt     string                 `protobuf:"bytes,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	Assets        []*ReleaseAsset        `protobuf:"bytes,7,rep,name=assets,proto3" json:"assets,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Release) Reset() {
+	*x = Release{}
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Release) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Release) ProtoMessage() {}
+
+func (x *Release) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Release.ProtoReflect.Descriptor instead.
+func (*Release) Descriptor() ([]byte, []int) {
+	return file_novaforge_git_v1_git_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *Release) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *Release) GetRepoId() string {
+	if x != nil {
+		return x.RepoId
+	}
+	return ""
+}
+
+func (x *Release) GetTag() string {
+	if x != nil {
+		return x.Tag
+	}
+	return ""
+}
+
+func (x *Release) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *Release) GetBody() string {
+	if x != nil {
+		return x.Body
+	}
+	return ""
+}
+
+func (x *Release) GetCreatedAt() string {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return ""
+}
+
+func (x *Release) GetAssets() []*ReleaseAsset {
+	if x != nil {
+		return x.Assets
+	}
+	return nil
+}
+
+// ReleaseAsset is one downloadable file on a release. The object's storage key is
+// deliberately absent: it is an internal address, and publishing it would invite
+// a client to construct one.
+type ReleaseAsset struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	SizeBytes     int64                  `protobuf:"varint,3,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	ContentType   string                 `protobuf:"bytes,4,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReleaseAsset) Reset() {
+	*x = ReleaseAsset{}
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReleaseAsset) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReleaseAsset) ProtoMessage() {}
+
+func (x *ReleaseAsset) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReleaseAsset.ProtoReflect.Descriptor instead.
+func (*ReleaseAsset) Descriptor() ([]byte, []int) {
+	return file_novaforge_git_v1_git_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *ReleaseAsset) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *ReleaseAsset) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ReleaseAsset) GetSizeBytes() int64 {
+	if x != nil {
+		return x.SizeBytes
+	}
+	return 0
+}
+
+func (x *ReleaseAsset) GetContentType() string {
+	if x != nil {
+		return x.ContentType
+	}
+	return ""
+}
+
+type CreateReleaseRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Repo  string                 `protobuf:"bytes,1,opt,name=repo,proto3" json:"repo,omitempty"`
+	// The tag must already exist in the repository. A release on a tag that does
+	// not exist is a download link pointing at nothing.
+	Tag           string `protobuf:"bytes,2,opt,name=tag,proto3" json:"tag,omitempty"`
+	Name          string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Body          string `protobuf:"bytes,4,opt,name=body,proto3" json:"body,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateReleaseRequest) Reset() {
+	*x = CreateReleaseRequest{}
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateReleaseRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateReleaseRequest) ProtoMessage() {}
+
+func (x *CreateReleaseRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateReleaseRequest.ProtoReflect.Descriptor instead.
+func (*CreateReleaseRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_git_v1_git_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *CreateReleaseRequest) GetRepo() string {
+	if x != nil {
+		return x.Repo
+	}
+	return ""
+}
+
+func (x *CreateReleaseRequest) GetTag() string {
+	if x != nil {
+		return x.Tag
+	}
+	return ""
+}
+
+func (x *CreateReleaseRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *CreateReleaseRequest) GetBody() string {
+	if x != nil {
+		return x.Body
+	}
+	return ""
+}
+
+type CreateReleaseResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Release       *Release               `protobuf:"bytes,1,opt,name=release,proto3" json:"release,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateReleaseResponse) Reset() {
+	*x = CreateReleaseResponse{}
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateReleaseResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateReleaseResponse) ProtoMessage() {}
+
+func (x *CreateReleaseResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateReleaseResponse.ProtoReflect.Descriptor instead.
+func (*CreateReleaseResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_git_v1_git_proto_rawDescGZIP(), []int{40}
+}
+
+func (x *CreateReleaseResponse) GetRelease() *Release {
+	if x != nil {
+		return x.Release
+	}
+	return nil
+}
+
+type ListReleasesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Repo          string                 `protobuf:"bytes,1,opt,name=repo,proto3" json:"repo,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListReleasesRequest) Reset() {
+	*x = ListReleasesRequest{}
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListReleasesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListReleasesRequest) ProtoMessage() {}
+
+func (x *ListReleasesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListReleasesRequest.ProtoReflect.Descriptor instead.
+func (*ListReleasesRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_git_v1_git_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *ListReleasesRequest) GetRepo() string {
+	if x != nil {
+		return x.Repo
+	}
+	return ""
+}
+
+type ListReleasesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Releases      []*Release             `protobuf:"bytes,1,rep,name=releases,proto3" json:"releases,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListReleasesResponse) Reset() {
+	*x = ListReleasesResponse{}
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListReleasesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListReleasesResponse) ProtoMessage() {}
+
+func (x *ListReleasesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListReleasesResponse.ProtoReflect.Descriptor instead.
+func (*ListReleasesResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_git_v1_git_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *ListReleasesResponse) GetReleases() []*Release {
+	if x != nil {
+		return x.Releases
+	}
+	return nil
+}
+
+type DeleteReleaseRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Repo          string                 `protobuf:"bytes,1,opt,name=repo,proto3" json:"repo,omitempty"`
+	Tag           string                 `protobuf:"bytes,2,opt,name=tag,proto3" json:"tag,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteReleaseRequest) Reset() {
+	*x = DeleteReleaseRequest{}
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteReleaseRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteReleaseRequest) ProtoMessage() {}
+
+func (x *DeleteReleaseRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteReleaseRequest.ProtoReflect.Descriptor instead.
+func (*DeleteReleaseRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_git_v1_git_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *DeleteReleaseRequest) GetRepo() string {
+	if x != nil {
+		return x.Repo
+	}
+	return ""
+}
+
+func (x *DeleteReleaseRequest) GetTag() string {
+	if x != nil {
+		return x.Tag
+	}
+	return ""
+}
+
+type DeleteReleaseResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteReleaseResponse) Reset() {
+	*x = DeleteReleaseResponse{}
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteReleaseResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteReleaseResponse) ProtoMessage() {}
+
+func (x *DeleteReleaseResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteReleaseResponse.ProtoReflect.Descriptor instead.
+func (*DeleteReleaseResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_git_v1_git_proto_rawDescGZIP(), []int{44}
+}
+
+// UploadReleaseAssetRequest is one frame of an upload. repo, tag, name and
+// content_type are read from the first frame only; every frame carries data,
+// including the first.
+type UploadReleaseAssetRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Repo          string                 `protobuf:"bytes,1,opt,name=repo,proto3" json:"repo,omitempty"`
+	Tag           string                 `protobuf:"bytes,2,opt,name=tag,proto3" json:"tag,omitempty"`
+	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	ContentType   string                 `protobuf:"bytes,4,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
+	Data          []byte                 `protobuf:"bytes,5,opt,name=data,proto3" json:"data,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UploadReleaseAssetRequest) Reset() {
+	*x = UploadReleaseAssetRequest{}
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UploadReleaseAssetRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UploadReleaseAssetRequest) ProtoMessage() {}
+
+func (x *UploadReleaseAssetRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UploadReleaseAssetRequest.ProtoReflect.Descriptor instead.
+func (*UploadReleaseAssetRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_git_v1_git_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *UploadReleaseAssetRequest) GetRepo() string {
+	if x != nil {
+		return x.Repo
+	}
+	return ""
+}
+
+func (x *UploadReleaseAssetRequest) GetTag() string {
+	if x != nil {
+		return x.Tag
+	}
+	return ""
+}
+
+func (x *UploadReleaseAssetRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *UploadReleaseAssetRequest) GetContentType() string {
+	if x != nil {
+		return x.ContentType
+	}
+	return ""
+}
+
+func (x *UploadReleaseAssetRequest) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+type UploadReleaseAssetResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Asset         *ReleaseAsset          `protobuf:"bytes,1,opt,name=asset,proto3" json:"asset,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UploadReleaseAssetResponse) Reset() {
+	*x = UploadReleaseAssetResponse{}
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UploadReleaseAssetResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UploadReleaseAssetResponse) ProtoMessage() {}
+
+func (x *UploadReleaseAssetResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UploadReleaseAssetResponse.ProtoReflect.Descriptor instead.
+func (*UploadReleaseAssetResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_git_v1_git_proto_rawDescGZIP(), []int{46}
+}
+
+func (x *UploadReleaseAssetResponse) GetAsset() *ReleaseAsset {
+	if x != nil {
+		return x.Asset
+	}
+	return nil
+}
+
+// DownloadReleaseAssetRequest addresses an asset the way a download URL does: by
+// repository, tag and file name, which is unique within a release.
+type DownloadReleaseAssetRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Repo          string                 `protobuf:"bytes,1,opt,name=repo,proto3" json:"repo,omitempty"`
+	Tag           string                 `protobuf:"bytes,2,opt,name=tag,proto3" json:"tag,omitempty"`
+	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DownloadReleaseAssetRequest) Reset() {
+	*x = DownloadReleaseAssetRequest{}
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DownloadReleaseAssetRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DownloadReleaseAssetRequest) ProtoMessage() {}
+
+func (x *DownloadReleaseAssetRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DownloadReleaseAssetRequest.ProtoReflect.Descriptor instead.
+func (*DownloadReleaseAssetRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_git_v1_git_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *DownloadReleaseAssetRequest) GetRepo() string {
+	if x != nil {
+		return x.Repo
+	}
+	return ""
+}
+
+func (x *DownloadReleaseAssetRequest) GetTag() string {
+	if x != nil {
+		return x.Tag
+	}
+	return ""
+}
+
+func (x *DownloadReleaseAssetRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+type DownloadReleaseAssetResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// name, size_bytes and content_type are set on the first message only.
+	Name          string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	SizeBytes     int64  `protobuf:"varint,2,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	ContentType   string `protobuf:"bytes,3,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
+	Data          []byte `protobuf:"bytes,4,opt,name=data,proto3" json:"data,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DownloadReleaseAssetResponse) Reset() {
+	*x = DownloadReleaseAssetResponse{}
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DownloadReleaseAssetResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DownloadReleaseAssetResponse) ProtoMessage() {}
+
+func (x *DownloadReleaseAssetResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_git_v1_git_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DownloadReleaseAssetResponse.ProtoReflect.Descriptor instead.
+func (*DownloadReleaseAssetResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_git_v1_git_proto_rawDescGZIP(), []int{48}
+}
+
+func (x *DownloadReleaseAssetResponse) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *DownloadReleaseAssetResponse) GetSizeBytes() int64 {
+	if x != nil {
+		return x.SizeBytes
+	}
+	return 0
+}
+
+func (x *DownloadReleaseAssetResponse) GetContentType() string {
+	if x != nil {
+		return x.ContentType
+	}
+	return ""
+}
+
+func (x *DownloadReleaseAssetResponse) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
 var File_novaforge_git_v1_git_proto protoreflect.FileDescriptor
 
 const file_novaforge_git_v1_git_proto_rawDesc = "" +
@@ -2151,7 +2861,55 @@ const file_novaforge_git_v1_git_proto_rawDesc = "" +
 	"authorName\x12!\n" +
 	"\fauthor_email\x18\x06 \x01(\tR\vauthorEmail\"(\n" +
 	"\x14CreateCommitResponse\x12\x10\n" +
-	"\x03sha\x18\x01 \x01(\tR\x03sha2\xc1\v\n" +
+	"\x03sha\x18\x01 \x01(\tR\x03sha\"\xc3\x01\n" +
+	"\aRelease\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
+	"\arepo_id\x18\x02 \x01(\tR\x06repoId\x12\x10\n" +
+	"\x03tag\x18\x03 \x01(\tR\x03tag\x12\x12\n" +
+	"\x04name\x18\x04 \x01(\tR\x04name\x12\x12\n" +
+	"\x04body\x18\x05 \x01(\tR\x04body\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x06 \x01(\tR\tcreatedAt\x126\n" +
+	"\x06assets\x18\a \x03(\v2\x1e.novaforge.git.v1.ReleaseAssetR\x06assets\"t\n" +
+	"\fReleaseAsset\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1d\n" +
+	"\n" +
+	"size_bytes\x18\x03 \x01(\x03R\tsizeBytes\x12!\n" +
+	"\fcontent_type\x18\x04 \x01(\tR\vcontentType\"d\n" +
+	"\x14CreateReleaseRequest\x12\x12\n" +
+	"\x04repo\x18\x01 \x01(\tR\x04repo\x12\x10\n" +
+	"\x03tag\x18\x02 \x01(\tR\x03tag\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12\x12\n" +
+	"\x04body\x18\x04 \x01(\tR\x04body\"L\n" +
+	"\x15CreateReleaseResponse\x123\n" +
+	"\arelease\x18\x01 \x01(\v2\x19.novaforge.git.v1.ReleaseR\arelease\")\n" +
+	"\x13ListReleasesRequest\x12\x12\n" +
+	"\x04repo\x18\x01 \x01(\tR\x04repo\"M\n" +
+	"\x14ListReleasesResponse\x125\n" +
+	"\breleases\x18\x01 \x03(\v2\x19.novaforge.git.v1.ReleaseR\breleases\"<\n" +
+	"\x14DeleteReleaseRequest\x12\x12\n" +
+	"\x04repo\x18\x01 \x01(\tR\x04repo\x12\x10\n" +
+	"\x03tag\x18\x02 \x01(\tR\x03tag\"\x17\n" +
+	"\x15DeleteReleaseResponse\"\x8c\x01\n" +
+	"\x19UploadReleaseAssetRequest\x12\x12\n" +
+	"\x04repo\x18\x01 \x01(\tR\x04repo\x12\x10\n" +
+	"\x03tag\x18\x02 \x01(\tR\x03tag\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12!\n" +
+	"\fcontent_type\x18\x04 \x01(\tR\vcontentType\x12\x12\n" +
+	"\x04data\x18\x05 \x01(\fR\x04data\"R\n" +
+	"\x1aUploadReleaseAssetResponse\x124\n" +
+	"\x05asset\x18\x01 \x01(\v2\x1e.novaforge.git.v1.ReleaseAssetR\x05asset\"W\n" +
+	"\x1bDownloadReleaseAssetRequest\x12\x12\n" +
+	"\x04repo\x18\x01 \x01(\tR\x04repo\x12\x10\n" +
+	"\x03tag\x18\x02 \x01(\tR\x03tag\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\"\x88\x01\n" +
+	"\x1cDownloadReleaseAssetResponse\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1d\n" +
+	"\n" +
+	"size_bytes\x18\x02 \x01(\x03R\tsizeBytes\x12!\n" +
+	"\fcontent_type\x18\x03 \x01(\tR\vcontentType\x12\x12\n" +
+	"\x04data\x18\x04 \x01(\fR\x04data2\xd0\x0f\n" +
 	"\n" +
 	"GitService\x12W\n" +
 	"\n" +
@@ -2172,7 +2930,12 @@ const file_novaforge_git_v1_git_proto_rawDesc = "" +
 	"\x05Merge\x12\x1e.novaforge.git.v1.MergeRequest\x1a\x1f.novaforge.git.v1.MergeResponse\x12]\n" +
 	"\fCreateBranch\x12%.novaforge.git.v1.CreateBranchRequest\x1a&.novaforge.git.v1.CreateBranchResponse\x12]\n" +
 	"\fCreateCommit\x12%.novaforge.git.v1.CreateCommitRequest\x1a&.novaforge.git.v1.CreateCommitResponse\x12\x9c\x01\n" +
-	"!ListOrganizationsWithRepositories\x12:.novaforge.git.v1.ListOrganizationsWithRepositoriesRequest\x1a;.novaforge.git.v1.ListOrganizationsWithRepositoriesResponseB\xbd\x01\n" +
+	"!ListOrganizationsWithRepositories\x12:.novaforge.git.v1.ListOrganizationsWithRepositoriesRequest\x1a;.novaforge.git.v1.ListOrganizationsWithRepositoriesResponse\x12`\n" +
+	"\rCreateRelease\x12&.novaforge.git.v1.CreateReleaseRequest\x1a'.novaforge.git.v1.CreateReleaseResponse\x12]\n" +
+	"\fListReleases\x12%.novaforge.git.v1.ListReleasesRequest\x1a&.novaforge.git.v1.ListReleasesResponse\x12`\n" +
+	"\rDeleteRelease\x12&.novaforge.git.v1.DeleteReleaseRequest\x1a'.novaforge.git.v1.DeleteReleaseResponse\x12q\n" +
+	"\x12UploadReleaseAsset\x12+.novaforge.git.v1.UploadReleaseAssetRequest\x1a,.novaforge.git.v1.UploadReleaseAssetResponse(\x01\x12w\n" +
+	"\x14DownloadReleaseAsset\x12-.novaforge.git.v1.DownloadReleaseAssetRequest\x1a..novaforge.git.v1.DownloadReleaseAssetResponse0\x01B\xbd\x01\n" +
 	"\x14com.novaforge.git.v1B\bGitProtoP\x01Z9github.com/novaforge/novaforge/gen/novaforge/git/v1;gitv1\xa2\x02\x03NGX\xaa\x02\x10Novaforge.Git.V1\xca\x02\x10Novaforge\\Git\\V1\xe2\x02\x1cNovaforge\\Git\\V1\\GPBMetadata\xea\x02\x12Novaforge::Git::V1b\x06proto3"
 
 var (
@@ -2187,45 +2950,57 @@ func file_novaforge_git_v1_git_proto_rawDescGZIP() []byte {
 	return file_novaforge_git_v1_git_proto_rawDescData
 }
 
-var file_novaforge_git_v1_git_proto_msgTypes = make([]protoimpl.MessageInfo, 37)
+var file_novaforge_git_v1_git_proto_msgTypes = make([]protoimpl.MessageInfo, 49)
 var file_novaforge_git_v1_git_proto_goTypes = []any{
 	(*ListOrganizationsWithRepositoriesRequest)(nil),  // 0: novaforge.git.v1.ListOrganizationsWithRepositoriesRequest
 	(*ListOrganizationsWithRepositoriesResponse)(nil), // 1: novaforge.git.v1.ListOrganizationsWithRepositoriesResponse
-	(*Repo)(nil),                 // 2: novaforge.git.v1.Repo
-	(*Ref)(nil),                  // 3: novaforge.git.v1.Ref
-	(*Commit)(nil),               // 4: novaforge.git.v1.Commit
-	(*TreeEntry)(nil),            // 5: novaforge.git.v1.TreeEntry
-	(*CreateRepoRequest)(nil),    // 6: novaforge.git.v1.CreateRepoRequest
-	(*CreateRepoResponse)(nil),   // 7: novaforge.git.v1.CreateRepoResponse
-	(*UpdateRepoRequest)(nil),    // 8: novaforge.git.v1.UpdateRepoRequest
-	(*UpdateRepoResponse)(nil),   // 9: novaforge.git.v1.UpdateRepoResponse
-	(*TransferRepoRequest)(nil),  // 10: novaforge.git.v1.TransferRepoRequest
-	(*TransferRepoResponse)(nil), // 11: novaforge.git.v1.TransferRepoResponse
-	(*GetRepoRequest)(nil),       // 12: novaforge.git.v1.GetRepoRequest
-	(*GetRepoResponse)(nil),      // 13: novaforge.git.v1.GetRepoResponse
-	(*ListReposRequest)(nil),     // 14: novaforge.git.v1.ListReposRequest
-	(*ListReposResponse)(nil),    // 15: novaforge.git.v1.ListReposResponse
-	(*DeleteRepoRequest)(nil),    // 16: novaforge.git.v1.DeleteRepoRequest
-	(*DeleteRepoResponse)(nil),   // 17: novaforge.git.v1.DeleteRepoResponse
-	(*ListBranchesRequest)(nil),  // 18: novaforge.git.v1.ListBranchesRequest
-	(*ListBranchesResponse)(nil), // 19: novaforge.git.v1.ListBranchesResponse
-	(*ListTagsRequest)(nil),      // 20: novaforge.git.v1.ListTagsRequest
-	(*ListTagsResponse)(nil),     // 21: novaforge.git.v1.ListTagsResponse
-	(*ListCommitsRequest)(nil),   // 22: novaforge.git.v1.ListCommitsRequest
-	(*ListCommitsResponse)(nil),  // 23: novaforge.git.v1.ListCommitsResponse
-	(*GetTreeRequest)(nil),       // 24: novaforge.git.v1.GetTreeRequest
-	(*GetTreeResponse)(nil),      // 25: novaforge.git.v1.GetTreeResponse
-	(*GetBlobRequest)(nil),       // 26: novaforge.git.v1.GetBlobRequest
-	(*GetBlobResponse)(nil),      // 27: novaforge.git.v1.GetBlobResponse
-	(*GetDiffRequest)(nil),       // 28: novaforge.git.v1.GetDiffRequest
-	(*GetDiffResponse)(nil),      // 29: novaforge.git.v1.GetDiffResponse
-	(*MergeRequest)(nil),         // 30: novaforge.git.v1.MergeRequest
-	(*MergeResponse)(nil),        // 31: novaforge.git.v1.MergeResponse
-	(*CreateBranchRequest)(nil),  // 32: novaforge.git.v1.CreateBranchRequest
-	(*CreateBranchResponse)(nil), // 33: novaforge.git.v1.CreateBranchResponse
-	(*FileChange)(nil),           // 34: novaforge.git.v1.FileChange
-	(*CreateCommitRequest)(nil),  // 35: novaforge.git.v1.CreateCommitRequest
-	(*CreateCommitResponse)(nil), // 36: novaforge.git.v1.CreateCommitResponse
+	(*Repo)(nil),                         // 2: novaforge.git.v1.Repo
+	(*Ref)(nil),                          // 3: novaforge.git.v1.Ref
+	(*Commit)(nil),                       // 4: novaforge.git.v1.Commit
+	(*TreeEntry)(nil),                    // 5: novaforge.git.v1.TreeEntry
+	(*CreateRepoRequest)(nil),            // 6: novaforge.git.v1.CreateRepoRequest
+	(*CreateRepoResponse)(nil),           // 7: novaforge.git.v1.CreateRepoResponse
+	(*UpdateRepoRequest)(nil),            // 8: novaforge.git.v1.UpdateRepoRequest
+	(*UpdateRepoResponse)(nil),           // 9: novaforge.git.v1.UpdateRepoResponse
+	(*TransferRepoRequest)(nil),          // 10: novaforge.git.v1.TransferRepoRequest
+	(*TransferRepoResponse)(nil),         // 11: novaforge.git.v1.TransferRepoResponse
+	(*GetRepoRequest)(nil),               // 12: novaforge.git.v1.GetRepoRequest
+	(*GetRepoResponse)(nil),              // 13: novaforge.git.v1.GetRepoResponse
+	(*ListReposRequest)(nil),             // 14: novaforge.git.v1.ListReposRequest
+	(*ListReposResponse)(nil),            // 15: novaforge.git.v1.ListReposResponse
+	(*DeleteRepoRequest)(nil),            // 16: novaforge.git.v1.DeleteRepoRequest
+	(*DeleteRepoResponse)(nil),           // 17: novaforge.git.v1.DeleteRepoResponse
+	(*ListBranchesRequest)(nil),          // 18: novaforge.git.v1.ListBranchesRequest
+	(*ListBranchesResponse)(nil),         // 19: novaforge.git.v1.ListBranchesResponse
+	(*ListTagsRequest)(nil),              // 20: novaforge.git.v1.ListTagsRequest
+	(*ListTagsResponse)(nil),             // 21: novaforge.git.v1.ListTagsResponse
+	(*ListCommitsRequest)(nil),           // 22: novaforge.git.v1.ListCommitsRequest
+	(*ListCommitsResponse)(nil),          // 23: novaforge.git.v1.ListCommitsResponse
+	(*GetTreeRequest)(nil),               // 24: novaforge.git.v1.GetTreeRequest
+	(*GetTreeResponse)(nil),              // 25: novaforge.git.v1.GetTreeResponse
+	(*GetBlobRequest)(nil),               // 26: novaforge.git.v1.GetBlobRequest
+	(*GetBlobResponse)(nil),              // 27: novaforge.git.v1.GetBlobResponse
+	(*GetDiffRequest)(nil),               // 28: novaforge.git.v1.GetDiffRequest
+	(*GetDiffResponse)(nil),              // 29: novaforge.git.v1.GetDiffResponse
+	(*MergeRequest)(nil),                 // 30: novaforge.git.v1.MergeRequest
+	(*MergeResponse)(nil),                // 31: novaforge.git.v1.MergeResponse
+	(*CreateBranchRequest)(nil),          // 32: novaforge.git.v1.CreateBranchRequest
+	(*CreateBranchResponse)(nil),         // 33: novaforge.git.v1.CreateBranchResponse
+	(*FileChange)(nil),                   // 34: novaforge.git.v1.FileChange
+	(*CreateCommitRequest)(nil),          // 35: novaforge.git.v1.CreateCommitRequest
+	(*CreateCommitResponse)(nil),         // 36: novaforge.git.v1.CreateCommitResponse
+	(*Release)(nil),                      // 37: novaforge.git.v1.Release
+	(*ReleaseAsset)(nil),                 // 38: novaforge.git.v1.ReleaseAsset
+	(*CreateReleaseRequest)(nil),         // 39: novaforge.git.v1.CreateReleaseRequest
+	(*CreateReleaseResponse)(nil),        // 40: novaforge.git.v1.CreateReleaseResponse
+	(*ListReleasesRequest)(nil),          // 41: novaforge.git.v1.ListReleasesRequest
+	(*ListReleasesResponse)(nil),         // 42: novaforge.git.v1.ListReleasesResponse
+	(*DeleteReleaseRequest)(nil),         // 43: novaforge.git.v1.DeleteReleaseRequest
+	(*DeleteReleaseResponse)(nil),        // 44: novaforge.git.v1.DeleteReleaseResponse
+	(*UploadReleaseAssetRequest)(nil),    // 45: novaforge.git.v1.UploadReleaseAssetRequest
+	(*UploadReleaseAssetResponse)(nil),   // 46: novaforge.git.v1.UploadReleaseAssetResponse
+	(*DownloadReleaseAssetRequest)(nil),  // 47: novaforge.git.v1.DownloadReleaseAssetRequest
+	(*DownloadReleaseAssetResponse)(nil), // 48: novaforge.git.v1.DownloadReleaseAssetResponse
 }
 var file_novaforge_git_v1_git_proto_depIdxs = []int32{
 	2,  // 0: novaforge.git.v1.CreateRepoResponse.repo:type_name -> novaforge.git.v1.Repo
@@ -2239,43 +3014,57 @@ var file_novaforge_git_v1_git_proto_depIdxs = []int32{
 	5,  // 8: novaforge.git.v1.GetTreeResponse.entries:type_name -> novaforge.git.v1.TreeEntry
 	3,  // 9: novaforge.git.v1.CreateBranchResponse.ref:type_name -> novaforge.git.v1.Ref
 	34, // 10: novaforge.git.v1.CreateCommitRequest.files:type_name -> novaforge.git.v1.FileChange
-	6,  // 11: novaforge.git.v1.GitService.CreateRepo:input_type -> novaforge.git.v1.CreateRepoRequest
-	12, // 12: novaforge.git.v1.GitService.GetRepo:input_type -> novaforge.git.v1.GetRepoRequest
-	14, // 13: novaforge.git.v1.GitService.ListRepos:input_type -> novaforge.git.v1.ListReposRequest
-	16, // 14: novaforge.git.v1.GitService.DeleteRepo:input_type -> novaforge.git.v1.DeleteRepoRequest
-	8,  // 15: novaforge.git.v1.GitService.UpdateRepo:input_type -> novaforge.git.v1.UpdateRepoRequest
-	10, // 16: novaforge.git.v1.GitService.TransferRepo:input_type -> novaforge.git.v1.TransferRepoRequest
-	18, // 17: novaforge.git.v1.GitService.ListBranches:input_type -> novaforge.git.v1.ListBranchesRequest
-	20, // 18: novaforge.git.v1.GitService.ListTags:input_type -> novaforge.git.v1.ListTagsRequest
-	22, // 19: novaforge.git.v1.GitService.ListCommits:input_type -> novaforge.git.v1.ListCommitsRequest
-	24, // 20: novaforge.git.v1.GitService.GetTree:input_type -> novaforge.git.v1.GetTreeRequest
-	26, // 21: novaforge.git.v1.GitService.GetBlob:input_type -> novaforge.git.v1.GetBlobRequest
-	28, // 22: novaforge.git.v1.GitService.GetDiff:input_type -> novaforge.git.v1.GetDiffRequest
-	30, // 23: novaforge.git.v1.GitService.Merge:input_type -> novaforge.git.v1.MergeRequest
-	32, // 24: novaforge.git.v1.GitService.CreateBranch:input_type -> novaforge.git.v1.CreateBranchRequest
-	35, // 25: novaforge.git.v1.GitService.CreateCommit:input_type -> novaforge.git.v1.CreateCommitRequest
-	0,  // 26: novaforge.git.v1.GitService.ListOrganizationsWithRepositories:input_type -> novaforge.git.v1.ListOrganizationsWithRepositoriesRequest
-	7,  // 27: novaforge.git.v1.GitService.CreateRepo:output_type -> novaforge.git.v1.CreateRepoResponse
-	13, // 28: novaforge.git.v1.GitService.GetRepo:output_type -> novaforge.git.v1.GetRepoResponse
-	15, // 29: novaforge.git.v1.GitService.ListRepos:output_type -> novaforge.git.v1.ListReposResponse
-	17, // 30: novaforge.git.v1.GitService.DeleteRepo:output_type -> novaforge.git.v1.DeleteRepoResponse
-	9,  // 31: novaforge.git.v1.GitService.UpdateRepo:output_type -> novaforge.git.v1.UpdateRepoResponse
-	11, // 32: novaforge.git.v1.GitService.TransferRepo:output_type -> novaforge.git.v1.TransferRepoResponse
-	19, // 33: novaforge.git.v1.GitService.ListBranches:output_type -> novaforge.git.v1.ListBranchesResponse
-	21, // 34: novaforge.git.v1.GitService.ListTags:output_type -> novaforge.git.v1.ListTagsResponse
-	23, // 35: novaforge.git.v1.GitService.ListCommits:output_type -> novaforge.git.v1.ListCommitsResponse
-	25, // 36: novaforge.git.v1.GitService.GetTree:output_type -> novaforge.git.v1.GetTreeResponse
-	27, // 37: novaforge.git.v1.GitService.GetBlob:output_type -> novaforge.git.v1.GetBlobResponse
-	29, // 38: novaforge.git.v1.GitService.GetDiff:output_type -> novaforge.git.v1.GetDiffResponse
-	31, // 39: novaforge.git.v1.GitService.Merge:output_type -> novaforge.git.v1.MergeResponse
-	33, // 40: novaforge.git.v1.GitService.CreateBranch:output_type -> novaforge.git.v1.CreateBranchResponse
-	36, // 41: novaforge.git.v1.GitService.CreateCommit:output_type -> novaforge.git.v1.CreateCommitResponse
-	1,  // 42: novaforge.git.v1.GitService.ListOrganizationsWithRepositories:output_type -> novaforge.git.v1.ListOrganizationsWithRepositoriesResponse
-	27, // [27:43] is the sub-list for method output_type
-	11, // [11:27] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	38, // 11: novaforge.git.v1.Release.assets:type_name -> novaforge.git.v1.ReleaseAsset
+	37, // 12: novaforge.git.v1.CreateReleaseResponse.release:type_name -> novaforge.git.v1.Release
+	37, // 13: novaforge.git.v1.ListReleasesResponse.releases:type_name -> novaforge.git.v1.Release
+	38, // 14: novaforge.git.v1.UploadReleaseAssetResponse.asset:type_name -> novaforge.git.v1.ReleaseAsset
+	6,  // 15: novaforge.git.v1.GitService.CreateRepo:input_type -> novaforge.git.v1.CreateRepoRequest
+	12, // 16: novaforge.git.v1.GitService.GetRepo:input_type -> novaforge.git.v1.GetRepoRequest
+	14, // 17: novaforge.git.v1.GitService.ListRepos:input_type -> novaforge.git.v1.ListReposRequest
+	16, // 18: novaforge.git.v1.GitService.DeleteRepo:input_type -> novaforge.git.v1.DeleteRepoRequest
+	8,  // 19: novaforge.git.v1.GitService.UpdateRepo:input_type -> novaforge.git.v1.UpdateRepoRequest
+	10, // 20: novaforge.git.v1.GitService.TransferRepo:input_type -> novaforge.git.v1.TransferRepoRequest
+	18, // 21: novaforge.git.v1.GitService.ListBranches:input_type -> novaforge.git.v1.ListBranchesRequest
+	20, // 22: novaforge.git.v1.GitService.ListTags:input_type -> novaforge.git.v1.ListTagsRequest
+	22, // 23: novaforge.git.v1.GitService.ListCommits:input_type -> novaforge.git.v1.ListCommitsRequest
+	24, // 24: novaforge.git.v1.GitService.GetTree:input_type -> novaforge.git.v1.GetTreeRequest
+	26, // 25: novaforge.git.v1.GitService.GetBlob:input_type -> novaforge.git.v1.GetBlobRequest
+	28, // 26: novaforge.git.v1.GitService.GetDiff:input_type -> novaforge.git.v1.GetDiffRequest
+	30, // 27: novaforge.git.v1.GitService.Merge:input_type -> novaforge.git.v1.MergeRequest
+	32, // 28: novaforge.git.v1.GitService.CreateBranch:input_type -> novaforge.git.v1.CreateBranchRequest
+	35, // 29: novaforge.git.v1.GitService.CreateCommit:input_type -> novaforge.git.v1.CreateCommitRequest
+	0,  // 30: novaforge.git.v1.GitService.ListOrganizationsWithRepositories:input_type -> novaforge.git.v1.ListOrganizationsWithRepositoriesRequest
+	39, // 31: novaforge.git.v1.GitService.CreateRelease:input_type -> novaforge.git.v1.CreateReleaseRequest
+	41, // 32: novaforge.git.v1.GitService.ListReleases:input_type -> novaforge.git.v1.ListReleasesRequest
+	43, // 33: novaforge.git.v1.GitService.DeleteRelease:input_type -> novaforge.git.v1.DeleteReleaseRequest
+	45, // 34: novaforge.git.v1.GitService.UploadReleaseAsset:input_type -> novaforge.git.v1.UploadReleaseAssetRequest
+	47, // 35: novaforge.git.v1.GitService.DownloadReleaseAsset:input_type -> novaforge.git.v1.DownloadReleaseAssetRequest
+	7,  // 36: novaforge.git.v1.GitService.CreateRepo:output_type -> novaforge.git.v1.CreateRepoResponse
+	13, // 37: novaforge.git.v1.GitService.GetRepo:output_type -> novaforge.git.v1.GetRepoResponse
+	15, // 38: novaforge.git.v1.GitService.ListRepos:output_type -> novaforge.git.v1.ListReposResponse
+	17, // 39: novaforge.git.v1.GitService.DeleteRepo:output_type -> novaforge.git.v1.DeleteRepoResponse
+	9,  // 40: novaforge.git.v1.GitService.UpdateRepo:output_type -> novaforge.git.v1.UpdateRepoResponse
+	11, // 41: novaforge.git.v1.GitService.TransferRepo:output_type -> novaforge.git.v1.TransferRepoResponse
+	19, // 42: novaforge.git.v1.GitService.ListBranches:output_type -> novaforge.git.v1.ListBranchesResponse
+	21, // 43: novaforge.git.v1.GitService.ListTags:output_type -> novaforge.git.v1.ListTagsResponse
+	23, // 44: novaforge.git.v1.GitService.ListCommits:output_type -> novaforge.git.v1.ListCommitsResponse
+	25, // 45: novaforge.git.v1.GitService.GetTree:output_type -> novaforge.git.v1.GetTreeResponse
+	27, // 46: novaforge.git.v1.GitService.GetBlob:output_type -> novaforge.git.v1.GetBlobResponse
+	29, // 47: novaforge.git.v1.GitService.GetDiff:output_type -> novaforge.git.v1.GetDiffResponse
+	31, // 48: novaforge.git.v1.GitService.Merge:output_type -> novaforge.git.v1.MergeResponse
+	33, // 49: novaforge.git.v1.GitService.CreateBranch:output_type -> novaforge.git.v1.CreateBranchResponse
+	36, // 50: novaforge.git.v1.GitService.CreateCommit:output_type -> novaforge.git.v1.CreateCommitResponse
+	1,  // 51: novaforge.git.v1.GitService.ListOrganizationsWithRepositories:output_type -> novaforge.git.v1.ListOrganizationsWithRepositoriesResponse
+	40, // 52: novaforge.git.v1.GitService.CreateRelease:output_type -> novaforge.git.v1.CreateReleaseResponse
+	42, // 53: novaforge.git.v1.GitService.ListReleases:output_type -> novaforge.git.v1.ListReleasesResponse
+	44, // 54: novaforge.git.v1.GitService.DeleteRelease:output_type -> novaforge.git.v1.DeleteReleaseResponse
+	46, // 55: novaforge.git.v1.GitService.UploadReleaseAsset:output_type -> novaforge.git.v1.UploadReleaseAssetResponse
+	48, // 56: novaforge.git.v1.GitService.DownloadReleaseAsset:output_type -> novaforge.git.v1.DownloadReleaseAssetResponse
+	36, // [36:57] is the sub-list for method output_type
+	15, // [15:36] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_novaforge_git_v1_git_proto_init() }
@@ -2289,7 +3078,7 @@ func file_novaforge_git_v1_git_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_novaforge_git_v1_git_proto_rawDesc), len(file_novaforge_git_v1_git_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   37,
+			NumMessages:   49,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

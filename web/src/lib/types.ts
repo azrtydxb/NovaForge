@@ -304,3 +304,25 @@ export interface ScanResult {
   proposed_work_item_keys: string[];
   scanner_errors: string[];
 }
+
+/** One downloadable file on a release. The object's storage key is deliberately
+ * not part of the API, so there is nothing here for a client to construct. */
+export interface ReleaseAsset {
+  id: string;
+  name: string;
+  size_bytes: number;
+  content_type: string;
+}
+
+/** A tag published for download. This is not a CI artifact: an artifact belongs
+ * to one job and is evidence of a run, while a release belongs to a version and
+ * is the thing a team hands out. */
+export interface Release {
+  id: string;
+  repo_id: string;
+  tag: string;
+  name: string;
+  body: string;
+  created_at: string;
+  assets: ReleaseAsset[];
+}
