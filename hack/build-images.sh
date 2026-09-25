@@ -19,7 +19,12 @@ TAG="${TAG:-$(git rev-parse --short HEAD)}"
 # fetch them from the cluster when they are not there rather than failing on a
 # missing ca.crt.
 [ -s "$BK_CERTS/ca.crt" ] || ./hack/bk-certs.sh
-SKIP="gen-openapi"
+# deployment-runner is not built here: its image is assembled by the operator
+# from Dockerfile.deployment-runner, which takes their approved chart archive and
+# its checksum as build arguments. The resulting digest binds the wrapper, the
+# chart bytes and the Helm binary together, which is the point — a chart this
+# repository built would not be the one the operator approved.
+SKIP="gen-openapi deployment-runner"
 
 # Services whose image needs the git binary at runtime, and those needing cgo.
 needs_git() { case "$1" in git-platform | runner | ci-runner | gates) return 0 ;; *) return 1 ;; esac }
