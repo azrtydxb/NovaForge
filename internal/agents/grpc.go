@@ -350,6 +350,11 @@ func (g *GRPCServer) StartRun(ctx context.Context, req *agentsv1.StartRunRequest
 		return nil
 	}()
 	if admissionErr != nil {
+		// The caller is told only that admission did not complete, because the
+		// failure can name another service's internals. The reason still has to
+		// be recorded somewhere: it was discarded entirely, so a deployment
+		// where every run was refused gave no way to find out why.
+		log.Printf("agents: run %s admission failed: %v", run.ID, admissionErr)
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 		defer cancel()
 		_ = g.Store.SetRunState(cleanupCtx, run.ID, "failed")
