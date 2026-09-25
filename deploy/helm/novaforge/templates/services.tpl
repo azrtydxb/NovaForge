@@ -114,6 +114,13 @@ spec:
             - name: NF_GIT_TLS_KEY_FILE
               value: /etc/novaforge/git-tls/tls.key
             {{- end }}
+            {{- if eq $name "git-platform" }}
+            # Only git-platform serves LFS, so only it is given the limit. The
+            # variable is not conditional on anything: a missing limit is a
+            # deployment whose object storage one push can fill.
+            - name: NF_LFS_MAX_OBJECT_BYTES
+              value: {{ $.Values.lfs.maxObjectBytes | quote }}
+            {{- end }}
             {{- /*
             Peer addresses use the canonical names the services read, not names
             derived from the Helm keys: the deployment name is work-reviews but

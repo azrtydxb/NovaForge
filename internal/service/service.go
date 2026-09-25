@@ -80,6 +80,14 @@ type Config struct {
 	// MaintenanceIntervalHours is how often the maintenance scanners run.
 	MaintenanceIntervalHours int
 
+	// LFSMaxObjectBytes bounds a single Git LFS object. It is read with no
+	// default here on purpose: a non-zero default would make chart_test treat
+	// NF_LFS_MAX_OBJECT_BYTES as optional, and the variable could then vanish
+	// from the pod with nothing noticing. gitops.NewLFSStore supplies the
+	// fallback instead, so an unbounded limit is never what a missing variable
+	// means.
+	LFSMaxObjectBytes int
+
 	JWTSecret  string
 	HMACSecret string
 	SecretsKEK string
@@ -134,6 +142,7 @@ func LoadConfig() Config {
 		AutoMergeEnabled:           env("AUTO_MERGE_ENABLED", "") == "true",
 		AutoMergeMaxFiles:          envInt("AUTO_MERGE_MAX_FILES_CHANGED", 0),
 		MaintenanceIntervalHours:   envInt("MAINTENANCE_INTERVAL_HOURS", 0),
+		LFSMaxObjectBytes:          envInt("NF_LFS_MAX_OBJECT_BYTES", 0),
 		JWTSecret:                  env("JWT_SECRET", ""),
 		HMACSecret:                 env("HMAC_SECRET", ""),
 		SecretsKEK:                 env("SECRETS_KEK", ""),
