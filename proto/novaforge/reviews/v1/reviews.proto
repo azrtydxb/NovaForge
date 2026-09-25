@@ -12,6 +12,9 @@ service ReviewsService {
   rpc AddPlanStep(AddPlanStepRequest) returns (AddPlanStepResponse);
   rpc RecordProof(RecordProofRequest) returns (RecordProofResponse);
   rpc SubmitReview(SubmitReviewRequest) returns (SubmitReviewResponse);
+  rpc ListReviews(ListReviewsRequest) returns (ListReviewsResponse);
+  rpc RequestAgentReview(RequestAgentReviewRequest) returns (RequestAgentReviewResponse);
+  rpc ListAgentReviewRequests(ListAgentReviewRequestsRequest) returns (ListAgentReviewRequestsResponse);
   rpc AddComment(AddCommentRequest) returns (AddCommentResponse);
   rpc GetExceptions(GetExceptionsRequest) returns (GetExceptionsResponse);
   rpc ListProof(ListProofRequest) returns (ListProofResponse);
@@ -123,6 +126,9 @@ message SubmitReviewRequest {
   string reviewer_id = 2;
   string reviewer_kind = 3;
   string verdict = 4;
+  // The exact source commit the person inspected; a changed head is refused.
+  string expected_source_sha = 5;
+  string summary = 6;
 }
 
 message SubmitReviewResponse {
@@ -172,6 +178,10 @@ message ProofRecord {
   string status = 2;
   string detail = 3;
   string recorded_at = 4;
+  // Empty on historical rows whose producer was not authenticated.
+  string producer = 5;
+  string actor_id = 6;
+
 }
 
 message ListProofRequest {
@@ -211,4 +221,66 @@ message ListPlanRequest {
 }
 message ListPlanResponse {
   repeated PlanStep steps = 1;
+}
+
+// Review is the latest durable verdict from one reviewer. Legacy rows have
+// no source_sha and cannot authorize a merge.
+message Review {
+  string reviewer_id = 1;
+  string reviewer_kind = 2;
+  string verdict = 3;
+  string summary = 4;
+  string source_sha = 5;
+  string created_at = 6;
+}
+message ListReviewsRequest {
+  string run_id = 1;
+}
+message ListReviewsResponse {
+  repeated Review reviews = 1;
+  string current_source_sha = 2;
+  // False means currency is unknown, not that durable reviews are stale.
+  bool current_source_available = 3;
+}
+
+// One durable, non-replayed review attempt per role. Usage availability is
+// independent of the verdict and of partial measured counters.
+message AgentReviewAttempt {
+  string id = 1;
+  string agent_id = 2;
+  string role = 3;
+  string model = 4;
+  string state = 5;
+  string verdict = 6;
+  string summary = 7;
+  string error = 8;
+  int64 tokens_used = 9;
+  int64 cost_used_micros = 10;
+  bool tokens_available = 11;
+  bool cost_available = 12;
+}
+message AgentReviewRequest {
+  string id = 1;
+  string run_id = 2;
+  string requested_by = 3;
+  string source_sha = 4;
+  string target_sha = 5;
+  string state = 6;
+  string detail = 7;
+  string created_at = 8;
+  repeated AgentReviewAttempt attempts = 9;
+}
+message RequestAgentReviewRequest {
+  string run_id = 1;
+  string expected_source_sha = 2;
+}
+message RequestAgentReviewResponse {
+  AgentReviewRequest request = 1;
+}
+message ListAgentReviewRequestsRequest {
+  string run_id = 1;
+}
+message ListAgentReviewRequestsResponse {
+  repeated AgentReviewRequest requests = 1;
+  bool available = 2;
 }

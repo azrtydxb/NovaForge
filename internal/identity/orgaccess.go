@@ -43,7 +43,7 @@ func (s *Store) ResolveOrgScope(ctx context.Context, userID uuid.UUID, ref strin
 		return Org{}, fmt.Errorf("check membership: %w", err)
 	}
 	if !member {
-		return Org{}, fmt.Errorf("user %s is not a member of organization %q", userID, o.Name)
+		return Org{}, fmt.Errorf("%w: user is not a member", ErrNotMember)
 	}
 	return o, nil
 }

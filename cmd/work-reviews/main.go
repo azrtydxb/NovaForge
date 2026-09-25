@@ -196,6 +196,15 @@ func main() {
 		}
 	}
 
+	stopReviews, err := startIndependentReviews(ctx, cfg, reviewsServer)
+	if err != nil {
+		log.Fatalf("work-reviews: independent review: %v", err)
+	}
+	defer stopReviews()
+	if reviewsServer.ReviewWorker == nil {
+		log.Println("work-reviews: NF_REVIEW_CONFIG_FILE unset; independent agent review unavailable")
+	}
+
 	// A decomposed epic is only worth decomposing if something then starts
 	// its ready subtasks. AGENTS_ADDR unset means this deployment runs no
 	// agents, which is a legitimate configuration — it is said out loud

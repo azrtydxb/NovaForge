@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -23,6 +24,8 @@ import (
 
 // runIDLabel labels every namespace and pod this package creates with the
 // agent run it belongs to.
+const orgIDLabel = "novaforge.io/org-id"
+
 const runIDLabel = "novaforge.io/run-id"
 
 // createdAtLabel records a namespace's creation time as a label (rather than
@@ -38,6 +41,7 @@ const createdAtLabel = "novaforge.io/created-at"
 
 // Spec describes the workspace to provision for one agent run.
 type Spec struct {
+	OrgID    uuid.UUID
 	Image    string
 	Env      map[string]string
 	CPULimit string
@@ -56,8 +60,12 @@ type Workspace struct {
 
 // Provisioner creates and tears down isolated per-run Kubernetes workspaces.
 type Provisioner struct {
-	client     kubernetes.Interface
-	restConfig *rest.Config
+	client              kubernetes.Interface
+	restConfig          *rest.Config
+	invalidated         sync.Map
+	recordCleanup       func(context.Context, Identity) error
+	cleanupLocks        sync.Map
+	terminationEvidence sync.Map
 }
 
 // podName and containerName name the single pod and container of every
@@ -85,6 +93,9 @@ func namespaceFor(runID uuid.UUID) string {
 // NetworkPolicy and a ResourceQuota derived from spec, then creates a pod
 // running spec.Image that mounts the repository PVC read-only.
 func (p *Provisioner) Create(ctx context.Context, runID uuid.UUID, spec Spec) (Workspace, error) {
+	if _, closed := p.invalidated.Load(runID); closed {
+		return Workspace{}, ErrWorkspaceClosed
+	}
 	ns := namespaceFor(runID)
 
 	annotations := map[string]string{}
@@ -97,6 +108,7 @@ func (p *Provisioner) Create(ctx context.Context, runID uuid.UUID, spec Spec) (W
 			Annotations: annotations,
 			Labels: map[string]string{
 				runIDLabel:     runID.String(),
+				orgIDLabel:     spec.OrgID.String(),
 				createdAtLabel: strconv.FormatInt(time.Now().UTC().Unix(), 10),
 			},
 		},
@@ -129,10 +141,10 @@ func (p *Provisioner) applyDenyAllNetworkPolicy(ctx context.Context, ns string) 
 		},
 		Spec: networkingv1.NetworkPolicySpec{
 			// An empty pod selector matches every pod in the namespace, and
-			// declaring the Ingress policy type with no rules denies all
-			// ingress traffic by default.
+			// declaring both policy types with no rules also prevents source
+			// commands reaching other tenants, the API or the public internet.
 			PodSelector: metav1.LabelSelector{},
-			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress, networkingv1.PolicyTypeEgress},
 		},
 	}
 	if _, err := p.client.NetworkingV1().NetworkPolicies(ns).Create(ctx, np, metav1.CreateOptions{}); err != nil {
@@ -225,9 +237,15 @@ func (p *Provisioner) createPod(ctx context.Context, ns string, runID uuid.UUID,
 			},
 		},
 		Spec: corev1.PodSpec{
-			RestartPolicy: corev1.RestartPolicyNever,
+			RestartPolicy:                corev1.RestartPolicyNever,
+			AutomountServiceAccountToken: new(false),
+			SecurityContext:              &corev1.PodSecurityContext{SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
 			Containers: []corev1.Container{
 				{
+					SecurityContext: &corev1.SecurityContext{
+						AllowPrivilegeEscalation: new(false),
+						Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+					},
 					Name:  containerName,
 					Image: spec.Image,
 					// The pod is the run's workspace: the agent's files are

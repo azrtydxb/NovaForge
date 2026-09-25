@@ -23,6 +23,10 @@ const (
 	WorkService_GetItem_FullMethodName                    = "/novaforge.work.v1.WorkService/GetItem"
 	WorkService_ListItems_FullMethodName                  = "/novaforge.work.v1.WorkService/ListItems"
 	WorkService_AssignItem_FullMethodName                 = "/novaforge.work.v1.WorkService/AssignItem"
+	WorkService_PatchItem_FullMethodName                  = "/novaforge.work.v1.WorkService/PatchItem"
+	WorkService_TransitionItem_FullMethodName             = "/novaforge.work.v1.WorkService/TransitionItem"
+	WorkService_ClaimExecution_FullMethodName             = "/novaforge.work.v1.WorkService/ClaimExecution"
+	WorkService_ReleaseExecution_FullMethodName           = "/novaforge.work.v1.WorkService/ReleaseExecution"
 	WorkService_ListSubtasks_FullMethodName               = "/novaforge.work.v1.WorkService/ListSubtasks"
 	WorkService_DecomposeEpic_FullMethodName              = "/novaforge.work.v1.WorkService/DecomposeEpic"
 	WorkService_AddComment_FullMethodName                 = "/novaforge.work.v1.WorkService/AddComment"
@@ -45,6 +49,10 @@ type WorkServiceClient interface {
 	GetItem(ctx context.Context, in *GetItemRequest, opts ...grpc.CallOption) (*GetItemResponse, error)
 	ListItems(ctx context.Context, in *ListItemsRequest, opts ...grpc.CallOption) (*ListItemsResponse, error)
 	AssignItem(ctx context.Context, in *AssignItemRequest, opts ...grpc.CallOption) (*AssignItemResponse, error)
+	PatchItem(ctx context.Context, in *PatchItemRequest, opts ...grpc.CallOption) (*PatchItemResponse, error)
+	TransitionItem(ctx context.Context, in *TransitionItemRequest, opts ...grpc.CallOption) (*TransitionItemResponse, error)
+	ClaimExecution(ctx context.Context, in *ClaimExecutionRequest, opts ...grpc.CallOption) (*ClaimExecutionResponse, error)
+	ReleaseExecution(ctx context.Context, in *ReleaseExecutionRequest, opts ...grpc.CallOption) (*ReleaseExecutionResponse, error)
 	ListSubtasks(ctx context.Context, in *ListSubtasksRequest, opts ...grpc.CallOption) (*ListSubtasksResponse, error)
 	DecomposeEpic(ctx context.Context, in *DecomposeEpicRequest, opts ...grpc.CallOption) (*DecomposeEpicResponse, error)
 	AddComment(ctx context.Context, in *AddCommentRequest, opts ...grpc.CallOption) (*AddCommentResponse, error)
@@ -97,6 +105,46 @@ func (c *workServiceClient) AssignItem(ctx context.Context, in *AssignItemReques
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AssignItemResponse)
 	err := c.cc.Invoke(ctx, WorkService_AssignItem_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *workServiceClient) PatchItem(ctx context.Context, in *PatchItemRequest, opts ...grpc.CallOption) (*PatchItemResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PatchItemResponse)
+	err := c.cc.Invoke(ctx, WorkService_PatchItem_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *workServiceClient) TransitionItem(ctx context.Context, in *TransitionItemRequest, opts ...grpc.CallOption) (*TransitionItemResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TransitionItemResponse)
+	err := c.cc.Invoke(ctx, WorkService_TransitionItem_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *workServiceClient) ClaimExecution(ctx context.Context, in *ClaimExecutionRequest, opts ...grpc.CallOption) (*ClaimExecutionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClaimExecutionResponse)
+	err := c.cc.Invoke(ctx, WorkService_ClaimExecution_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *workServiceClient) ReleaseExecution(ctx context.Context, in *ReleaseExecutionRequest, opts ...grpc.CallOption) (*ReleaseExecutionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReleaseExecutionResponse)
+	err := c.cc.Invoke(ctx, WorkService_ReleaseExecution_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -195,6 +243,10 @@ type WorkServiceServer interface {
 	GetItem(context.Context, *GetItemRequest) (*GetItemResponse, error)
 	ListItems(context.Context, *ListItemsRequest) (*ListItemsResponse, error)
 	AssignItem(context.Context, *AssignItemRequest) (*AssignItemResponse, error)
+	PatchItem(context.Context, *PatchItemRequest) (*PatchItemResponse, error)
+	TransitionItem(context.Context, *TransitionItemRequest) (*TransitionItemResponse, error)
+	ClaimExecution(context.Context, *ClaimExecutionRequest) (*ClaimExecutionResponse, error)
+	ReleaseExecution(context.Context, *ReleaseExecutionRequest) (*ReleaseExecutionResponse, error)
 	ListSubtasks(context.Context, *ListSubtasksRequest) (*ListSubtasksResponse, error)
 	DecomposeEpic(context.Context, *DecomposeEpicRequest) (*DecomposeEpicResponse, error)
 	AddComment(context.Context, *AddCommentRequest) (*AddCommentResponse, error)
@@ -223,6 +275,18 @@ func (UnimplementedWorkServiceServer) ListItems(context.Context, *ListItemsReque
 }
 func (UnimplementedWorkServiceServer) AssignItem(context.Context, *AssignItemRequest) (*AssignItemResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AssignItem not implemented")
+}
+func (UnimplementedWorkServiceServer) PatchItem(context.Context, *PatchItemRequest) (*PatchItemResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PatchItem not implemented")
+}
+func (UnimplementedWorkServiceServer) TransitionItem(context.Context, *TransitionItemRequest) (*TransitionItemResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TransitionItem not implemented")
+}
+func (UnimplementedWorkServiceServer) ClaimExecution(context.Context, *ClaimExecutionRequest) (*ClaimExecutionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClaimExecution not implemented")
+}
+func (UnimplementedWorkServiceServer) ReleaseExecution(context.Context, *ReleaseExecutionRequest) (*ReleaseExecutionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReleaseExecution not implemented")
 }
 func (UnimplementedWorkServiceServer) ListSubtasks(context.Context, *ListSubtasksRequest) (*ListSubtasksResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListSubtasks not implemented")
@@ -336,6 +400,78 @@ func _WorkService_AssignItem_Handler(srv interface{}, ctx context.Context, dec f
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(WorkServiceServer).AssignItem(ctx, req.(*AssignItemRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WorkService_PatchItem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PatchItemRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkServiceServer).PatchItem(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WorkService_PatchItem_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkServiceServer).PatchItem(ctx, req.(*PatchItemRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WorkService_TransitionItem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TransitionItemRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkServiceServer).TransitionItem(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WorkService_TransitionItem_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkServiceServer).TransitionItem(ctx, req.(*TransitionItemRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WorkService_ClaimExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClaimExecutionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkServiceServer).ClaimExecution(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WorkService_ClaimExecution_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkServiceServer).ClaimExecution(ctx, req.(*ClaimExecutionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WorkService_ReleaseExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReleaseExecutionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkServiceServer).ReleaseExecution(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WorkService_ReleaseExecution_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkServiceServer).ReleaseExecution(ctx, req.(*ReleaseExecutionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -506,6 +642,22 @@ var WorkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AssignItem",
 			Handler:    _WorkService_AssignItem_Handler,
+		},
+		{
+			MethodName: "PatchItem",
+			Handler:    _WorkService_PatchItem_Handler,
+		},
+		{
+			MethodName: "TransitionItem",
+			Handler:    _WorkService_TransitionItem_Handler,
+		},
+		{
+			MethodName: "ClaimExecution",
+			Handler:    _WorkService_ClaimExecution_Handler,
+		},
+		{
+			MethodName: "ReleaseExecution",
+			Handler:    _WorkService_ReleaseExecution_Handler,
 		},
 		{
 			MethodName: "ListSubtasks",

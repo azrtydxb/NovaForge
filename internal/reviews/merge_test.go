@@ -22,7 +22,7 @@ type stubGateChecker struct {
 	err     error
 }
 
-func (s stubGateChecker) MayMerge(context.Context, uuid.UUID) (bool, []string, error) {
+func (s stubGateChecker) MayMergePinned(context.Context, uuid.UUID, string, string) (bool, []string, error) {
 	return s.allowed, s.reasons, s.err
 }
 
@@ -41,6 +41,13 @@ func (s *stubMergeGitClient) Merge(_ context.Context, _ *gitv1.MergeRequest, _ .
 		return nil, s.err
 	}
 	return &gitv1.MergeResponse{MergeSha: s.mergeSHA}, nil
+}
+
+func (s *stubMergeGitClient) ListCommits(context.Context, *gitv1.ListCommitsRequest, ...grpc.CallOption) (*gitv1.ListCommitsResponse, error) {
+	return &gitv1.ListCommitsResponse{Commits: []*gitv1.Commit{{Sha: reviewedSHA}}}, nil
+}
+func (s *stubMergeGitClient) GetDiff(context.Context, *gitv1.GetDiffRequest, ...grpc.CallOption) (*gitv1.GetDiffResponse, error) {
+	return &gitv1.GetDiffResponse{Unified: "diff --git a/example b/example\n+review this line\n"}, nil
 }
 
 func TestMergeBlockedByFailingGate(t *testing.T) {
@@ -117,7 +124,7 @@ func TestMergeProceedsWhenAllowed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateRun: %v", err)
 	}
-	if err := store.SubmitReview(ctx, run.ID, reviewerID, "user", "approve"); err != nil {
+	if err := store.SubmitReviewAt(ctx, run.ID, reviewerID, "user", "approve", reviewedSHA, "reviewed this revision"); err != nil {
 		t.Fatalf("SubmitReview: %v", err)
 	}
 
@@ -193,7 +200,7 @@ func (e evaluatingGateChecker) Evaluate(context.Context, uuid.UUID) error {
 	return e.evalErr
 }
 
-func (e evaluatingGateChecker) MayMerge(context.Context, uuid.UUID) (bool, []string, error) {
+func (e evaluatingGateChecker) MayMergePinned(context.Context, uuid.UUID, string, string) (bool, []string, error) {
 	*e.calls = append(*e.calls, "may-merge")
 	return false, []string{"not yet"}, nil
 }

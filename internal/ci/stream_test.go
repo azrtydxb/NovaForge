@@ -181,8 +181,16 @@ func TestRunnerJobStreamAndArtifact(t *testing.T) {
 		t.Fatalf("job settled %q (%s), want success", finished.Status, finished.Detail)
 	}
 
-	// 3. The finished log is sealed into object storage, and reads back whole.
-	sealed, err := blobs.Get(ctx, "logs/"+job.ID.String()+".txt")
+	// 3. Terminal admission precedes its durable seal projection. Observe
+	// actual publication, not merely the terminal state, before reading evidence.
+	var sealed io.ReadCloser
+	for time.Now().Before(deadline) {
+		sealed, err = blobs.Get(ctx, "logs/"+job.ID.String()+".txt")
+		if err == nil {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 	if err != nil {
 		t.Fatalf("the finished job's log was never sealed into object storage: %v", err)
 	}

@@ -18,6 +18,7 @@ const dispatchSendTimeout = 5 * time.Second
 
 // DispatchJob is the job payload pushed down a runner's Connect stream.
 type DispatchJob struct {
+	ConnectionID uuid.UUID
 	JobID        uuid.UUID
 	RunID        uuid.UUID
 	RepoCloneURL string
@@ -41,6 +42,7 @@ type DispatchJob struct {
 
 // registeredRunner is one runner currently holding an open Connect stream.
 type registeredRunner struct {
+	connectionID uuid.UUID
 	ch           chan<- *civ1.ConnectResponse
 	labels       map[string]struct{}
 	lastDispatch time.Time
@@ -51,9 +53,12 @@ type registeredRunner struct {
 // persistent outbound gRPC stream and the platform pushes jobs down it, so
 // a runner never needs inbound network reachability.
 type Dispatcher struct {
-	mu      sync.Mutex
-	runners map[uuid.UUID]*registeredRunner
-	store   *Store
+	// Serializes this replica's durable replacement with local activation.
+	// An older labels lookup must not register after its replacement.
+	activationMu sync.Mutex
+	mu           sync.Mutex
+	runners      map[uuid.UUID]*registeredRunner
+	store        *Store
 }
 
 // NewDispatcher builds a Dispatcher whose reaper marks jobs orphaned by a
@@ -65,14 +70,18 @@ func NewDispatcher(store *Store) *Dispatcher {
 
 // Register records runnerID as connected and able to receive jobs whose
 // required labels are a subset of labels, delivered on ch.
-func (d *Dispatcher) Register(runnerID uuid.UUID, labels []string, ch chan<- *civ1.ConnectResponse) {
+func (d *Dispatcher) Register(runnerID uuid.UUID, labels []string, ch chan<- *civ1.ConnectResponse, connections ...uuid.UUID) {
 	set := make(map[string]struct{}, len(labels))
 	for _, l := range labels {
 		set[l] = struct{}{}
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.runners[runnerID] = &registeredRunner{ch: ch, labels: set}
+	var connection uuid.UUID
+	if len(connections) > 0 {
+		connection = connections[0]
+	}
+	d.runners[runnerID] = &registeredRunner{ch: ch, labels: set, connectionID: connection}
 }
 
 // Unregister removes runnerID from the dispatch pool and reaps any job still
@@ -144,8 +153,9 @@ func hasAllLabels(have map[string]struct{}, want []string) bool {
 
 // ConnectedRunner is one runner currently holding an open stream.
 type ConnectedRunner struct {
-	ID     uuid.UUID
-	Labels []string
+	ConnectionID uuid.UUID
+	ID           uuid.UUID
+	Labels       []string
 }
 
 // Connected returns the runners currently able to receive work. The pump asks
@@ -160,7 +170,7 @@ func (d *Dispatcher) Connected() []ConnectedRunner {
 		for l := range r.labels {
 			labels = append(labels, l)
 		}
-		out = append(out, ConnectedRunner{ID: id, Labels: labels})
+		out = append(out, ConnectedRunner{ID: id, Labels: labels, ConnectionID: r.connectionID})
 	}
 	return out
 }
@@ -174,7 +184,7 @@ func (d *Dispatcher) DispatchTo(ctx context.Context, runnerID uuid.UUID, job Dis
 		r.lastDispatch = time.Now()
 	}
 	d.mu.Unlock()
-	if !ok {
+	if !ok || r.connectionID != job.ConnectionID {
 		return fmt.Errorf("runner %s is no longer connected", runnerID)
 	}
 	select {
@@ -191,6 +201,7 @@ func (d *Dispatcher) DispatchTo(ctx context.Context, runnerID uuid.UUID, job Dis
 func toConnectResponse(job DispatchJob) *civ1.ConnectResponse {
 	return &civ1.ConnectResponse{
 		JobId:         job.JobID.String(),
+		ConnectionId:  job.ConnectionID.String(),
 		RunId:         job.RunID.String(),
 		RepoCloneUrl:  job.RepoCloneURL,
 		CommitSha:     job.CommitSHA,
@@ -201,4 +212,44 @@ func toConnectResponse(job DispatchJob) *civ1.ConnectResponse {
 		ArtifactPaths: job.ArtifactPaths,
 		SecretEnv:     job.SecretEnv,
 	}
+}
+
+// UnregisterConnection never lets an old stream remove its replacement.
+func (d *Dispatcher) UnregisterConnection(ctx context.Context, runner, connection uuid.UUID) {
+	d.mu.Lock()
+	if current := d.runners[runner]; current != nil && current.connectionID == connection {
+		delete(d.runners, runner)
+	}
+	d.mu.Unlock()
+	if d.store != nil {
+		_ = d.store.EndRunnerConnection(ctx, runner, connection)
+	}
+}
+
+// activateConnection is the sole production handshake activation path. The
+// hello is queued while holding the map lock, before any pump can queue a job.
+func (d *Dispatcher) activateConnection(ctx context.Context, runner uuid.UUID, ch chan<- *civ1.ConnectResponse) (uuid.UUID, error) {
+	d.activationMu.Lock()
+	defer d.activationMu.Unlock()
+	connection, err := d.store.BeginRunnerConnection(ctx, runner)
+	if err != nil {
+		return connection, err
+	}
+	labels, err := d.store.RunnerLabels(ctx, runner)
+	if err != nil {
+		return connection, err
+	}
+	set := map[string]struct{}{}
+	for _, label := range labels {
+		set[label] = struct{}{}
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	select {
+	case ch <- &civ1.ConnectResponse{ConnectionId: connection.String()}:
+	case <-ctx.Done():
+		return connection, ctx.Err()
+	}
+	d.runners[runner] = &registeredRunner{connectionID: connection, ch: ch, labels: set}
+	return connection, nil
 }

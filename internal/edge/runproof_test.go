@@ -2,11 +2,16 @@ package edge_test
 
 import (
 	"context"
+	"github.com/novaforge/novaforge/internal/svcauth"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
+	"net"
 	"net/http"
 	"sort"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -97,7 +102,7 @@ func TestEngineeringRunProof(t *testing.T) {
 	if err != nil || again == nil || again.GetNumber() != opened.GetNumber() {
 		t.Fatalf("a second open for the same branch made another run: %v, %v", again, err)
 	}
-	if _, err := rv.RecordProof(ctx, &reviewsv1.RecordProofRequest{RunId: opened.GetId(), Gate: "tests", Status: "pass", Detail: "ok"}); err != nil {
+	if _, err := authenticatedProofClient(t, reviewsServer, orgID).RecordProof(context.Background(), &reviewsv1.RecordProofRequest{RunId: opened.GetId(), Gate: "tests", Status: "pass", Detail: "ok"}); err != nil {
 		t.Fatalf("RecordProof: %v", err)
 	}
 
@@ -171,4 +176,30 @@ func TestEngineeringRunProof(t *testing.T) {
 	if len(proof.Proof) != 1 || proof.Proof[0].Gate != "tests" || proof.Proof[0].Status != "pass" {
 		t.Fatalf("proof = %+v", proof.Proof)
 	}
+}
+
+// Proof producers cross the actual signed-service-token interceptor even when
+// the rest of this older fixture uses a configurable user scope.
+func authenticatedProofClient(t *testing.T, server *reviews.GRPCServer, org uuid.UUID) reviewsv1.ReviewsServiceClient {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := grpc.NewServer(grpc.UnaryInterceptor(svcauth.UnaryServerInterceptor(nil, "edge-proof-test")))
+	reviewsv1.RegisterReviewsServiceServer(srv, server)
+	go srv.Serve(listener)
+	t.Cleanup(srv.Stop)
+	token, err := svcauth.Mint("edge-proof-test", "gates", org, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err := grpc.NewClient(listener.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithUnaryInterceptor(func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+		return invoker(metadata.NewOutgoingContext(ctx, metadata.Pairs("authorization", "Bearer "+token)), method, req, reply, cc, opts...)
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { conn.Close() })
+	return reviewsv1.NewReviewsServiceClient(conn)
 }

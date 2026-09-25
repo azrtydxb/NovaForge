@@ -93,6 +93,18 @@ resources:
   requests: { cpu: 100m, memory: 128Mi }
   limits: { cpu: "2", memory: 1Gi }
 
+# Operator JSON and referenced credential/CA files live in pre-created Secrets,
+# mounted read-only only into their consuming service. Never put secret bytes in
+# Helm values. Paths are /etc/novaforge/operator/<key>/<configKey>.
+# Empty secretName explicitly leaves the feature unavailable; it is not enabled
+# merely by rendering the chart. Directory mounts permit kubelet secret rotation.
+operatorConfigs:
+  openbao: { secretName: "", configKey: config.json }
+  deployments: { secretName: "", configKey: config.json }
+  semanticProducer: { secretName: "", configKey: config.json }
+  mcpHTTP: { secretName: "", configKey: config.json }
+  reviews: { secretName: "", configKey: config.json }
+
 # Only services whose binary exists are listed. Entries are added as each
 # service's cmd/ package lands, so a deploy never references a missing image.
 services:
@@ -115,6 +127,10 @@ services:
   gates:
     grpcPort: 9096
     schema: gates
+    # Explicit operator-owned digest. Empty leaves executable gates unavailable.
+    # Image contents and sandbox RBAC must be separately qualified; this setting
+    # does not grant cluster authority or select a local execution fallback.
+    analysisImage: ""
   agent-runtime:
     grpcPort: 9095
     schema: agents

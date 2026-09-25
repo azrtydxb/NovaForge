@@ -1,0 +1,1 @@
+DROP TABLE secrets.deployment_credential_intents;

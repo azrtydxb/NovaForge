@@ -317,10 +317,12 @@ func (x *EvaluateResponse) GetEvaluations() []*Evaluation {
 }
 
 type MayMergeRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	RunId             string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	ExpectedSourceSha string                 `protobuf:"bytes,2,opt,name=expected_source_sha,json=expectedSourceSha,proto3" json:"expected_source_sha,omitempty"`
+	ExpectedTargetSha string                 `protobuf:"bytes,3,opt,name=expected_target_sha,json=expectedTargetSha,proto3" json:"expected_target_sha,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *MayMergeRequest) Reset() {
@@ -360,12 +362,28 @@ func (x *MayMergeRequest) GetRunId() string {
 	return ""
 }
 
+func (x *MayMergeRequest) GetExpectedSourceSha() string {
+	if x != nil {
+		return x.ExpectedSourceSha
+	}
+	return ""
+}
+
+func (x *MayMergeRequest) GetExpectedTargetSha() string {
+	if x != nil {
+		return x.ExpectedTargetSha
+	}
+	return ""
+}
+
 type MayMergeResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Allowed       bool                   `protobuf:"varint,1,opt,name=allowed,proto3" json:"allowed,omitempty"`
-	Reasons       []string               `protobuf:"bytes,2,rep,name=reasons,proto3" json:"reasons,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	Allowed            bool                   `protobuf:"varint,1,opt,name=allowed,proto3" json:"allowed,omitempty"`
+	Reasons            []string               `protobuf:"bytes,2,rep,name=reasons,proto3" json:"reasons,omitempty"`
+	EvaluatedSourceSha string                 `protobuf:"bytes,3,opt,name=evaluated_source_sha,json=evaluatedSourceSha,proto3" json:"evaluated_source_sha,omitempty"`
+	EvaluatedTargetSha string                 `protobuf:"bytes,4,opt,name=evaluated_target_sha,json=evaluatedTargetSha,proto3" json:"evaluated_target_sha,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *MayMergeResponse) Reset() {
@@ -410,6 +428,20 @@ func (x *MayMergeResponse) GetReasons() []string {
 		return x.Reasons
 	}
 	return nil
+}
+
+func (x *MayMergeResponse) GetEvaluatedSourceSha() string {
+	if x != nil {
+		return x.EvaluatedSourceSha
+	}
+	return ""
+}
+
+func (x *MayMergeResponse) GetEvaluatedTargetSha() string {
+	if x != nil {
+		return x.EvaluatedTargetSha
+	}
+	return ""
 }
 
 type ListEvaluationsRequest struct {
@@ -1106,9 +1138,11 @@ type IssueJobLeaseRequest struct {
 	// ref is the ref the CI run was scheduled for.
 	Ref string `protobuf:"bytes,3,opt,name=ref,proto3" json:"ref,omitempty"`
 	// environment is the job's declared environment: staging or production.
-	Environment   string `protobuf:"bytes,4,opt,name=environment,proto3" json:"environment,omitempty"`
-	Name          string `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
-	TtlSeconds    int64  `protobuf:"varint,6,opt,name=ttl_seconds,json=ttlSeconds,proto3" json:"ttl_seconds,omitempty"`
+	Environment string `protobuf:"bytes,4,opt,name=environment,proto3" json:"environment,omitempty"`
+	Name        string `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
+	TtlSeconds  int64  `protobuf:"varint,6,opt,name=ttl_seconds,json=ttlSeconds,proto3" json:"ttl_seconds,omitempty"`
+	// A fresh identifier for each all-or-nothing credential resolution attempt.
+	AttemptId     string `protobuf:"bytes,7,opt,name=attempt_id,json=attemptId,proto3" json:"attempt_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1183,6 +1217,13 @@ func (x *IssueJobLeaseRequest) GetTtlSeconds() int64 {
 		return x.TtlSeconds
 	}
 	return 0
+}
+
+func (x *IssueJobLeaseRequest) GetAttemptId() string {
+	if x != nil {
+		return x.AttemptId
+	}
+	return ""
 }
 
 type IssueJobLeaseResponse struct {
@@ -2211,6 +2252,184 @@ func (x *ProposeGateChangeResponse) GetTitle() string {
 	return ""
 }
 
+// Empty attempt_id closes the entire run permanently; otherwise only the
+// failed attempt is fenced, permitting a new attempt to retry the job.
+type RevokeRunLeasesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	AttemptId     string                 `protobuf:"bytes,2,opt,name=attempt_id,json=attemptId,proto3" json:"attempt_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RevokeRunLeasesRequest) Reset() {
+	*x = RevokeRunLeasesRequest{}
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RevokeRunLeasesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RevokeRunLeasesRequest) ProtoMessage() {}
+
+func (x *RevokeRunLeasesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RevokeRunLeasesRequest.ProtoReflect.Descriptor instead.
+func (*RevokeRunLeasesRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *RevokeRunLeasesRequest) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *RevokeRunLeasesRequest) GetAttemptId() string {
+	if x != nil {
+		return x.AttemptId
+	}
+	return ""
+}
+
+type RevokeRunLeasesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Fenced        bool                   `protobuf:"varint,1,opt,name=fenced,proto3" json:"fenced,omitempty"`
+	Pending       int32                  `protobuf:"varint,2,opt,name=pending,proto3" json:"pending,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RevokeRunLeasesResponse) Reset() {
+	*x = RevokeRunLeasesResponse{}
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RevokeRunLeasesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RevokeRunLeasesResponse) ProtoMessage() {}
+
+func (x *RevokeRunLeasesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RevokeRunLeasesResponse.ProtoReflect.Descriptor instead.
+func (*RevokeRunLeasesResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *RevokeRunLeasesResponse) GetFenced() bool {
+	if x != nil {
+		return x.Fenced
+	}
+	return false
+}
+
+func (x *RevokeRunLeasesResponse) GetPending() int32 {
+	if x != nil {
+		return x.Pending
+	}
+	return 0
+}
+
+type RetryCredentialRevocationsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RetryCredentialRevocationsRequest) Reset() {
+	*x = RetryCredentialRevocationsRequest{}
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RetryCredentialRevocationsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RetryCredentialRevocationsRequest) ProtoMessage() {}
+
+func (x *RetryCredentialRevocationsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RetryCredentialRevocationsRequest.ProtoReflect.Descriptor instead.
+func (*RetryCredentialRevocationsRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{39}
+}
+
+type RetryCredentialRevocationsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RetryCredentialRevocationsResponse) Reset() {
+	*x = RetryCredentialRevocationsResponse{}
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RetryCredentialRevocationsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RetryCredentialRevocationsResponse) ProtoMessage() {}
+
+func (x *RetryCredentialRevocationsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_gates_v1_gates_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RetryCredentialRevocationsResponse.ProtoReflect.Descriptor instead.
+func (*RetryCredentialRevocationsResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_gates_v1_gates_proto_rawDescGZIP(), []int{40}
+}
+
 var File_novaforge_gates_v1_gates_proto protoreflect.FileDescriptor
 
 const file_novaforge_gates_v1_gates_proto_rawDesc = "" +
@@ -2238,12 +2457,16 @@ const file_novaforge_gates_v1_gates_proto_rawDesc = "" +
 	"\x0fEvaluateRequest\x12\x15\n" +
 	"\x06run_id\x18\x01 \x01(\tR\x05runId\"T\n" +
 	"\x10EvaluateResponse\x12@\n" +
-	"\vevaluations\x18\x01 \x03(\v2\x1e.novaforge.gates.v1.EvaluationR\vevaluations\"(\n" +
+	"\vevaluations\x18\x01 \x03(\v2\x1e.novaforge.gates.v1.EvaluationR\vevaluations\"\x88\x01\n" +
 	"\x0fMayMergeRequest\x12\x15\n" +
-	"\x06run_id\x18\x01 \x01(\tR\x05runId\"F\n" +
+	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12.\n" +
+	"\x13expected_source_sha\x18\x02 \x01(\tR\x11expectedSourceSha\x12.\n" +
+	"\x13expected_target_sha\x18\x03 \x01(\tR\x11expectedTargetSha\"\xaa\x01\n" +
 	"\x10MayMergeResponse\x12\x18\n" +
 	"\aallowed\x18\x01 \x01(\bR\aallowed\x12\x18\n" +
-	"\areasons\x18\x02 \x03(\tR\areasons\"/\n" +
+	"\areasons\x18\x02 \x03(\tR\areasons\x120\n" +
+	"\x14evaluated_source_sha\x18\x03 \x01(\tR\x12evaluatedSourceSha\x120\n" +
+	"\x14evaluated_target_sha\x18\x04 \x01(\tR\x12evaluatedTargetSha\"/\n" +
 	"\x16ListEvaluationsRequest\x12\x15\n" +
 	"\x06run_id\x18\x01 \x01(\tR\x05runId\"[\n" +
 	"\x17ListEvaluationsResponse\x12@\n" +
@@ -2297,7 +2520,7 @@ const file_novaforge_gates_v1_gates_proto_rawDesc = "" +
 	"\venvironment\x18\x02 \x01(\tR\venvironment\x12\x14\n" +
 	"\x05value\x18\x03 \x01(\tR\x05value\"P\n" +
 	"\x11PutSecretResponse\x12;\n" +
-	"\x06secret\x18\x01 \x01(\v2#.novaforge.gates.v1.SecretReferenceR\x06secret\"\xaf\x01\n" +
+	"\x06secret\x18\x01 \x01(\v2#.novaforge.gates.v1.SecretReferenceR\x06secret\"\xce\x01\n" +
 	"\x14IssueJobLeaseRequest\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x17\n" +
 	"\arepo_id\x18\x02 \x01(\tR\x06repoId\x12\x10\n" +
@@ -2305,7 +2528,9 @@ const file_novaforge_gates_v1_gates_proto_rawDesc = "" +
 	"\venvironment\x18\x04 \x01(\tR\venvironment\x12\x12\n" +
 	"\x04name\x18\x05 \x01(\tR\x04name\x12\x1f\n" +
 	"\vttl_seconds\x18\x06 \x01(\x03R\n" +
-	"ttlSeconds\"\x9d\x01\n" +
+	"ttlSeconds\x12\x1d\n" +
+	"\n" +
+	"attempt_id\x18\a \x01(\tR\tattemptId\"\x9d\x01\n" +
 	"\x15IssueJobLeaseResponse\x12\x19\n" +
 	"\blease_id\x18\x01 \x01(\tR\aleaseId\x12\x14\n" +
 	"\x05token\x18\x02 \x01(\tR\x05token\x12\x12\n" +
@@ -2381,7 +2606,16 @@ const file_novaforge_gates_v1_gates_proto_rawDesc = "" +
 	"\x06branch\x18\x03 \x01(\tR\x06branch\x12\x1d\n" +
 	"\n" +
 	"commit_sha\x18\x04 \x01(\tR\tcommitSha\x12\x14\n" +
-	"\x05title\x18\x05 \x01(\tR\x05title2\xd3\f\n" +
+	"\x05title\x18\x05 \x01(\tR\x05title\"N\n" +
+	"\x16RevokeRunLeasesRequest\x12\x15\n" +
+	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x1d\n" +
+	"\n" +
+	"attempt_id\x18\x02 \x01(\tR\tattemptId\"K\n" +
+	"\x17RevokeRunLeasesResponse\x12\x16\n" +
+	"\x06fenced\x18\x01 \x01(\bR\x06fenced\x12\x18\n" +
+	"\apending\x18\x02 \x01(\x05R\apending\"#\n" +
+	"!RetryCredentialRevocationsRequest\"$\n" +
+	"\"RetryCredentialRevocationsResponse2\xcd\x0e\n" +
 	"\fGatesService\x12U\n" +
 	"\bEvaluate\x12#.novaforge.gates.v1.EvaluateRequest\x1a$.novaforge.gates.v1.EvaluateResponse\x12U\n" +
 	"\bMayMerge\x12#.novaforge.gates.v1.MayMergeRequest\x1a$.novaforge.gates.v1.MayMergeResponse\x12j\n" +
@@ -2398,7 +2632,9 @@ const file_novaforge_gates_v1_gates_proto_rawDesc = "" +
 	"\rListApprovals\x12(.novaforge.gates.v1.ListApprovalsRequest\x1a).novaforge.gates.v1.ListApprovalsResponse\x12X\n" +
 	"\tPutSecret\x12$.novaforge.gates.v1.PutSecretRequest\x1a%.novaforge.gates.v1.PutSecretResponse\x12d\n" +
 	"\rIssueJobLease\x12(.novaforge.gates.v1.IssueJobLeaseRequest\x1a).novaforge.gates.v1.IssueJobLeaseResponse\x12^\n" +
-	"\vRevokeLease\x12&.novaforge.gates.v1.RevokeLeaseRequest\x1a'.novaforge.gates.v1.RevokeLeaseResponse\x12g\n" +
+	"\vRevokeLease\x12&.novaforge.gates.v1.RevokeLeaseRequest\x1a'.novaforge.gates.v1.RevokeLeaseResponse\x12j\n" +
+	"\x0fRevokeRunLeases\x12*.novaforge.gates.v1.RevokeRunLeasesRequest\x1a+.novaforge.gates.v1.RevokeRunLeasesResponse\x12\x8b\x01\n" +
+	"\x1aRetryCredentialRevocations\x125.novaforge.gates.v1.RetryCredentialRevocationsRequest\x1a6.novaforge.gates.v1.RetryCredentialRevocationsResponse\x12g\n" +
 	"\x0eListGateConfig\x12).novaforge.gates.v1.ListGateConfigRequest\x1a*.novaforge.gates.v1.ListGateConfigResponse\x12p\n" +
 	"\x11ProposeGateChange\x12,.novaforge.gates.v1.ProposeGateChangeRequest\x1a-.novaforge.gates.v1.ProposeGateChangeResponseB\xcd\x01\n" +
 	"\x16com.novaforge.gates.v1B\n" +
@@ -2416,45 +2652,49 @@ func file_novaforge_gates_v1_gates_proto_rawDescGZIP() []byte {
 	return file_novaforge_gates_v1_gates_proto_rawDescData
 }
 
-var file_novaforge_gates_v1_gates_proto_msgTypes = make([]protoimpl.MessageInfo, 37)
+var file_novaforge_gates_v1_gates_proto_msgTypes = make([]protoimpl.MessageInfo, 41)
 var file_novaforge_gates_v1_gates_proto_goTypes = []any{
-	(*Evaluation)(nil),                  // 0: novaforge.gates.v1.Evaluation
-	(*ListCoverageHistoryRequest)(nil),  // 1: novaforge.gates.v1.ListCoverageHistoryRequest
-	(*ListCoverageHistoryResponse)(nil), // 2: novaforge.gates.v1.ListCoverageHistoryResponse
-	(*EvaluateRequest)(nil),             // 3: novaforge.gates.v1.EvaluateRequest
-	(*EvaluateResponse)(nil),            // 4: novaforge.gates.v1.EvaluateResponse
-	(*MayMergeRequest)(nil),             // 5: novaforge.gates.v1.MayMergeRequest
-	(*MayMergeResponse)(nil),            // 6: novaforge.gates.v1.MayMergeResponse
-	(*ListEvaluationsRequest)(nil),      // 7: novaforge.gates.v1.ListEvaluationsRequest
-	(*ListEvaluationsResponse)(nil),     // 8: novaforge.gates.v1.ListEvaluationsResponse
-	(*ApprovalRequestMsg)(nil),          // 9: novaforge.gates.v1.ApprovalRequestMsg
-	(*ListApprovalsRequest)(nil),        // 10: novaforge.gates.v1.ListApprovalsRequest
-	(*ListApprovalsResponse)(nil),       // 11: novaforge.gates.v1.ListApprovalsResponse
-	(*RequestApprovalRequest)(nil),      // 12: novaforge.gates.v1.RequestApprovalRequest
-	(*RequestApprovalResponse)(nil),     // 13: novaforge.gates.v1.RequestApprovalResponse
-	(*ResolveApprovalRequest)(nil),      // 14: novaforge.gates.v1.ResolveApprovalRequest
-	(*ResolveApprovalResponse)(nil),     // 15: novaforge.gates.v1.ResolveApprovalResponse
-	(*PutSecretRequest)(nil),            // 16: novaforge.gates.v1.PutSecretRequest
-	(*PutSecretResponse)(nil),           // 17: novaforge.gates.v1.PutSecretResponse
-	(*IssueJobLeaseRequest)(nil),        // 18: novaforge.gates.v1.IssueJobLeaseRequest
-	(*IssueJobLeaseResponse)(nil),       // 19: novaforge.gates.v1.IssueJobLeaseResponse
-	(*IssueLeaseRequest)(nil),           // 20: novaforge.gates.v1.IssueLeaseRequest
-	(*IssueLeaseResponse)(nil),          // 21: novaforge.gates.v1.IssueLeaseResponse
-	(*RedeemLeaseRequest)(nil),          // 22: novaforge.gates.v1.RedeemLeaseRequest
-	(*RedeemLeaseResponse)(nil),         // 23: novaforge.gates.v1.RedeemLeaseResponse
-	(*SecretReference)(nil),             // 24: novaforge.gates.v1.SecretReference
-	(*ListSecretsRequest)(nil),          // 25: novaforge.gates.v1.ListSecretsRequest
-	(*ListSecretsResponse)(nil),         // 26: novaforge.gates.v1.ListSecretsResponse
-	(*Lease)(nil),                       // 27: novaforge.gates.v1.Lease
-	(*ListLeasesRequest)(nil),           // 28: novaforge.gates.v1.ListLeasesRequest
-	(*ListLeasesResponse)(nil),          // 29: novaforge.gates.v1.ListLeasesResponse
-	(*RevokeLeaseRequest)(nil),          // 30: novaforge.gates.v1.RevokeLeaseRequest
-	(*RevokeLeaseResponse)(nil),         // 31: novaforge.gates.v1.RevokeLeaseResponse
-	(*GateConfig)(nil),                  // 32: novaforge.gates.v1.GateConfig
-	(*ListGateConfigRequest)(nil),       // 33: novaforge.gates.v1.ListGateConfigRequest
-	(*ListGateConfigResponse)(nil),      // 34: novaforge.gates.v1.ListGateConfigResponse
-	(*ProposeGateChangeRequest)(nil),    // 35: novaforge.gates.v1.ProposeGateChangeRequest
-	(*ProposeGateChangeResponse)(nil),   // 36: novaforge.gates.v1.ProposeGateChangeResponse
+	(*Evaluation)(nil),                         // 0: novaforge.gates.v1.Evaluation
+	(*ListCoverageHistoryRequest)(nil),         // 1: novaforge.gates.v1.ListCoverageHistoryRequest
+	(*ListCoverageHistoryResponse)(nil),        // 2: novaforge.gates.v1.ListCoverageHistoryResponse
+	(*EvaluateRequest)(nil),                    // 3: novaforge.gates.v1.EvaluateRequest
+	(*EvaluateResponse)(nil),                   // 4: novaforge.gates.v1.EvaluateResponse
+	(*MayMergeRequest)(nil),                    // 5: novaforge.gates.v1.MayMergeRequest
+	(*MayMergeResponse)(nil),                   // 6: novaforge.gates.v1.MayMergeResponse
+	(*ListEvaluationsRequest)(nil),             // 7: novaforge.gates.v1.ListEvaluationsRequest
+	(*ListEvaluationsResponse)(nil),            // 8: novaforge.gates.v1.ListEvaluationsResponse
+	(*ApprovalRequestMsg)(nil),                 // 9: novaforge.gates.v1.ApprovalRequestMsg
+	(*ListApprovalsRequest)(nil),               // 10: novaforge.gates.v1.ListApprovalsRequest
+	(*ListApprovalsResponse)(nil),              // 11: novaforge.gates.v1.ListApprovalsResponse
+	(*RequestApprovalRequest)(nil),             // 12: novaforge.gates.v1.RequestApprovalRequest
+	(*RequestApprovalResponse)(nil),            // 13: novaforge.gates.v1.RequestApprovalResponse
+	(*ResolveApprovalRequest)(nil),             // 14: novaforge.gates.v1.ResolveApprovalRequest
+	(*ResolveApprovalResponse)(nil),            // 15: novaforge.gates.v1.ResolveApprovalResponse
+	(*PutSecretRequest)(nil),                   // 16: novaforge.gates.v1.PutSecretRequest
+	(*PutSecretResponse)(nil),                  // 17: novaforge.gates.v1.PutSecretResponse
+	(*IssueJobLeaseRequest)(nil),               // 18: novaforge.gates.v1.IssueJobLeaseRequest
+	(*IssueJobLeaseResponse)(nil),              // 19: novaforge.gates.v1.IssueJobLeaseResponse
+	(*IssueLeaseRequest)(nil),                  // 20: novaforge.gates.v1.IssueLeaseRequest
+	(*IssueLeaseResponse)(nil),                 // 21: novaforge.gates.v1.IssueLeaseResponse
+	(*RedeemLeaseRequest)(nil),                 // 22: novaforge.gates.v1.RedeemLeaseRequest
+	(*RedeemLeaseResponse)(nil),                // 23: novaforge.gates.v1.RedeemLeaseResponse
+	(*SecretReference)(nil),                    // 24: novaforge.gates.v1.SecretReference
+	(*ListSecretsRequest)(nil),                 // 25: novaforge.gates.v1.ListSecretsRequest
+	(*ListSecretsResponse)(nil),                // 26: novaforge.gates.v1.ListSecretsResponse
+	(*Lease)(nil),                              // 27: novaforge.gates.v1.Lease
+	(*ListLeasesRequest)(nil),                  // 28: novaforge.gates.v1.ListLeasesRequest
+	(*ListLeasesResponse)(nil),                 // 29: novaforge.gates.v1.ListLeasesResponse
+	(*RevokeLeaseRequest)(nil),                 // 30: novaforge.gates.v1.RevokeLeaseRequest
+	(*RevokeLeaseResponse)(nil),                // 31: novaforge.gates.v1.RevokeLeaseResponse
+	(*GateConfig)(nil),                         // 32: novaforge.gates.v1.GateConfig
+	(*ListGateConfigRequest)(nil),              // 33: novaforge.gates.v1.ListGateConfigRequest
+	(*ListGateConfigResponse)(nil),             // 34: novaforge.gates.v1.ListGateConfigResponse
+	(*ProposeGateChangeRequest)(nil),           // 35: novaforge.gates.v1.ProposeGateChangeRequest
+	(*ProposeGateChangeResponse)(nil),          // 36: novaforge.gates.v1.ProposeGateChangeResponse
+	(*RevokeRunLeasesRequest)(nil),             // 37: novaforge.gates.v1.RevokeRunLeasesRequest
+	(*RevokeRunLeasesResponse)(nil),            // 38: novaforge.gates.v1.RevokeRunLeasesResponse
+	(*RetryCredentialRevocationsRequest)(nil),  // 39: novaforge.gates.v1.RetryCredentialRevocationsRequest
+	(*RetryCredentialRevocationsResponse)(nil), // 40: novaforge.gates.v1.RetryCredentialRevocationsResponse
 }
 var file_novaforge_gates_v1_gates_proto_depIdxs = []int32{
 	0,  // 0: novaforge.gates.v1.ListCoverageHistoryResponse.evaluations:type_name -> novaforge.gates.v1.Evaluation
@@ -2481,26 +2721,30 @@ var file_novaforge_gates_v1_gates_proto_depIdxs = []int32{
 	16, // 21: novaforge.gates.v1.GatesService.PutSecret:input_type -> novaforge.gates.v1.PutSecretRequest
 	18, // 22: novaforge.gates.v1.GatesService.IssueJobLease:input_type -> novaforge.gates.v1.IssueJobLeaseRequest
 	30, // 23: novaforge.gates.v1.GatesService.RevokeLease:input_type -> novaforge.gates.v1.RevokeLeaseRequest
-	33, // 24: novaforge.gates.v1.GatesService.ListGateConfig:input_type -> novaforge.gates.v1.ListGateConfigRequest
-	35, // 25: novaforge.gates.v1.GatesService.ProposeGateChange:input_type -> novaforge.gates.v1.ProposeGateChangeRequest
-	4,  // 26: novaforge.gates.v1.GatesService.Evaluate:output_type -> novaforge.gates.v1.EvaluateResponse
-	6,  // 27: novaforge.gates.v1.GatesService.MayMerge:output_type -> novaforge.gates.v1.MayMergeResponse
-	8,  // 28: novaforge.gates.v1.GatesService.ListEvaluations:output_type -> novaforge.gates.v1.ListEvaluationsResponse
-	2,  // 29: novaforge.gates.v1.GatesService.ListCoverageHistory:output_type -> novaforge.gates.v1.ListCoverageHistoryResponse
-	13, // 30: novaforge.gates.v1.GatesService.RequestApproval:output_type -> novaforge.gates.v1.RequestApprovalResponse
-	15, // 31: novaforge.gates.v1.GatesService.ResolveApproval:output_type -> novaforge.gates.v1.ResolveApprovalResponse
-	21, // 32: novaforge.gates.v1.GatesService.IssueLease:output_type -> novaforge.gates.v1.IssueLeaseResponse
-	23, // 33: novaforge.gates.v1.GatesService.RedeemLease:output_type -> novaforge.gates.v1.RedeemLeaseResponse
-	26, // 34: novaforge.gates.v1.GatesService.ListSecrets:output_type -> novaforge.gates.v1.ListSecretsResponse
-	29, // 35: novaforge.gates.v1.GatesService.ListLeases:output_type -> novaforge.gates.v1.ListLeasesResponse
-	11, // 36: novaforge.gates.v1.GatesService.ListApprovals:output_type -> novaforge.gates.v1.ListApprovalsResponse
-	17, // 37: novaforge.gates.v1.GatesService.PutSecret:output_type -> novaforge.gates.v1.PutSecretResponse
-	19, // 38: novaforge.gates.v1.GatesService.IssueJobLease:output_type -> novaforge.gates.v1.IssueJobLeaseResponse
-	31, // 39: novaforge.gates.v1.GatesService.RevokeLease:output_type -> novaforge.gates.v1.RevokeLeaseResponse
-	34, // 40: novaforge.gates.v1.GatesService.ListGateConfig:output_type -> novaforge.gates.v1.ListGateConfigResponse
-	36, // 41: novaforge.gates.v1.GatesService.ProposeGateChange:output_type -> novaforge.gates.v1.ProposeGateChangeResponse
-	26, // [26:42] is the sub-list for method output_type
-	10, // [10:26] is the sub-list for method input_type
+	37, // 24: novaforge.gates.v1.GatesService.RevokeRunLeases:input_type -> novaforge.gates.v1.RevokeRunLeasesRequest
+	39, // 25: novaforge.gates.v1.GatesService.RetryCredentialRevocations:input_type -> novaforge.gates.v1.RetryCredentialRevocationsRequest
+	33, // 26: novaforge.gates.v1.GatesService.ListGateConfig:input_type -> novaforge.gates.v1.ListGateConfigRequest
+	35, // 27: novaforge.gates.v1.GatesService.ProposeGateChange:input_type -> novaforge.gates.v1.ProposeGateChangeRequest
+	4,  // 28: novaforge.gates.v1.GatesService.Evaluate:output_type -> novaforge.gates.v1.EvaluateResponse
+	6,  // 29: novaforge.gates.v1.GatesService.MayMerge:output_type -> novaforge.gates.v1.MayMergeResponse
+	8,  // 30: novaforge.gates.v1.GatesService.ListEvaluations:output_type -> novaforge.gates.v1.ListEvaluationsResponse
+	2,  // 31: novaforge.gates.v1.GatesService.ListCoverageHistory:output_type -> novaforge.gates.v1.ListCoverageHistoryResponse
+	13, // 32: novaforge.gates.v1.GatesService.RequestApproval:output_type -> novaforge.gates.v1.RequestApprovalResponse
+	15, // 33: novaforge.gates.v1.GatesService.ResolveApproval:output_type -> novaforge.gates.v1.ResolveApprovalResponse
+	21, // 34: novaforge.gates.v1.GatesService.IssueLease:output_type -> novaforge.gates.v1.IssueLeaseResponse
+	23, // 35: novaforge.gates.v1.GatesService.RedeemLease:output_type -> novaforge.gates.v1.RedeemLeaseResponse
+	26, // 36: novaforge.gates.v1.GatesService.ListSecrets:output_type -> novaforge.gates.v1.ListSecretsResponse
+	29, // 37: novaforge.gates.v1.GatesService.ListLeases:output_type -> novaforge.gates.v1.ListLeasesResponse
+	11, // 38: novaforge.gates.v1.GatesService.ListApprovals:output_type -> novaforge.gates.v1.ListApprovalsResponse
+	17, // 39: novaforge.gates.v1.GatesService.PutSecret:output_type -> novaforge.gates.v1.PutSecretResponse
+	19, // 40: novaforge.gates.v1.GatesService.IssueJobLease:output_type -> novaforge.gates.v1.IssueJobLeaseResponse
+	31, // 41: novaforge.gates.v1.GatesService.RevokeLease:output_type -> novaforge.gates.v1.RevokeLeaseResponse
+	38, // 42: novaforge.gates.v1.GatesService.RevokeRunLeases:output_type -> novaforge.gates.v1.RevokeRunLeasesResponse
+	40, // 43: novaforge.gates.v1.GatesService.RetryCredentialRevocations:output_type -> novaforge.gates.v1.RetryCredentialRevocationsResponse
+	34, // 44: novaforge.gates.v1.GatesService.ListGateConfig:output_type -> novaforge.gates.v1.ListGateConfigResponse
+	36, // 45: novaforge.gates.v1.GatesService.ProposeGateChange:output_type -> novaforge.gates.v1.ProposeGateChangeResponse
+	28, // [28:46] is the sub-list for method output_type
+	10, // [10:28] is the sub-list for method input_type
 	10, // [10:10] is the sub-list for extension type_name
 	10, // [10:10] is the sub-list for extension extendee
 	0,  // [0:10] is the sub-list for field type_name
@@ -2519,7 +2763,7 @@ func file_novaforge_gates_v1_gates_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_novaforge_gates_v1_gates_proto_rawDesc), len(file_novaforge_gates_v1_gates_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   37,
+			NumMessages:   41,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

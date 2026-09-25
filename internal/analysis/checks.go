@@ -239,20 +239,11 @@ type osvReport struct {
 	} `json:"results"`
 }
 
-// Vulnerabilities runs osv-scanner over the tree's lockfiles. It covers every
-// ecosystem osv-scanner does, not only Go. osv-scanner exits 1 when it finds
-// something, so the exit code is not treated as failure to run.
+// Vulnerabilities uses only the immutable image's validated offline advisory
+// snapshot. Missing, expired or incomplete data is unavailable, never a clean
+// dependency gate. Exit 1 means findings; other nonzero exits are scan errors.
 func Vulnerabilities(ctx context.Context, run Exec, dir string) ([]Vulnerability, error) {
-	out, exit, err := run(ctx, dir, "osv-scanner", "scan", "source", "--format", "json", "-r", ".")
-	if err != nil {
-		return nil, err
-	}
-	// Exit 128 is osv-scanner's "no lockfiles found": nothing to scan is not
-	// a vulnerability and not an error.
-	if exit == 128 {
-		return nil, nil
-	}
-	return parseOSV(out, dir)
+	return offlineVulnerabilities(ctx, run, dir)
 }
 
 func parseOSV(out []byte, dir string) ([]Vulnerability, error) {

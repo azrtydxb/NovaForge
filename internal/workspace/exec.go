@@ -42,6 +42,9 @@ func (p *Provisioner) WithRESTConfig(cfg *rest.Config) *Provisioner {
 // passes. An agent handed a workspace that never started would see every
 // workspace tool fail with an opaque exec error.
 func (p *Provisioner) WaitReady(ctx context.Context, runID uuid.UUID, timeout time.Duration) error {
+	if _, closed := p.invalidated.Load(runID); closed {
+		return ErrWorkspaceClosed
+	}
 	ns := namespaceFor(runID)
 	var last string
 	err := wait.PollUntilContextTimeout(ctx, time.Second, timeout, true, func(ctx context.Context) (bool, error) {
@@ -84,37 +87,9 @@ type ExecResult struct {
 // non-nil. A command that ran and exited non-zero is a result, not an error:
 // err is reserved for failing to run it at all.
 func (p *Provisioner) Exec(ctx context.Context, runID uuid.UUID, command []string, stdin io.Reader) (ExecResult, error) {
-	if p.restConfig == nil {
-		return ExecResult{}, ErrNoExec
-	}
-	req := p.client.CoreV1().RESTClient().Post().
-		Resource("pods").
-		Namespace(namespaceFor(runID)).
-		Name(podName).
-		SubResource("exec").
-		VersionedParams(&corev1.PodExecOptions{
-			Container: containerName,
-			Command:   command,
-			Stdin:     stdin != nil,
-			Stdout:    true,
-			Stderr:    true,
-		}, scheme.ParameterCodec)
-
-	// WebSocket is the current exec protocol; SPDY is kept as the fallback for
-	// an API server that refuses the upgrade.
-	ws, err := remotecommand.NewWebSocketExecutor(p.restConfig, "GET", req.URL().String())
+	executor, err := p.executor(runID, command, stdin != nil)
 	if err != nil {
-		return ExecResult{}, fmt.Errorf("workspace exec: %w", err)
-	}
-	spdy, err := remotecommand.NewSPDYExecutor(p.restConfig, "POST", req.URL())
-	if err != nil {
-		return ExecResult{}, fmt.Errorf("workspace exec: %w", err)
-	}
-	executor, err := remotecommand.NewFallbackExecutor(ws, spdy, func(err error) bool {
-		return httpstream.IsUpgradeFailure(err) || httpstream.IsHTTPSProxyError(err)
-	})
-	if err != nil {
-		return ExecResult{}, fmt.Errorf("workspace exec: %w", err)
+		return ExecResult{}, err
 	}
 
 	var stdout, stderr bytes.Buffer
@@ -129,4 +104,44 @@ func (p *Provisioner) Exec(ctx context.Context, runID uuid.UUID, command []strin
 		return res, fmt.Errorf("workspace exec: %w", err)
 	}
 	return res, nil
+}
+
+func (p *Provisioner) executor(runID uuid.UUID, command []string, stdin bool) (remotecommand.Executor, error) {
+	if _, closed := p.invalidated.Load(runID); closed {
+		return nil, ErrWorkspaceClosed
+	}
+	if p.restConfig == nil {
+		return nil, ErrNoExec
+	}
+	req := p.client.CoreV1().RESTClient().Post().
+		Resource("pods").
+		Namespace(namespaceFor(runID)).
+		Name(podName).
+		SubResource("exec").
+		VersionedParams(&corev1.PodExecOptions{
+			Container: containerName,
+			Command:   command,
+			Stdin:     stdin,
+			Stdout:    true,
+			Stderr:    true,
+		}, scheme.ParameterCodec)
+
+	// WebSocket is the current exec protocol; SPDY is kept as the fallback for
+	// an API server that refuses the upgrade.
+	ws, err := remotecommand.NewWebSocketExecutor(p.restConfig, "GET", req.URL().String())
+	if err != nil {
+		return nil, fmt.Errorf("workspace exec: %w", err)
+	}
+	spdy, err := remotecommand.NewSPDYExecutor(p.restConfig, "POST", req.URL())
+	if err != nil {
+		return nil, fmt.Errorf("workspace exec: %w", err)
+	}
+	executor, err := remotecommand.NewFallbackExecutor(ws, spdy, func(err error) bool {
+		return httpstream.IsUpgradeFailure(err) || httpstream.IsHTTPSProxyError(err)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("workspace exec: %w", err)
+	}
+
+	return executor, nil
 }

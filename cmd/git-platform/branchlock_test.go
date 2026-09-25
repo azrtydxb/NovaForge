@@ -30,6 +30,7 @@ import (
 	"github.com/novaforge/novaforge/internal/capability"
 	"github.com/novaforge/novaforge/internal/database"
 	"github.com/novaforge/novaforge/internal/gitops"
+	"github.com/novaforge/novaforge/internal/platformtest"
 	"github.com/novaforge/novaforge/internal/svcauth"
 )
 
@@ -122,48 +123,38 @@ func commitFile(t *testing.T, dir, name, content string) {
 // is rejected while a run holds it. It goes through the production path end to
 // end: StartRun locks the run's branch as the run starts, git-platform's real
 // capability function asks agent-runtime over gRPC with a service token, and
-// unmodified git clients push over both transports. Nothing is a stub except
-// who the transports say the caller is and the Work Item read.
+// unmodified git clients push over both transports. Identity and Work own real
+// authenticated admission; the real Runner is held only at inference. Transport
+// caller lookup remains local so both transports exercise this command's guard.
 func TestAgentBranchLockedDuringRun(t *testing.T) {
-	pool := lockTestPool(t)
-	orgID := uuid.New()
-	person := authz.Scope{OrgID: orgID, ActorID: uuid.New(), ActorKind: "user"}
+	p, control := platformtest.StartWithControlledRunner(t)
+	owner := p.NewUser(t, "lockowner")
+	org := p.NewOrg(t, owner, "lockorg")
+	repo := p.NewRepo(t, owner, org, "locked", nil)
+	agentID := p.NewAgent(t, owner, org)
+	item := p.NewWorkItem(t, owner, org, repo)
+	run := p.StartAgentRun(t, owner, org, repo, agentID, item)
+	runID := uuid.MustParse(run.GetId())
+	control.Wait(t, run.GetId())
+
+	orgID := uuid.MustParse(org.ID)
+	person := authz.Scope{OrgID: orgID, ActorID: uuid.MustParse(owner.ID), ActorKind: "user"}
 	personCtx := authz.WithScope(context.Background(), person)
-
-	root := t.TempDir()
-	gitSrv := gitops.NewGRPCServer(pool, root)
-	repoName := "locked-" + uuid.NewString()[:8]
-	repo, err := gitSrv.CreateRepo(personCtx, &gitv1.CreateRepoRequest{Name: repoName})
-	if err != nil {
-		t.Fatalf("CreateRepo: %v", err)
+	waitForState(t, p.AgentStore, personCtx, runID, "running")
+	assertBranchLockLifecycle(t, p, personCtx, p.AsUser(owner, org), runID, item.GetId(), false)
+	prefix := "agents/" + item.GetKey() + "/"
+	if run.GetBranch() != prefix+"work" {
+		t.Fatalf("run branch = %q, want %q", run.GetBranch(), prefix+"work")
 	}
 
-	store := agents.NewStore(pool)
-	grants := capability.NewStore(pool)
-	key := "NF-1"
-	work := &workItemDouble{item: &workv1.WorkItem{Id: uuid.NewString(), Key: key, RepoId: repo.GetRepo().GetId(), State: "open"}}
-	runtime := agents.NewGRPCServer(store, grants, nil, work, nil)
-	client := startAgentRuntime(t, runtime)
-
-	agent, err := store.CreateAgent(personCtx, agents.Agent{OrgID: orgID, Name: "engineer-" + uuid.NewString()[:8], Role: "engineer", ModelRef: "m", Enabled: true})
-	if err != nil {
-		t.Fatalf("CreateAgent: %v", err)
-	}
-	started, err := runtime.StartRun(personCtx, &agentsv1.StartRunRequest{
-		AgentId: agent.ID.String(), RepoId: repo.GetRepo().GetId(), WorkItemKey: key, SponsorId: person.ActorID.String(),
-	})
-	if err != nil {
-		t.Fatalf("StartRun: %v", err)
-	}
-	runID := uuid.MustParse(started.GetRun().GetId())
-	waitForState(t, store, personCtx, runID, "running")
-
-	caps := newCapFunc(grants, newBranchLockGuard(client, testHMACSecret, repoIDResolver(pool)))
+	root, repoName := p.GitRoot, repo.Name
+	gitSrv := gitops.NewGRPCServer(p.Pool, root)
+	caps := newCapFunc(p.Grants, newBranchLockGuard(p.Agents, platformtest.HMACSecret, repoIDResolver(p.Pool)))
 
 	// --- HTTPS transport ---
 	auth := func(ctx context.Context, user, pass, orgRef string) (authz.Scope, error) {
 		if user == "agent" {
-			return authz.Scope{OrgID: orgID, ActorID: agent.ID, ActorKind: "agent"}, nil
+			return authz.Scope{OrgID: orgID, ActorID: uuid.MustParse(agentID), ActorKind: "agent"}, nil
 		}
 		return person, nil
 	}
@@ -176,7 +167,7 @@ func TestAgentBranchLockedDuringRun(t *testing.T) {
 	mustGit(t, "", "clone", "-q", humanURL, human)
 	commitFile(t, human, "person.txt", "a person's change\n")
 
-	for _, ref := range []string{"agents/NF-1/work", "agents/NF-1/another"} {
+	for _, ref := range []string{prefix + "work", prefix + "another"} {
 		out, err := gitIn(t, human, "push", "origin", "HEAD:refs/heads/"+ref)
 		if err == nil {
 			t.Fatalf("a person's HTTPS push to %s was accepted while run %s holds it: %s", ref, runID, out)
@@ -192,7 +183,7 @@ func TestAgentBranchLockedDuringRun(t *testing.T) {
 	agentDir := t.TempDir()
 	mustGit(t, "", "clone", "-q", agentURL, agentDir)
 	commitFile(t, agentDir, "agent.txt", "the agent's work\n")
-	if out, err := gitIn(t, agentDir, "push", "origin", "HEAD:refs/heads/agents/NF-1/work"); err != nil {
+	if out, err := gitIn(t, agentDir, "push", "origin", "HEAD:refs/heads/"+prefix+"work"); err != nil {
 		t.Fatalf("the holding run's agent was refused its own branch: %v — %s", err, out)
 	}
 
@@ -235,7 +226,7 @@ func TestAgentBranchLockedDuringRun(t *testing.T) {
 	if _, err := gitIn(t, human, "remote", "add", "ssh", fmt.Sprintf("ssh://git@127.0.0.1/%s/%s.git", orgID, repoName)); err != nil {
 		t.Fatalf("add ssh remote: %v", err)
 	}
-	out, err := gitIn(t, human, "-c", "core.sshCommand="+sshCmd, "push", "ssh", "HEAD:refs/heads/agents/NF-1/over-ssh")
+	out, err := gitIn(t, human, "-c", "core.sshCommand="+sshCmd, "push", "ssh", "HEAD:refs/heads/"+prefix+"over-ssh")
 	if err == nil {
 		t.Fatalf("a person's SSH push to the locked prefix was accepted: %s", out)
 	}
@@ -247,22 +238,27 @@ func TestAgentBranchLockedDuringRun(t *testing.T) {
 	// A person can also write a ref without pushing: the GUI and MCP create
 	// branches through git-platform's gRPC. The lock holds there too.
 	gitSrv.RefGuard = caps
-	if _, err := gitSrv.CreateBranch(personCtx, &gitv1.CreateBranchRequest{Repo: repoName, Name: "agents/NF-1/by-api", FromRef: "feature/person"}); status.Code(err) != codes.PermissionDenied {
+	if _, err := gitSrv.CreateBranch(personCtx, &gitv1.CreateBranchRequest{Repo: repoName, Name: prefix + "by-api", FromRef: "feature/person"}); status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("CreateBranch under the locked prefix by a person = %v, want PermissionDenied", err)
 	}
-	if _, err := gitSrv.CreateCommit(personCtx, &gitv1.CreateCommitRequest{Repo: repoName, Branch: "agents/NF-1/work", Message: "m",
+	if _, err := gitSrv.CreateCommit(personCtx, &gitv1.CreateCommitRequest{Repo: repoName, Branch: prefix + "work", Message: "m",
 		Files: []*gitv1.FileChange{{Path: "x.txt", Content: []byte("x")}}}); status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("CreateCommit to the locked branch by a person = %v, want PermissionDenied", err)
 	}
 
 	// --- the run ends, and the lock with it ---
-	if _, err := runtime.CancelRun(personCtx, &agentsv1.CancelRunRequest{Id: runID.String()}); err != nil {
+	// Cancellation intent alone cannot release a live execution's lock. Stop
+	// inference and join the real Runner's durable completion and owner cleanup
+	// before requiring the idempotent CancelRun RPC to succeed without retries.
+	control.Stop(t, run.GetId())
+	if _, err := p.Agents.CancelRun(p.AsUser(owner, org), &agentsv1.CancelRunRequest{Id: runID.String()}); err != nil {
 		t.Fatalf("CancelRun: %v", err)
 	}
-	if out, err := gitIn(t, human, "push", "--force", "origin", "HEAD:refs/heads/agents/NF-1/work"); err != nil {
+	assertBranchLockLifecycle(t, p, personCtx, p.AsUser(owner, org), runID, item.GetId(), true)
+	if out, err := gitIn(t, human, "push", "--force", "origin", "HEAD:refs/heads/"+prefix+"work"); err != nil {
 		t.Fatalf("a person's HTTPS push after the run ended was refused: %v — %s", err, out)
 	}
-	if out, err := gitIn(t, human, "-c", "core.sshCommand="+sshCmd, "push", "ssh", "HEAD:refs/heads/agents/NF-1/over-ssh"); err != nil {
+	if out, err := gitIn(t, human, "-c", "core.sshCommand="+sshCmd, "push", "ssh", "HEAD:refs/heads/"+prefix+"over-ssh"); err != nil {
 		t.Fatalf("a person's SSH push after the run ended was refused: %v — %s", err, out)
 	}
 }

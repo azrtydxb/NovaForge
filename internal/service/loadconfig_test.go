@@ -29,8 +29,14 @@ func TestLoadConfigPopulatesEveryField(t *testing.T) {
 		"AI_MODEL_PRICES": `{"m":{"input_micros_per_million_tokens":1,"output_micros_per_million_tokens":1}}`,
 		"EMBED_ENDPOINT":  "http://m/v1", "EMBED_MODEL": "e",
 		"AUTO_MERGE_ENABLED": "true", "AUTO_MERGE_MAX_FILES_CHANGED": "7",
-		"MAINTENANCE_INTERVAL_HOURS": "9",
-		"JWT_SECRET":                 "j", "HMAC_SECRET": "h", "SECRETS_KEK": "kek",
+		"MAINTENANCE_INTERVAL_HOURS":       "9",
+		"NF_GATE_ANALYSIS_IMAGE":           "registry.example/analysis@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		"NF_OPENBAO_CONFIG_FILE":           "/etc/novaforge/openbao.json",
+		"NF_MCP_HTTP_CONFIG_FILE":          "/etc/novaforge/mcp.json",
+		"NF_REVIEW_CONFIG_FILE":            "/etc/novaforge/review.json",
+		"NF_DEPLOYMENT_CONFIG_FILE":        "/etc/novaforge/deployment.json",
+		"NF_SEMANTIC_PRODUCER_CONFIG_FILE": "/etc/novaforge/semantic.json",
+		"JWT_SECRET":                       "j", "HMAC_SECRET": "h", "SECRETS_KEK": "kek",
 	}
 	for k, v := range env {
 		t.Setenv(k, v)

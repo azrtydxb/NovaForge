@@ -31,7 +31,7 @@ func runLookupOrgChecked(orgID, repoID uuid.UUID, targetRef, headSHA string) gat
 		if err != nil || scope.OrgID != orgID {
 			return gates.RunHead{}, status.Error(codes.PermissionDenied, "run does not belong to this organization")
 		}
-		return gates.RunHead{OrgID: orgID, RepoID: repoID, TargetRef: targetRef, HeadSHA: headSHA}, nil
+		return gates.RunHead{OrgID: orgID, RepoID: repoID, TargetRef: targetRef, TargetSHA: "bbb", HeadSHA: headSHA}, nil
 	}
 }
 
@@ -43,21 +43,24 @@ func TestMayMergeRequiresOrgScope(t *testing.T) {
 	repoID := uuid.New()
 	runID := uuid.New()
 	store := newStore(t)
+	git := singleGateGit()
+	git.tree["bbb"] = git.tree["main"]
+	git.blobs["bbb|.novaforge/gates/tests.yaml"] = git.blobs["main|.novaforge/gates/tests.yaml"]
 	controller := &gates.Controller{
 		Store: store,
-		Git:   singleGateGit(),
+		Git:   git,
 		Runs:  runLookupOrgChecked(orgID, repoID, "main", "aaa"),
 	}
 	srv := gates.NewGRPCServer(controller, nil, nil, nil)
 
 	foreignOrg := uuid.New()
-	_, err := srv.MayMerge(scopedCtx(foreignOrg), &gatesv1.MayMergeRequest{RunId: runID.String()})
+	_, err := srv.MayMerge(scopedCtx(foreignOrg), &gatesv1.MayMergeRequest{RunId: runID.String(), ExpectedSourceSha: "aaa", ExpectedTargetSha: "bbb"})
 	if status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("MayMerge for foreign org: code = %v, want PermissionDenied", status.Code(err))
 	}
 
 	// Sanity: the same call succeeds for the run's actual organization.
-	_, err = srv.MayMerge(scopedCtx(orgID), &gatesv1.MayMergeRequest{RunId: runID.String()})
+	_, err = srv.MayMerge(scopedCtx(orgID), &gatesv1.MayMergeRequest{RunId: runID.String(), ExpectedSourceSha: "aaa", ExpectedTargetSha: "bbb"})
 	if err != nil {
 		t.Fatalf("MayMerge for the run's own org: %v", err)
 	}

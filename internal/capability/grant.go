@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/novaforge/novaforge/internal/authz"
 )
 
 // Grant is a scoped capability issued to a user or an agent within an
@@ -31,6 +32,8 @@ type Grant struct {
 	DeployProd    bool
 	ExpiresAt     time.Time
 }
+
+var ErrGrantExpired = errors.New("grant expired")
 
 const refHeadsPrefix = "refs/heads/"
 
@@ -98,7 +101,7 @@ func (s *Store) Resolve(ctx context.Context, id uuid.UUID) (Grant, error) {
 		return Grant{}, fmt.Errorf("resolve capability grant %s: %w", id, err)
 	}
 	if g.ExpiresAt.Before(time.Now()) {
-		return Grant{}, errors.New("grant expired")
+		return Grant{}, ErrGrantExpired
 	}
 	return g, nil
 }
@@ -134,4 +137,43 @@ func (s *Store) ListActive(ctx context.Context, orgID, subjectID uuid.UUID) ([]G
 		return nil, fmt.Errorf("list active capability grants: %w", err)
 	}
 	return grants, nil
+}
+
+// Revoke expires exactly one grant in the caller's organization. Missing or
+// already expired grants are success: retry after a lost RPC response must
+// not resurrect authority or require knowing whether the first call landed.
+// Resolve and ListActive both consult this persisted expiry on each call.
+func (s *Store) Revoke(ctx context.Context, id uuid.UUID) error {
+	scope, err := authz.FromContext(ctx)
+	if err != nil {
+		return err
+	}
+	if err := authz.RequireOrg(ctx, scope.OrgID); err != nil {
+		return err
+	}
+	_, err = s.pool.Exec(ctx, `UPDATE gitplatform.capability_grants SET expires_at=LEAST(expires_at,'epoch'::timestamptz) WHERE id=$1 AND org_id=$2`, id, scope.OrgID)
+	if err != nil {
+		return fmt.Errorf("revoke capability grant: %w", err)
+	}
+	return nil
+}
+
+// ResolveScoped is the Identity RPC read path; no foreign row is read first.
+func (s *Store) ResolveScoped(ctx context.Context, id uuid.UUID) (Grant, error) {
+	scope, err := authz.FromContext(ctx)
+	if err != nil {
+		return Grant{}, err
+	}
+	if err = authz.RequireOrg(ctx, scope.OrgID); err != nil {
+		return Grant{}, err
+	}
+	var g Grant
+	err = s.pool.QueryRow(ctx, `SELECT id,org_id,subject_id,subject_kind,repo_read,write_branch,secrets_prod,deploy_staging,deploy_prod,expires_at FROM gitplatform.capability_grants WHERE id=$1 AND org_id=$2`, id, scope.OrgID).Scan(&g.ID, &g.OrgID, &g.SubjectID, &g.SubjectKind, &g.RepoRead, &g.WriteBranch, &g.SecretsProd, &g.DeployStaging, &g.DeployProd, &g.ExpiresAt)
+	if err != nil {
+		return Grant{}, err
+	}
+	if !g.ExpiresAt.After(time.Now()) {
+		return Grant{}, ErrGrantExpired
+	}
+	return g, nil
 }

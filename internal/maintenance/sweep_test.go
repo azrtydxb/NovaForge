@@ -19,6 +19,8 @@ import (
 	"google.golang.org/grpc/status"
 
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
+	"github.com/novaforge/novaforge/internal/analysis"
+	"github.com/novaforge/novaforge/internal/analysistest"
 	"github.com/novaforge/novaforge/internal/authz"
 	"github.com/novaforge/novaforge/internal/database"
 	"github.com/novaforge/novaforge/internal/gitops"
@@ -109,6 +111,9 @@ func TestMaintenanceProposesWorkItem(t *testing.T) {
 	}
 
 	sweeper := maintenance.NewSweeper(store, git, sweepSecret)
+	// The host fixture has no image filesystem. Stage real advisory bytes and
+	// map only tool/data paths; do not replace scanner findings or outcomes.
+	sweeper.Exec, _ = analysistest.OfflineFixture(t, analysis.DefaultExec)
 	var benchmark benchmarkEvidence
 	sweeper.CI, benchmark = historyCI(t, orgID, uuid.MustParse(repo.GetRepo().GetId()))
 	sweeper.Gates = coverageHistory(t, orgID, uuid.MustParse(repo.GetRepo().GetId()))

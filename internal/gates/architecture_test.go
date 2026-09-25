@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/novaforge/novaforge/internal/analysis"
 	"github.com/novaforge/novaforge/internal/gates"
 )
 
@@ -24,7 +25,9 @@ func mustWriteFile(t *testing.T, path, content string) {
 
 // archFixture builds a tiny real Go module in a temp dir with two packages,
 // frontend and database, where frontend imports database — so the
-// architecture gate has a real import graph to walk with go/packages.
+// architecture gate has a real import graph to walk with go list. These
+// component tests explicitly execute only this test-authored source locally;
+// they do not qualify sandbox isolation or add a production fallback.
 func archFixture(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -43,6 +46,7 @@ func TestForbiddenDependencyDetected(t *testing.T) {
 		WorkDir:   dir,
 		TargetSHA: "aaa",
 		Params:    map[string]any{"forbidden_dependencies": []any{"frontend -> database"}},
+		Exec:      analysis.DefaultExec,
 	}
 
 	eval, err := gates.Runners["architecture"](context.Background(), in)
@@ -64,6 +68,7 @@ func TestAllowedDependencyPasses(t *testing.T) {
 		WorkDir:   dir,
 		TargetSHA: "aaa",
 		Params:    map[string]any{"forbidden_dependencies": []any{"database -> frontend"}},
+		Exec:      analysis.DefaultExec,
 	}
 
 	eval, err := gates.Runners["architecture"](context.Background(), in)

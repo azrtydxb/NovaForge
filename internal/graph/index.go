@@ -108,7 +108,7 @@ func (s *Store) ReplaceFileIndex(ctx context.Context, fi FileIndex) error {
 	if err := authz.RequireOrg(ctx, fi.OrgID); err != nil {
 		return err
 	}
-	tx, err := s.pool.Begin(ctx)
+	tx, err := beginIndexWrite(ctx, s.pool, fi.OrgID, fi.RepoID)
 	if err != nil {
 		return fmt.Errorf("begin: %w", err)
 	}
@@ -126,6 +126,7 @@ func (s *Store) ReplaceFileIndex(ctx context.Context, fi FileIndex) error {
 	if fi.Evidence != nil {
 		attrs["source_hash"] = fi.Evidence.ContentHash
 		attrs["module_hash"] = fi.Evidence.ModuleHash
+		attrs["module_path"] = fi.Evidence.ModulePath
 		if fi.Evidence.Complete {
 			attrs["parse_complete"] = "true"
 		}
@@ -240,7 +241,7 @@ func (s *Store) RemoveFileIndex(ctx context.Context, orgID, repoID uuid.UUID, pa
 	if err := authz.RequireOrg(ctx, orgID); err != nil {
 		return err
 	}
-	tx, err := s.pool.Begin(ctx)
+	tx, err := beginIndexWrite(ctx, s.pool, orgID, repoID)
 	if err != nil {
 		return fmt.Errorf("begin: %w", err)
 	}

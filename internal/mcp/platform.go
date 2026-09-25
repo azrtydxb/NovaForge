@@ -238,6 +238,22 @@ func (b *PlatformBackend) RunCI(ctx context.Context, c Caller, org, repo, ref st
 	return marshalOpts.Format(resp.GetRun()), nil
 }
 
+// gateRefHead resolves through the Git owner with the same caller credential.
+// An absent ref must not fall back to HEAD and invent a policy baseline.
+func (b *PlatformBackend) gateRefHead(ctx context.Context, repoID, ref string) (string, error) {
+	if repoID == "" || ref == "" {
+		return "", fmt.Errorf("gate status needs an explicit repository and reference")
+	}
+	resp, err := b.c.Git.ListCommits(ctx, &gitv1.ListCommitsRequest{Repo: repoID, Ref: ref, Limit: 1})
+	if err != nil {
+		return "", fmt.Errorf("resolve gate reference %q: %w", ref, err)
+	}
+	if len(resp.GetCommits()) != 1 || resp.GetCommits()[0].GetSha() == "" {
+		return "", fmt.Errorf("gate reference %q has no unambiguous commit", ref)
+	}
+	return resp.GetCommits()[0].GetSha(), nil
+}
+
 // GetGateStatus reports the gate evaluations of a review run, addressed by
 // its number, together with whether the run may merge right now. The
 // evaluations alone cannot say that: a gate that was never evaluated has no
@@ -247,7 +263,18 @@ func (b *PlatformBackend) GetGateStatus(ctx context.Context, c Caller, org, repo
 	if err != nil {
 		return "", err
 	}
+	if b.c.Gates == nil || b.c.Git == nil || b.c.Reviews == nil {
+		return "", fmt.Errorf("gate status needs the gates, Git and reviews services")
+	}
 	run, err := b.reviewRunByNumber(authed, repo, number)
+	if err != nil {
+		return "", err
+	}
+	source, err := b.gateRefHead(authed, run.GetRepoId(), run.GetSourceRef())
+	if err != nil {
+		return "", err
+	}
+	target, err := b.gateRefHead(authed, run.GetRepoId(), run.GetTargetRef())
 	if err != nil {
 		return "", err
 	}
@@ -255,9 +282,14 @@ func (b *PlatformBackend) GetGateStatus(ctx context.Context, c Caller, org, repo
 	if err != nil {
 		return "", fmt.Errorf("list gate evaluations for run #%d: %w", number, err)
 	}
-	may, err := b.c.Gates.MayMerge(authed, &gatesv1.MayMergeRequest{RunId: run.GetId()})
+	may, err := b.c.Gates.MayMerge(authed, &gatesv1.MayMergeRequest{RunId: run.GetId(), ExpectedSourceSha: source, ExpectedTargetSha: target})
 	if err != nil {
 		return "", fmt.Errorf("ask whether run #%d may merge: %w", number, err)
+	}
+	// Even an allowed response from an older or stale owner cannot authorize
+	// a different source/policy baseline than the caller actually resolved.
+	if may.GetEvaluatedSourceSha() != source || may.GetEvaluatedTargetSha() != target {
+		return "", fmt.Errorf("gate owner did not evaluate the requested source/target pair")
 	}
 	reasons := may.GetReasons()
 	if reasons == nil {
@@ -266,9 +298,11 @@ func (b *PlatformBackend) GetGateStatus(ctx context.Context, c Caller, org, repo
 	out, err := json.Marshal(struct {
 		Run         int             `json:"run"`
 		MayMerge    bool            `json:"may_merge"`
+		SourceSHA   string          `json:"source_sha"`
+		TargetSHA   string          `json:"target_sha"`
 		Reasons     []string        `json:"reasons"`
 		Evaluations json.RawMessage `json:"evaluations"`
-	}{number, may.GetAllowed(), reasons, json.RawMessage(marshalOpts.Format(evals))})
+	}{number, may.GetAllowed(), source, target, reasons, json.RawMessage(marshalOpts.Format(evals))})
 	if err != nil {
 		return "", fmt.Errorf("encode gate status: %w", err)
 	}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"strings"
 	"time"
 
@@ -25,17 +26,24 @@ const hardStepCap = 200
 
 // Result is the outcome of one Loop.Execute call.
 type Result struct {
-	State      string
-	Steps      int
-	TokensUsed int64
-	CostMicros int64
-	Summary    string
+	Model            string
+	State            string
+	Steps            int
+	TokensUsed       int64
+	CostMicros       int64
+	Summary          string
+	TokensAvailable  bool
+	CostAvailable    bool
+	PersistenceError error
+	Completion       agents.Completion
 }
 
 // Loop drives one agent run's model/tool loop.
 type Loop struct {
-	Model  provider.LanguageModel
-	Budget *agents.Budget
+	// BeforeFinish closes authorized sessions before a success receipt is written.
+	BeforeFinish func(context.Context) error
+	Model        provider.LanguageModel
+	Budget       *agents.Budget
 
 	// Audit, when non-nil, receives a final "run.summary" entry recording
 	// the run's outcome — the loop's only persisted evidence beyond the
@@ -48,7 +56,7 @@ type Loop struct {
 	// loop makes.
 	ProviderOptions map[string]any
 
-	// Runs, when non-nil, receives the run's token spend when it finishes.
+	// Runs, when non-nil, atomically receives outcome, spend and final evidence.
 	Runs *agents.Store
 
 	// Criteria, when non-nil, reads the run's Work Item so a run that stops
@@ -79,6 +87,11 @@ func NewLoop(model provider.LanguageModel, budget *agents.Budget, audit *agents.
 // are persisted: tool calls through reg's audit log, and a final summary
 // string through l.Audit. Model reasoning is never written to any table.
 func (l *Loop) Execute(ctx context.Context, run agents.Run, reg *tools.Registry) (Result, error) {
+	if l.Runs != nil {
+		var stopWatching context.CancelFunc
+		ctx, stopWatching = l.Runs.WithRunCancellation(ctx, run.ID)
+		defer stopWatching()
+	}
 	toolDefs := buildToolDefs(reg)
 
 	// The agent is told what it is working on, not just that it is working.
@@ -105,14 +118,17 @@ func (l *Loop) Execute(ctx context.Context, run agents.Run, reg *tools.Registry)
 	// only a comparison between steps: a model call that never returned used
 	// to hold the run past its limit for as long as the call took, which for a
 	// hung gateway is forever.
-	ctx, stopClock := context.WithDeadline(ctx, l.Budget.Deadline())
+	ctx, stopClock := context.WithDeadlineCause(ctx, l.Budget.Deadline(), agents.ErrOverBudget)
 	defer stopClock()
 
 	var steps int
-	var spent spend
+	spent := spend{tokensAvailable: true, costAvailable: l.Price != nil}
 	var evidence []evidenceStep
 
 	for {
+		if errors.Is(context.Cause(ctx), tools.ErrMCPStdioClosed) {
+			return l.finish(ctx, run, "failed", steps, spent, "stdio session invalidated workspace")
+		}
 		if l.cancelled(ctx, run) {
 			return l.finish(ctx, run, "cancelled", steps, spent, "run cancelled before model call")
 		}
@@ -129,6 +145,11 @@ func (l *Loop) Execute(ctx context.Context, run agents.Run, reg *tools.Registry)
 			ProviderOptions: l.ProviderOptions,
 		})
 		if err != nil {
+			spent.tokensAvailable = false
+			spent.costAvailable = false
+			if resp != nil {
+				spent = l.account(spent, resp.Usage)
+			}
 			// CancelRun aborts an in-flight call by cancelling ctx; that is a
 			// cancellation, not a model failure, and must be recorded as one.
 			if l.cancelled(ctx, run) {
@@ -141,8 +162,19 @@ func (l *Loop) Execute(ctx context.Context, run agents.Run, reg *tools.Registry)
 			}
 			return l.finish(ctx, run, "failed", steps, spent, fmt.Sprintf("model call failed: %v", err))
 		}
+		if resp == nil {
+			spent.tokensAvailable = false
+			spent.costAvailable = false
+			return l.finish(ctx, run, "failed", steps, spent, "model returned no response; accounting unavailable")
+		}
 		steps++
 		spent = l.account(spent, resp.Usage)
+		if err := modelUsage(resp.Usage, l.Price != nil); err != nil {
+			return l.finish(ctx, run, "failed", steps, spent, err.Error())
+		}
+		if err := l.overBudget(ctx); err != nil {
+			return l.finish(ctx, run, "over_budget", steps, spent, "budget exceeded during model call: "+err.Error())
+		}
 
 		calls := resp.ToolCalls()
 		if len(calls) == 0 {
@@ -154,9 +186,17 @@ func (l *Loop) Execute(ctx context.Context, run agents.Run, reg *tools.Registry)
 			if l.Criteria == nil {
 				return l.finish(ctx, run, "succeeded", steps, spent, resp.Text())
 			}
+			if errors.Is(context.Cause(ctx), tools.ErrMCPStdioClosed) {
+				return l.finish(ctx, run, "failed", steps, spent, "stdio session invalidated workspace")
+			}
 			state, summary, verifyUsage := l.verify(ctx, run, evidence, resp.Text())
-			spent = l.account(spent, verifyUsage)
-			if budgetErr := l.overBudget(ctx); budgetErr != nil && state != "succeeded" {
+			if verifyUsage != nil {
+				spent = l.account(spent, *verifyUsage)
+			}
+			if l.cancelled(ctx, run) {
+				return l.finish(ctx, run, "cancelled", steps, spent, "run cancelled during verification")
+			}
+			if budgetErr := l.overBudget(ctx); budgetErr != nil {
 				return l.finish(ctx, run, "over_budget", steps, spent, "budget exceeded during verification: "+budgetErr.Error())
 			}
 			return l.finish(ctx, run, state, steps, spent, summary)
@@ -165,6 +205,9 @@ func (l *Loop) Execute(ctx context.Context, run agents.Run, reg *tools.Registry)
 		messages = append(messages, assistantMessage(resp, calls))
 
 		for _, call := range calls {
+			if errors.Is(context.Cause(ctx), tools.ErrMCPStdioClosed) {
+				return l.finish(ctx, run, "failed", steps, spent, "stdio session invalidated workspace")
+			}
 			if l.cancelled(ctx, run) {
 				return l.finish(ctx, run, "cancelled", steps, spent, "run cancelled before tool call")
 			}
@@ -173,6 +216,9 @@ func (l *Loop) Execute(ctx context.Context, run agents.Run, reg *tools.Registry)
 			}
 
 			result, callErr := reg.Call(ctx, run.ID, call.Name, call.Args)
+			if errors.Is(callErr, tools.ErrAuditUnavailable) {
+				return l.finish(ctx, run, "failed", steps, spent, "tool audit persistence unavailable")
+			}
 			messages = append(messages, toolResultMessage(call, result, callErr))
 			step := evidenceStep{Tool: call.Name, Args: string(call.Args), Result: string(result)}
 			if callErr != nil {
@@ -185,23 +231,64 @@ func (l *Loop) Execute(ctx context.Context, run agents.Run, reg *tools.Registry)
 
 // spend is what the loop has consumed so far.
 type spend struct {
-	tokens     int64
-	costMicros int64
+	tokens          int64
+	costMicros      int64
+	tokensAvailable bool
+	costAvailable   bool
 }
 
 // account adds one model response's usage to the run's spend and its budget.
 // Cost accrues only when the deployment prices the model's tokens; a run in
 // an unpriced deployment has no cost limit to reach (StartRun refuses one).
 func (l *Loop) account(s spend, usage provider.Usage) spend {
+	if modelUsage(usage, false) != nil {
+		s.tokensAvailable = false
+		s.costAvailable = false
+	}
+	if l.Price == nil || modelUsage(usage, true) != nil {
+		s.costAvailable = false
+	}
 	tokens := int64(usage.TotalTokens)
-	s.tokens += tokens
+	if usage.InputTokens >= 0 && usage.OutputTokens >= 0 {
+		parts := int64(usage.InputTokens) + int64(usage.OutputTokens)
+		if int64(usage.InputTokens) > math.MaxInt64-int64(usage.OutputTokens) {
+			parts = math.MaxInt64
+			l.Budget.MarkOverflow()
+		}
+		if parts > tokens {
+			tokens = parts
+		}
+	}
+	if tokens < 0 {
+		tokens = 0
+	}
 	l.Budget.AddTokens(tokens)
-	if l.Price != nil {
-		cost := l.Price.CostMicros(usage.InputTokens, usage.OutputTokens)
-		s.costMicros += cost
+	s.tokens = l.Budget.TokensUsed()
+	if l.Price != nil && usage.InputTokens >= 0 && usage.OutputTokens >= 0 {
+		cost, overflow := l.Price.CostMicrosChecked(usage.InputTokens, usage.OutputTokens)
+		if overflow {
+			l.Budget.MarkOverflow()
+		}
 		l.Budget.AddCostMicros(cost)
+		s.costMicros = l.Budget.CostMicrosUsed()
 	}
 	return s
+}
+
+// modelUsage refuses missing or malformed measurements instead of guessing
+// token counts from text or recording an unpriced response as free. Total
+// tokens alone can bound tokens but cannot price asymmetric input/output.
+func modelUsage(usage provider.Usage, priced bool) error {
+	if usage.TotalTokens < 0 || usage.InputTokens < 0 || usage.OutputTokens < 0 {
+		return fmt.Errorf("model usage is invalid; budget accounting unavailable")
+	}
+	if usage.TotalTokens == 0 && usage.InputTokens == 0 && usage.OutputTokens == 0 {
+		return fmt.Errorf("model returned no token usage; budget accounting unavailable")
+	}
+	if priced && usage.InputTokens == 0 && usage.OutputTokens == 0 {
+		return fmt.Errorf("model returned no input/output usage; cost accounting unavailable")
+	}
+	return nil
 }
 
 // overBudget reports which budget limit the run has exceeded, if any. The
@@ -212,7 +299,7 @@ func (l *Loop) overBudget(ctx context.Context) error {
 	if err := l.Budget.Check(); err != nil {
 		return err
 	}
-	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+	if errors.Is(context.Cause(ctx), agents.ErrOverBudget) {
 		return fmt.Errorf("%w: wallclock limit exceeded (deadline %s passed)", agents.ErrOverBudget, l.Budget.Deadline().UTC().Format(time.RFC3339))
 	}
 	return nil
@@ -226,10 +313,15 @@ func (l *Loop) overBudget(ctx context.Context) error {
 // that is not executing this loop; a cancelled ctx is the faster local
 // signal for the replica that is.
 func (l *Loop) cancelled(ctx context.Context, run agents.Run) bool {
+	if errors.Is(context.Cause(ctx), tools.ErrMCPStdioClosed) {
+		return false
+	}
 	if l.Runs != nil {
-		current, err := l.Runs.GetRun(context.WithoutCancel(ctx), run.ID)
-		if err == nil {
-			return current.State == "cancelled"
+		checkCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+		defer cancel()
+		current, err := l.Runs.GetRun(checkCtx, run.ID)
+		if err == nil && current.State == "cancelled" {
+			return true
 		}
 		// A run whose row is gone was purged with its repository or its
 		// organization. Treating that as a transient failure would let the
@@ -239,7 +331,9 @@ func (l *Loop) cancelled(ctx context.Context, run agents.Run) bool {
 		}
 		// A transient read failure must not end a healthy run; the context
 		// is still consulted and the next step boundary checks again.
-		log.Printf("agentrun: check cancellation of run %s: %v", run.ID, err)
+		if err != nil {
+			log.Printf("agentrun: check cancellation of run %s: %v", run.ID, err)
+		}
 	}
 	// A deadline is the wall-clock limit, not a cancellation (see overBudget).
 	return errors.Is(ctx.Err(), context.Canceled)
@@ -297,28 +391,44 @@ func toolResultMessage(call provider.ToolCallPart, result []byte, callErr error)
 // to model reasoning, only the state string and summary text the caller
 // (or the model's own final text, on natural completion) supplied.
 func (l *Loop) finish(ctx context.Context, run agents.Run, state string, steps int, spent spend, summary string) (Result, error) {
+	if errors.Is(context.Cause(ctx), tools.ErrMCPStdioClosed) {
+		state = "failed"
+		summary = "stdio session invalidated workspace"
+	}
+	if l.BeforeFinish != nil {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 65*time.Second)
+		err := l.BeforeFinish(cleanupCtx)
+		cancel()
+		if err != nil {
+			state = "failed"
+			summary = "workspace teardown unconfirmed; cleanup pending"
+		}
+	}
 	// A cancelled run's context is already done, and its evidence must still
 	// be written — otherwise the spend and summary of exactly the runs someone
 	// chose to stop are the ones lost.
-	ctx = context.WithoutCancel(ctx)
-	// What the run spent is recorded before anything else: the budget was
-	// enforced in memory, and without this the number is gone the moment the
-	// process moves on.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	result := Result{State: state, Steps: steps, TokensUsed: spent.tokens, CostMicros: spent.costMicros, Summary: summary, TokensAvailable: spent.tokensAvailable, CostAvailable: spent.costAvailable}
+	result.Completion = agents.Completion{State: state, Summary: summary, Spend: agents.Spend{Tokens: spent.tokens, CostMicros: spent.costMicros, Reason: endReason(state, summary), TokensAvailable: spent.tokensAvailable, CostAvailable: spent.costAvailable}}
 	if l.Runs != nil {
-		if err := l.Runs.RecordSpend(ctx, run.ID, agents.Spend{Tokens: spent.tokens, CostMicros: spent.costMicros, Reason: endReason(state, summary)}); err != nil {
-			log.Printf("agentrun: record spend for run %s: %v", run.ID, err)
+		durableState, err := l.Runs.CompleteRun(ctx, run.ID, result.Completion)
+		result.PersistenceError = err
+		if err == nil {
+			result.State = durableState
 		}
+		return result, err
 	}
 	if l.Audit != nil {
-		argsJSON, err := json.Marshal(map[string]string{"state": state, "summary": summary})
+		argsJSON, _ := json.Marshal(map[string]string{"state": state, "summary": summary})
+		id, err := l.Audit.Record(ctx, agents.Entry{RunID: run.ID, Tool: "run.summary", ArgsJSON: argsJSON})
 		if err == nil {
-			id, recErr := l.Audit.Record(ctx, agents.Entry{RunID: run.ID, Tool: "run.summary", ArgsJSON: argsJSON})
-			if recErr == nil {
-				_ = l.Audit.Complete(ctx, id, "ok", "")
-			}
+			err = l.Audit.Complete(ctx, id, "ok", "")
 		}
+		result.PersistenceError = err
+		return result, err
 	}
-	return Result{State: state, Steps: steps, TokensUsed: spent.tokens, CostMicros: spent.costMicros, Summary: summary}, nil
+	return result, nil
 }
 
 // maxEndReason bounds the reason stored on the run row; the full summary is

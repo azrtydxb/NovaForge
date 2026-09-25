@@ -2,10 +2,11 @@ package gates
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"os/exec"
 	"strings"
 
+	"github.com/novaforge/novaforge/internal/analysis"
 	"gopkg.in/yaml.v3"
 )
 
@@ -20,15 +21,23 @@ type openapiDoc struct {
 
 const openapiSpecPath = "api/openapi.yaml"
 
-// gitShowAtSHA reads path as it existed at sha inside the git repository
-// checked out at workdir, by shelling out to the git binary — per the
-// platform's rule that Git is implemented by shelling out rather than a
-// pure-Go library.
-func gitShowAtSHA(ctx context.Context, workdir, sha, path string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "git", "-C", workdir, "show", sha+":"+path)
-	out, err := cmd.Output()
+var errAPISpecMissing = errors.New("OpenAPI spec does not exist at revision")
+
+// Git evidence is read through the injected owner adapter, never a privileged
+// local subprocess. Only a confirmed NotFound permits an absent target spec.
+func gitShowAtSHA(ctx context.Context, run analysis.Exec, workdir, sha, path string) ([]byte, error) {
+	if run == nil || !gateRevision.MatchString(sha) {
+		return nil, fmt.Errorf("immutable API evidence executor/revision missing")
+	}
+	out, exit, err := run(ctx, workdir, "git", "show", sha+":"+path)
 	if err != nil {
-		return nil, fmt.Errorf("git show %s:%s: %w", sha, path, err)
+		return nil, err
+	}
+	if exit == 44 {
+		return nil, errAPISpecMissing
+	}
+	if exit != 0 {
+		return nil, fmt.Errorf("API evidence read failed: exit %d", exit)
 	}
 	return out, nil
 }
@@ -38,12 +47,14 @@ func gitShowAtSHA(ctx context.Context, workdir, sha, path string) ([]byte, error
 // path, method, or required response present at the target is missing at
 // the source.
 func runAPICompat(ctx context.Context, in Input) (Evaluation, error) {
-	targetContent, err := gitShowAtSHA(ctx, in.WorkDir, in.TargetSHA, openapiSpecPath)
+	targetContent, err := gitShowAtSHA(ctx, in.Exec, in.WorkDir, in.PolicySHA, openapiSpecPath)
 	if err != nil {
-		// No spec at the target to break compatibility with.
-		return newEvaluation(in, "api-compatibility", "pass", "no openapi spec at target"), nil
+		if errors.Is(err, errAPISpecMissing) {
+			return newEvaluation(in, "api-compatibility", "pass", "no openapi spec at target"), nil
+		}
+		return toolError(in, "api-compatibility", err)
 	}
-	sourceContent, err := gitShowAtSHA(ctx, in.WorkDir, in.SourceSHA, openapiSpecPath)
+	sourceContent, err := gitShowAtSHA(ctx, in.Exec, in.WorkDir, in.SourceSHA, openapiSpecPath)
 	if err != nil {
 		return newEvaluation(in, "api-compatibility", "error", fmt.Sprintf("read source openapi spec: %v", err)), nil
 	}

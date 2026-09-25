@@ -8,6 +8,10 @@ package novaforge.identity.v1;
 service IdentityService {
   rpc Register(RegisterRequest) returns (RegisterResponse);
   rpc Login(LoginRequest) returns (LoginResponse);
+  rpc LogoutSession(LogoutSessionRequest) returns (LogoutSessionResponse);
+  rpc IssueIntent(IssueIntentRequest) returns (IssueIntentResponse);
+  rpc CancelIssuance(CancelIssuanceRequest) returns (CancelIssuanceResponse);
+  rpc RevokeGrant(RevokeGrantRequest) returns (RevokeGrantResponse);
   rpc ResolveSession(ResolveSessionRequest) returns (ResolveSessionResponse);
   rpc ResolveToken(ResolveTokenRequest) returns (ResolveTokenResponse);
   rpc ResolveFingerprint(ResolveFingerprintRequest) returns (ResolveFingerprintResponse);
@@ -270,3 +274,20 @@ message GetGrantRequest {
 message GetGrantResponse {
   Grant grant = 1;
 }
+
+// Immutable identity; provenance fields are verified against the run owner.
+message GrantIntent {
+  string issuer_id = 1;
+  string issuer_kind = 2;
+  string run_id = 3;
+  Grant grant = 4;
+}
+message IssueIntentRequest { GrantIntent intent = 1; }
+message IssueIntentResponse { Grant grant = 1; }
+message CancelIssuanceRequest { GrantIntent intent = 1; }
+message CancelIssuanceResponse { bool ok = 1; }
+message RevokeGrantRequest { string id = 1; }
+message RevokeGrantResponse { bool ok = 1; }
+// Revokes only the session presented in authorization metadata, never a PAT.
+message LogoutSessionRequest {}
+message LogoutSessionResponse { bool ok = 1; }

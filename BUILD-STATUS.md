@@ -3,7 +3,53 @@
 Autonomous build of the backend described in `.procoder/specs/backend-platform.md`,
 executed against the six plans in `.procoder/plans/`.
 
-## Latest verification and completion scope (2026-09-16)
+## Current integration checkpoint (2026-09-18)
+
+**Completion and activation remain blocked.** The latest parent finish review
+reports 51 canonical test failures and unreconciled planning signals. A separate
+full Go run using an owned database and the explicitly staged OSV fixture has
+five failing top-level tests across CLI/Gates, all stopped at the unconfigured
+analysis sandbox. Four tests explicitly skip hostile-cluster, browser, live-model
+and real-OpenBao qualification. This diagnostic does not replace the canonical
+gate; the existing merge assertions have not been relaxed.
+
+Journal, namespaced lifecycle and recovery enumeration have component-level
+PostgreSQL/race evidence and scoped independent reviews. Recovery enumeration
+is not wired into startup or an authenticated recovery worker. Reopening a store
+is not actual process-restart evidence. Executor transport/dependency experiments
+remain in temporary copies, not adopted dependencies or deployed services.
+
+An operator-authorized fixed-command probe on kw observed stdout/stderr FIN but
+status PeerReset for both exit0 and exit7. Its diagnostic PASS records observations,
+not accepted executor output: the current FIN-only profile rejects that behavior.
+The temporary pod and namespace received UID-preconditioned deletion acknowledgments
+and subsequent NotFound observations; no existing Helm resource changed. This
+is not proof of production journal cleanup, physical termination or hostile-code
+isolation. Capture: `/tmp/nf-live-stream-probe.2WQhajpE`.
+
+The operator approved isolated qualification of a separate application-status
+profile, explicitly trusting a qualified authenticated server path to emit one
+immutable terminal status with no unseen amendment. Its parser alone received
+scoped review. A second approved two-command kw diagnostic observed status
+CANCEL=5, GOAWAY0 and classified boundary TLS EOF, with output FINs and no recorded
+failure. Its temporary pod/namespace received UID-preconditioned deletion
+acknowledgments and subsequent NotFound. An earlier driver-prefix failure and its
+cleanup are retained separately. These are narrow observations, not executor or
+remote-exit acceptance; classifier inference is specific to reviewed Go behavior.
+
+The operator authorized the recommended local-only framing/lifecycle candidate:
+natural classified peer end, conservative rejection of terminal repeats, preserved
+legacy behavior and fixture-only TLS. A first bounded evidence slice is underway
+in temporary copies. Framing/transport failure qualification, full input/control
+handling, production authority binding and acceptance wiring remain unresolved.
+Valid JSON or status reset alone cannot establish execution/output completeness.
+No dependency adoption or Gates activation is authorized.
+
+See `.procoder/plans/integration-recovery.md` for exact tests, artifacts and limits.
+The deployment accounts below are historical evidence, not clearance for the
+current uncommitted integration tree.
+
+## Historical verification and completion scope (2026-09-16)
 
 Helm revision **70**, implementation commit **d6e07d1**, passed all twelve
 in-cluster suites in one run: airgap, deploy, work_ci, gui, search, graph,
@@ -933,6 +979,14 @@ log). The health endpoint returned HTTP 200. Commits `9b95e02` and `02b87b0`
 therefore must not be treated as proven fixes for this live-log regression.
 
 ## Spec traceability
+
+Current integration correction: S-8 `TestToolCallAudited` is **partial**.
+The renamed `TestArgsStoreOnlyObservableMetadata` checks metadata, not retained
+argument values; its old `TestArgsAreStoredVerbatim` citation was stale. Raw
+arguments must not be restored merely to satisfy traceability: a privacy-safe
+argument-evidence contract remains unresolved. The current structural check
+reports 32 covered/1 partial, but validates references rather than execution or
+semantic fulfillment. The historical account below is not current acceptance.
 
 `.procoder/specs/traceability.yaml` maps each of the spec's 33 acceptance
 criteria to the tests and e2e steps that actually prove it. Only

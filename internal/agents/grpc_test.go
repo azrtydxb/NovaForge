@@ -12,6 +12,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	agentsv1 "github.com/novaforge/novaforge/gen/novaforge/agents/v1"
@@ -69,7 +70,8 @@ func newGRPCServer(t *testing.T, work *stubWorkClient) (*agents.GRPCServer, *age
 	store := newStore(t)
 	grants := capability.NewStore(grantsPool(t))
 	rdb := agentsRedis(t)
-	return agents.NewGRPCServer(store, grants, rdb, work, nil), store
+	store.WorkClaims = &workClaimsFixture{item: work.item}
+	return agents.NewGRPCServer(store, ownerFixture{grants}, rdb, work, func(context.Context, agents.Run) {}), store
 }
 
 // TestStartRunIssuesScopedGrant starts a run for Work Item "NF-1" and
@@ -212,6 +214,8 @@ func (f *fakeStreamServer) Send(resp *agentsv1.StreamRunEventsResponse) error {
 	f.recv <- resp
 	return nil
 }
+
+func (f *fakeStreamServer) SendHeader(metadata.MD) error { return nil }
 
 func (f *fakeStreamServer) Context() context.Context { return f.ctx }
 

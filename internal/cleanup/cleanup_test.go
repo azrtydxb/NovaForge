@@ -351,52 +351,144 @@ func TestEngineeringGraphPurgesIndexAndKnowledge(t *testing.T) {
 // calls go, their ids are announced for the gates service first, and an
 // organization's deletion removes its agents too.
 func TestAgentRuntimeCancelsThenPurgesRuns(t *testing.T) {
-	migrate(t, "agents", agents.MigrationsFS)
-	p := pool(t)
+	p, started := runtimePurgePlatform(t)
+	user := p.NewUser(t, "purge")
+	org := p.NewOrg(t, user, "purge")
+	otherUser := p.NewUser(t, "kept")
+	otherOrg := p.NewOrg(t, otherUser, "kept")
+	agent := p.NewAgent(t, user, org)
+	doomed := newRuntimePurgeRun(t, p, started, user, org, agent)
+	kept := newRuntimePurgeRun(t, p, started, user, org, agent)
+	foreign := newRuntimePurgeRun(t, p, started, otherUser, otherOrg, p.NewAgent(t, otherUser, otherOrg))
+
 	var announced []events.RunsDeletedEvent
-	h := cleanup.AgentRuntime(agents.NewStore(p), func(_ context.Context, e events.RunsDeletedEvent) error {
+	h := cleanup.AgentRuntime(p.AgentStore, func(_ context.Context, e events.RunsDeletedEvent) error {
+		// Announcement must precede deletion, including on retry.
+		for _, id := range e.RunIDs {
+			if n := count(t, p.Pool, `SELECT count(*) FROM agents.agent_runs WHERE org_id=$1 AND id=$2`, e.OrgID, id); n != 1 {
+				t.Fatal("run was removed before announcement")
+			}
+		}
 		announced = append(announced, e)
 		return nil
 	})
-	org := uuid.New()
-	doomed, kept := uuid.New(), uuid.New()
-	agent := uuid.New()
-	t.Cleanup(func() {
-		_, _ = p.Exec(context.Background(), `DELETE FROM agents.agent_runs WHERE org_id = $1`, org)
-		_, _ = p.Exec(context.Background(), `DELETE FROM agents.agents WHERE org_id = $1`, org)
-	})
-	exec(t, p, `INSERT INTO agents.agents (id, org_id, name, role, model_ref) VALUES ($1,$2,$3,'coder','m')`, agent, org, "a-"+uuid.NewString()[:8])
-	var doomedRun uuid.UUID
-	for _, repo := range []uuid.UUID{doomed, kept} {
-		run := uuid.New()
-		exec(t, p, `INSERT INTO agents.agent_runs (id, org_id, agent_id, sponsor_id, grant_id, branch, repo_id, state)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,'running')`, run, org, agent, uuid.New(), uuid.New(), "agents/"+uuid.NewString()[:6]+"/work", repo)
-		exec(t, p, `INSERT INTO agents.tool_calls (id, run_id, org_id, tool, args_json) VALUES ($1,$2,$3,'git.commit','{}')`, uuid.New(), run, org)
-		if repo == doomed {
-			doomedRun = run
+	assertAnnouncement := func(f runtimePurgeRun) {
+		t.Helper()
+		if len(announced) != 1 || announced[0].OrgID != f.org || announced[0].Kind != "agent" || len(announced[0].RunIDs) != 1 || announced[0].RunIDs[0] != f.id {
+			t.Fatalf("announced = %+v, want the deleted scope's one run", announced)
+		}
+		announced = nil
+	}
+	assertUntouched := func(f runtimePurgeRun) {
+		t.Helper()
+		r := f.saved(t, p)
+		if r.State != "running" || r.ExecutionFinished || r.GrantCleanupPending || !r.WorkReleasePending {
+			t.Fatal("another repository/organization's running run was touched")
+		}
+		f.assertClaim(t, p, false)
+		f.assertGrant(t, p, false)
+		if n := count(t, p.Pool, `SELECT count(*) FROM agents.tool_calls WHERE org_id=$1 AND id=$2 AND outcome='pending'`, f.org, f.audit); n != 1 {
+			t.Fatal("another repository/organization's audit was touched")
+		}
+		if n := count(t, p.Pool, `SELECT count(*) FROM agents.agents WHERE org_id=$1 AND id=$2`, f.org, f.agent); n != 1 {
+			t.Fatal("another organization's agent was removed")
 		}
 	}
+	assertGone := func(f runtimePurgeRun) {
+		t.Helper()
+		if n := count(t, p.Pool, `SELECT count(*) FROM agents.agent_runs WHERE org_id=$1 AND repo_id=$2`, f.org, f.repo); n != 0 {
+			t.Fatalf("%d run(s) of deleted scope left", n)
+		}
+		if n := count(t, p.Pool, `SELECT count(*) FROM agents.tool_calls WHERE run_id=$1`, f.id); n != 0 {
+			t.Fatalf("%d tool call(s) of deleted run left", n)
+		}
+		f.assertClaim(t, p, true)
+		f.assertGrant(t, p, true)
+	}
+	repoEvent := events.RepoDeletedEvent{OrgID: doomed.org, RepoID: doomed.repo}
+	// Settled audit alone cannot authorize release while the real Runner is held.
+	if err := agents.NewAuditLog(p.Pool).Complete(doomed.ctx, doomed.audit, "refused", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.RepoDeleted(context.Background(), repoEvent); err == nil {
+		t.Fatal("purge accepted before Runner completion")
+	}
+	assertAnnouncement(doomed)
+	r := doomed.saved(t, p)
+	if r.State != "cancelled" || r.ExecutionFinished || r.GrantCleanupPending || !r.WorkReleasePending {
+		t.Fatal("cancellation must fence authority but retain execution obligation")
+	}
+	doomed.assertClaim(t, p, false)
+	doomed.assertGrant(t, p, true)
+	assertUntouched(kept)
+	assertUntouched(foreign)
+	doomed.execution.stop(t)
+	r = doomed.saved(t, p)
+	if !r.ExecutionFinished || !r.WorkReleasePending {
+		t.Fatal("Runner did not durably complete before owner release")
+	}
+	if err := p.AgentStore.CleanupRunGrant(doomed.ctx, doomed.id); err != nil {
+		t.Fatal(err)
+	}
+	r = doomed.saved(t, p)
+	if r.GrantCleanupPending || r.WorkReleasePending || r.WorkspaceCleanupPending {
+		t.Fatal("owner cleanup not durably acknowledged")
+	}
+	doomed.assertClaim(t, p, true)
+	if err := h.RepoDeleted(context.Background(), repoEvent); err != nil {
+		t.Fatalf("RepoDeleted after acknowledged cleanup: %v", err)
+	}
+	assertAnnouncement(doomed)
+	assertGone(doomed)
+	assertUntouched(kept)
+	assertUntouched(foreign)
+	if err := h.RepoDeleted(context.Background(), repoEvent); err != nil || len(announced) != 0 {
+		t.Fatalf("repeated RepoDeleted: %v, announcements=%d", err, len(announced))
+	}
 
-	if err := h.RepoDeleted(context.Background(), events.RepoDeletedEvent{OrgID: org, RepoID: doomed}); err != nil {
-		t.Fatalf("RepoDeleted: %v", err)
+	// Conversely, confirmed Runner completion cannot release a pending audit.
+	kept.execution.stop(t)
+	if !kept.saved(t, p).ExecutionFinished {
+		t.Fatal("Runner completion was not durable")
 	}
-	if len(announced) != 1 || announced[0].Kind != "agent" || len(announced[0].RunIDs) != 1 || announced[0].RunIDs[0] != doomedRun {
-		t.Fatalf("announced = %+v, want the deleted repository's one run", announced)
+	orgEvent := events.OrgDeletedEvent{OrgID: kept.org}
+	if err := h.OrgDeleted(context.Background(), orgEvent); err == nil {
+		t.Fatal("purge accepted with pending tool evidence")
 	}
-	if n := count(t, p, `SELECT count(*) FROM agents.agent_runs WHERE org_id = $1 AND repo_id = $2`, org, doomed); n != 0 {
-		t.Fatalf("%d run(s) of the deleted repository left", n)
+	assertAnnouncement(kept)
+	r = kept.saved(t, p)
+	if r.State != "cancelled" || r.GrantCleanupPending || !r.WorkReleasePending || !r.ExecutionFinished {
+		t.Fatal("pending audit did not retain completed run and Work obligation")
 	}
-	if n := count(t, p, `SELECT count(*) FROM agents.tool_calls WHERE run_id = $1`, doomedRun); n != 0 {
-		t.Fatalf("%d tool call(s) of a deleted run left", n)
+	kept.assertClaim(t, p, false)
+	kept.assertGrant(t, p, true)
+	if n := count(t, p.Pool, `SELECT count(*) FROM agents.tool_calls WHERE id=$1 AND outcome='pending'`, kept.audit); n != 1 {
+		t.Fatal("pending audit was lost")
 	}
-	if n := count(t, p, `SELECT count(*) FROM agents.agent_runs WHERE org_id = $1 AND repo_id = $2 AND state = 'running'`, org, kept); n != 1 {
-		t.Fatalf("the other repository's running run was touched (%d still running)", n)
+	if n := count(t, p.Pool, `SELECT count(*) FROM agents.agents WHERE org_id=$1`, kept.org); n != 1 {
+		t.Fatal("agent removed before cleanup acknowledgement")
 	}
-	if err := h.OrgDeleted(context.Background(), events.OrgDeletedEvent{OrgID: org}); err != nil {
-		t.Fatalf("OrgDeleted: %v", err)
+	assertUntouched(foreign)
+	kept.refuseUndispatchedCall(t, p)
+	if err := p.AgentStore.CleanupRunGrant(kept.ctx, kept.id); err != nil {
+		t.Fatal(err)
 	}
-	if n := count(t, p, `SELECT count(*) FROM agents.agents WHERE org_id = $1`, org); n != 0 {
-		t.Fatalf("%d agent(s) of the deleted organization left", n)
+	r = kept.saved(t, p)
+	if r.GrantCleanupPending || r.WorkReleasePending || r.WorkspaceCleanupPending {
+		t.Fatal("owner cleanup not durably acknowledged")
+	}
+	kept.assertClaim(t, p, true)
+	if err := h.OrgDeleted(context.Background(), orgEvent); err != nil {
+		t.Fatalf("OrgDeleted after acknowledged cleanup: %v", err)
+	}
+	assertAnnouncement(kept)
+	assertGone(kept)
+	if n := count(t, p.Pool, `SELECT count(*) FROM agents.agents WHERE org_id=$1`, kept.org); n != 0 {
+		t.Fatalf("%d agent(s) of deleted organization left", n)
+	}
+	assertUntouched(foreign)
+	if err := h.OrgDeleted(context.Background(), orgEvent); err != nil || len(announced) != 0 {
+		t.Fatalf("repeated OrgDeleted: %v, announcements=%d", err, len(announced))
 	}
 }
 

@@ -150,19 +150,13 @@ func TestSASTWithoutRulesIsAnError(t *testing.T) {
 
 func TestVulnerabilitiesFindsAKnownCVE(t *testing.T) {
 	requireTool(t, "osv-scanner")
-	requireTool(t, "go")
+
 	// golang.org/x/text v0.3.0 carries several published advisories.
 	dir := probe(t, map[string]string{
 		"go.mod":  "module example.com/probe\n\ngo 1.22\n\nrequire golang.org/x/text v0.3.0\n",
 		"main.go": "package probe\n\nimport _ \"golang.org/x/text/language\"\n",
 	})
-	if out, err := exec.Command("go", "-C", dir, "mod", "download", "golang.org/x/text").CombinedOutput(); err != nil {
-		t.Fatalf("download module: %v: %s", err, out)
-	}
-	if out, err := exec.Command("go", "-C", dir, "mod", "tidy").CombinedOutput(); err != nil {
-		t.Fatalf("tidy: %v: %s", err, out)
-	}
-	vulns, err := analysis.Vulnerabilities(context.Background(), analysis.DefaultExec, dir)
+	vulns, err := analysis.Vulnerabilities(context.Background(), offlineFixtureExec(t), dir)
 	if err != nil {
 		t.Fatalf("Vulnerabilities: %v", err)
 	}

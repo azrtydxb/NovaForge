@@ -13,12 +13,9 @@ import (
 // path masks them before a line is stored, and the job's terminal status
 // forgets them.
 //
-// It is in memory on purpose: the values exist in this process only between
-// redeeming them and the job ending, and writing them anywhere to redact
-// with would be the leak it prevents. The pump that dispatched a job and the
-// Connect stream its lines arrive on are the same process — a job is only
-// ever sent down a stream this process holds — so the registry is always
-// where the lines are.
+// Values stay in memory, never in the retry journal. Replica changes or
+// restarts lose this context, so the RPC path checks durable job classification
+// and suppresses credential-bearing output rather than trusting an empty map.
 type Redactions struct {
 	mu   sync.Mutex
 	jobs map[uuid.UUID]*redact.Redactor
@@ -58,4 +55,24 @@ func (r *Redactions) Forget(jobID uuid.UUID) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	delete(r.jobs, jobID)
+}
+
+// SuppressedCredentialOutput is observable evidence of unavailable masking,
+// never an empty successful log or an assertion that the supplied text was safe.
+const SuppressedCredentialOutput = "[output suppressed: credential masking context unavailable]"
+
+func (r *Redactions) mask(jobID uuid.UUID, line string, sensitive bool) string {
+	if r == nil {
+		if sensitive {
+			return SuppressedCredentialOutput
+		}
+		return line
+	}
+	r.mu.Lock()
+	red := r.jobs[jobID]
+	r.mu.Unlock()
+	if red == nil && sensitive {
+		return SuppressedCredentialOutput
+	}
+	return red.Line(line)
 }

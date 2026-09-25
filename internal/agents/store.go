@@ -6,6 +6,7 @@ package agents
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -16,6 +17,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/novaforge/novaforge/internal/authz"
+	"github.com/novaforge/novaforge/internal/capability"
+	"github.com/novaforge/novaforge/internal/workspace"
 )
 
 const uniqueViolation = "23505"
@@ -44,8 +47,17 @@ type Provenance struct {
 // Run is a row in the agents.agent_runs table: one execution of an agent
 // against a work item, bounded by wall-clock, token, and cost limits.
 type Run struct {
-	ID    uuid.UUID
-	OrgID uuid.UUID
+	WorkspaceIdentity       *workspace.Identity
+	WorkspaceCleanupPending bool
+	WorkspaceCleanupError   string
+	GrantIntent             *capability.IssuanceIntent
+	WorkClaimRequired       bool
+	WorkItemSnapshot        []byte
+	WorkReleasePending      bool
+	WorkReleaseError        string
+	ExecutionFinished       bool
+	ID                      uuid.UUID
+	OrgID                   uuid.UUID
 	// RepoID is the repository this run works in. Without it the run loop
 	// cannot tell the agent which repository it is in, and every repo.* tool
 	// is unusable: the column existed from the branch-lock migration onward,
@@ -66,9 +78,13 @@ type Run struct {
 	// TokensUsed and CostUsedMicros are what the run spent, recorded when it
 	// ends; EndReason says why a run that did not succeed ended (which limit
 	// stopped it, or what failed). All three are zero until the run ends.
-	TokensUsed     int64
-	CostUsedMicros int64
-	EndReason      string
+	TokensUsed          int64
+	CostUsedMicros      int64
+	EndReason           string
+	GrantCleanupPending bool
+	GrantCleanupError   string
+	TokensAvailable     bool
+	CostAvailable       bool
 
 	// Provenance is populated by GetRun when a run_provenance row exists for
 	// this run; it is nil until RecordProvenance has been called.
@@ -78,6 +94,13 @@ type Run struct {
 // Store provides access to the agents schema's core tables.
 type Store struct {
 	pool *pgxpool.Pool
+	// GrantRevoker calls the grant owner's org-scoped, idempotent API. It must
+	// be configured before serving grant-bearing runs, never changed live.
+	GrantRevoker           func(context.Context, uuid.UUID) error
+	GrantIssuanceCanceller func(context.Context, capability.IssuanceIntent) error
+	WorkClaims             ExecutionClaims
+	WorkspaceCleaner       func(context.Context, workspace.Identity) error
+	WorkspaceRecoverer     func(context.Context, uuid.UUID) (workspace.Identity, error)
 }
 
 // NewStore wraps pool as an agents.Store.
@@ -124,8 +147,16 @@ func (s *Store) CreateAgent(ctx context.Context, a Agent) (Agent, error) {
 	if err := authz.RequireOrg(ctx, a.OrgID); err != nil {
 		return Agent{}, err
 	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return Agent{}, err
+	}
+	defer tx.Rollback(context.WithoutCancel(ctx))
+	if err = allowAdmission(ctx, tx, a.OrgID, uuid.Nil); err != nil {
+		return Agent{}, err
+	}
 	a.ID = uuid.New()
-	_, err := s.pool.Exec(ctx,
+	_, err = tx.Exec(ctx,
 		`INSERT INTO agents.agents (id, org_id, name, role, model_ref, enabled)
 		 VALUES ($1, $2, $3, $4, $5, $6)`,
 		a.ID, a.OrgID, a.Name, a.Role, a.ModelRef, a.Enabled,
@@ -136,6 +167,9 @@ func (s *Store) CreateAgent(ctx context.Context, a Agent) (Agent, error) {
 			return Agent{}, fmt.Errorf("agent %q already exists in org %s", a.Name, a.OrgID)
 		}
 		return Agent{}, fmt.Errorf("create agent: %w", err)
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return Agent{}, err
 	}
 	return a, nil
 }
@@ -197,7 +231,26 @@ func (s *Store) CreateRun(ctx context.Context, r Run) (Run, error) {
 	if err := authz.RequireOrg(ctx, r.OrgID); err != nil {
 		return Run{}, err
 	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return Run{}, err
+	}
+	defer tx.Rollback(context.WithoutCancel(ctx))
+	if err = allowAdmission(ctx, tx, r.OrgID, r.RepoID); err != nil {
+		return Run{}, err
+	}
 	r.ID = uuid.New()
+	var intent []byte
+	if r.GrantIntent != nil {
+		r.GrantIntent.RunID = r.ID
+		if r.GrantIntent.Grant.OrgID != r.OrgID || r.GrantIntent.Grant.ID != r.GrantID || r.GrantIntent.Grant.SubjectID != r.AgentID {
+			return Run{}, fmt.Errorf("grant intent identity mismatch")
+		}
+		intent, err = json.Marshal(r.GrantIntent)
+		if err != nil {
+			return Run{}, err
+		}
+	}
 	r.State = "queued"
 
 	var workItemID any
@@ -221,13 +274,13 @@ func (s *Store) CreateRun(ctx context.Context, r Run) (Run, error) {
 		costLimit = 0
 	}
 
-	_, err := s.pool.Exec(ctx,
+	_, err = tx.Exec(ctx,
 		`INSERT INTO agents.agent_runs
 		   (id, org_id, repo_id, agent_id, work_item_id, sponsor_id, grant_id, branch, state,
-		    wallclock_limit_seconds, token_limit, cost_limit_micros)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'queued', $9, $10, $11)`,
+		    wallclock_limit_seconds, token_limit, cost_limit_micros,grant_issue_intent,admission_lease_until,work_claim_required,work_release_pending)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'queued', $9, $10, $11,$12,CASE WHEN $12::jsonb IS NULL THEN '-infinity'::timestamptz ELSE now()+interval '1 minute' END,$13,$13)`,
 		r.ID, r.OrgID, r.RepoID, r.AgentID, workItemID, r.SponsorID, r.GrantID, r.Branch,
-		wallclockSeconds, tokenLimit, costLimit,
+		wallclockSeconds, tokenLimit, costLimit, intent, r.WorkClaimRequired,
 	)
 	if err != nil {
 		return Run{}, fmt.Errorf("create run: %w", err)
@@ -235,6 +288,9 @@ func (s *Store) CreateRun(ctx context.Context, r Run) (Run, error) {
 	r.WallclockLimit = time.Duration(wallclockSeconds) * time.Second
 	r.TokenLimit = tokenLimit
 	r.CostLimitMicros = costLimit
+	if err = tx.Commit(ctx); err != nil {
+		return Run{}, err
+	}
 	return r, nil
 }
 
@@ -250,21 +306,32 @@ func (s *Store) GetRun(ctx context.Context, id uuid.UUID) (Run, error) {
 	var workItemID, sponsorID, grantID uuid.UUID
 	var wallclockSeconds int
 	var startedAt, endedAt *time.Time
+	var intent, workspaceBody []byte
 	err = s.pool.QueryRow(ctx,
 		`SELECT id, org_id, repo_id, agent_id, COALESCE(work_item_id, '00000000-0000-0000-0000-000000000000'),
 		        sponsor_id, grant_id, branch, state, started_at, ended_at,
 		        wallclock_limit_seconds, token_limit, cost_limit_micros,
-		        tokens_used, cost_used_micros, end_reason
+		        tokens_used, cost_used_micros, end_reason, grant_cleanup_pending, grant_cleanup_error, tokens_available, cost_available, grant_issue_intent,work_claim_required,work_item_snapshot,work_release_pending,work_release_error,execution_finished,workspace_identity,workspace_cleanup_pending,workspace_cleanup_error
 		 FROM agents.agent_runs WHERE id = $1 AND org_id = $2`,
 		id, scope.OrgID,
 	).Scan(&r.ID, &r.OrgID, &r.RepoID, &r.AgentID, &workItemID, &sponsorID, &grantID, &r.Branch,
 		&r.State, &startedAt, &endedAt, &wallclockSeconds, &r.TokenLimit, &r.CostLimitMicros,
-		&r.TokensUsed, &r.CostUsedMicros, &r.EndReason)
+		&r.TokensUsed, &r.CostUsedMicros, &r.EndReason, &r.GrantCleanupPending, &r.GrantCleanupError, &r.TokensAvailable, &r.CostAvailable, &intent, &r.WorkClaimRequired, &r.WorkItemSnapshot, &r.WorkReleasePending, &r.WorkReleaseError, &r.ExecutionFinished, &workspaceBody, &r.WorkspaceCleanupPending, &r.WorkspaceCleanupError)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return Run{}, fmt.Errorf("run %s not found: %w", id, err)
 		}
 		return Run{}, fmt.Errorf("get run: %w", err)
+	}
+	if workspaceBody != nil {
+		if err := json.Unmarshal(workspaceBody, &r.WorkspaceIdentity); err != nil {
+			return Run{}, err
+		}
+	}
+	if intent != nil {
+		if err := json.Unmarshal(intent, &r.GrantIntent); err != nil {
+			return Run{}, err
+		}
 	}
 	r.WorkItemID = workItemID
 	r.SponsorID = sponsorID
@@ -336,7 +403,9 @@ func (s *Store) SetRunState(ctx context.Context, id uuid.UUID, newState string) 
 		)
 	} else if terminalStates[newState] {
 		_, sqlErr = tx.Exec(ctx,
-			`UPDATE agents.agent_runs SET state = $1, ended_at = now() WHERE id = $2`,
+			`UPDATE agents.agent_runs SET state = $1, ended_at = now(),
+             grant_cleanup_pending = grant_id <> '00000000-0000-0000-0000-000000000000',
+             grant_cleanup_error = '' WHERE id = $2`,
 			newState, id,
 		)
 	} else {
@@ -467,9 +536,11 @@ func (s *Store) RunsForWorkItem(ctx context.Context, workItemID uuid.UUID) ([]uu
 // Spend is what a finished run consumed, and why it ended when it did not
 // succeed.
 type Spend struct {
-	Tokens     int64
-	CostMicros int64
-	Reason     string
+	TokensAvailable bool
+	CostAvailable   bool
+	Tokens          int64
+	CostMicros      int64
+	Reason          string
 }
 
 // RecordSpend persists what a finished run actually consumed. The budget is
@@ -481,8 +552,8 @@ func (s *Store) RecordSpend(ctx context.Context, runID uuid.UUID, spend Spend) e
 		return err
 	}
 	if _, err := s.pool.Exec(ctx,
-		`UPDATE agents.agent_runs SET tokens_used = $1, cost_used_micros = $2, end_reason = $3
-		 WHERE id = $4 AND org_id = $5`,
+		`UPDATE agents.agent_runs SET tokens_used = GREATEST(tokens_used,$1), cost_used_micros = GREATEST(cost_used_micros,$2), end_reason = $3
+		 WHERE id = $4 AND org_id = $5 AND completion IS NULL AND state IN ('queued','running')`,
 		spend.Tokens, spend.CostMicros, spend.Reason, runID, scope.OrgID,
 	); err != nil {
 		return fmt.Errorf("record spend for run %s: %w", runID, err)

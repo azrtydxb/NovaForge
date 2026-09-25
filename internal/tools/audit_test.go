@@ -3,9 +3,10 @@ package tools_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
-	"strings"
+
 	"testing"
 	"time"
 
@@ -75,7 +76,7 @@ func TestToolCallAudited(t *testing.T) {
 		{"work.get", okArgs, "ok", ""},
 		{"test.fails", failArgs, "error", "the handler could not do it"},
 		{"git.commit", deniedArgs, "denied", "agents/NF-1/"},
-		{"shell.exec", unknownArgs, "refused", "unknown tool"},
+		{"unregistered", unknownArgs, "refused", "unknown tool"},
 		{"work.get", overArgs, "refused", "over budget"},
 	}
 	if len(entries) != len(wants) {
@@ -86,7 +87,8 @@ func TestToolCallAudited(t *testing.T) {
 		if e.Tool != w.tool {
 			t.Errorf("entry %d tool = %q, want %q", i, e.Tool, w.tool)
 		}
-		if !jsonEqual(t, e.ArgsJSON, []byte(w.args)) {
+		wantArgs, _ := json.Marshal(map[string]any{"argument_bytes": len(w.args), "valid_json": true})
+		if !jsonEqual(t, e.ArgsJSON, wantArgs) {
 			t.Errorf("entry %d (%s) args = %s, want %s", i, w.tool, e.ArgsJSON, w.args)
 		}
 		if e.Outcome != w.outcome {
@@ -95,7 +97,7 @@ func TestToolCallAudited(t *testing.T) {
 		if w.errContains == "" && e.Error != "" {
 			t.Errorf("entry %d (%s) error = %q, want none", i, w.tool, e.Error)
 		}
-		if w.errContains != "" && !strings.Contains(e.Error, w.errContains) {
+		if w.errContains != "" && e.Error != "tool "+w.outcome {
 			t.Errorf("entry %d (%s) error = %q, want it to contain %q", i, w.tool, e.Error, w.errContains)
 		}
 		if e.EndedAt == nil {
@@ -133,7 +135,7 @@ func TestCancelledCallStillRecordsItsOutcome(t *testing.T) {
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if len(entries) != 1 || entries[0].Outcome != "error" || entries[0].EndedAt == nil {
+	if len(entries) != 1 || entries[0].Outcome != "cancelled" || entries[0].EndedAt == nil {
 		t.Fatalf("entries = %+v, want one completed entry with outcome error", entries)
 	}
 }
@@ -148,4 +150,42 @@ func jsonEqual(t *testing.T, a, b []byte) bool {
 		t.Fatalf("bad expected JSON %s: %v", b, err)
 	}
 	return reflect.DeepEqual(va, vb)
+}
+
+func TestAuditCompletionTimeoutStopsFurtherExecution(t *testing.T) {
+	pool := auditPool(t)
+	a := agents.NewAuditLog(pool)
+	s := agents.NewStore(pool)
+	org := uuid.New()
+	ctx := scopedCtx(org)
+	run := newTestRun(t, ctx, s, org)
+	reg := tools.NewRegistry(tools.Runtime{}, a)
+	var release func()
+	reg.Register("test.lock", func(context.Context, tools.Runtime, []byte) ([]byte, error) {
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if _, err = tx.Exec(ctx, `SELECT id FROM agents.tool_calls WHERE run_id=$1 FOR UPDATE`, run.ID); err != nil {
+			tx.Rollback(ctx)
+			return nil, err
+		}
+		release = func() { tx.Rollback(ctx) }
+		return nil, fmt.Errorf("provider token must not escape into durable error")
+	})
+	start := time.Now()
+	_, err := reg.Call(ctx, run.ID, "test.lock", []byte(`{"secret":"must-not-store"}`))
+	if release != nil {
+		release()
+	}
+	if !errors.Is(err, tools.ErrAuditUnavailable) {
+		t.Fatalf("persistence failure masked: %v", err)
+	}
+	if time.Since(start) > 3*time.Second {
+		t.Fatal("audit retry not bounded")
+	}
+	entries, err := a.List(ctx, run.ID)
+	if err != nil || len(entries) != 1 || entries[0].Outcome != "pending" {
+		t.Fatalf("lost outcome invented: %+v %v", entries, err)
+	}
 }

@@ -2,6 +2,7 @@ package agents
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -44,37 +45,72 @@ func (a *AuditLog) Record(ctx context.Context, e Entry) (uuid.UUID, error) {
 	if err != nil {
 		return uuid.Nil, err
 	}
-	id := uuid.New()
-	_, err = a.pool.Exec(ctx,
-		`INSERT INTO agents.tool_calls (id, run_id, org_id, tool, args_json, outcome)
-		 VALUES ($1, $2, $3, $4, $5, 'pending')`,
-		id, e.RunID, scope.OrgID, e.Tool, e.ArgsJSON,
-	)
-	if err != nil {
-		return uuid.Nil, fmt.Errorf("record tool call: %w", err)
+	id := e.ID
+	if id == uuid.Nil {
+		id = uuid.New()
 	}
-	return id, nil
+	// Only trusted run evidence has a separate schema. Tool argument values,
+	// arbitrary keys and upstream error text are never durable audit metadata.
+	if e.Tool != "run.summary" && e.Tool != "run.verification" {
+		e.ArgsJSON, _ = json.Marshal(map[string]any{"argument_bytes": len(e.ArgsJSON), "valid_json": json.Valid(e.ArgsJSON)})
+	}
+	tx, err := a.pool.Begin(ctx)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	defer tx.Rollback(ctx)
+	var parent uuid.UUID
+	if err = tx.QueryRow(ctx, `SELECT id FROM agents.agent_runs WHERE id=$1 AND org_id=$2 FOR UPDATE`, e.RunID, scope.OrgID).Scan(&parent); err != nil {
+		return uuid.Nil, fmt.Errorf("audit parent unavailable: %w", err)
+	}
+	tag, err := tx.Exec(ctx, `INSERT INTO agents.tool_calls(id,run_id,org_id,tool,args_json,outcome) VALUES($1,$2,$3,$4,$5,'pending')
+ ON CONFLICT(id) DO UPDATE SET id=EXCLUDED.id WHERE tool_calls.run_id=EXCLUDED.run_id AND tool_calls.org_id=EXCLUDED.org_id AND tool_calls.tool=EXCLUDED.tool AND tool_calls.args_json=EXCLUDED.args_json`, id, e.RunID, scope.OrgID, e.Tool, e.ArgsJSON)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if tag.RowsAffected() != 1 {
+		return uuid.Nil, fmt.Errorf("audit identity conflict")
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO agents.tool_events(org_id,run_id,call_id,tool,outcome) VALUES($1,$2,$3,$4,'pending') ON CONFLICT DO NOTHING`, scope.OrgID, e.RunID, id, e.Tool); err != nil {
+		return uuid.Nil, err
+	}
+	return id, tx.Commit(ctx)
 }
 
-// Complete marks a previously recorded tool call as finished with outcome
-// (e.g. "ok" or "error") and, for errors, errText.
-func (a *AuditLog) Complete(ctx context.Context, id uuid.UUID, outcome string, errText string) error {
+// Complete atomically stores an immutable terminal receipt and its outbox event.
+// Unknown provider text is deliberately omitted, not guessed to be secret-free.
+func (a *AuditLog) Complete(ctx context.Context, id uuid.UUID, outcome string, _ string) error {
 	scope, err := authz.FromContext(ctx)
 	if err != nil {
 		return err
 	}
-	tag, err := a.pool.Exec(ctx,
-		`UPDATE agents.tool_calls SET outcome = $1, error = $2, ended_at = now()
-		 WHERE id = $3 AND org_id = $4`,
-		outcome, errText, id, scope.OrgID,
-	)
+	switch outcome {
+	case "ok", "error", "denied", "refused", "cancelled", "unavailable":
+	default:
+		return fmt.Errorf("invalid terminal tool outcome")
+	}
+	errText := ""
+	if outcome != "ok" {
+		errText = "tool " + outcome
+	}
+	tx, err := a.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("complete tool call: %w", err)
+		return err
 	}
-	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("tool call %s not found", id)
+	defer tx.Rollback(ctx)
+	var run uuid.UUID
+	if err = tx.QueryRow(ctx, `SELECT r.id FROM agents.agent_runs r JOIN agents.tool_calls c ON c.run_id=r.id AND c.org_id=r.org_id WHERE c.id=$1 AND r.org_id=$2 FOR UPDATE OF r`, id, scope.OrgID).Scan(&run); err != nil {
+		return err
 	}
-	return nil
+	var tool string
+	err = tx.QueryRow(ctx, `UPDATE agents.tool_calls SET outcome=$1,error=$2,ended_at=COALESCE(ended_at,clock_timestamp()) WHERE id=$3 AND org_id=$4 AND ((outcome='pending' AND ended_at IS NULL) OR (outcome=$1 AND error=$2 AND ended_at IS NOT NULL)) RETURNING tool`, outcome, errText, id, scope.OrgID).Scan(&tool)
+	if err != nil {
+		return fmt.Errorf("terminal audit receipt conflicts or unavailable: %w", err)
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO agents.tool_events(org_id,run_id,call_id,tool,outcome) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`, scope.OrgID, run, id, tool, outcome); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // List returns every tool call recorded for runID, oldest first, scoped to

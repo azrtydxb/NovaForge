@@ -26,6 +26,8 @@ import (
 	"gopkg.in/yaml.v3"
 
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
+	"github.com/novaforge/novaforge/internal/gateconfig"
+	"github.com/novaforge/novaforge/internal/gatenames"
 	"github.com/novaforge/novaforge/internal/tools"
 )
 
@@ -77,10 +79,25 @@ type Budget struct {
 // cleanly into a definition that restricted nothing — the silent disabling of
 // enforcement a malformed configuration must never cause.
 func decodeStrict(content []byte, v any) error {
+	// A present null/empty document must not become an unrestricted zero
+	// definition. Node.Decode does not support KnownFields, so retain the
+	// strict typed pass below after checking the document's root shape.
+	var document yaml.Node
+	if err := yaml.Unmarshal(content, &document); err != nil {
+		return err
+	}
+	if len(document.Content) != 1 || document.Content[0].Kind != yaml.MappingNode {
+		return fmt.Errorf("configuration must be a YAML mapping")
+	}
 	dec := yaml.NewDecoder(bytes.NewReader(content))
 	dec.KnownFields(true)
 	if err := dec.Decode(v); err != nil && !errors.Is(err, io.EOF) {
 		return err
+	}
+	// A decoder otherwise accepts a valid first document while silently
+	// ignoring a later policy, including an empty document or malformed YAML.
+	if err := dec.Decode(new(any)); !errors.Is(err, io.EOF) {
+		return fmt.Errorf("exactly one YAML document is required")
 	}
 	return nil
 }
@@ -126,8 +143,9 @@ func (c Config) AgentFor(name, role string) *AgentDef {
 
 // GateDef is one gate definition read from a file under .novaforge/gates/.
 type GateDef struct {
-	Name   string         `yaml:"name"`
-	Params map[string]any `yaml:"params"`
+	Name     string         `yaml:"name"`
+	Required bool           `yaml:"required"`
+	Params   map[string]any `yaml:"params"`
 }
 
 // Config is everything Load assembles from one repository's .novaforge
@@ -155,20 +173,11 @@ type Config struct {
 func Load(ctx context.Context, git GitReader, orgID, repoID uuid.UUID, ref string) (Config, error) {
 	repo := repoID.String()
 
-	// A repository without project.yaml is still governed by whatever agent,
-	// gate and context files it does have. Returning the empty configuration
-	// whenever project.yaml was missing meant deleting that one file lifted
-	// every agent's tool restriction.
-	var project Project
-	projectBlob, err := git.GetBlob(ctx, &gitv1.GetBlobRequest{Repo: repo, Ref: ref, Path: projectPath})
-	switch {
-	case isNotFound(err):
-	case err != nil:
-		return Config{}, fmt.Errorf("novaforge config: read %s: %w", projectPath, err)
-	default:
-		if err := decodeStrict(projectBlob.Content, &project); err != nil {
-			return Config{}, fmt.Errorf("novaforge config: parse %s: %w", projectPath, err)
-		}
+	// Missing project.yaml does not lift independently declared agent or gate
+	// restrictions: continue loading those files even with a zero Project.
+	project, err := LoadProject(ctx, git, repoID, ref)
+	if err != nil {
+		return Config{}, err
 	}
 
 	agentDefs, err := loadAgents(ctx, git, repo, ref)
@@ -192,6 +201,34 @@ func Load(ctx context.Context, git GitReader, orgID, repoID uuid.UUID, ref strin
 		Gates:       gateDefs,
 		ContextDocs: contextDocs,
 	}, nil
+}
+
+// LoadProject reads only project.yaml at the supplied revision. Governance
+// callers use the pinned target revision, so a source edit cannot weaken policy.
+// It shares the same strict decoder and name checks as the complete loader.
+func LoadProject(ctx context.Context, git GitReader, repoID uuid.UUID, ref string) (Project, error) {
+	var project Project
+	blob, err := git.GetBlob(ctx, &gitv1.GetBlobRequest{Repo: repoID.String(), Ref: ref, Path: projectPath})
+	if isNotFound(err) {
+		return project, nil
+	}
+	if err != nil {
+		return Project{}, fmt.Errorf("novaforge config: read %s: %w", projectPath, err)
+	}
+	if blob == nil {
+		return Project{}, fmt.Errorf("novaforge config: missing response for %s", projectPath)
+	}
+	if err := decodeStrict(blob.Content, &project); err != nil {
+		return Project{}, fmt.Errorf("novaforge config: parse %s: %w", projectPath, err)
+	}
+	seen := make(map[string]bool)
+	for _, name := range project.Gates {
+		if !gatenames.Known(name) || seen[name] {
+			return Project{}, fmt.Errorf("novaforge config: %s: unknown or duplicate required gate %q", projectPath, name)
+		}
+		seen[name] = true
+	}
+	return project, nil
 }
 
 func loadAgents(ctx context.Context, git GitReader, repo, ref string) ([]AgentDef, error) {
@@ -220,7 +257,8 @@ func loadAgents(ctx context.Context, git GitReader, repo, ref string) ([]AgentDe
 		}
 		def.Path = path
 		for _, tool := range def.Tools {
-			if !known[tool] {
+			_, external := tools.MCPToolSelection(tool)
+			if !known[tool] && !external {
 				return nil, fmt.Errorf("novaforge config: %s: agent %q names unknown tool %q", path, def.Name, tool)
 			}
 		}
@@ -239,6 +277,7 @@ func loadGates(ctx context.Context, git GitReader, repo, ref string) ([]GateDef,
 	}
 
 	var defs []GateDef
+	seen := make(map[string]bool)
 	for _, entry := range tree.Entries {
 		if entry.Kind != "blob" {
 			continue
@@ -248,11 +287,27 @@ func loadGates(ctx context.Context, git GitReader, repo, ref string) ([]GateDef,
 		if err != nil {
 			return nil, fmt.Errorf("novaforge config: read %s: %w", path, err)
 		}
-		var def GateDef
-		if err := yaml.Unmarshal(blob.Content, &def); err != nil {
+		// Match the gate owner's wire policy: omission is not an explicit
+		// optional gate. A pointer distinguishes false from missing/null.
+		var wire struct {
+			Name     string         `yaml:"name"`
+			Required *bool          `yaml:"required"`
+			Params   map[string]any `yaml:"params"`
+		}
+		if err := decodeStrict(blob.Content, &wire); err != nil {
 			return nil, fmt.Errorf("novaforge config: parse %s: %w", path, err)
 		}
-		defs = append(defs, def)
+		if wire.Required == nil || !gatenames.Known(wire.Name) {
+			return nil, fmt.Errorf("novaforge config: %s: known gate name and explicit required boolean are mandatory", path)
+		}
+		if seen[wire.Name] {
+			return nil, fmt.Errorf("novaforge config: %s: duplicate gate %q", path, wire.Name)
+		}
+		if err := gateconfig.ValidateParameters(wire.Name, wire.Params); err != nil {
+			return nil, fmt.Errorf("novaforge config: %s: %w", path, err)
+		}
+		seen[wire.Name] = true
+		defs = append(defs, GateDef{Name: wire.Name, Required: *wire.Required, Params: wire.Params})
 	}
 	return defs, nil
 }

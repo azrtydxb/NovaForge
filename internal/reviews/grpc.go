@@ -2,6 +2,7 @@ package reviews
 
 import (
 	"context"
+	"errors"
 	"log"
 	"strings"
 
@@ -23,7 +24,8 @@ const rfc3339 = "2006-01-02T15:04:05.999999999Z07:00"
 type GRPCServer struct {
 	reviewsv1.UnimplementedReviewsServiceServer
 
-	Store *Store
+	Store        *Store
+	ReviewWorker *ReviewWorker
 
 	// Merger backs the MergeRun RPC — a person merging deliberately. It is
 	// the same Merger AutoMerge uses, so both pass the identical gate check.
@@ -274,6 +276,9 @@ func (g *GRPCServer) RecordProof(ctx context.Context, req *reviewsv1.RecordProof
 		return nil, err
 	}
 	if err := g.Store.RecordProof(ctx, runID, req.GetGate(), req.GetStatus(), req.GetDetail()); err != nil {
+		if errors.Is(err, ErrProofAuthority) {
+			return nil, status.Error(codes.PermissionDenied, err.Error())
+		}
 		return nil, status.Errorf(codes.InvalidArgument, "record proof: %v", err)
 	}
 	return &reviewsv1.RecordProofResponse{Ok: true}, nil
@@ -304,7 +309,18 @@ func (g *GRPCServer) SubmitReview(ctx context.Context, req *reviewsv1.SubmitRevi
 	if id := req.GetReviewerId(); id != "" && id != scope.ActorID.String() {
 		return nil, status.Error(codes.PermissionDenied, "a review can only be submitted as yourself")
 	}
-	if err := g.Store.SubmitReview(ctx, runID, scope.ActorID, "user", req.GetVerdict()); err != nil {
+	run, err := g.Store.GetRun(ctx, runID)
+	if err != nil {
+		return nil, status.Error(codes.NotFound, "run not found")
+	}
+	head, err := sourceHead(ctx, g.Git, run)
+	if err != nil {
+		return nil, status.Errorf(codes.Unavailable, "resolve reviewed source: %v", err)
+	}
+	if req.GetExpectedSourceSha() == "" || req.GetExpectedSourceSha() != head {
+		return nil, status.Error(codes.Aborted, "source changed or expected_source_sha missing; inspect the current revision before reviewing")
+	}
+	if err := g.Store.SubmitReviewAt(ctx, runID, scope.ActorID, "user", req.GetVerdict(), head, req.GetSummary()); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "submit review: %v", err)
 	}
 	g.considerAutoMerge(ctx, runID)

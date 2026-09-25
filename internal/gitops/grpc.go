@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -443,8 +444,11 @@ func (s *Server) Merge(ctx context.Context, req *gitv1.MergeRequest) (*gitv1.Mer
 		return nil, err
 	}
 
-	old, sha, err := mergeRefs(repo.Path(), req.GetSourceRef(), req.GetTargetRef(), req.GetMethod(), req.GetMessage())
+	old, sha, err := mergeRefs(repo.Path(), req.GetSourceRef(), req.GetTargetRef(), req.GetMethod(), req.GetMessage(), req.GetExpectedSourceSha(), req.GetExpectedTargetSha())
 	if err != nil {
+		if status.Code(err) == codes.Aborted || status.Code(err) == codes.InvalidArgument {
+			return nil, err
+		}
 		if isGitNotFound(err) {
 			return nil, status.Errorf(codes.NotFound, "unknown ref %q or %q", req.GetSourceRef(), req.GetTargetRef())
 		}
@@ -616,7 +620,17 @@ func isMergeConflict(err error) bool {
 //
 // It returns targetRef's head before the merge alongside the merge result,
 // so the merge can be published as the push of targetRef it is.
-func mergeRefs(repoPath, sourceRef, targetRef, method, message string) (oldSHA, newSHA string, err error) {
+func mergeRefs(repoPath, sourceRef, targetRef, method, message, expectedSource, expectedTarget string) (oldSHA, newSHA string, err error) {
+	sourceBranch := strings.TrimPrefix(sourceRef, refHeadsPrefix)
+	targetBranch := strings.TrimPrefix(targetRef, refHeadsPrefix)
+	for _, branch := range []string{sourceBranch, targetBranch} {
+		if _, err := run(repoPath, "check-ref-format", refHeadsPrefix+branch); err != nil {
+			return "", "", status.Error(codes.InvalidArgument, "merge requires valid branch refs")
+		}
+	}
+	if sourceBranch == targetBranch {
+		return "", "", status.Error(codes.InvalidArgument, "source and target must differ")
+	}
 	tmpDir, err := os.MkdirTemp("", "novaforge-merge-*")
 	if err != nil {
 		return "", "", fmt.Errorf("create temp clone dir: %w", err)
@@ -632,8 +646,6 @@ func mergeRefs(repoPath, sourceRef, targetRef, method, message string) (oldSHA, 
 	// under origin/. Both refs are therefore addressed via their
 	// remote-tracking form here, and targetRef is (re)created locally from
 	// it so the merge result can be committed and pushed back.
-	targetBranch := strings.TrimPrefix(targetRef, refHeadsPrefix)
-	sourceBranch := strings.TrimPrefix(sourceRef, refHeadsPrefix)
 	if _, err := run(tmpDir, "checkout", "-B", targetBranch, "origin/"+targetBranch); err != nil {
 		return "", "", err
 	}
@@ -642,12 +654,22 @@ func mergeRefs(repoPath, sourceRef, targetRef, method, message string) (oldSHA, 
 		return "", "", err
 	}
 	oldSHA = strings.TrimSpace(string(out))
+	if expectedTarget != "" && expectedTarget != oldSHA {
+		return "", "", status.Error(codes.Aborted, "target head changed since gate evaluation")
+	}
 
 	if message == "" {
 		message = fmt.Sprintf("Merge %s into %s", sourceRef, targetRef)
 	}
 
-	sourceRemoteRef := "origin/" + sourceBranch
+	sourceHead, err := run(tmpDir, "rev-parse", "--verify", "refs/remotes/origin/"+sourceBranch+"^{commit}")
+	if err != nil {
+		return "", "", err
+	}
+	sourceRemoteRef := strings.TrimSpace(string(sourceHead))
+	if expectedSource != "" && expectedSource != sourceRemoteRef {
+		return "", "", status.Error(codes.Aborted, "source head changed since review")
+	}
 	env := []string{"-c", "user.email=novaforge@localhost", "-c", "user.name=NovaForge"}
 	switch method {
 	case "squash":
@@ -666,16 +688,24 @@ func mergeRefs(repoPath, sourceRef, targetRef, method, message string) (oldSHA, 
 			return "", "", err
 		}
 	}
-	targetRef = targetBranch
-
-	if _, err := run(tmpDir, "push", leaseFor(targetRef, oldSHA), "origin", "HEAD:"+refHeadsPrefix+targetRef); err != nil {
-		return "", "", err
-	}
 	out, err = run(tmpDir, "rev-parse", "HEAD")
 	if err != nil {
 		return "", "", err
 	}
-	return oldSHA, strings.TrimSpace(string(out)), nil
+	newSHA = strings.TrimSpace(string(out))
+	// Import objects without moving any public ref. A Git-native transaction then
+	// locks and verifies source AND target; transport pushes participate in these
+	// locks too, unlike an in-process mutex or a database advisory lock.
+	if _, err := run(repoPath, "fetch", "--no-write-fetch-head", "--no-tags", tmpDir, newSHA); err != nil {
+		return "", "", err
+	}
+	cmd := exec.Command("git", "update-ref", "--stdin")
+	cmd.Dir = repoPath
+	cmd.Stdin = strings.NewReader(fmt.Sprintf("start\nverify %s%s %s\nupdate %s%s %s %s\nprepare\ncommit\n", refHeadsPrefix, sourceBranch, sourceRemoteRef, refHeadsPrefix, targetBranch, newSHA, oldSHA))
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return "", "", status.Errorf(codes.Aborted, "merge ref transaction rejected: %s", strings.TrimSpace(string(out)))
+	}
+	return oldSHA, newSHA, nil
 }
 
 // runEnv is run with extra leading git arguments (such as -c config

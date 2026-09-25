@@ -228,6 +228,11 @@ func TestApprovalPaths(t *testing.T) {
 		if err := s.decide(s.admin, third.GetId(), "approved", "index too"); err != nil {
 			t.Fatalf("approve third: %v", err)
 		}
+		// Policy approval is not an independent code review of the new commit.
+		if _, err := s.merge(s.member, run.GetId()); status.Code(err) != codes.FailedPrecondition || !strings.Contains(err.Error(), "no approval independent") {
+			t.Fatalf("schema approval must not refresh an old code review: %v", err)
+		}
+		s.approveReview(s.member, run.GetId())
 		if _, err := s.merge(s.member, run.GetId()); err != nil {
 			t.Fatalf("merge after approval of the current head: %v", err)
 		}

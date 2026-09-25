@@ -22,6 +22,8 @@ export function ContextSwitcher({
   return (
     <div style={{ position: "relative", margin: "0 0 10px" }}>
       <button
+        aria-label="Select workspace"
+        aria-expanded={open}
         onClick={onToggle}
         style={{
           display: "flex",

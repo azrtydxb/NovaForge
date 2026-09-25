@@ -172,7 +172,8 @@ type manifest struct {
 				Containers []struct {
 					Image string `yaml:"image"`
 					Env   []struct {
-						Name string `yaml:"name"`
+						Name  string `yaml:"name"`
+						Value string `yaml:"value"`
 					} `yaml:"env"`
 					EnvFrom []struct {
 						SecretRef *struct {

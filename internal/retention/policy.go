@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/novaforge/novaforge/internal/authz"
 	"github.com/novaforge/novaforge/internal/blobstore"
 )
 
@@ -85,9 +86,19 @@ func (s *Store) Set(ctx context.Context, policy Policy) error {
 // sweeper cannot delete rows it does not own; each service that owns
 // EvidenceDays-governed data enforces it itself, consulting the same
 // Store.Get this package exposes.
+type LogIdentity struct {
+	OrgID, JobID uuid.UUID
+	ConnectionID *uuid.UUID
+}
+
 type Sweeper struct {
-	pool  *pgxpool.Pool
-	blobs *blobstore.Client
+	// BeforeLogDelete durably fences materialization; AfterLogDelete removes
+	// owner payload. The job inventory survives either callback failing, so
+	// delete-success/callback-failure is retried even when the object is absent.
+	BeforeLogDelete func(context.Context, LogIdentity) error
+	AfterLogDelete  func(context.Context, LogIdentity) error
+	pool            *pgxpool.Pool
+	blobs           *blobstore.Client
 }
 
 // NewSweeper builds a Sweeper. pool must be able to see both the retention
@@ -123,7 +134,7 @@ func (sw *Sweeper) Sweep(ctx context.Context) (int, error) {
 
 func (sw *Sweeper) sweepLogs(ctx context.Context) (int, error) {
 	rows, err := sw.pool.Query(ctx, `
-		SELECT job.id, job.finished_at, COALESCE(pol.log_days, $1)
+		SELECT job.id, job.finished_at, COALESCE(pol.log_days, $1),run.org_id,job.connection_id
 		FROM ci.workflow_jobs job
 		JOIN ci.workflow_runs run ON run.id = job.run_id
 		LEFT JOIN retention.retention_policies pol ON pol.org_id = run.org_id
@@ -135,6 +146,7 @@ func (sw *Sweeper) sweepLogs(ctx context.Context) (int, error) {
 	}
 
 	type candidate struct {
+		identity   LogIdentity
 		jobID      uuid.UUID
 		finishedAt time.Time
 		logDays    int
@@ -142,7 +154,7 @@ func (sw *Sweeper) sweepLogs(ctx context.Context) (int, error) {
 	var candidates []candidate
 	for rows.Next() {
 		var c candidate
-		if err := rows.Scan(&c.jobID, &c.finishedAt, &c.logDays); err != nil {
+		if err := rows.Scan(&c.jobID, &c.finishedAt, &c.logDays, &c.identity.OrgID, &c.identity.ConnectionID); err != nil {
 			rows.Close()
 			return 0, fmt.Errorf("scan job for log sweep: %w", err)
 		}
@@ -165,9 +177,21 @@ func (sw *Sweeper) sweepLogs(ctx context.Context) (int, error) {
 			continue
 		}
 
+		c.identity.JobID = c.jobID
+		owner := authz.WithScope(ctx, authz.Scope{OrgID: c.identity.OrgID, ActorKind: "service", ServiceName: "ci-retention"})
+		if sw.BeforeLogDelete != nil {
+			if err := sw.BeforeLogDelete(owner, c.identity); err != nil {
+				return deleted, err
+			}
+		}
 		key := "logs/" + c.jobID.String() + ".txt"
 		if err := sw.blobs.Delete(ctx, key); err != nil {
 			return deleted, fmt.Errorf("delete sealed log for job %s: %w", c.jobID, err)
+		}
+		if sw.AfterLogDelete != nil {
+			if err := sw.AfterLogDelete(owner, c.identity); err != nil {
+				return deleted, err
+			}
 		}
 		deleted++
 	}

@@ -247,7 +247,12 @@ func TestOrgMembershipAndGrantLifecycle(t *testing.T) {
 		t.Fatal("want a non-empty grant id")
 	}
 
-	getResp, err := srv.GetGrant(otherCtx, &identityv1.GetGrantRequest{Id: issueResp.GetGrant().GetId()})
+	// GetGrant never derives organization authority from a caller-supplied id.
+	if _, err := srv.GetGrant(otherCtx, &identityv1.GetGrantRequest{Id: issueResp.GetGrant().GetId()}); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("unscoped grant lookup: %v", err)
+	}
+	grantCtx := authz.WithScope(ctx, authz.Scope{OrgID: uuid.MustParse(orgResp.GetOrg().GetId()), ActorID: otherID, ActorKind: "user"})
+	getResp, err := srv.GetGrant(grantCtx, &identityv1.GetGrantRequest{Id: issueResp.GetGrant().GetId()})
 	if err != nil {
 		t.Fatalf("get grant: %v", err)
 	}

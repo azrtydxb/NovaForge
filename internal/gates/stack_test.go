@@ -163,24 +163,18 @@ func newPlatformStack(t *testing.T) *platformStack {
 	t.Cleanup(func() { reviewsConn.Close() })
 	s.reviews = reviewsv1.NewReviewsServiceClient(reviewsConn)
 
-	controller := &gates.Controller{
-		Store:      gates.NewStore(pool),
-		Git:        s.git,
-		Runs:       gates.NewServiceRunLookup(s.reviews, nil, s.git),
-		BuildInput: gates.NewWorkspaceInputBuilder(s.git, ""),
-		Proof: func(ctx context.Context, runID uuid.UUID, gate, status, detail string) error {
-			_, err := s.reviews.RecordProof(ctx, &reviewsv1.RecordProofRequest{
-				RunId: runID.String(), Gate: gate, Status: status, Detail: detail,
-			})
-			return err
-		},
-	}
+	controller := gates.NewController(gates.NewStore(pool), s.git, s.reviews, nil, "",
+		gates.WithProofService(s.hmac))
 	gatesSrv := gates.NewGRPCServer(controller, approvals.NewStore(pool), nil, capability.NewStore(pool))
 	gatesSrv.Proposals = &gates.Proposer{Git: s.git, Reviews: s.reviews}
 	gatesConn := serve(t, func(g *grpc.Server) { gatesv1.RegisterGatesServiceServer(g, gatesSrv) }, auth)
 	s.gates = gatesv1.NewGatesServiceClient(gatesConn)
 
 	reviewsSrv := reviews.NewGRPCServer(reviews.NewStore(pool))
+	// Review admission must resolve the reviewed source through its real owner,
+	// just as work-reviews does in production; a Merger-only Git client is not
+	// available to the independent SubmitReview path.
+	reviewsSrv.Git = s.git
 	reviewsSrv.Merger = &reviews.Merger{
 		Store: reviewsSrv.Store,
 		Gates: reviews.GatesClient{Gates: s.gates},
@@ -338,7 +332,15 @@ func (s *platformStack) openRun(u stackUser, source string) *reviewsv1.Run {
 
 func (s *platformStack) approveReview(u stackUser, runID string) {
 	s.t.Helper()
-	if _, err := s.reviews.SubmitReview(s.as(u), &reviewsv1.SubmitReviewRequest{RunId: runID, Verdict: "approve"}); err != nil {
+	run, err := s.reviews.GetRun(s.as(u), &reviewsv1.GetRunRequest{Id: runID})
+	if err != nil {
+		s.t.Fatalf("inspect review run: %v", err)
+	}
+	head, err := s.git.ListCommits(s.as(u), &gitv1.ListCommitsRequest{Repo: run.GetRun().GetRepoId(), Ref: run.GetRun().GetSourceRef(), Limit: 1})
+	if err != nil || len(head.GetCommits()) != 1 {
+		s.t.Fatalf("inspect reviewed source: %v (%v)", head, err)
+	}
+	if _, err := s.reviews.SubmitReview(s.as(u), &reviewsv1.SubmitReviewRequest{RunId: runID, Verdict: "approve", ExpectedSourceSha: head.GetCommits()[0].GetSha()}); err != nil {
 		s.t.Fatalf("SubmitReview: %v", err)
 	}
 }

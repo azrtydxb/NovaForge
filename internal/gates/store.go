@@ -33,8 +33,11 @@ type Evaluation struct {
 	Status      string
 	Detail      string
 	EvaluatedAt time.Time
-	TargetSHA   string
-	RepoID      uuid.UUID
+	// TargetSHA is the historical name for the evaluated SOURCE commit.
+	TargetSHA string
+	// PolicySHA pins the actual target commit supplying policy.
+	PolicySHA string
+	RepoID    uuid.UUID
 	// Nil means no measurement, including legacy rows and failed test runs.
 	CoveragePercent *float64
 }
@@ -50,10 +53,9 @@ func NewStore(pool *pgxpool.Pool) *Store {
 }
 
 // RecordEvaluation upserts the result of evaluating e.Gate for e.RunID at
-// e.TargetSHA. Upserting on (run_id, gate, target_sha) means an
-// at-least-once redelivery of the same evaluation can never create a
-// duplicate row: it only ever refreshes the single row for that gate at
-// that commit.
+// e.TargetSHA under e.PolicySHA. Upserting on
+// (run_id, gate, target_sha, policy_sha) deduplicates redelivery without
+// replacing evidence evaluated under another policy revision.
 func (s *Store) RecordEvaluation(ctx context.Context, e Evaluation) error {
 	if err := authz.RequireOrg(ctx, e.OrgID); err != nil {
 		return err
@@ -66,9 +68,9 @@ func (s *Store) RecordEvaluation(ctx context.Context, e Evaluation) error {
 		e.ID = uuid.New()
 	}
 	tag, err := s.pool.Exec(ctx,
-		`INSERT INTO gates.gate_evaluations (id, org_id, run_id, gate, status, detail, target_sha, evaluated_at, repo_id, coverage_percent)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, now(), $8, $9)
-		 ON CONFLICT (run_id, gate, target_sha) DO UPDATE SET
+		`INSERT INTO gates.gate_evaluations (id, org_id, run_id, gate, status, detail, target_sha, evaluated_at, repo_id, coverage_percent,policy_sha)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, now(), $8, $9,$10)
+		 ON CONFLICT (run_id, gate, target_sha, policy_sha) DO UPDATE SET
 		   status = EXCLUDED.status,
 		   detail = EXCLUDED.detail,
 		   repo_id = EXCLUDED.repo_id,
@@ -77,7 +79,7 @@ func (s *Store) RecordEvaluation(ctx context.Context, e Evaluation) error {
 		 WHERE gates.gate_evaluations.org_id = EXCLUDED.org_id
 		   AND (gates.gate_evaluations.repo_id = EXCLUDED.repo_id
 		        OR gates.gate_evaluations.repo_id = '00000000-0000-0000-0000-000000000000')`,
-		e.ID, e.OrgID, e.RunID, e.Gate, e.Status, e.Detail, e.TargetSHA, e.RepoID, e.CoveragePercent,
+		e.ID, e.OrgID, e.RunID, e.Gate, e.Status, e.Detail, e.TargetSHA, e.RepoID, e.CoveragePercent, e.PolicySHA,
 	)
 	if err != nil {
 		return fmt.Errorf("record gate evaluation: %w", err)
@@ -96,7 +98,7 @@ func (s *Store) ListEvaluations(ctx context.Context, runID uuid.UUID) ([]Evaluat
 		return nil, err
 	}
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, org_id, run_id, gate, status, detail, target_sha, evaluated_at, repo_id, coverage_percent
+		`SELECT id, org_id, run_id, gate, status, detail, target_sha, evaluated_at, repo_id, coverage_percent,policy_sha
 		 FROM gates.gate_evaluations WHERE run_id = $1 AND org_id = $2
 		 ORDER BY evaluated_at DESC`,
 		runID, scope.OrgID,
@@ -109,7 +111,7 @@ func (s *Store) ListEvaluations(ctx context.Context, runID uuid.UUID) ([]Evaluat
 	var out []Evaluation
 	for rows.Next() {
 		var e Evaluation
-		if err := rows.Scan(&e.ID, &e.OrgID, &e.RunID, &e.Gate, &e.Status, &e.Detail, &e.TargetSHA, &e.EvaluatedAt, &e.RepoID, &e.CoveragePercent); err != nil {
+		if err := rows.Scan(&e.ID, &e.OrgID, &e.RunID, &e.Gate, &e.Status, &e.Detail, &e.TargetSHA, &e.EvaluatedAt, &e.RepoID, &e.CoveragePercent, &e.PolicySHA); err != nil {
 			return nil, fmt.Errorf("scan gate evaluation: %w", err)
 		}
 		out = append(out, e)
@@ -120,21 +122,25 @@ func (s *Store) ListEvaluations(ctx context.Context, runID uuid.UUID) ([]Evaluat
 	return out, nil
 }
 
-// LatestForSHA returns, for each gate that has been evaluated for runID at
-// exactly targetSHA, its most recent evaluation. Evaluations are SHA-scoped
-// by construction (RecordEvaluation upserts per (run_id, gate, target_sha)),
-// so a gate evaluated only at a different SHA is simply absent from the
-// result: a new push invalidates prior results without any explicit
-// invalidation step.
-func (s *Store) LatestForSHA(ctx context.Context, runID uuid.UUID, sha string) (map[string]Evaluation, error) {
+// LatestForSHA returns each gate's evaluation for the exact source SHA and
+// policy SHA. RecordEvaluation upserts per (run_id, gate, target_sha, policy_sha),
+// so a source or policy change cannot reuse evidence from another revision.
+// Omitting the policy selects only legacy, unqualified evidence.
+func (s *Store) LatestForSHA(ctx context.Context, runID uuid.UUID, sha string, policies ...string) (map[string]Evaluation, error) {
 	scope, err := authz.FromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
+	// Absence of a policy pin means legacy evidence only, never an arbitrary
+	// qualified policy version that happens to share the source commit.
+	policy := ""
+	if len(policies) > 0 {
+		policy = policies[0]
+	}
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, org_id, run_id, gate, status, detail, target_sha, evaluated_at, repo_id, coverage_percent
-		 FROM gates.gate_evaluations WHERE run_id = $1 AND org_id = $2 AND target_sha = $3`,
-		runID, scope.OrgID, sha,
+		`SELECT id, org_id, run_id, gate, status, detail, target_sha, evaluated_at, repo_id, coverage_percent,policy_sha
+		 FROM gates.gate_evaluations WHERE run_id = $1 AND org_id = $2 AND target_sha = $3 AND policy_sha = $4`,
+		runID, scope.OrgID, sha, policy,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("latest gate evaluations for sha: %w", err)
@@ -144,7 +150,7 @@ func (s *Store) LatestForSHA(ctx context.Context, runID uuid.UUID, sha string) (
 	out := make(map[string]Evaluation)
 	for rows.Next() {
 		var e Evaluation
-		if err := rows.Scan(&e.ID, &e.OrgID, &e.RunID, &e.Gate, &e.Status, &e.Detail, &e.TargetSHA, &e.EvaluatedAt, &e.RepoID, &e.CoveragePercent); err != nil {
+		if err := rows.Scan(&e.ID, &e.OrgID, &e.RunID, &e.Gate, &e.Status, &e.Detail, &e.TargetSHA, &e.EvaluatedAt, &e.RepoID, &e.CoveragePercent, &e.PolicySHA); err != nil {
 			return nil, fmt.Errorf("scan gate evaluation: %w", err)
 		}
 		out[e.Gate] = e

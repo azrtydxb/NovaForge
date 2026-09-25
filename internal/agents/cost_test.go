@@ -58,6 +58,13 @@ func TestStartRunRefusesCostLimitWithoutPrice(t *testing.T) {
 	if resp.GetRun().GetCostLimitMicros() != 0 {
 		t.Fatalf("cost limit = %d, want 0 (none)", resp.GetRun().GetCostLimitMicros())
 	}
+	// A priced repository override is resolved later by Runner. Admission
+	// must not reject it just because the deployment default is unpriced.
+	srv.HasModelPrices = true
+	req.CostLimitMicros = 1
+	if _, err := srv.StartRun(ctx, req); err != nil {
+		t.Fatalf("configured override price was refused at admission: %v", err)
+	}
 }
 
 func TestTokenPriceRoundsUp(t *testing.T) {
@@ -107,4 +114,11 @@ func sponsorOf(t *testing.T, ctx context.Context) string {
 		t.Fatal(err)
 	}
 	return scope.ActorID.String()
+}
+
+func TestTokenPriceCannotOverflowToFree(t *testing.T) {
+	p := agents.TokenPrice{InputMicrosPerMillion: 1 << 62, OutputMicrosPerMillion: 1 << 62}
+	if got := p.CostMicros(1000000, 1000000); got != int64(1<<63-1) {
+		t.Fatalf("overflowed cost=%d, want saturated positive cost", got)
+	}
 }

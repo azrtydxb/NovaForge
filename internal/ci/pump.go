@@ -58,6 +58,7 @@ func NewPump(store *Store, dispatcher *Dispatcher, cloneBase, hmacSecret string)
 
 // Run pumps until ctx is cancelled.
 func (p *Pump) Run(ctx context.Context) {
+	go p.runCredentialCleanup(ctx)
 	ticker := time.NewTicker(p.interval)
 	defer ticker.Stop()
 	for {
@@ -99,7 +100,7 @@ func (p *Pump) tick(ctx context.Context) error {
 // runner is done for this tick — a job was sent, or there is nothing to claim
 // — rather than whether a job was set aside and another should be tried.
 func (p *Pump) offer(ctx context.Context, r ConnectedRunner) bool {
-	job, orgID, err := p.store.ClaimForDispatch(ctx, r.ID, r.Labels)
+	job, orgID, err := p.store.ClaimForDispatch(ctx, r.ID, r.Labels, r.ConnectionID)
 	if errors.Is(err, ErrNoClaimableJob) {
 		// Nothing to do for this runner is the normal case, not an error.
 		return true
@@ -127,12 +128,38 @@ func (p *Pump) offer(ctx context.Context, r ConnectedRunner) bool {
 	// only, and the value lives in memory until the runner has it. A job that
 	// cannot get them does not run — it waits if the broker is unreachable
 	// and fails if the broker refused.
+	attempt := uuid.Nil
+	abandon := func(cause error) bool {
+		if attempt == uuid.Nil {
+			return true
+		}
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		var ids []uuid.UUID
+		var ce *CredentialCleanupError
+		if errors.As(cause, &ce) {
+			ids = ce.LeaseIDs
+		}
+		if err := p.store.abandonCredentials(cleanup, orgID, job.JobID, attempt, ids); err != nil {
+			p.log.Error("ci credential cleanup not persisted; reservation retained", "job", job.JobID, "error", err)
+			return false
+		}
+		return true
+	}
 	if len(job.Secrets) > 0 {
+		attempt = uuid.New()
+		if err := p.store.prepareCredentials(ctx, orgID, job.JobID, r.ID, attempt); err != nil {
+			p.releaseClaim(ctx, job.JobID, "credential preparation unavailable", time.Now().Add(credentialRetryAfter))
+			return false
+		}
 		creds, cerr := ResolveJobCredentials(ctx, p.Credentials, JobCredentials{
-			OrgID: orgID, JobID: job.JobID, RepoID: job.RepoID, Ref: job.Ref,
+			AttemptID: attempt, OrgID: orgID, JobID: job.JobID, RepoID: job.RepoID, Ref: job.Ref,
 			Environment: job.Environment, Secrets: job.Secrets,
 		})
 		if cerr != nil {
+			if !abandon(cerr) {
+				return true
+			}
 			if StateAfterCredentialResolution(cerr) == "pending" {
 				p.log.Warn("ci pump: job blocked on credentials", "job", job.JobID, "error", cerr)
 				p.releaseClaim(ctx, job.JobID, "blocked: "+cerr.Error(), time.Now().Add(credentialRetryAfter))
@@ -146,9 +173,12 @@ func (p *Pump) offer(ctx context.Context, r ConnectedRunner) bool {
 		p.Redactions.Register(job.JobID, redact.Values(creds))
 	}
 
-	if err := p.store.StartClaimedJob(ctx, job.JobID, r.ID); err != nil {
+	if err := p.store.StartClaimedJob(ctx, job.JobID, r.ID, attempt); err != nil {
 		p.log.Warn("ci pump: cannot start reserved job", "job", job.JobID, "error", err)
 		p.Redactions.Forget(job.JobID)
+		if !abandon(nil) {
+			return true
+		}
 		p.releaseClaim(ctx, job.JobID, "", time.Now())
 		return true
 	}
@@ -158,6 +188,9 @@ func (p *Pump) offer(ctx context.Context, r ConnectedRunner) bool {
 		// is spent, so it is brokered afresh when it is claimed again.
 		p.log.Warn("ci pump: dispatch failed, releasing job", "job", job.JobID, "error", err)
 		p.Redactions.Forget(job.JobID)
+		if !abandon(nil) {
+			return true
+		}
 		p.releaseClaim(ctx, job.JobID, "", time.Now())
 	}
 	return true

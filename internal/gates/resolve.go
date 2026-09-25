@@ -1,8 +1,10 @@
 package gates
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 
@@ -12,7 +14,9 @@ import (
 	"gopkg.in/yaml.v3"
 
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
+	"github.com/novaforge/novaforge/internal/gateconfig"
 	"github.com/novaforge/novaforge/internal/gatenames"
+	"github.com/novaforge/novaforge/internal/repoconfig"
 )
 
 // knownGates is the fixed set of gate names the platform understands. A
@@ -36,10 +40,35 @@ type gateFile struct {
 
 const gatesDir = ".novaforge/gates"
 
+// Missing required is not explicit optional policy: a misspelled field must
+// never silently weaken a merge gate. Decode one complete document only.
+func decodeGateFile(content []byte) (gateFile, error) {
+	var wire struct {
+		Name     string         `yaml:"name"`
+		Required *bool          `yaml:"required"`
+		Params   map[string]any `yaml:"params"`
+	}
+	dec := yaml.NewDecoder(bytes.NewReader(content))
+	dec.KnownFields(true)
+	if err := dec.Decode(&wire); err != nil {
+		return gateFile{}, err
+	}
+	if wire.Required == nil {
+		return gateFile{}, fmt.Errorf("required must be explicitly true or false")
+	}
+	if err := dec.Decode(new(any)); err != io.EOF {
+		return gateFile{}, fmt.Errorf("exactly one YAML document is required")
+	}
+	if err := gateconfig.ValidateParameters(wire.Name, wire.Params); err != nil {
+		return gateFile{}, err
+	}
+	return gateFile{Name: wire.Name, Required: *wire.Required, Params: wire.Params}, nil
+}
+
 // Resolve reads gate definitions from the repository's .novaforge/gates
 // directory at targetRef — the branch being merged into, never the source
-// branch — and unions them with workItemGates, the Work Item's required
-// gates. Reading only at targetRef is what makes it impossible for a change
+// branch — and unions them with project.yaml and workItemGates requirements.
+// Reading only at targetRef is what makes it impossible for a change
 // under review to delete or weaken the gates that judge it: the source
 // branch is never consulted.
 func Resolve(ctx context.Context, git gitv1.GitServiceClient, orgID, repoID uuid.UUID, targetRef string, workItemGates []string) ([]Definition, error) {
@@ -84,8 +113,8 @@ func Resolve(ctx context.Context, git gitv1.GitServiceClient, orgID, repoID uuid
 			return nil, fmt.Errorf("read gate config %s: %w", path, err)
 		}
 
-		var gf gateFile
-		if err := yaml.Unmarshal(blob.Content, &gf); err != nil {
+		gf, err := decodeGateFile(blob.Content)
+		if err != nil {
 			return nil, fmt.Errorf("malformed gate config %s: %w", path, err)
 		}
 		if gf.Name == "" {
@@ -94,10 +123,21 @@ func Resolve(ctx context.Context, git gitv1.GitServiceClient, orgID, repoID uuid
 		if !knownGates[gf.Name] {
 			return nil, fmt.Errorf("unknown gate %q in %s", gf.Name, path)
 		}
+		if _, exists := defs[gf.Name]; exists {
+			return nil, fmt.Errorf("duplicate gate %q in %s", gf.Name, path)
+		}
 		defs[gf.Name] = Definition{Name: gf.Name, Params: gf.Params, Required: gf.Required}
 	}
 
-	for _, name := range workItemGates {
+	project, err := repoconfig.LoadProject(ctx, git, repoID, targetRef)
+	if err != nil {
+		return nil, err
+	}
+	// Directory flags cannot weaken project or Work requirements. Copy before
+	// unioning so an append cannot mutate caller-owned Work Item storage.
+	required := append([]string(nil), workItemGates...)
+	required = append(required, project.Gates...)
+	for _, name := range required {
 		if !knownGates[name] {
 			return nil, fmt.Errorf("unknown gate %q required by work item", name)
 		}

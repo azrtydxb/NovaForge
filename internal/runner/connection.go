@@ -3,6 +3,7 @@ package runner
 import (
 	"context"
 	"fmt"
+	"google.golang.org/protobuf/proto"
 	"log"
 	"sync"
 	"time"
@@ -46,6 +47,8 @@ type Session struct {
 // returns nil when ctx is cancelled, and waits for jobs already started to
 // report before returning.
 func (s *Session) Run(ctx context.Context) error {
+	ctx, cancelSession := context.WithCancel(ctx)
+	defer cancelSession()
 	stream, err := s.Client.Connect(ctx)
 	if err != nil {
 		return fmt.Errorf("connect: %w", err)
@@ -62,6 +65,13 @@ func (s *Session) Run(ctx context.Context) error {
 		return fmt.Errorf("send initial heartbeat: %w", err)
 	}
 
+	hello, err := stream.Recv()
+	if err != nil || hello.GetConnectionId() == "" || hello.GetJobId() != "" {
+		return fmt.Errorf("runner connection handshake failed")
+	}
+	connectionID := hello.GetConnectionId()
+	rawSend := send
+	send = func(msg *civ1.ConnectRequest) error { msg.ConnectionId = connectionID; return rawSend(msg) }
 	recvCh := make(chan *civ1.ConnectResponse)
 	recvErrCh := make(chan error, 1)
 	go func() {
@@ -87,7 +97,7 @@ func (s *Session) Run(ctx context.Context) error {
 	defer ticker.Stop()
 
 	var wg sync.WaitGroup
-	defer wg.Wait()
+	defer func() { cancelSession(); wg.Wait() }()
 
 	for {
 		select {
@@ -100,6 +110,9 @@ func (s *Session) Run(ctx context.Context) error {
 				return fmt.Errorf("send heartbeat: %w", err)
 			}
 		case job := <-recvCh:
+			if job.GetConnectionId() != connectionID || job.GetJobId() == "" {
+				return fmt.Errorf("job has invalid connection identity")
+			}
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -124,20 +137,23 @@ func (s *Session) runJob(ctx context.Context, send func(*civ1.ConnectRequest) er
 
 	logs := make(chan string, 256)
 	logsDone := make(chan struct{})
+	var lastLogSequence int64
 	go func() {
 		defer close(logsDone)
 		for line := range logs {
+			lastLogSequence++
 			line = mask.Line(line)
 			if err := send(&civ1.ConnectRequest{
 				RunnerId: s.RunnerID,
 				Token:    s.Token,
-				Payload:  &civ1.ConnectRequest_LogChunk{LogChunk: &civ1.LogChunk{JobId: job.GetJobId(), Line: line}},
+				Payload:  &civ1.ConnectRequest_LogChunk{LogChunk: &civ1.LogChunk{JobId: job.GetJobId(), Line: line, Sequence: lastLogSequence}},
 			}); err != nil {
 				log.Printf("runner: send log chunk for job %s: %v", job.GetJobId(), err)
 			}
 		}
 	}()
 
+	ctx = context.WithValue(ctx, connectionContextKey{}, job.GetConnectionId())
 	exitCode, err := s.Executor.Run(ctx, job, logs)
 	close(logs)
 	<-logsDone
@@ -156,12 +172,14 @@ func (s *Session) runJob(ctx context.Context, send func(*civ1.ConnectRequest) er
 	reportCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if _, err := s.Client.ReportStatus(reportCtx, &civ1.ReportStatusRequest{
-		RunnerId: s.RunnerID,
-		Token:    s.Token,
-		JobId:    job.GetJobId(),
-		Status:   status,
-		ExitCode: int32(exitCode),
-		Detail:   mask.Line(detail),
+		RunnerId:        s.RunnerID,
+		ConnectionId:    job.GetConnectionId(),
+		Token:           s.Token,
+		JobId:           job.GetJobId(),
+		Status:          status,
+		ExitCode:        int32(exitCode),
+		LastLogSequence: proto.Int64(lastLogSequence),
+		Detail:          mask.Line(detail),
 	}); err != nil {
 		log.Printf("runner: report status for job %s: %v", job.GetJobId(), err)
 	}
@@ -179,7 +197,7 @@ func UploadArtifactsThrough(client civ1.RunnerServiceClient, runnerID, token str
 	return func(ctx context.Context, jobID string, arts []Artifact) error {
 		for _, a := range arts {
 			if _, err := client.UploadArtifact(ctx, &civ1.UploadArtifactRequest{
-				RunnerId: runnerID, Token: token, JobId: jobID,
+				RunnerId: runnerID, Token: token, JobId: jobID, ConnectionId: connectionFromContext(ctx),
 				Name: a.Name, Content: a.Content,
 			}); err != nil {
 				return fmt.Errorf("upload %s: %w", a.Name, err)
@@ -195,4 +213,11 @@ func heartbeatMessage(runnerID, token string) *civ1.ConnectRequest {
 		Token:    token,
 		Payload:  &civ1.ConnectRequest_Heartbeat{Heartbeat: &civ1.Heartbeat{At: time.Now().UTC().Format(time.RFC3339)}},
 	}
+}
+
+type connectionContextKey struct{}
+
+func connectionFromContext(ctx context.Context) string {
+	value, _ := ctx.Value(connectionContextKey{}).(string)
+	return value
 }

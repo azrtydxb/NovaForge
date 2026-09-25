@@ -7,9 +7,10 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"log"
 	"sort"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -230,25 +231,46 @@ const (
 // did.
 func (r *Registry) Call(ctx context.Context, runID uuid.UUID, name string, argsJSON []byte) ([]byte, error) {
 	if r.audit == nil {
-		return nil, fmt.Errorf("tool %q: this run has no audit log, and no call is made unrecorded", name)
+		return nil, ErrAuditUnavailable
 	}
-	auditID, err := r.audit.Record(ctx, agents.Entry{
+	auditName := name
+	if _, ok := r.tools[name]; !ok {
+		auditName = "unregistered"
+		for _, known := range KnownToolNames() {
+			if known == name {
+				auditName = name
+				break
+			}
+		}
+	}
+	recordCtx, stopRecord := context.WithTimeout(ctx, 2*time.Second)
+	defer stopRecord()
+	auditID, err := r.audit.Record(recordCtx, agents.Entry{
 		RunID:    runID,
-		Tool:     name,
+		Tool:     auditName,
 		ArgsJSON: normalizeArgs(argsJSON),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("audit record: %w", err)
+		return nil, fmt.Errorf("%w: start receipt unavailable", ErrAuditUnavailable)
 	}
 	// The outcome is written even when the run's context has been cancelled
 	// part-way through the call: under that context the write failed, and the
 	// calls of exactly the runs someone chose to stop stayed "pending".
 	complete := func(outcome, errText string) error {
-		return r.audit.Complete(context.WithoutCancel(ctx), auditID, outcome, errText)
+		var err error
+		for attempt := 0; attempt < 3; attempt++ {
+			writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 500*time.Millisecond)
+			err = r.audit.Complete(writeCtx, auditID, outcome, errText)
+			cancel()
+			if err == nil {
+				return nil
+			}
+		}
+		return ErrAuditUnavailable
 	}
 	fail := func(outcome string, callErr error) ([]byte, error) {
 		if err := complete(outcome, callErr.Error()); err != nil {
-			log.Printf("tools: record %s outcome of %s for run %s: %v", outcome, name, runID, err)
+			return nil, errors.Join(callErr, ErrAuditUnavailable)
 		}
 		return nil, callErr
 	}
@@ -272,6 +294,9 @@ func (r *Registry) Call(ctx context.Context, runID uuid.UUID, name string, argsJ
 
 	result, err := entry.handler(ctx, r.rt, argsJSON)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return fail("cancelled", err)
+		}
 		return fail(OutcomeError, err)
 	}
 
@@ -280,6 +305,8 @@ func (r *Registry) Call(ctx context.Context, runID uuid.UUID, name string, argsJ
 	}
 	return result, nil
 }
+
+var ErrAuditUnavailable = errors.New("tool audit persistence unavailable")
 
 // normalizeArgs stores an explicit JSON null (rather than an empty byte
 // slice, which is not valid JSON) when a tool call carries no arguments.

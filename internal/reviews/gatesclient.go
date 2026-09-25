@@ -26,11 +26,17 @@ func (g GatesClient) Evaluate(ctx context.Context, runID uuid.UUID) error {
 	return nil
 }
 
-// MayMerge asks the gate controller whether runID may merge.
-func (g GatesClient) MayMerge(ctx context.Context, runID uuid.UUID) (bool, []string, error) {
-	resp, err := g.Gates.MayMerge(ctx, &gatesv1.MayMergeRequest{RunId: runID.String()})
+// MayMergePinned refuses unbound or mismatched authority even if allowed is true.
+func (g GatesClient) MayMergePinned(ctx context.Context, runID uuid.UUID, sourceSHA, targetSHA string) (bool, []string, error) {
+	if sourceSHA == "" || targetSHA == "" {
+		return false, nil, fmt.Errorf("pinned source and target required")
+	}
+	resp, err := g.Gates.MayMerge(ctx, &gatesv1.MayMergeRequest{RunId: runID.String(), ExpectedSourceSha: sourceSHA, ExpectedTargetSha: targetSHA})
 	if err != nil {
 		return false, nil, fmt.Errorf("gates: may merge %s: %w", runID, err)
+	}
+	if resp.GetEvaluatedSourceSha() != sourceSHA || resp.GetEvaluatedTargetSha() != targetSHA {
+		return false, nil, fmt.Errorf("gate response revision identity missing or mismatched")
 	}
 	return resp.GetAllowed(), resp.GetReasons(), nil
 }

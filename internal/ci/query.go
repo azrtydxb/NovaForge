@@ -117,6 +117,12 @@ func (q *QueryServer) GetJobLogs(ctx context.Context, req *civ1.GetJobLogsReques
 		return nil, err
 	}
 
+	if lines, journal, err := q.store.journalSnapshot(ctx, jobID); err != nil {
+		return nil, status.Errorf(codes.Internal, "read admitted log: %v", err)
+	} else if journal {
+		return &civ1.GetJobLogsResponse{Lines: lines}, nil
+	}
+
 	// A finished job's log lives in object storage; a running job's in Redis.
 	// Both are read, sealed first: a runner's last chunks can land after the
 	// status report that sealed the log, and those lines stay live until the

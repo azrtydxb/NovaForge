@@ -27,6 +27,7 @@ const tailPollInterval = 2 * time.Second
 // LogSink streams a job's live log lines through Redis while it runs, and
 // seals the finished log into object storage.
 type LogSink struct {
+	store *Store
 	rdb   *redis.Client
 	blobs *blobstore.Client
 }
@@ -117,6 +118,13 @@ func (s *LogSink) Tail(ctx context.Context, jobID uuid.UUID, from string) (<-cha
 // read stays live, is still returned by a log read, and is folded in by the
 // next Seal.
 func (s *LogSink) Seal(ctx context.Context, jobID uuid.UUID) (string, error) {
+	if s.store != nil {
+		if _, journal, err := s.store.journalSnapshot(ctx, jobID); err != nil {
+			return "", err
+		} else if journal {
+			return s.sealJournal(ctx, jobID)
+		}
+	}
 	// A sink with no object storage cannot seal. Saying so leaves the log live
 	// and readable, where dereferencing the missing store took the whole
 	// ci-runner process down on a job's final status report.
@@ -157,6 +165,9 @@ func (s *LogSink) Seal(ctx context.Context, jobID uuid.UUID) (string, error) {
 			return "", fmt.Errorf("remove sealed lines of job %s from the live log: %w", jobID, err)
 		}
 	}
+	if s.store != nil {
+		return s.acknowledgeSeal(ctx, jobID, objectKey)
+	}
 	return objectKey, nil
 }
 
@@ -195,6 +206,11 @@ func (s *LogSink) Delete(ctx context.Context, jobID uuid.UUID) error {
 // sealed yet. Tail follows a running job; this answers "what has it printed",
 // which is what a request for a log wants when the job may still be going.
 func (s *LogSink) Snapshot(ctx context.Context, jobID uuid.UUID) ([]string, error) {
+	if s.store != nil {
+		if lines, journal, err := s.store.journalSnapshot(ctx, jobID); err != nil || journal {
+			return lines, err
+		}
+	}
 	msgs, err := s.rdb.XRange(ctx, logStreamKey(jobID), "-", "+").Result()
 	if err != nil {
 		return nil, fmt.Errorf("read job log: %w", err)

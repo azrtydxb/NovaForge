@@ -3,7 +3,10 @@ package workspace_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"github.com/novaforge/novaforge/internal/capability"
+	"github.com/novaforge/novaforge/internal/mcp"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -60,6 +63,9 @@ func TestAgentRunIsolationAndEvidence(t *testing.T) {
 	if err := database.MigrateAs(dbURL, "gitplatform", "gitplatform_git", gitops.MigrationsFS); err != nil {
 		t.Fatalf("migrate gitplatform: %v", err)
 	}
+	if err := database.Migrate(dbURL, "gitplatform", capability.MigrationsFS); err != nil {
+		t.Fatalf("migrate capabilities: %v", err)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
 	defer cancel()
 	pool, err := database.Connect(ctx, dbURL)
@@ -91,6 +97,7 @@ func TestAgentRunIsolationAndEvidence(t *testing.T) {
 	// The run writes through the git API as its agent, so it holds a real
 	// capability grant for its branch, and git-platform checks it.
 	grants := capability.NewStore(pool)
+	store.GrantRevoker = grants.Revoke
 	gitSrv.Grants = grants
 	grant, err := grants.Issue(personCtx, capability.Grant{OrgID: orgID, SubjectID: agent.ID, SubjectKind: "agent",
 		RepoRead: true, WriteBranch: "agents/NF-1/", ExpiresAt: time.Now().Add(time.Hour)})
@@ -107,8 +114,9 @@ func TestAgentRunIsolationAndEvidence(t *testing.T) {
 	}
 
 	// --- the run's own namespace, on the cluster ---
-	p := workspace.NewProvisioner(client).WithRESTConfig(cfg)
-	ws, err := p.Create(ctx, run.ID, workspace.Spec{Image: workspace.DefaultImage, CPULimit: "1", MemLimit: "1Gi"})
+	p := workspace.NewProvisioner(client).WithRESTConfig(cfg).WithCleanupRecorder(store.RecordWorkspaceCleanup)
+	store.WorkspaceCleaner = p.DestroyConfirmed
+	ws, err := p.Create(ctx, run.ID, workspace.Spec{OrgID: orgID, Image: workspace.DefaultImage, CPULimit: "1", MemLimit: "1Gi"})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -126,6 +134,57 @@ func TestAgentRunIsolationAndEvidence(t *testing.T) {
 	}
 	if err := p.WaitReady(ctx, run.ID, 5*time.Minute); err != nil {
 		t.Fatalf("WaitReady: %v", err)
+	}
+
+	// A policy object's existence is not confinement. Probe the reachable API
+	// destination from the real pod, and check no cluster token was mounted.
+	apiURL, err := url.Parse(cfg.Host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := apiURL.Port()
+	if port == "" {
+		port = "443"
+	}
+	probe, err := p.Exec(ctx, run.ID, []string{"timeout", "2", "bash", "-c", `exec 3<>/dev/tcp/$1/$2`, "bash", apiURL.Hostname(), port}, nil)
+	if err != nil || probe.ExitCode != 124 {
+		t.Fatalf("workspace API egress was not blocked by timeout: exit=%d stderr=%s err=%v", probe.ExitCode, probe.Stderr, err)
+	}
+	probe, err = p.Exec(ctx, run.ID, []string{"sh", "-c", "test ! -e /var/run/secrets/kubernetes.io/serviceaccount/token"}, nil)
+	if err != nil || probe.ExitCode != 0 {
+		t.Fatalf("workspace has service-account token: %+v, %v", probe, err)
+	}
+
+	// The external stdio process is launched over Kubernetes exec in this
+	// very sandbox, never on agent-runtime's credentialed host.
+	stream, err := p.OpenStdio(personCtx, run.ID, []string{"sh", "-c", `
+setsid sh -c 'while :; do date +%s > /workspace/detached-heartbeat; sleep 1; done' </dev/null >/dev/null 2>&1 &
+echo $! > /workspace/detached-pid
+read -r line
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-06-18"}}'
+read -r line
+read -r line
+printf '%s\n' '{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"sandbox","inputSchema":{"type":"object"}}]}}'
+read -r line
+printf '%s\n' '{"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text","text":"confined"}]}}'
+# A normal session stays alive through authorized artifact collection.
+cat >/dev/null
+`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mcpClient := mcp.NewStdioClient(mcp.ServerDef{Name: "sandbox"}, []string{"sandbox"}, stream)
+	defer mcpClient.Close()
+	if err := mcpClient.Connect(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defs, err := mcpClient.ListTools(ctx)
+	if err != nil || len(defs) != 1 {
+		t.Fatalf("stdio discovery: %+v, %v", defs, err)
+	}
+	answer, err := mcpClient.Call(ctx, "sandbox", []byte(`{}`))
+	if err != nil || answer.Content != "confined" || !answer.Untrusted {
+		t.Fatalf("stdio call: %+v, %v", answer, err)
 	}
 
 	// --- the run does its work inside the namespace ---
@@ -151,6 +210,25 @@ func TestAgentRunIsolationAndEvidence(t *testing.T) {
 	}
 	if err := audit.Complete(runCtx, callID, "ok", ""); err != nil {
 		t.Fatalf("audit Complete: %v", err)
+	}
+	// Normal closure happens only after authorized artifact collection. The
+	// detached session escaped its exec shell, so stream close alone cannot stop it.
+	probe, err = p.Exec(ctx, run.ID, []string{"sh", "-c", "kill -0 $(cat /workspace/detached-pid)"}, nil)
+	if err != nil || probe.ExitCode != 0 {
+		t.Fatalf("detached child not running before Close: %+v %v", probe, err)
+	}
+	if err = mcpClient.Close(); err != nil {
+		t.Fatalf("confirmed stdio teardown: %v", err)
+	}
+	if _, err = p.Exec(ctx, run.ID, []string{"true"}, nil); !errors.Is(err, workspace.ErrWorkspaceClosed) {
+		t.Fatalf("stdio Close allowed later workspace work: %v", err)
+	}
+	saved, err := store.GetRun(personCtx, run.ID)
+	if err != nil || saved.WorkspaceIdentity == nil || !saved.WorkspaceIdentity.TerminationObserved {
+		t.Fatalf("no durable termination evidence: %+v %v", saved, err)
+	}
+	if err = store.ConfirmWorkspaceCleanup(personCtx, run.ID); err != nil {
+		t.Fatal(err)
 	}
 	if err := agents.SettleRun(runCtx, store, rdb, run, "succeeded"); err != nil {
 		t.Fatalf("SettleRun: %v", err)

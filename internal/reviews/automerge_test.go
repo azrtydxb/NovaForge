@@ -19,9 +19,9 @@ type spyGateChecker struct {
 	called *bool
 }
 
-func (s spyGateChecker) MayMerge(ctx context.Context, runID uuid.UUID) (bool, []string, error) {
+func (s spyGateChecker) MayMergePinned(ctx context.Context, runID uuid.UUID, source, target string) (bool, []string, error) {
 	*s.called = true
-	return s.inner.MayMerge(ctx, runID)
+	return s.inner.MayMergePinned(ctx, runID, source, target)
 }
 
 func newAutoMergeRun(t *testing.T, store *reviews.Store, ctx context.Context, orgID uuid.UUID, sourceRef string) reviews.Run {
@@ -41,7 +41,7 @@ func TestAutoMergeRefusedWhenGateFails(t *testing.T) {
 	orgID := uuid.New()
 	ctx := scopedCtx(orgID)
 	run := newAutoMergeRun(t, store, ctx, orgID, "src")
-	if err := store.SubmitReview(ctx, run.ID, uuid.New(), "user", "approve"); err != nil {
+	if err := store.SubmitReviewAt(ctx, run.ID, uuid.New(), "user", "approve", reviewedSHA, "reviewed this revision"); err != nil {
 		t.Fatalf("SubmitReview: %v", err)
 	}
 
@@ -145,7 +145,7 @@ func TestAutoMergeRefusedWhenDisabled(t *testing.T) {
 	orgID := uuid.New()
 	ctx := scopedCtx(orgID)
 	run := newAutoMergeRun(t, store, ctx, orgID, "src")
-	if err := store.SubmitReview(ctx, run.ID, uuid.New(), "user", "approve"); err != nil {
+	if err := store.SubmitReviewAt(ctx, run.ID, uuid.New(), "user", "approve", reviewedSHA, "reviewed this revision"); err != nil {
 		t.Fatalf("SubmitReview: %v", err)
 	}
 
@@ -180,7 +180,7 @@ func TestAutoMergeUsesTheSameMergePath(t *testing.T) {
 	orgID := uuid.New()
 	ctx := scopedCtx(orgID)
 	run := newAutoMergeRun(t, store, ctx, orgID, "src")
-	if err := store.SubmitReview(ctx, run.ID, uuid.New(), "user", "approve"); err != nil {
+	if err := store.SubmitReviewAt(ctx, run.ID, uuid.New(), "user", "approve", reviewedSHA, "reviewed this revision"); err != nil {
 		t.Fatalf("SubmitReview: %v", err)
 	}
 

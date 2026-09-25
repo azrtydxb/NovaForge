@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/novaforge/novaforge/internal/cli"
 	"github.com/novaforge/novaforge/internal/platformtest"
 )
@@ -33,7 +34,7 @@ func nfTry(args ...string) (string, string, int) {
 // the real REST edge and the real services, with no GUI. `nf run gates` and
 // `nf run merge` existed and no test or e2e step had ever called them.
 func TestCLIFullLifecycle(t *testing.T) {
-	p := platformtest.Start(t)
+	p, control := platformtest.StartWithControlledRunner(t)
 	author := p.NewUser(t, "cliauthor")
 	reviewer := p.NewUser(t, "clireviewer")
 	authorHome, reviewerHome := t.TempDir(), t.TempDir()
@@ -82,6 +83,12 @@ func TestCLIFullLifecycle(t *testing.T) {
 		t.Fatalf("nf agent start did not report the run's granted branch: %q", started)
 	}
 	runID := strings.Fields(started)[0]
+	id, err := uuid.Parse(runID)
+	if err != nil {
+		t.Fatalf("nf agent start printed invalid run ID: %v", err)
+	}
+	control.Wait(t, id.String())
+	defer control.Stop(t, id.String())
 	if got := nf(t, "agent", "get", runID); !strings.Contains(got, runID) {
 		t.Fatalf("nf agent get %s = %q", runID, got)
 	}

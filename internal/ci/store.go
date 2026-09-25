@@ -331,7 +331,22 @@ func (s *Store) SetJobStatus(ctx context.Context, jobID uuid.UUID, status string
 // still pending or running: failure if any job failed or was cancelled,
 // success otherwise.
 func (s *Store) rollUpRunStatus(ctx context.Context, jobID uuid.UUID) error {
-	_, err := s.pool.Exec(ctx, `
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin run settlement: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	// Interruption also locks the run before aggregating. Taking this lock
+	// in a separate statement is essential: a snapshot taken while waiting
+	// can still miss the interrupted sibling's newly committed terminal job.
+	var runID uuid.UUID
+	if err := tx.QueryRow(ctx, `SELECT wr.id FROM ci.workflow_runs wr JOIN ci.workflow_jobs j ON j.run_id=wr.id WHERE j.id=$1 FOR UPDATE OF wr`, jobID).Scan(&runID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		return fmt.Errorf("lock run for settlement: %w", err)
+	}
+	_, err = tx.Exec(ctx, `
 		WITH r AS (
 		  SELECT run_id FROM ci.workflow_jobs WHERE id = $1
 		), state AS (
@@ -351,6 +366,9 @@ func (s *Store) rollUpRunStatus(ctx context.Context, jobID uuid.UUID) error {
 	if err != nil {
 		return fmt.Errorf("roll up run status: %w", err)
 	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit run settlement: %w", err)
+	}
 	return nil
 }
 
@@ -360,11 +378,11 @@ func (s *Store) GetJob(ctx context.Context, jobID uuid.UUID) (WorkflowJob, error
 	var job WorkflowJob
 	var runCmd, agentRole, image, detail *string
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, run_id, name, needs, run_cmd, agent_role, image, status, runner_id, detail, started_at, finished_at, agent_run_id, coalesce(work_item_key, '')
+		SELECT id, run_id, name, needs, run_cmd, agent_role, image, status, runner_id, detail, started_at, finished_at, agent_run_id, coalesce(work_item_key, ''), secrets, environment
 		FROM ci.workflow_jobs WHERE id = $1`,
 		jobID,
 	).Scan(&job.ID, &job.RunID, &job.Name, &job.Needs, &runCmd, &agentRole, &image, &job.Status,
-		&job.RunnerID, &detail, &job.StartedAt, &job.FinishedAt, &job.AgentRunID, &job.WorkItemKey)
+		&job.RunnerID, &detail, &job.StartedAt, &job.FinishedAt, &job.AgentRunID, &job.WorkItemKey, &job.Secrets, &job.Environment)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return WorkflowJob{}, fmt.Errorf("job %s not found: %w", jobID, err)
@@ -389,7 +407,7 @@ func (s *Store) GetJob(ctx context.Context, jobID uuid.UUID) (WorkflowJob, error
 // ListJobsForRun returns every job belonging to runID, ordered by name.
 func (s *Store) ListJobsForRun(ctx context.Context, runID uuid.UUID) ([]WorkflowJob, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, run_id, name, needs, run_cmd, agent_role, image, status, runner_id, detail, started_at, finished_at, agent_run_id, coalesce(work_item_key, '')
+		SELECT id, run_id, name, needs, run_cmd, agent_role, image, status, runner_id, detail, started_at, finished_at, agent_run_id, coalesce(work_item_key, ''), secrets, environment
 		FROM ci.workflow_jobs WHERE run_id = $1 ORDER BY name`,
 		runID,
 	)
@@ -403,7 +421,7 @@ func (s *Store) ListJobsForRun(ctx context.Context, runID uuid.UUID) ([]Workflow
 		var job WorkflowJob
 		var runCmd, agentRole, image, detail *string
 		if err := rows.Scan(&job.ID, &job.RunID, &job.Name, &job.Needs, &runCmd, &agentRole, &image, &job.Status,
-			&job.RunnerID, &detail, &job.StartedAt, &job.FinishedAt, &job.AgentRunID, &job.WorkItemKey); err != nil {
+			&job.RunnerID, &detail, &job.StartedAt, &job.FinishedAt, &job.AgentRunID, &job.WorkItemKey, &job.Secrets, &job.Environment); err != nil {
 			return nil, fmt.Errorf("scan job: %w", err)
 		}
 		if runCmd != nil {
@@ -515,7 +533,7 @@ func nullString(s string) *string {
 // use the org-scoped readers. It does not need them: the row it is allowed to
 // act on is decided by the claim itself, under FOR UPDATE SKIP LOCKED, and the
 // organization comes back with it rather than being asserted by the caller.
-func (s *Store) ClaimForDispatch(ctx context.Context, runnerID uuid.UUID, labels []string) (DispatchJob, uuid.UUID, error) {
+func (s *Store) ClaimForDispatch(ctx context.Context, runnerID uuid.UUID, labels []string, connections ...uuid.UUID) (DispatchJob, uuid.UUID, error) {
 	_ = labels
 
 	tx, err := s.pool.Begin(ctx)
@@ -523,6 +541,13 @@ func (s *Store) ClaimForDispatch(ctx context.Context, runnerID uuid.UUID, labels
 		return DispatchJob{}, uuid.Nil, fmt.Errorf("begin claim: %w", err)
 	}
 	defer tx.Rollback(ctx)
+	var connection *uuid.UUID
+	if err := tx.QueryRow(ctx, `SELECT connection_id FROM ci.runners WHERE id=$1 FOR UPDATE`, runnerID).Scan(&connection); err != nil {
+		return DispatchJob{}, uuid.Nil, err
+	}
+	if len(connections) > 0 && connections[0] != uuid.Nil && (connection == nil || *connection != connections[0]) {
+		return DispatchJob{}, uuid.Nil, ErrNoClaimableJob
+	}
 
 	var (
 		dj       DispatchJob
@@ -582,8 +607,8 @@ func (s *Store) ClaimForDispatch(ctx context.Context, runnerID uuid.UUID, labels
 	dj.CommitSHA = sha
 
 	if _, err := tx.Exec(ctx, `
-		UPDATE ci.workflow_jobs SET runner_id = $1
-		WHERE id = $2`, runnerID, dj.JobID); err != nil {
+		UPDATE ci.workflow_jobs SET runner_id = $1, connection_id=$3,journal_enabled=($3::uuid IS NOT NULL)
+		WHERE id = $2`, runnerID, dj.JobID, connection); err != nil {
 		return DispatchJob{}, uuid.Nil, fmt.Errorf("reserve job: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -592,6 +617,9 @@ func (s *Store) ClaimForDispatch(ctx context.Context, runnerID uuid.UUID, labels
 	// The caller turns this into a full clone URL. The NAME is carried, not the
 	// id: the on-disk repository path and the smart-HTTP route are keyed by
 	// name, and CI must not read git-platform's schema to translate.
+	if connection != nil {
+		dj.ConnectionID = *connection
+	}
 	dj.RepoCloneURL = repoName
 	return dj, orgID, nil
 }

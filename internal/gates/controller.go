@@ -17,6 +17,7 @@ type RunHead struct {
 	OrgID         uuid.UUID
 	RepoID        uuid.UUID
 	TargetRef     string
+	TargetSHA     string
 	HeadSHA       string
 	WorkItemGates []string
 	// SourceRef is the branch carrying the change. Approval requirements are
@@ -81,7 +82,15 @@ func (c *Controller) resolveForRun(ctx context.Context, runID uuid.UUID) (resolv
 	if err != nil {
 		return resolved{}, fmt.Errorf("resolve run head for %s: %w", runID, err)
 	}
-	defs, err := Resolve(ctx, c.Git, head.OrgID, head.RepoID, head.TargetRef, head.WorkItemGates)
+	return c.resolveHead(ctx, runID, head)
+}
+
+func (c *Controller) resolveHead(ctx context.Context, runID uuid.UUID, head RunHead) (resolved, error) {
+	target := head.TargetSHA
+	if target == "" {
+		target = head.TargetRef
+	}
+	defs, err := Resolve(ctx, c.Git, head.OrgID, head.RepoID, target, head.WorkItemGates)
 	if err != nil {
 		return resolved{}, fmt.Errorf("resolve gate definitions: %w", err)
 	}
@@ -90,7 +99,7 @@ func (c *Controller) resolveForRun(ctx context.Context, runID uuid.UUID) (resolv
 		return resolved{}, err
 	}
 	defs = requireDependencyGate(defs, reqs)
-	latest, err := c.Store.LatestForSHA(ctx, runID, head.HeadSHA)
+	latest, err := c.Store.LatestForSHA(ctx, runID, head.HeadSHA, head.TargetSHA)
 	if err != nil {
 		return resolved{}, fmt.Errorf("load latest evaluations for %s: %w", runID, err)
 	}
@@ -142,6 +151,7 @@ func (c *Controller) Evaluate(ctx context.Context, runID uuid.UUID) ([]Evaluatio
 		eval.RunID = runID
 		eval.Gate = def.Name
 		eval.TargetSHA = head.HeadSHA
+		eval.PolicySHA = head.TargetSHA
 		if err := c.Store.RecordEvaluation(ctx, eval); err != nil {
 			return nil, fmt.Errorf("record evaluation for gate %q: %w", def.Name, err)
 		}
@@ -182,6 +192,31 @@ func (c *Controller) MayMerge(ctx context.Context, runID uuid.UUID) (bool, []str
 	if err != nil {
 		return false, nil, err
 	}
+	return c.mayMergeResolved(ctx, runID, r)
+}
+
+// MayMergePinned evaluates exactly one resolved pair, not a second lookup
+// after asking MayMerge. Callers must still CAS both refs at Git mutation.
+func (c *Controller) MayMergePinned(ctx context.Context, runID uuid.UUID, source, target string) (bool, []string, RunHead, error) {
+	if source == "" || target == "" {
+		return false, nil, RunHead{}, fmt.Errorf("both expected revisions are required")
+	}
+	head, err := c.Runs(ctx, runID)
+	if err != nil {
+		return false, nil, head, err
+	}
+	if head.HeadSHA != source || head.TargetSHA != target {
+		return false, []string{"run revisions changed; reevaluate before merge"}, head, nil
+	}
+	r, err := c.resolveHead(ctx, runID, head)
+	if err != nil {
+		return false, nil, head, err
+	}
+	allowed, reasons, err := c.mayMergeResolved(ctx, runID, r)
+	return allowed, reasons, head, err
+}
+
+func (c *Controller) mayMergeResolved(ctx context.Context, runID uuid.UUID, r resolved) (bool, []string, error) {
 	head, defs, latest := r.head, r.defs, r.latest
 
 	reasons, err := c.approvalReasons(ctx, runID, head, r.reqs, false)

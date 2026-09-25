@@ -67,7 +67,7 @@ func TestRecordThenComplete(t *testing.T) {
 	}
 }
 
-func TestArgsAreStoredVerbatim(t *testing.T) {
+func TestArgsStoreOnlyObservableMetadata(t *testing.T) {
 	store := newStore(t)
 	orgID := uuid.New()
 	ctx := scopedCtx(orgID)
@@ -102,7 +102,7 @@ func TestArgsAreStoredVerbatim(t *testing.T) {
 	if err := json.Unmarshal(entries[0].ArgsJSON, &got); err != nil {
 		t.Fatalf("unmarshal got: %v", err)
 	}
-	if want["path"] != got["path"] || want["ref"] != got["ref"] {
+	if got["argument_bytes"] != float64(len(args)) || got["valid_json"] != true || len(got) != 2 {
 		t.Fatalf("args did not round-trip: want %v, got %v", want, got)
 	}
 }
@@ -136,7 +136,49 @@ func TestFailedCallRetainsError(t *testing.T) {
 	if entries[0].Outcome != "error" {
 		t.Fatalf("want outcome error, got %q", entries[0].Outcome)
 	}
-	if entries[0].Error != "permission denied" {
+	if entries[0].Error != "tool error" {
 		t.Fatalf("want error text permission denied, got %q", entries[0].Error)
+	}
+}
+
+func TestAuditCompletionIsImmutableAndIdempotent(t *testing.T) {
+	store := newStore(t)
+	org := uuid.New()
+	ctx := scopedCtx(org)
+	run := mustCreateRun(t, store, ctx, org)
+	audit := agents.NewAuditLog(store.Pool())
+	id, err := audit.Record(ctx, agents.Entry{RunID: run.ID, Tool: "repo.read_file", ArgsJSON: []byte(`{}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = audit.Complete(ctx, id, "error", "original failure"); err != nil {
+		t.Fatal(err)
+	}
+	before, err := audit.List(ctx, run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = audit.Complete(ctx, id, "error", "original failure"); err != nil {
+		t.Fatalf("exact replay: %v", err)
+	}
+	if err = audit.Complete(ctx, id, "ok", ""); err == nil {
+		t.Error("terminal audit outcome overwritten")
+	}
+	if err = audit.Complete(scopedCtx(uuid.New()), id, "error", "original failure"); err == nil {
+		t.Error("cross-org replay accepted")
+	}
+	after, err := audit.List(ctx, run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(after) != 1 || after[0].Outcome != "error" || after[0].Error != "tool error" || !after[0].EndedAt.Equal(*before[0].EndedAt) {
+		t.Fatalf("receipt changed: %+v", after)
+	}
+	id, err = audit.Record(ctx, agents.Entry{RunID: run.ID, Tool: "repo.read_file", ArgsJSON: []byte(`{}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = audit.Complete(ctx, id, "pending", ""); err == nil {
+		t.Error("pending accepted as terminal outcome")
 	}
 }

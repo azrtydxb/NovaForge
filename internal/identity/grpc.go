@@ -2,6 +2,10 @@ package identity
 
 import (
 	"context"
+	"errors"
+	"github.com/jackc/pgx/v5"
+	agentsv1 "github.com/novaforge/novaforge/gen/novaforge/agents/v1"
+	"github.com/novaforge/novaforge/internal/svcauth"
 	"strings"
 	"time"
 
@@ -34,6 +38,8 @@ type Server struct {
 	grants     *capability.Store
 	sessionTTL time.Duration
 	orgDeleted OrgDeletedPublisher
+	HMACSecret string
+	Agents     agentsv1.AgentServiceClient
 }
 
 // NewGRPCServer wires store, sessions, tokens, sshKeys, and grants into an
@@ -80,6 +86,9 @@ func (s *Server) Login(ctx context.Context, req *identityv1.LoginRequest) (*iden
 	}
 	u, err := s.store.UserByUsername(ctx, req.GetUsername())
 	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return nil, status.Error(codes.Internal, "identity datastore unavailable")
+		}
 		return nil, status.Error(codes.Unauthenticated, "invalid username or password")
 	}
 	if !VerifyPassword(u.PasswordHash, req.GetPassword()) {
@@ -104,7 +113,7 @@ func (s *Server) ResolveSession(ctx context.Context, req *identityv1.ResolveSess
 	}
 	userID, err := s.sessions.Resolve(ctx, req.GetToken())
 	if err != nil {
-		return nil, status.Error(codes.Unauthenticated, "invalid or expired session")
+		return nil, credentialError(err)
 	}
 	subj := &identityv1.Subject{UserId: userID.String(), ActorKind: "user"}
 	if err := s.attachOrg(ctx, subj, userID, req.GetOrg()); err != nil {
@@ -121,7 +130,7 @@ func (s *Server) ResolveToken(ctx context.Context, req *identityv1.ResolveTokenR
 	}
 	t, err := s.tokens.Resolve(ctx, req.GetToken())
 	if err != nil {
-		return nil, status.Error(codes.Unauthenticated, "invalid, revoked, or expired token")
+		return nil, credentialError(err)
 	}
 	subj := &identityv1.Subject{UserId: t.UserID.String(), ActorKind: "user", Scopes: t.Scopes}
 	if err := s.attachOrg(ctx, subj, t.UserID, req.GetOrg()); err != nil {
@@ -140,7 +149,10 @@ func (s *Server) attachOrg(ctx context.Context, subj *identityv1.Subject, userID
 	}
 	org, err := s.store.ResolveOrgScope(ctx, userID, ref)
 	if err != nil {
-		return status.Error(codes.PermissionDenied, err.Error())
+		if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, ErrNotMember) {
+			return status.Error(codes.PermissionDenied, "organization membership required")
+		}
+		return status.Error(codes.Internal, "identity datastore unavailable")
 	}
 	subj.OrgId = org.ID.String()
 	// The role rides with the verified membership so a service deciding an
@@ -148,7 +160,10 @@ func (s *Server) attachOrg(ctx context.Context, subj *identityv1.Subject, userID
 	// caller's scope instead of reaching into this service's schema.
 	role, err := s.store.MemberRole(ctx, org.ID, userID)
 	if err != nil {
-		return status.Error(codes.PermissionDenied, err.Error())
+		if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, ErrNotMember) {
+			return status.Error(codes.PermissionDenied, "organization membership required")
+		}
+		return status.Error(codes.Internal, "identity datastore unavailable")
 	}
 	subj.Role = role
 	return nil
@@ -162,7 +177,10 @@ func (s *Server) ResolveFingerprint(ctx context.Context, req *identityv1.Resolve
 	}
 	userID, err := s.sshKeys.UserByFingerprint(ctx, req.GetFingerprint())
 	if err != nil {
-		return nil, status.Error(codes.Unauthenticated, "unknown fingerprint")
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, status.Error(codes.Unauthenticated, "unknown fingerprint")
+		}
+		return nil, status.Error(codes.Internal, "identity datastore unavailable")
 	}
 	subj := &identityv1.Subject{UserId: userID.String(), ActorKind: "user"}
 	if err := s.attachOrg(ctx, subj, userID, req.GetOrg()); err != nil {
@@ -293,14 +311,40 @@ func (s *Server) GetGrant(ctx context.Context, req *identityv1.GetGrantRequest) 
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid id")
 	}
-	g, err := s.grants.Resolve(ctx, id)
+	scope, err := authz.FromContext(ctx)
+	if err != nil || scope.OrgID == uuid.Nil {
+		return nil, status.Error(codes.PermissionDenied, "organization scope required")
+	}
+	switch scope.ActorKind {
+	case "user":
+		if err = s.requireOrgMember(ctx, scope.OrgID); err != nil {
+			return nil, err
+		}
+	case "agent":
+		if scope.ActorID == uuid.Nil {
+			return nil, status.Error(codes.PermissionDenied, "agent identity required")
+		}
+	case "service":
+		switch scope.ServiceName {
+		case "gates", "ci-credentials", "agent-runtime", "identity":
+		default:
+			return nil, status.Error(codes.PermissionDenied, "grant resolver service denied")
+		}
+	default:
+		return nil, status.Error(codes.PermissionDenied, "grant resolver denied")
+	}
+	g, err := s.grants.ResolveScoped(ctx, id)
 	if err != nil {
-		return nil, status.Error(codes.NotFound, "grant not found or expired")
+		if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, capability.ErrGrantExpired) {
+			return nil, status.Error(codes.NotFound, "grant not found or expired")
+		}
+		return nil, status.Error(codes.Internal, "grant store unavailable")
 	}
-	if err := s.requireOrgMember(ctx, g.OrgID); err != nil {
-		return nil, err
+	if scope.ActorKind == "agent" && (g.SubjectKind != "agent" || g.SubjectID != scope.ActorID) {
+		return nil, status.Error(codes.PermissionDenied, "grant belongs to another subject")
 	}
-	return &identityv1.GetGrantResponse{Grant: toProtoGrant(g)}, nil
+
+	return &identityv1.GetGrantResponse{Grant: capability.GrantProto(g)}, nil
 }
 
 // requireOrgMember denies the request with codes.PermissionDenied unless the
@@ -346,31 +390,55 @@ func toProtoGrant(g capability.Grant) *identityv1.Grant {
 // it themselves via authz.FromContext.
 func UnaryAuthInterceptor(s *Server) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		if scope, ok := s.resolveCallerScope(ctx); ok {
+		scope, ok, err := s.resolveCallerScope(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
 			ctx = authz.WithScope(ctx, scope)
 		}
 		return handler(ctx, req)
 	}
 }
 
-func (s *Server) resolveCallerScope(ctx context.Context) (authz.Scope, bool) {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return authz.Scope{}, false
-	}
-	values := md.Get("authorization")
-	if len(values) == 0 {
-		return authz.Scope{}, false
-	}
-	token := strings.TrimPrefix(values[0], "Bearer ")
+func (s *Server) resolveCallerScope(ctx context.Context) (authz.Scope, bool, error) {
+	token := presentedBearer(ctx)
 	if token == "" {
-		return authz.Scope{}, false
+		return authz.Scope{}, false, nil
 	}
-	if userID, err := s.sessions.Resolve(ctx, token); err == nil {
-		return authz.Scope{ActorID: userID, ActorKind: "user"}, true
+	if strings.HasPrefix(token, svcauth.Prefix) {
+		scope, err := svcauth.ScopeFromToken(s.HMACSecret, token)
+		return scope, err == nil, nil
 	}
-	if t, err := s.tokens.Resolve(ctx, token); err == nil {
-		return authz.Scope{ActorID: t.UserID, ActorKind: "user"}, true
+	var user uuid.UUID
+	if strings.HasPrefix(token, "nf_") {
+		t, err := s.tokens.Resolve(ctx, token)
+		if err != nil {
+			if errors.Is(err, ErrInvalidCredential) {
+				return authz.Scope{}, false, nil
+			}
+			return authz.Scope{}, false, credentialError(err)
+		}
+		user = t.UserID
+	} else {
+		id, err := s.sessions.Resolve(ctx, token)
+		if err != nil {
+			if errors.Is(err, ErrInvalidCredential) {
+				return authz.Scope{}, false, nil
+			}
+			return authz.Scope{}, false, credentialError(err)
+		}
+		user = id
 	}
-	return authz.Scope{}, false
+	scope := authz.Scope{ActorID: user, ActorKind: "user"}
+	md, _ := metadata.FromIncomingContext(ctx)
+	if refs := md.Get("x-novaforge-org"); len(refs) > 0 && refs[0] != "" {
+		subject := &identityv1.Subject{}
+		if err := s.attachOrg(ctx, subject, user, refs[0]); err != nil {
+			return authz.Scope{}, false, err
+		}
+		scope.OrgID, _ = uuid.Parse(subject.OrgId)
+		scope.Role = subject.Role
+	}
+	return scope, true, nil
 }

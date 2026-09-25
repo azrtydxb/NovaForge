@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/novaforge/novaforge/internal/analysis"
+	"github.com/novaforge/novaforge/internal/analysistest"
 	"github.com/novaforge/novaforge/internal/maintenance"
 )
 
@@ -51,7 +52,8 @@ func TestCVEScannerFindsAKnownVulnerability(t *testing.T) {
 		t.Fatalf("tidy: %v: %s", err, out)
 	}
 
-	findings, err := maintenance.Scanners["cve"](context.Background(), maintenance.ScanInput{WorkDir: dir, Exec: analysis.DefaultExec})
+	run, _ := analysistest.OfflineFixture(t, analysis.DefaultExec)
+	findings, err := maintenance.Scanners["cve"](context.Background(), maintenance.ScanInput{WorkDir: dir, Exec: run})
 	if err != nil {
 		t.Fatalf("cve scanner: %v", err)
 	}

@@ -316,19 +316,20 @@ criteria:
         step: "4a. a person's push to the agent's branch is refused while the run holds it"
 
   S-8/TestToolCallAudited:
-    status: covered
+    status: partial
     note: >-
-      Asserted through Registry.Call against the real audit log: arguments
-      and outcome for a successful call, a failing handler (error), a
-      capability refusal (denied), an unknown tool and a call over budget
-      (refused), and a call cancelled mid-flight is still completed. No e2e
-      step reads the audit log.
+      Registry.Call records observable argument metadata and outcomes for
+      successful, failing, denied, unknown, over-budget and cancelled calls.
+      Raw arguments are deliberately not retained: the current metadata-only
+      representation does not establish the specification's argument-level
+      audit criterion. Reconcile a privacy-safe argument evidence contract
+      before marking this criterion covered. No e2e step reads the audit log.
     go_tests:
       - ./internal/tools TestToolCallAudited
       - ./internal/tools TestCancelledCallStillRecordsItsOutcome
       - ./internal/tools TestEveryCallIsAudited
       - ./internal/agents TestRecordThenComplete
-      - ./internal/agents TestArgsAreStoredVerbatim
+      - ./internal/agents TestArgsStoreOnlyObservableMetadata
       - ./internal/agents TestFailedCallRetainsError
 
   S-9/TestAirGappedAgentRun:

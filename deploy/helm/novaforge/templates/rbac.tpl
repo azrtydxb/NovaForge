@@ -4,6 +4,9 @@ exactly the objects it must manage for isolation and nothing else, so a
 compromised agent-runtime cannot reach the rest of the cluster.
 */ -}}
 {{- range $name, $svc := .Values.services }}
+{{- if and (eq $name "gates") $svc.rbac }}
+{{- fail "Gates cannot use generic cluster RBAC; sandbox authority must be namespace-scoped" }}
+{{- end }}
 {{- if $svc.rbac }}
 apiVersion: v1
 kind: ServiceAccount

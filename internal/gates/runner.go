@@ -18,7 +18,9 @@ type Input struct {
 	OrgID, RepoID, RunID uuid.UUID
 	WorkDir              string
 	TargetSHA, SourceSHA string
-	Params               map[string]any
+	// PolicySHA pins target-side evidence independently of evaluated source.
+	PolicySHA string
+	Params    map[string]any
 
 	// Exec runs the analysis tools the gates use. It is injected so a test
 	// can drive a gate without a toolchain, but the checks themselves live in
@@ -101,23 +103,26 @@ func paramFloat(params map[string]any, key string, def float64) float64 {
 // paramStringSlice reads a string-slice parameter from a gate's Params.
 // YAML-decoded sequences arrive as []any, so each element is type-asserted
 // individually rather than assuming []string.
-func paramStringSlice(params map[string]any, key string) []string {
+func paramStringSlice(params map[string]any, key string) ([]string, error) {
 	v, ok := params[key]
 	if !ok {
-		return nil
+		return nil, nil
 	}
 	if s, ok := v.([]string); ok {
-		return s
+		return s, nil
 	}
 	raw, ok := v.([]any)
 	if !ok {
-		return nil
+		return nil, fmt.Errorf("%s must be a list of strings", key)
 	}
 	out := make([]string, 0, len(raw))
 	for _, item := range raw {
-		if s, ok := item.(string); ok {
-			out = append(out, s)
+		s, ok := item.(string)
+		if !ok {
+			// Dropping an invalid element would silently remove a constraint.
+			return nil, fmt.Errorf("%s must contain only strings", key)
 		}
+		out = append(out, s)
 	}
-	return out
+	return out, nil
 }

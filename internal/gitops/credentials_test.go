@@ -61,13 +61,17 @@ func TestPATGitClone(t *testing.T) {
 // git.commit tool calls. A person's push to the default branch is not
 // constrained by any grant.
 func TestAgentBranchScopeEnforced(t *testing.T) {
-	p := platformtest.Start(t)
+	p, control := platformtest.StartWithControlledRunner(t)
 	owner := p.NewUser(t, "scopeowner")
 	org := p.NewOrg(t, owner, "scopeorg")
 	repo := p.NewRepo(t, owner, org, "scoperepo", nil)
 	agentID := p.NewAgent(t, owner, org)
 	item := p.NewWorkItem(t, owner, org, repo)
 	run := p.StartAgentRun(t, owner, org, repo, agentID, item)
+	// Keep a real admitted Runner alive at inference while exercising Git.
+	// A nil executor must never manufacture a live capability for this test.
+	control.Wait(t, run.GetId())
+	defer control.Stop(t, run.GetId())
 	agentCred := p.AgentCredential(t, org, agentID)
 	granted := "refs/heads/" + run.GetBranch()
 	if !strings.HasPrefix(run.GetBranch(), "agents/"+item.GetKey()+"/") {

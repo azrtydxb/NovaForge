@@ -48,7 +48,7 @@ type crossOrg struct {
 
 func newCrossOrg(t *testing.T) *crossOrg {
 	t.Helper()
-	p := platformtest.Start(t)
+	p, control := platformtest.StartWithControlledRunner(t)
 	c := &crossOrg{p: p}
 	c.a, c.b = p.NewUser(t, "xa"), p.NewUser(t, "xb")
 	c.orgA, c.orgB = p.NewOrg(t, c.a, "xorga"), p.NewOrg(t, c.b, "xorgb")
@@ -59,6 +59,7 @@ func newCrossOrg(t *testing.T) *crossOrg {
 	c.agentA = p.NewAgent(t, c.a, c.orgA)
 	c.agentB = p.NewAgent(t, c.b, c.orgB)
 	c.runB = p.StartAgentRun(t, c.b, c.orgB, c.repoB, c.agentB, c.itemB)
+	control.Wait(t, c.runB.GetId())
 	_, c.patA = p.NewPAT(t, c.a)
 	c.keyA = p.AddSSHKey(t, c.a)
 	c.asAInA, c.asAInB, c.asBInB = p.AsUser(c.a, c.orgA), p.AsUser(c.a, c.orgB), p.AsUser(c.b, c.orgB)

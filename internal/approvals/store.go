@@ -189,6 +189,8 @@ func (s *Store) Raise(ctx context.Context, req ApprovalRequest) (ApprovalRequest
 // the pending request id in the caller's organization, returning the decided
 // request. The organization comes from ctx: without that predicate a caller
 // who learned another organization's request id could decide it.
+// Deployment actions also enforce independent administrator authority here,
+// because an accepted decision authorizes an external side effect.
 func (s *Store) Resolve(ctx context.Context, id, decidedBy uuid.UUID, decision, comment string) (ApprovalRequest, error) {
 	scope, err := authz.FromContext(ctx)
 	if err != nil {
@@ -201,8 +203,11 @@ func (s *Store) Resolve(ctx context.Context, id, decidedBy uuid.UUID, decision, 
 		UPDATE approvals.approval_requests
 		SET decision = $1, decided_by = $2, decided_at = now(), comment = $3
 		WHERE id = $4 AND org_id = $5 AND decision = 'pending'
+		  AND (action NOT IN ('deploy_staging', 'deploy_production') OR
+		       ($6 AND $7::uuid = $2::uuid AND author_id IS DISTINCT FROM $2::uuid))
 		RETURNING `+requestColumns,
 		decision, decidedBy, comment, id, scope.OrgID,
+		scope.IsOrgAdmin() && scope.ActorID != uuid.Nil, scope.ActorID,
 	))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ApprovalRequest{}, ErrNotPending

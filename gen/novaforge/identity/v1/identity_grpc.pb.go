@@ -21,6 +21,10 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	IdentityService_Register_FullMethodName           = "/novaforge.identity.v1.IdentityService/Register"
 	IdentityService_Login_FullMethodName              = "/novaforge.identity.v1.IdentityService/Login"
+	IdentityService_LogoutSession_FullMethodName      = "/novaforge.identity.v1.IdentityService/LogoutSession"
+	IdentityService_IssueIntent_FullMethodName        = "/novaforge.identity.v1.IdentityService/IssueIntent"
+	IdentityService_CancelIssuance_FullMethodName     = "/novaforge.identity.v1.IdentityService/CancelIssuance"
+	IdentityService_RevokeGrant_FullMethodName        = "/novaforge.identity.v1.IdentityService/RevokeGrant"
 	IdentityService_ResolveSession_FullMethodName     = "/novaforge.identity.v1.IdentityService/ResolveSession"
 	IdentityService_ResolveToken_FullMethodName       = "/novaforge.identity.v1.IdentityService/ResolveToken"
 	IdentityService_ResolveFingerprint_FullMethodName = "/novaforge.identity.v1.IdentityService/ResolveFingerprint"
@@ -53,6 +57,10 @@ const (
 type IdentityServiceClient interface {
 	Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterResponse, error)
 	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginResponse, error)
+	LogoutSession(ctx context.Context, in *LogoutSessionRequest, opts ...grpc.CallOption) (*LogoutSessionResponse, error)
+	IssueIntent(ctx context.Context, in *IssueIntentRequest, opts ...grpc.CallOption) (*IssueIntentResponse, error)
+	CancelIssuance(ctx context.Context, in *CancelIssuanceRequest, opts ...grpc.CallOption) (*CancelIssuanceResponse, error)
+	RevokeGrant(ctx context.Context, in *RevokeGrantRequest, opts ...grpc.CallOption) (*RevokeGrantResponse, error)
 	ResolveSession(ctx context.Context, in *ResolveSessionRequest, opts ...grpc.CallOption) (*ResolveSessionResponse, error)
 	ResolveToken(ctx context.Context, in *ResolveTokenRequest, opts ...grpc.CallOption) (*ResolveTokenResponse, error)
 	ResolveFingerprint(ctx context.Context, in *ResolveFingerprintRequest, opts ...grpc.CallOption) (*ResolveFingerprintResponse, error)
@@ -100,6 +108,46 @@ func (c *identityServiceClient) Login(ctx context.Context, in *LoginRequest, opt
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(LoginResponse)
 	err := c.cc.Invoke(ctx, IdentityService_Login_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) LogoutSession(ctx context.Context, in *LogoutSessionRequest, opts ...grpc.CallOption) (*LogoutSessionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LogoutSessionResponse)
+	err := c.cc.Invoke(ctx, IdentityService_LogoutSession_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) IssueIntent(ctx context.Context, in *IssueIntentRequest, opts ...grpc.CallOption) (*IssueIntentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IssueIntentResponse)
+	err := c.cc.Invoke(ctx, IdentityService_IssueIntent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) CancelIssuance(ctx context.Context, in *CancelIssuanceRequest, opts ...grpc.CallOption) (*CancelIssuanceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CancelIssuanceResponse)
+	err := c.cc.Invoke(ctx, IdentityService_CancelIssuance_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) RevokeGrant(ctx context.Context, in *RevokeGrantRequest, opts ...grpc.CallOption) (*RevokeGrantResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RevokeGrantResponse)
+	err := c.cc.Invoke(ctx, IdentityService_RevokeGrant_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -316,6 +364,10 @@ func (c *identityServiceClient) Verify2FA(ctx context.Context, in *Verify2FARequ
 type IdentityServiceServer interface {
 	Register(context.Context, *RegisterRequest) (*RegisterResponse, error)
 	Login(context.Context, *LoginRequest) (*LoginResponse, error)
+	LogoutSession(context.Context, *LogoutSessionRequest) (*LogoutSessionResponse, error)
+	IssueIntent(context.Context, *IssueIntentRequest) (*IssueIntentResponse, error)
+	CancelIssuance(context.Context, *CancelIssuanceRequest) (*CancelIssuanceResponse, error)
+	RevokeGrant(context.Context, *RevokeGrantRequest) (*RevokeGrantResponse, error)
 	ResolveSession(context.Context, *ResolveSessionRequest) (*ResolveSessionResponse, error)
 	ResolveToken(context.Context, *ResolveTokenRequest) (*ResolveTokenResponse, error)
 	ResolveFingerprint(context.Context, *ResolveFingerprintRequest) (*ResolveFingerprintResponse, error)
@@ -353,6 +405,18 @@ func (UnimplementedIdentityServiceServer) Register(context.Context, *RegisterReq
 }
 func (UnimplementedIdentityServiceServer) Login(context.Context, *LoginRequest) (*LoginResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Login not implemented")
+}
+func (UnimplementedIdentityServiceServer) LogoutSession(context.Context, *LogoutSessionRequest) (*LogoutSessionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method LogoutSession not implemented")
+}
+func (UnimplementedIdentityServiceServer) IssueIntent(context.Context, *IssueIntentRequest) (*IssueIntentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method IssueIntent not implemented")
+}
+func (UnimplementedIdentityServiceServer) CancelIssuance(context.Context, *CancelIssuanceRequest) (*CancelIssuanceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CancelIssuance not implemented")
+}
+func (UnimplementedIdentityServiceServer) RevokeGrant(context.Context, *RevokeGrantRequest) (*RevokeGrantResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RevokeGrant not implemented")
 }
 func (UnimplementedIdentityServiceServer) ResolveSession(context.Context, *ResolveSessionRequest) (*ResolveSessionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ResolveSession not implemented")
@@ -466,6 +530,78 @@ func _IdentityService_Login_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(IdentityServiceServer).Login(ctx, req.(*LoginRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_LogoutSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LogoutSessionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).LogoutSession(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_LogoutSession_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).LogoutSession(ctx, req.(*LogoutSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_IssueIntent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IssueIntentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).IssueIntent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_IssueIntent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).IssueIntent(ctx, req.(*IssueIntentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_CancelIssuance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelIssuanceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).CancelIssuance(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_CancelIssuance_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).CancelIssuance(ctx, req.(*CancelIssuanceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_RevokeGrant_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RevokeGrantRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).RevokeGrant(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_RevokeGrant_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).RevokeGrant(ctx, req.(*RevokeGrantRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -844,6 +980,22 @@ var IdentityService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Login",
 			Handler:    _IdentityService_Login_Handler,
+		},
+		{
+			MethodName: "LogoutSession",
+			Handler:    _IdentityService_LogoutSession_Handler,
+		},
+		{
+			MethodName: "IssueIntent",
+			Handler:    _IdentityService_IssueIntent_Handler,
+		},
+		{
+			MethodName: "CancelIssuance",
+			Handler:    _IdentityService_CancelIssuance_Handler,
+		},
+		{
+			MethodName: "RevokeGrant",
+			Handler:    _IdentityService_RevokeGrant_Handler,
 		},
 		{
 			MethodName: "ResolveSession",

@@ -22,10 +22,9 @@ import (
 // IndexCommit call has none of it, and still writes symbols and dependency
 // edges — only changed_by history needs a push.
 type pushInfo struct {
-	module     string
-	moduleHash string
-	changed    map[string]map[int]bool
-	commits    map[string]graph.CommitInfo
+	modules *moduleContexts
+	changed map[string]map[int]bool
+	commits map[string]graph.CommitInfo
 }
 
 // attributionCommitLimit bounds how many of a push's commits are inspected
@@ -38,7 +37,6 @@ var (
 	hunkHeaderRe = regexp.MustCompile(`^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@`)
 	agentKeyRe   = regexp.MustCompile(`agents/([A-Z][A-Z0-9]*-\d+)/`)
 	workKeyRe    = regexp.MustCompile(`\b([A-Z][A-Z0-9]*-\d+)\b`)
-	goModuleRe   = regexp.MustCompile(`(?m)^\s*module\s+"?([^"\s]+)"?`)
 )
 
 // changedLines reads a unified diff and returns, per new-side path, the line
@@ -120,26 +118,6 @@ func workItemKey(message string) string {
 	return ""
 }
 
-// goModule reads the module path the repository's root go.mod declares at
-// sha, or "" when it has none. Without it an import cannot be told apart from
-// a dependency outside the repository.
-func (idx *Indexer) goModule(ctx context.Context, repoID uuid.UUID, sha string) (string, string) {
-	blob, err := idx.Git.GetBlob(ctx, &gitv1.GetBlobRequest{Repo: repoID.String(), Ref: sha, Path: "go.mod"})
-	if status.Code(err) == codes.NotFound {
-		return "", graph.SourceDigest(nil)
-	}
-	if err != nil {
-		// An unknown module must never masquerade as a known missing module
-		// when maintenance validates the graph's extraction context.
-		return "", ""
-	}
-	digest := graph.SourceDigest(blob.GetContent())
-	if m := goModuleRe.FindSubmatch(blob.GetContent()); m != nil {
-		return string(m[1]), digest
-	}
-	return "", digest
-}
-
 // attribute assigns each changed path to the newest commit in the push that
 // touched it. Every commit between the push's old and new head is a
 // candidate, newest first; a merge commit is diffed against its first
@@ -211,6 +189,10 @@ func (idx *Indexer) attribute(ctx context.Context, repoID uuid.UUID, oldSHA, new
 // ExampleX) is a tested_by relation rather than a dependency; any other
 // reference in a test file is test scaffolding and is not recorded.
 func goEdges(path, module string, file File, symbolKeys map[*Symbol]string) ([]graph.FileImport, []graph.FileReference) {
+	return goEdgesResolved(path, file, symbolKeys, func(importPath string) string { return moduleDir(module, importPath) })
+}
+
+func goEdgesResolved(path string, file File, symbolKeys map[*Symbol]string, resolve func(string) string) ([]graph.FileImport, []graph.FileReference) {
 	dir := graphDir(path)
 	isTest := strings.HasSuffix(path, "_test.go")
 
@@ -218,7 +200,7 @@ func goEdges(path, module string, file File, symbolKeys map[*Symbol]string) ([]g
 	aliases := map[string]string{} // import name -> directory ("" when external)
 	var importedDirs []string
 	for _, imp := range file.Imports {
-		d := moduleDir(module, imp.Path)
+		d := resolve(imp.Path)
 		imports = append(imports, graph.FileImport{ImportPath: imp.Path, Dir: d})
 		target := ""
 		if d != "" {

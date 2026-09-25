@@ -11,6 +11,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"k8s.io/client-go/rest"
 
 	gatesv1 "github.com/novaforge/novaforge/gen/novaforge/gates/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
@@ -49,6 +50,16 @@ func main() {
 	}
 	if cfg.GRPCPort == 0 {
 		cfg.GRPCPort = defaultGRPCPort
+	}
+
+	// Validate opted-in isolation before performing database migrations. Only
+	// in-cluster identity is used; there is no workstation kubeconfig fallback.
+	sandbox, err := loadAnalysisSandbox(cfg.GateAnalysisImage, rest.InClusterConfig)
+	if err != nil {
+		log.Fatalf("gates: configure analysis sandbox: %v", err)
+	}
+	if sandbox == nil {
+		log.Print("gates: NF_GATE_ANALYSIS_IMAGE is unset; executable gates are unavailable")
 	}
 
 	if err := database.Migrate(cfg.DatabaseURL, "gates", gates.MigrationsFS); err != nil {
@@ -116,7 +127,8 @@ func main() {
 	defer eventBus.Close()
 	cleanup.Gates(&gates.Purger{Pool: pool}).Run(ctx, eventBus, "gates")
 
-	controller := gates.NewController(gatesStore, gitClient, reviewsClient, workClient, os.Getenv("NOVAFORGE_SEMGREP_RULES"))
+	controller := gates.NewController(gatesStore, gitClient, reviewsClient, workClient, os.Getenv("NOVAFORGE_SEMGREP_RULES"),
+		gates.WithProofService(cfg.HMACSecret), gates.WithAnalysisSandbox(sandbox))
 
 	grpcServer := gates.NewGRPCServer(controller, approvalsStore, secretsBroker, grants)
 	grpcServer.Proposals = &gates.Proposer{Git: gitClient, Reviews: reviewsClient}

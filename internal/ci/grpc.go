@@ -5,8 +5,10 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"log"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -59,6 +61,9 @@ func NewServer(store *Store, dispatcher *Dispatcher) *Server {
 // its runner reports it finished.
 func (s *Server) SetLogSink(logs logAppender) {
 	s.logs = logs
+	if sink, ok := logs.(*LogSink); ok {
+		sink.store = s.store
+	}
 	if sealer, ok := logs.(logSealer); ok {
 		s.sealer = sealer
 	}
@@ -108,28 +113,40 @@ func (s *Server) Register(ctx context.Context, req *civ1.RegisterRequest) (*civ1
 // When the stream ends for any reason, the runner is unregistered and any
 // job still running against it is reaped.
 func (s *Server) Connect(stream civ1.RunnerService_ConnectServer) error {
-	ctx := stream.Context()
+	ctx, cancelStream := context.WithCancel(stream.Context())
+	defer cancelStream()
 
 	send := make(chan *civ1.ConnectResponse, 16)
 	sendErr := make(chan error, 1)
 	go func() {
-		for msg := range send {
-			if err := stream.Send(msg); err != nil {
-				sendErr <- err
+		for {
+			select {
+			case <-ctx.Done():
 				return
+			case msg := <-send:
+				if err := stream.Send(msg); err != nil {
+					sendErr <- err
+					return
+				}
 			}
 		}
-		sendErr <- nil
 	}()
-	defer close(send)
+	// The dispatcher may hold an in-flight channel reference after unregister.
+	// Cancellation stops the sender; closing send would panic that producer.
 
 	var runnerID uuid.UUID
 	var runnerToken string
+	var connectionID uuid.UUID
+	defer func() {
+		if connectionID != uuid.Nil {
+			s.dispatcher.UnregisterConnection(ctx, runnerID, connectionID)
+		}
+	}()
 	for {
 		req, err := stream.Recv()
 		if err != nil {
 			if runnerID != uuid.Nil {
-				s.dispatcher.Unregister(context.Background(), runnerID)
+				s.dispatcher.UnregisterConnection(ctx, runnerID, connectionID)
 			}
 			if err.Error() == "EOF" {
 				return nil
@@ -149,21 +166,27 @@ func (s *Server) Connect(stream civ1.RunnerService_ConnectServer) error {
 			if err := s.authenticateRunner(ctx, id, req.GetToken()); err != nil {
 				return err
 			}
-			runnerToken = req.GetToken()
-			runnerID = id
-			labels, lerr := s.store.RunnerLabels(ctx, runnerID)
-			if lerr != nil {
-				return lerr
+			if req.GetHeartbeat() == nil || req.GetConnectionId() != "" {
+				return status.Error(codes.InvalidArgument, "initial heartbeat required")
 			}
-			s.dispatcher.Register(runnerID, labels, send)
-		} else if id != runnerID || req.GetToken() != runnerToken {
-			s.dispatcher.Unregister(context.Background(), runnerID)
+			runnerID = id
+			runnerToken = req.GetToken()
+			connectionID, err = s.dispatcher.activateConnection(ctx, id, send)
+			if err != nil {
+				return err
+			}
+			continue
+		} else if id != runnerID || req.GetToken() != runnerToken || req.GetConnectionId() != connectionID.String() {
+			s.dispatcher.UnregisterConnection(ctx, runnerID, connectionID)
 			return status.Error(codes.PermissionDenied, "a Connect stream speaks for one runner")
 		}
 
+		if err := s.store.runnerConnection(ctx, runnerID, connectionID); err != nil {
+			return status.Error(codes.PermissionDenied, "runner connection superseded")
+		}
 		switch req.GetPayload().(type) {
 		case *civ1.ConnectRequest_Heartbeat:
-			_ = s.store.TouchRunner(ctx, runnerID)
+			// The incarnation-qualified heartbeat above already refreshed liveness.
 		case *civ1.ConnectRequest_LogChunk:
 			chunk := req.GetLogChunk()
 			jobID, jerr := uuid.Parse(chunk.GetJobId())
@@ -174,15 +197,15 @@ func (s *Server) Connect(stream civ1.RunnerService_ConnectServer) error {
 			// brokered value is masked before the line is stored, whatever the
 			// runner did: the log is readable by every member of the
 			// organization and the credential is not.
-			if s.logs != nil && s.jobIsRunners(ctx, jobID, runnerID) == nil {
-				_ = s.logs.Append(ctx, jobID, s.redactions.Line(jobID, chunk.GetLine()))
+			if err := s.store.appendRunnerLog(ctx, runnerID, connectionID, jobID, chunk.GetSequence(), s.maskRunnerOutput(ctx, jobID, chunk.GetLine()), sha256.Sum256([]byte(chunk.GetLine()))); err != nil {
+				return status.Error(codes.FailedPrecondition, "runner log admission failed")
 			}
 		}
 
 		select {
 		case err := <-sendErr:
 			if runnerID != uuid.Nil {
-				s.dispatcher.Unregister(context.Background(), runnerID)
+				s.dispatcher.UnregisterConnection(ctx, runnerID, connectionID)
 			}
 			return err
 		default:
@@ -205,23 +228,35 @@ func (s *Server) ReportStatus(ctx context.Context, req *civ1.ReportStatusRequest
 	if err := s.authenticateRunner(ctx, runnerID, req.GetToken()); err != nil {
 		return nil, err
 	}
-	if err := s.jobIsRunners(ctx, jobID, runnerID); err != nil {
-		return nil, err
+	connectionID, err := uuid.Parse(req.GetConnectionId())
+	if err != nil || s.store.jobConnection(ctx, jobID, runnerID, connectionID) != nil {
+		return nil, status.Error(codes.PermissionDenied, "job connection superseded")
 	}
-	// A finished job's log moves to object storage. Nothing used to call Seal,
-	// so every job's log stayed in Redis forever and the retention sweep, which
-	// deletes sealed logs, had nothing to delete. It is sealed before the status
-	// is written, so a job anyone sees as finished already has its log sealed.
-	// A failure to seal does not stop the job finishing: its lines stay
-	// readable live.
-	if terminalJobStatus(req.GetStatus()) && s.sealer != nil {
-		if _, err := s.sealer.Seal(ctx, jobID); err != nil {
-			log.Printf("ci: seal log of job %s: %v", jobID, err)
+	detail := s.maskRunnerOutput(ctx, jobID, req.GetDetail())
+	deadline := time.NewTimer(5 * time.Second)
+	defer deadline.Stop()
+	for {
+		err = s.store.recordRunnerReceipt(ctx, runnerID, connectionID, jobID, req, detail)
+		if !errors.Is(err, errLogBarrier) {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-deadline.C:
+			return nil, status.Error(codes.FailedPrecondition, "log sequence barrier incomplete")
+		case <-time.After(10 * time.Millisecond):
 		}
 	}
-	detail := s.redactions.Line(jobID, req.GetDetail())
-	if err := s.store.SetJobStatus(ctx, jobID, req.GetStatus(), detail); err != nil {
-		return nil, err
+	if err != nil {
+		return nil, status.Error(codes.FailedPrecondition, "runner receipt rejected")
+	}
+	// Sealing projects a committed terminal receipt, never a speculative
+	// runner request. Failure retains the durable obligation for reconciliation.
+	if terminalJobStatus(req.GetStatus()) && s.sealer != nil {
+		if _, err := s.sealer.Seal(ctx, jobID); err != nil {
+			log.Printf("ci: seal pending for %s: %v", jobID, err)
+		}
 	}
 	switch req.GetStatus() {
 	case "success", "failure", "cancelled":
@@ -274,10 +309,24 @@ func (s *Server) UploadArtifact(ctx context.Context, req *civ1.UploadArtifactReq
 		return nil, err
 	}
 
+	connectionID, err := uuid.Parse(req.GetConnectionId())
+	if err != nil || s.store.jobConnection(ctx, jobID, runnerID, connectionID) != nil {
+		return nil, status.Error(codes.PermissionDenied, "job connection superseded")
+	}
 	art, err := s.artifacts.Upload(ctx, jobID, req.GetName(),
-		bytes.NewReader(req.GetContent()), int64(len(req.GetContent())))
+		bytes.NewReader(req.GetContent()), int64(len(req.GetContent())), connectionID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "store artifact: %v", err)
 	}
 	return &civ1.UploadArtifactResponse{ArtifactId: art.ID.String()}, nil
+}
+
+// Missing jobs/classification never imply credential-free output. A status RPC
+// may reach a replica other than the one holding the runner's Connect stream.
+func (s *Server) maskRunnerOutput(ctx context.Context, jobID uuid.UUID, line string) string {
+	job, err := s.store.GetJob(ctx, jobID)
+	if err != nil {
+		return SuppressedCredentialOutput
+	}
+	return s.redactions.mask(jobID, line, len(job.Secrets) > 0)
 }

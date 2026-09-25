@@ -8,8 +8,8 @@
 // components each correct and each tested against a double of the other, and
 // nothing connecting them. A test that starts here starts from a credential
 // identity issued, and every hop after that is the hop production makes. The
-// only thing absent is Kubernetes: agent runs are started and recorded but
-// never executed, since executing them needs a cluster and a model.
+// only thing absent is Kubernetes. Start refuses execution; tests needing a
+// live run explicitly select StartWithExecutor or StartWithControlledRunner.
 //
 // It is imported only by tests. Without TEST_DATABASE_URL and TEST_REDIS_URL
 // Start skips the calling test, which reads as a pass — source hack/env.sh.
@@ -146,7 +146,11 @@ func (p *Platform) Index(t testing.TB, org Org, repo Repo, head string) {
 }
 
 // Start brings the platform up for t and tears it down when t ends.
-func Start(t testing.TB) *Platform {
+func Start(t testing.TB) *Platform { return StartWithExecutor(t, nil) }
+
+// StartWithExecutor binds an explicit executor after every real RPC client is
+// constructed. Default Start deliberately cannot admit a run with no executor.
+func StartWithExecutor(t testing.TB, factory func(*Platform) agents.ExecuteFunc) *Platform {
 	t.Helper()
 	dbURL, redisURL := os.Getenv("TEST_DATABASE_URL"), os.Getenv("TEST_REDIS_URL")
 	if dbURL == "" || redisURL == "" {
@@ -172,6 +176,7 @@ func Start(t testing.TB) *Platform {
 	// identity
 	idSrv := identity.NewGRPCServer(identity.NewStore(pool), identity.NewSessionStore(rdb),
 		identity.NewTokenStore(pool), identity.NewSSHKeyStore(pool), p.Grants)
+	idSrv.HMACSecret = HMACSecret
 	p.IdentityAddr = serve(t, func(s *grpc.Server) { identityv1.RegisterIdentityServiceServer(s, idSrv) },
 		grpc.UnaryInterceptor(identity.UnaryAuthInterceptor(idSrv)))
 	p.Identity = identityv1.NewIdentityServiceClient(dial(t, p.IdentityAddr, nil))
@@ -212,6 +217,8 @@ func Start(t testing.TB) *Platform {
 	// work-reviews, with the merger joined to the real gate service.
 	workStore, reviewsStore := work.NewStore(pool), reviews.NewStore(pool)
 	reviewsSrv := reviews.NewGRPCServer(reviewsStore)
+	// Review admission reads the inspected source independently of merging.
+	reviewsSrv.Git = gitFwd
 	reviewsSrv.Merger = &reviews.Merger{
 		Store: reviewsStore,
 		Gates: reviews.GatesClient{Gates: gatesv1.NewGatesServiceClient(gatesConnFwd)},
@@ -224,7 +231,7 @@ func Start(t testing.TB) *Platform {
 
 	// gates, with the controller the gates service composes.
 	controller := gates.NewController(gates.NewStore(pool), gitFwd,
-		reviewsv1.NewReviewsServiceClient(workConnFwd), workv1.NewWorkServiceClient(workConnFwd), "")
+		reviewsv1.NewReviewsServiceClient(workConnFwd), workv1.NewWorkServiceClient(workConnFwd), "", gates.WithProofService(HMACSecret))
 	gatesSrv := gates.NewGRPCServer(controller, approvals.NewStore(pool), secrets.NewBroker(pool, []byte("platformtest-kek")), p.Grants)
 	gatesSrv.Proposals = &gates.Proposer{Git: gitFwd, Reviews: reviewsv1.NewReviewsServiceClient(workConnFwd)}
 	serveOn(t, gatesLis, func(s *grpc.Server) { gatesv1.RegisterGatesServiceServer(s, gatesSrv) }, interceptor)
@@ -233,13 +240,17 @@ func Start(t testing.TB) *Platform {
 	p.Reviews = reviewsv1.NewReviewsServiceClient(dial(t, p.WorkAddr, nil))
 	p.Gates = gatesv1.NewGatesServiceClient(dial(t, p.GatesAddr, nil))
 
-	// agent-runtime, with no executor: a run is started, granted and
-	// recorded, and never executed, because execution needs Kubernetes.
+	// Construct the runtime fail-closed. The optional factory binds its executor
+	// only after all real owner clients are available; nil never admits a run.
 	p.AgentStore = agents.NewStore(pool)
-	agentsSrv := agents.NewGRPCServer(p.AgentStore, p.Grants, rdb, workv1.NewWorkServiceClient(workConnFwd), nil)
+	authority := capability.RuntimeClient{Identity: p.Identity, HMACSecret: HMACSecret}
+	p.AgentStore.WorkClaims = agents.WorkExecutionClient{Work: p.Work, HMACSecret: HMACSecret}
+	agentsSrv := agents.NewGRPCServer(p.AgentStore, authority, rdb, workv1.NewWorkServiceClient(workConnFwd), nil)
 	agentsSrv.Audit = agents.NewAuditLog(pool)
-	p.AgentsAddr = serve(t, func(s *grpc.Server) { agentsv1.RegisterAgentServiceServer(s, agentsSrv) }, interceptor)
+	p.AgentsAddr = serve(t, func(s *grpc.Server) { agentsv1.RegisterAgentServiceServer(s, agentsSrv) }, interceptor,
+		grpc.StreamInterceptor(svcauth.StreamServerInterceptor(p.Identity, HMACSecret)))
 	p.Agents = agentsv1.NewAgentServiceClient(dial(t, p.AgentsAddr, nil))
+	idSrv.Agents = p.Agents
 
 	// mcp-server: the register over gRPC, and NovaForge's own MCP server over
 	// the production backend on Streamable HTTP.
@@ -285,7 +296,15 @@ func Start(t testing.TB) *Platform {
 	p.MCPURL = mcpHTTP.URL
 
 	// The REST edge, composed as cmd/edge composes it.
-	edgeDial := func(addr string) *grpc.ClientConn { return dial(t, addr, edge.ForwardCredential) }
+	edgeDial := func(addr string) *grpc.ClientConn {
+		conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithUnaryInterceptor(edge.ForwardCredential), grpc.WithStreamInterceptor(edge.ForwardCredentialStream))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { conn.Close() })
+		return conn
+	}
 	workEdge := edgeDial(p.WorkAddr)
 	ecfg := edge.Config{
 		Identity: identityv1.NewIdentityServiceClient(edgeDial(p.IdentityAddr)),
@@ -301,6 +320,9 @@ func Start(t testing.TB) *Platform {
 	edgeSrv := httptest.NewServer(edge.NewRouter(ecfg))
 	t.Cleanup(edgeSrv.Close)
 	p.EdgeURL = edgeSrv.URL
+	if factory != nil {
+		agentsSrv.Execute = factory(p)
+	}
 	return p
 }
 

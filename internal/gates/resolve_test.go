@@ -7,6 +7,8 @@ import (
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	"github.com/novaforge/novaforge/internal/gates"
@@ -36,11 +38,7 @@ func (s *stubGitClient) GetBlob(_ context.Context, in *gitv1.GetBlobRequest, _ .
 	return &gitv1.GetBlobResponse{Content: content}, nil
 }
 
-type notFoundErr string
-
-func (e notFoundErr) Error() string { return "not found: " + string(e) }
-
-func errNotFound(path string) error { return notFoundErr(path) }
+func errNotFound(path string) error { return status.Errorf(codes.NotFound, "not found: %s", path) }
 
 func TestResolveReadsFromTargetRefNotSource(t *testing.T) {
 	client := &stubGitClient{

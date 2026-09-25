@@ -52,7 +52,7 @@ func NewRouter(cfg Config) http.Handler {
 
 	for _, rt := range Routes() {
 		h := cfg.handlerFor(rt)
-		if rt.Pattern == "/healthz" || strings.HasPrefix(rt.Pattern, "/api/v1/auth/") {
+		if rt.Pattern == "/healthz" || (strings.HasPrefix(rt.Pattern, "/api/v1/auth/") && rt.OpID != "logout") {
 			r.Method(rt.Method, rt.Pattern, h)
 			continue
 		}
@@ -84,8 +84,13 @@ func (c Config) handlerFor(rt Route) http.Handler {
 // never treated as an unscoped, and therefore unrestricted, caller.
 func authenticate(cfg Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if cfg.Identity == nil {
+		cookie, _ := r.Cookie("nf_session")
+		if bearer(r) == "" && (cookie == nil || cookie.Value == "") {
 			WriteError(w, http.StatusUnauthorized, errors.New("no credentials"))
+			return
+		}
+		if cfg.Identity == nil {
+			WriteError(w, http.StatusServiceUnavailable, errors.New("identity service is not configured"))
 			return
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
@@ -111,7 +116,10 @@ func authenticate(cfg Config, next http.Handler) http.Handler {
 				if resp, err := cfg.Identity.ResolveSession(ctx, &identityv1.ResolveSessionRequest{Token: tok, Org: org}); err == nil {
 					subj = resp.GetSubject()
 					lastErr = nil
-				} else {
+				} else if status.Code(lastErr) == codes.Unauthenticated ||
+					(status.Code(lastErr) == codes.PermissionDenied && status.Code(err) != codes.Unauthenticated) {
+					// Preserve upstream failures, and do not turn a valid PAT's
+					// authorization denial into an invalid-session response.
 					lastErr = err
 				}
 			}
@@ -125,11 +133,16 @@ func authenticate(cfg Config, next http.Handler) http.Handler {
 			}
 		}
 		if subj == nil && lastErr != nil {
-			WriteError(w, http.StatusUnauthorized, lastErr)
+			if status.Code(lastErr) == codes.PermissionDenied {
+				// Identity's diagnostic may name the account and membership.
+				// Public denials must not distinguish absent and foreign orgs.
+				lastErr = status.Error(codes.PermissionDenied, "access denied")
+			}
+			WriteError(w, authenticationStatus(lastErr), lastErr)
 			return
 		}
 		if subj == nil {
-			WriteError(w, http.StatusUnauthorized, errors.New("no credentials"))
+			WriteError(w, http.StatusBadGateway, errors.New("identity returned no subject"))
 			return
 		}
 
@@ -155,6 +168,18 @@ func authenticate(cfg Config, next http.Handler) http.Handler {
 		rctx = WithOrgRef(rctx, org)
 		next.ServeHTTP(w, r.WithContext(rctx))
 	})
+}
+
+// Only a definitive credential rejection may clear a browser's session.
+func authenticationStatus(err error) int {
+	switch {
+	case errors.Is(err, context.DeadlineExceeded), status.Code(err) == codes.DeadlineExceeded:
+		return http.StatusGatewayTimeout
+	case errors.Is(err, context.Canceled), status.Code(err) == codes.Canceled, status.Code(err) == codes.Unavailable:
+		return http.StatusServiceUnavailable
+	default:
+		return StatusFromGRPC(err)
+	}
 }
 
 func bearer(r *http.Request) string {
@@ -214,7 +239,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type")
+		w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, Last-Event-ID")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return

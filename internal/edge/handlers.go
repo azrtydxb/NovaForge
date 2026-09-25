@@ -44,6 +44,9 @@ func Handlers(cfg Config) map[string]http.HandlerFunc {
 	h["healthz"] = func(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	}
+	// Wrappers must run last so older key-only operations cannot replace the
+	// repository checks or discard revision-bound review input.
+	AddGUIHandlers(h, cfg.Git, cfg.Work, cfg.Reviews, cfg.Agents)
 	return h
 }
 
@@ -102,7 +105,18 @@ func addIdentityHandlers(h map[string]http.HandlerFunc, c identityv1.IdentitySer
 	}
 
 	h["logout"] = func(w http.ResponseWriter, r *http.Request) {
-		http.SetCookie(w, &http.Cookie{Name: "nf_session", Value: "", Path: "/", MaxAge: -1})
+		// Clearing a browser cookie does not revoke a copied session token.
+		// Identity receives only the credential selected by edge authentication.
+		resp, err := c.LogoutSession(r.Context(), &identityv1.LogoutSessionRequest{})
+		if err != nil {
+			WriteError(w, StatusFromGRPC(err), err)
+			return
+		}
+		if !resp.GetOk() {
+			WriteJSON(w, http.StatusBadGateway, map[string]string{"error": "session revocation was not acknowledged"})
+			return
+		}
+		http.SetCookie(w, &http.Cookie{Name: "nf_session", Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode})
 		WriteJSON(w, http.StatusOK, map[string]string{"status": "logged out"})
 	}
 

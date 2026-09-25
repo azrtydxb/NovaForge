@@ -2,13 +2,14 @@ package reviews_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"testing"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/azrtydxb/go-ai-sdk/provider"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
@@ -71,12 +72,13 @@ func TestAuthorAgentExcludedFromReviewers(t *testing.T) {
 	store := newStore(t)
 	orgID := uuid.New()
 	authorAgentID := uuid.New()
-	ctx := scopedCtx(orgID)
+	ctx := proofServiceContext(t, scopedCtx(orgID), "work-reviews")
 
 	run := runWithAuthorAgent(t, store, ctx, orgID, authorAgentID)
 
 	securityAgentID := uuid.New()
 	r := &reviews.AgentReviewer{
+		Git:   &stubMergeGitClient{},
 		Store: store,
 		RoleAgent: map[string]agents.Agent{
 			"reviewer": {ID: authorAgentID, Name: "backend-agent", Role: "reviewer"},
@@ -103,7 +105,7 @@ func TestReviewersUseDistinctModelsWhenAvailable(t *testing.T) {
 	store := newStore(t)
 	orgID := uuid.New()
 	authorID := uuid.New()
-	ctx := scopedCtx(orgID)
+	ctx := proofServiceContext(t, scopedCtx(orgID), "work-reviews")
 
 	run, err := store.CreateRun(ctx, reviews.Run{
 		OrgID: orgID, RepoID: uuid.New(), Title: "r", SourceRef: "src", TargetRef: "main",
@@ -114,6 +116,7 @@ func TestReviewersUseDistinctModelsWhenAvailable(t *testing.T) {
 	}
 
 	r := &reviews.AgentReviewer{
+		Git:   &stubMergeGitClient{},
 		Store: store,
 		RoleAgent: map[string]agents.Agent{
 			"reviewer": {ID: uuid.New(), Name: "reviewer-agent", Role: "reviewer"},
@@ -138,7 +141,7 @@ func TestRequestChangesBlocksMerge(t *testing.T) {
 	store := newStore(t)
 	orgID := uuid.New()
 	authorID := uuid.New()
-	ctx := scopedCtx(orgID)
+	ctx := proofServiceContext(t, scopedCtx(orgID), "work-reviews")
 
 	run, err := store.CreateRun(ctx, reviews.Run{
 		OrgID: orgID, RepoID: uuid.New(), Title: "r", SourceRef: "src", TargetRef: "main",
@@ -149,6 +152,7 @@ func TestRequestChangesBlocksMerge(t *testing.T) {
 	}
 
 	r := &reviews.AgentReviewer{
+		Git:   &stubMergeGitClient{},
 		Store: store,
 		RoleAgent: map[string]agents.Agent{
 			"reviewer": {ID: uuid.New(), Name: "reviewer-agent", Role: "reviewer"},
@@ -191,7 +195,7 @@ func (reviewGatesGit) GetBlob(_ context.Context, in *gitv1.GetBlobRequest, _ ...
 	if in.Ref == "main" && in.Path == ".novaforge/gates/tests.yaml" {
 		return &gitv1.GetBlobResponse{Content: []byte("name: tests\nrequired: true\n")}, nil
 	}
-	return nil, errors.New("not found")
+	return nil, status.Error(codes.NotFound, "not found")
 }
 
 func gatesStore(t *testing.T) *gates.Store {
@@ -212,7 +216,7 @@ func TestAllApprovalsStillRequireGates(t *testing.T) {
 	store := newStore(t)
 	orgID := uuid.New()
 	authorID := uuid.New()
-	ctx := scopedCtx(orgID)
+	ctx := proofServiceContext(t, scopedCtx(orgID), "work-reviews")
 
 	run, err := store.CreateRun(ctx, reviews.Run{
 		OrgID: orgID, RepoID: uuid.New(), Title: "r", SourceRef: "src", TargetRef: "main",
@@ -223,6 +227,7 @@ func TestAllApprovalsStillRequireGates(t *testing.T) {
 	}
 
 	r := &reviews.AgentReviewer{
+		Git:   &stubMergeGitClient{},
 		Store: store,
 		RoleAgent: map[string]agents.Agent{
 			"reviewer":     {ID: uuid.New(), Name: "reviewer-agent", Role: "reviewer"},
@@ -273,7 +278,7 @@ func TestReviewVerdictsRecordedAsProof(t *testing.T) {
 	store := newStore(t)
 	orgID := uuid.New()
 	authorID := uuid.New()
-	ctx := scopedCtx(orgID)
+	ctx := proofServiceContext(t, scopedCtx(orgID), "work-reviews")
 
 	run, err := store.CreateRun(ctx, reviews.Run{
 		OrgID: orgID, RepoID: uuid.New(), Title: "r", SourceRef: "src", TargetRef: "main",
@@ -284,6 +289,7 @@ func TestReviewVerdictsRecordedAsProof(t *testing.T) {
 	}
 
 	r := &reviews.AgentReviewer{
+		Git:   &stubMergeGitClient{},
 		Store: store,
 		RoleAgent: map[string]agents.Agent{
 			"reviewer": {ID: uuid.New(), Name: "reviewer-agent", Role: "reviewer"},

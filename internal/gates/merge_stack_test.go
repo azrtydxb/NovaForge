@@ -29,9 +29,8 @@ func seedCalc(s *platformStack) {
 // an Engineering Run whose change fails the required tests gate. A person
 // other than the author approves the review, and the merge is still refused —
 // through work-reviews' real gates client, over gRPC, by the real controller
-// running `go test` on the change. Once the agent fixes the change the same
-// merge goes through, which proves the refusal was the gate and not the
-// stack.
+// running `go test` on the change. Once the agent fixes the change and the
+// reviewer approves that exact new revision, the merge goes through.
 func TestGateBlocksMerge(t *testing.T) {
 	s := newPlatformStack(t)
 	seedCalc(s)
@@ -59,6 +58,10 @@ func TestGateBlocksMerge(t *testing.T) {
 
 	// The agent fixes the change; the new head is evaluated afresh.
 	s.commit("agents/NF-1/work", "main", map[string]*string{"calc.go": str(addGo + "\n// fixed\n")})
+	if _, err := s.merge(s.member, run.GetId()); status.Code(err) != codes.FailedPrecondition || !strings.Contains(err.Error(), "no approval independent") {
+		t.Fatalf("old review must not approve the fixed revision: %v", err)
+	}
+	s.approveReview(s.member, run.GetId())
 	if _, err := s.merge(s.member, run.GetId()); err != nil {
 		t.Fatalf("merge after the change passes its gate: %v", err)
 	}

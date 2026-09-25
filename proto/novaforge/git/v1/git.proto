@@ -151,6 +151,12 @@ message MergeRequest {
   string target_ref = 3;
   string method = 4;
   string message = 5;
+  // Mandatory for review-authorized merges. Compare atomically under the
+  // repository write lock, then merge this exact source commit.
+  string expected_source_sha = 6;
+  // Trusted policy baseline inspected by the gate owner. Both refs are checked
+  // in the same native Git transaction before publishing the merge.
+  string expected_target_sha = 7;
 }
 message MergeResponse {
   string merge_sha = 1;
