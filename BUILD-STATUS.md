@@ -920,6 +920,19 @@ These are real and are not worked around:
   `REGISTRY_PASSWORD`; `hack/deploy.sh` refuses to deploy without the first,
   because a deployment with no gateway credential looks configured and is not.
   A fresh clone must create that file before deploying.
+- **A webhook reaches the cluster, not the internet.** git-platform is listed under
+  `networkPolicy.airGapped`, so in the deployed configuration a hook delivers to an
+  in-cluster endpoint and a public-internet endpoint is dropped by Cilium. That is the
+  operator's security posture rather than a defect, and it means "webhooks work" here
+  does not mean "a hook can call GitHub". Changing it is a deliberate decision about
+  egress, not a configuration oversight. There is also no SSRF or private-range
+  filtering, because in an air-gapped deployment the private ranges are exactly the
+  endpoints a hook can reach.
+- **Only pushes are delivered as webhooks.** S-24 names pushes, Engineering Runs and CI
+  results. Neither a run nor a CI result is published on any stream today, and the
+  stream that does carry run deletions has run ids with no repository, so there is
+  nothing routable to a repository's hooks. Closing it needs a publisher in
+  `internal/ci` and `work-reviews`.
 - **The provider's unseal material lives beside it.** `novaforge-bao/openbao-init`
   holds the single unseal key and the root token in a Secret in the same
   namespace as the OpenBao it unseals, so anything that can read that namespace's

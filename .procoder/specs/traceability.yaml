@@ -727,13 +727,43 @@ criteria:
       - ./internal/work TestCompletedSinceCountsOnlyItemsThatAreDoneNow
       - ./internal/work TestCompletedSinceIsOrganizationScoped
   S-24/TestWebhookDelivered:
-    status: uncovered
+    status: partial
     note: >-
-      Not built. Task 4 of .procoder/plans/git-parity.md.
+      A push delivers a signed POST and the delivery is recorded with the endpoint's
+      response status; a hook whose endpoint always fails is retried to a bound and
+      then left failed rather than retried forever, and the message is acked so a pod
+      restart does not re-deliver to a broken endpoint. The worker is a Redis consumer
+      group and TestGitPlatformStartsTheDeliveryWorker asserts cmd/git-platform starts
+      it — verified red by unstarting it. Mutation-checked: signing body+0x27 and
+      ignoring the retry bound each make the corresponding test fail.
+
+      Partial, not covered: S-24 names pushes, Engineering Runs and CI results, and
+      only pushes are delivered. Neither an Engineering Run nor a CI result is
+      published on any stream today, and StreamRunsDeleted carries run ids with no
+      repository, so there is nothing routable to a repository's hooks. Closing this
+      needs a publisher in internal/ci and work-reviews.
+
+      Also unproven on the cluster: nothing was built or deployed, and git-platform is
+      listed under networkPolicy.airGapped, so in the deployed configuration a hook
+      reaches an in-cluster endpoint and a public-internet endpoint is dropped by
+      Cilium.
+    go_tests:
+      - ./internal/webhooks TestWebhookDelivered
+      - ./internal/webhooks TestWebhookRetriesAreBounded
+      - ./internal/webhooks TestGitPlatformStartsTheDeliveryWorker
+      - ./internal/webhooks TestHooksAreScopedToTheirOrganization
   S-24/TestWebhookSecretNeverReadBack:
-    status: uncovered
+    status: covered
     note: >-
-      Not built. Task 4 of .procoder/plans/git-parity.md.
+      A hook's secret can be set and rotated and no read returns either value: the Hook
+      type carries no secret field at all, rather than one every caller must remember
+      not to render, and a read reports only whether a secret is present. Stored under
+      AES-GCM with the same key derivation the secret broker uses, and an empty KEK
+      refuses to store a secret rather than deriving a key from the empty string. The
+      signature a receiver verifies is computed over the exact delivered body —
+      mutation-checked by signing body+0x27, which fails the test.
+    go_tests:
+      - ./internal/webhooks TestWebhookSecretNeverReadBack
   S-25/TestLFSRoundTrip:
     status: uncovered
     note: >-
@@ -770,9 +800,25 @@ criteria:
     note: >-
       Not built. Task 7 of .procoder/plans/git-parity.md.
   S-28/TestReleaseWithAssets:
-    status: uncovered
+    status: covered
     note: >-
-      Not built. Task 5 of .procoder/plans/git-parity.md.
+      A release exists only on a tag the repository actually has, asked of git
+      rev-parse rather than of a table; an asset downloads byte for byte; deleting a
+      release removes its blobstore objects, verified gone from MinIO rather than
+      merely unrowed. Keys are org-scoped
+      (org/<org>/repo/<repo>/release/<release>/<asset>) and two organizations sharing a
+      repository name, tag and asset name get different keys. Download streams at the
+      store, RPC and edge layers — verified red by widening the chunk, which reports
+      the asset "sent in 1 message(s): it is being buffered, not streamed". The
+      recorded size is what arrived rather than what the uploader claimed.
+
+      Not proven on the cluster: the blobstore construction, the stream interceptor and
+      the novaforge-releases bucket have never run in a pod, and platformtest starts
+      git-platform without a release store.
+    go_tests:
+      - ./internal/gitops TestReleaseWithAssets
+      - ./internal/gitops TestReleaseAssetKeysAreOrgScoped
+      - ./internal/gitops TestReleaseAssetStreamsThroughTheRPC
   S-29/TestGitOverHTTPS:
     status: uncovered
     note: >-
