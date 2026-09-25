@@ -765,13 +765,48 @@ criteria:
     go_tests:
       - ./internal/webhooks TestWebhookSecretNeverReadBack
   S-25/TestLFSRoundTrip:
-    status: uncovered
+    status: partial
     note: >-
-      Not built. Task 6 of .procoder/plans/git-parity.md.
+      An unmodified git-lfs client pushes a 5 MiB file over HTTP and a fresh clone
+      retrieves it byte for byte. The proof that the payload is not in the git
+      directory is that the whole bare repository is under 1 MiB afterwards — random
+      data does not compress, so that is evidence rather than an assertion about
+      pointers.
+
+      Partial: LFS is served over HTTP only. There is no git-lfs-authenticate on the
+      SSH transport, so a clone that reaches the platform over ssh:// will not fetch
+      LFS objects. The batch verify operation and non-basic transfer adapters are
+      refused with a 422 saying so rather than implemented.
+
+      Also unproven on the cluster, and deleting a repository or organization leaves
+      its LFS payloads in the bucket — the rows cascade, the objects do not, which
+      matches the pre-existing behaviour for release assets.
+    go_tests:
+      - ./internal/gitops TestLFSRoundTrip
   S-25/TestLFSQuotaAndOwnership:
-    status: uncovered
+    status: covered
     note: >-
-      Not built. Task 6 of .procoder/plans/git-parity.md.
+      An upload declaring more than NF_LFS_MAX_OBJECT_BYTES is refused before any
+      bytes are stored, a transfer exceeding it is refused at the transport, a body
+      that does not hash to its oid is refused, and another organization's credential
+      reaches nothing. LFS is served by the same handler, AuthFunc and CapFunc as the
+      git transport, so the grant, branch-lock, archive and collaborator-role guards
+      apply to it unmodified — an upload is authorized as a write against the ref the
+      client declared, which is what pushing is.
+
+      The config field has no default in LoadConfig deliberately: a default makes the
+      chart guard treat the variable as optional, and it could then vanish from the pod
+      unnoticed. The 5 GiB fallback lives in the store, so a missing variable is bounded
+      rather than unbounded.
+
+      The blob key is scoped by organization and repository rather than content-addressed
+      by oid alone. Nothing pinned that until
+      TestLFSBlobKeyIsScopedToItsRepository — stripping the scoping broke no other test,
+      because what refuses a request is the org-scoped row lookup, so the key is
+      defence in depth that needed its own guard.
+    go_tests:
+      - ./internal/gitops TestLFSQuotaAndOwnership
+      - ./internal/gitops TestLFSBlobKeyIsScopedToItsRepository
   S-26/TestRepositoryAdministration:
     status: covered
     note: >-
