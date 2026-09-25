@@ -56,6 +56,11 @@ func Routes() []Route {
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/tree/{ref}/*", "getTree", "Tree listing at a path"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/blob/{ref}/*", "getBlob", "File contents"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/diff", "getDiff", "Unified diff between two refs"},
+		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/releases", "listReleases", "Releases and their downloadable assets"},
+		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/releases", "createRelease", "Publish an existing tag as a release"},
+		{http.MethodDelete, "/api/v1/orgs/{org}/repos/{repo}/releases/{tag}", "deleteRelease", "Delete a release and the objects its assets hold"},
+		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/releases/{tag}/assets", "uploadReleaseAsset", "Upload an asset onto a release; the body is the file itself"},
+		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/releases/{tag}/assets/{name}", "downloadReleaseAsset", "Download one release asset"},
 
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/work", "listWorkItems", "Work Items"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/work", "createWorkItem", "Create a Work Item"},

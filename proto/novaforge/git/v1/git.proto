@@ -26,6 +26,16 @@ service GitService {
   // with organization ids. The worker re-enters each organization's scope with
   // an org-scoped token before reading anything in it.
   rpc ListOrganizationsWithRepositories(ListOrganizationsWithRepositoriesRequest) returns (ListOrganizationsWithRepositoriesResponse);
+  rpc CreateRelease(CreateReleaseRequest) returns (CreateReleaseResponse);
+  rpc ListReleases(ListReleasesRequest) returns (ListReleasesResponse);
+  rpc DeleteRelease(DeleteReleaseRequest) returns (DeleteReleaseResponse);
+  // UploadReleaseAsset and DownloadReleaseAsset stream in both directions. A
+  // release asset is a build output, routinely hundreds of megabytes, so neither
+  // side can hold one in a single message: gRPC's default limit is 4 MiB, and
+  // raising it would only move the point at which the service runs out of memory
+  // serving concurrent downloads.
+  rpc UploadReleaseAsset(stream UploadReleaseAssetRequest) returns (UploadReleaseAssetResponse);
+  rpc DownloadReleaseAsset(DownloadReleaseAssetRequest) returns (stream DownloadReleaseAssetResponse);
 }
 
 message ListOrganizationsWithRepositoriesRequest {}
@@ -221,4 +231,81 @@ message CreateCommitRequest {
 }
 message CreateCommitResponse {
   string sha = 1;
+}
+
+// Release is a tag published for download: a version a team hands out, with the
+// files published alongside it. It is not a CI artifact — an artifact belongs to
+// one job and is evidence of a run, while a release belongs to a version.
+message Release {
+  string id = 1;
+  string repo_id = 2;
+  string tag = 3;
+  string name = 4;
+  string body = 5;
+  string created_at = 6;
+  repeated ReleaseAsset assets = 7;
+}
+
+// ReleaseAsset is one downloadable file on a release. The object's storage key is
+// deliberately absent: it is an internal address, and publishing it would invite
+// a client to construct one.
+message ReleaseAsset {
+  string id = 1;
+  string name = 2;
+  int64 size_bytes = 3;
+  string content_type = 4;
+}
+
+message CreateReleaseRequest {
+  string repo = 1;
+  // The tag must already exist in the repository. A release on a tag that does
+  // not exist is a download link pointing at nothing.
+  string tag = 2;
+  string name = 3;
+  string body = 4;
+}
+message CreateReleaseResponse {
+  Release release = 1;
+}
+
+message ListReleasesRequest {
+  string repo = 1;
+}
+message ListReleasesResponse {
+  repeated Release releases = 1;
+}
+
+message DeleteReleaseRequest {
+  string repo = 1;
+  string tag = 2;
+}
+message DeleteReleaseResponse {}
+
+// UploadReleaseAssetRequest is one frame of an upload. repo, tag, name and
+// content_type are read from the first frame only; every frame carries data,
+// including the first.
+message UploadReleaseAssetRequest {
+  string repo = 1;
+  string tag = 2;
+  string name = 3;
+  string content_type = 4;
+  bytes data = 5;
+}
+message UploadReleaseAssetResponse {
+  ReleaseAsset asset = 1;
+}
+
+// DownloadReleaseAssetRequest addresses an asset the way a download URL does: by
+// repository, tag and file name, which is unique within a release.
+message DownloadReleaseAssetRequest {
+  string repo = 1;
+  string tag = 2;
+  string name = 3;
+}
+message DownloadReleaseAssetResponse {
+  // name, size_bytes and content_type are set on the first message only.
+  string name = 1;
+  int64 size_bytes = 2;
+  string content_type = 3;
+  bytes data = 4;
 }

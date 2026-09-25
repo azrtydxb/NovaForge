@@ -13,6 +13,7 @@ import type {
   Commit,
   OrgMember,
   Ref,
+  Release,
   Repo,
   TreeEntry,
   User,
@@ -656,6 +657,8 @@ function Browser({
           )}
         </Panel>
 
+        <Releases base={base} org={org} repo={repo} tags={tags} />
+
         {empty ? null : (
           <Compare
             base={base}
@@ -694,6 +697,266 @@ function Browser({
     </div>
   );
 }
+
+/** Releases lists a repository's releases and the files published with each one.
+ *
+ * A release can only be published on a tag the repository already has, so the tag
+ * is chosen from the repository's own tags rather than typed: the platform refuses
+ * anything else, and a free-text field would only lead people to that refusal.
+ * When there are no tags the panel says so instead of offering an empty picker.
+ *
+ * Nothing here invents a number: sizes and types are what the platform recorded
+ * when the file arrived, and a release with no assets is shown as having none. */
+function Releases({
+  base,
+  org,
+  repo,
+  tags,
+}: {
+  base: string;
+  org: string;
+  repo: string;
+  tags: Ref[];
+}) {
+  const qc = useQueryClient();
+  const [publishing, setPublishing] = useState(false);
+  const [uploadError, setUploadError] = useState<unknown>(null);
+
+  const releases = useQuery({
+    queryKey: ["releases", org, repo],
+    queryFn: () => api.get<{ releases: Release[] }>(`${base}/releases`),
+  });
+  const invalidate = () =>
+    void qc.invalidateQueries({ queryKey: ["releases", org, repo] });
+
+  const publish = useMutation({
+    mutationFn: (v: Record<string, string>) =>
+      api.post<Release>(`${base}/releases`, {
+        tag: v.tag,
+        name: v.name,
+        body: v.body,
+      }),
+    onSuccess: () => {
+      setPublishing(false);
+      invalidate();
+    },
+  });
+
+  const remove = useMutation({
+    mutationFn: (tag: string) => api.del(`${base}/releases/${enc(tag)}`),
+    onSuccess: invalidate,
+  });
+
+  const addAsset = useMutation({
+    mutationFn: ({ tag, file }: { tag: string; file: File }) =>
+      api.upload(
+        `${base}/releases/${enc(tag)}/assets?name=${enc(file.name)}`,
+        file,
+      ),
+    onSuccess: () => {
+      setUploadError(null);
+      invalidate();
+    },
+    onError: setUploadError,
+  });
+
+  const tagNames = tags.map((t) => t.name);
+
+  return (
+    <Panel>
+      <PanelHead>
+        RELEASES
+        <div style={{ flex: 1 }} />
+        <button
+          onClick={() => {
+            publish.reset();
+            setPublishing(true);
+          }}
+          disabled={tagNames.length === 0}
+          title={
+            tagNames.length === 0
+              ? "Push a tag first: a release is published on a tag."
+              : undefined
+          }
+          style={{
+            background: "transparent",
+            border: "1px solid var(--line-2)",
+            borderRadius: 6,
+            color: "var(--fg-muted)",
+            font: "10px var(--sans)",
+            padding: "3px 7px",
+            cursor: tagNames.length === 0 ? "default" : "pointer",
+          }}
+        >
+          publish a release
+        </button>
+      </PanelHead>
+
+      {publishing ? (
+        <Dialog
+          title="Publish a release"
+          submitLabel="Publish"
+          fields={[
+            {
+              name: "tag",
+              label: "Tag",
+              required: true,
+              type: "select",
+              options: tagNames,
+              help: "Only a tag that exists in this repository can carry a release.",
+            },
+            { name: "name", label: "Title", placeholder: "v1.0.0" },
+            { name: "body", label: "Notes", type: "textarea" },
+          ]}
+          busy={publish.isPending}
+          error={publish.error}
+          onSubmit={(v) => publish.mutate(v)}
+          onClose={() => setPublishing(false)}
+        />
+      ) : null}
+
+      <Async query={releases}>
+        {(d) =>
+          d.releases.length === 0 ? (
+            <Empty>
+              No releases yet. Publish one on a tag to hand out a build.
+            </Empty>
+          ) : (
+            <>
+              {d.releases.map((rel) => (
+                <div
+                  key={rel.id}
+                  style={{
+                    padding: "9px 14px",
+                    borderBottom: "1px solid var(--line)",
+                  }}
+                >
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 8 }}
+                  >
+                    <span style={{ font: "600 12px var(--mono)" }}>
+                      {rel.tag}
+                    </span>
+                    <span
+                      style={{
+                        font: "12px var(--sans)",
+                        color: "var(--fg-dim)",
+                      }}
+                    >
+                      {rel.name}
+                    </span>
+                    <div style={{ flex: 1 }} />
+                    <label style={assetAction}>
+                      add asset
+                      <input
+                        type="file"
+                        style={{ display: "none" }}
+                        disabled={addAsset.isPending}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          // The input is cleared so choosing the same file twice
+                          // still fires a change, which is how a retry after a
+                          // failed upload silently did nothing.
+                          e.target.value = "";
+                          if (file) addAsset.mutate({ tag: rel.tag, file });
+                        }}
+                      />
+                    </label>
+                    <button
+                      onClick={() => remove.mutate(rel.tag)}
+                      disabled={remove.isPending}
+                      style={{ ...assetAction, color: "var(--bad)" }}
+                    >
+                      delete
+                    </button>
+                  </div>
+                  {rel.body ? (
+                    <div
+                      style={{
+                        font: "11px/1.6 var(--sans)",
+                        color: "var(--fg-muted)",
+                        marginTop: 3,
+                        whiteSpace: "pre-wrap",
+                      }}
+                    >
+                      {rel.body}
+                    </div>
+                  ) : null}
+                  {rel.assets.length === 0 ? (
+                    <div
+                      style={{
+                        font: "11px var(--sans)",
+                        color: "var(--fg-faint)",
+                        marginTop: 4,
+                      }}
+                    >
+                      No assets on this release.
+                    </div>
+                  ) : (
+                    <div style={{ marginTop: 5, display: "grid", gap: 3 }}>
+                      {rel.assets.map((a) => (
+                        <div
+                          key={a.id}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            font: "11px var(--mono)",
+                            color: "var(--fg-muted)",
+                          }}
+                        >
+                          {/* The credential lives in this page, not in a cookie,
+                              so a plain link cannot fetch the file. */}
+                          <button
+                            onClick={() =>
+                              void api.download(
+                                `${base}/releases/${enc(rel.tag)}/assets/${enc(a.name)}`,
+                                a.name,
+                              )
+                            }
+                            style={{ ...assetAction, color: "var(--link)" }}
+                          >
+                            {a.name}
+                          </button>
+                          <span>{formatBytes(a.size_bytes)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </>
+          )
+        }
+      </Async>
+      {uploadError ? <Failed error={uploadError} /> : null}
+      {remove.error ? <Failed error={remove.error} /> : null}
+    </Panel>
+  );
+}
+
+/** formatBytes reports the size the platform recorded, never a rounded guess at
+ * one it does not have. */
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  const units = ["KiB", "MiB", "GiB", "TiB"];
+  let v = n / 1024;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v < 10 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
+}
+
+const assetAction: React.CSSProperties = {
+  background: "transparent",
+  border: "none",
+  padding: 0,
+  color: "var(--fg-muted)",
+  font: "10px var(--sans)",
+  cursor: "pointer",
+};
 
 /** Compare shows the unified diff between two refs, branches or tags, as
  * git-platform computes it. Nothing is fetched until someone asks, so the
