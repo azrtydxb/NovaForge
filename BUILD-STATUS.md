@@ -66,12 +66,48 @@ records as unresolved, and the isolation problem it was research toward is
 solved and proven by the sandbox above. Merging unfinished transport research
 into a working tree would add risk for no gain.
 
-**Not yet proven.** Nothing is deployed on the kw cluster at this commit: the
-`novaforge` namespace does not exist, so there is no Helm revision behind this
-checkpoint and no in-cluster e2e run. Every claim above rests on local suites
-against real cluster datastores and real sandbox pods, not on a running
-deployment. The deployment accounts below are historical evidence from revision
-70 and earlier, and describe an older tree.
+**Deployed, and four more seams only the deployment could show.** The platform
+is installed on kw and every service is running. Deploying it found four places
+where a component was written, correct and tested, and the production entrypoint
+did not use it — none of them reachable from a local suite:
+
+- **gates could not create its sandbox.** The chart refused it the runtime RBAC
+  deliberately and the narrower grant that refusal implied was never written, so
+  the service came up healthy with its image configured and no authority to make
+  a namespace. Local tests never saw this because they use a developer
+  kubeconfig, not the service account.
+- **agent-runtime never took the Work execution claim.** `store.WorkClaims` was
+  set only by a test double, so every unit test admitted runs and the deployed
+  service refused all of them.
+- **agent-runtime built its grant authority from the capability store.**
+  `capability.RuntimeClient`, which goes through Identity's delegated issuance,
+  is what the platform test stack has always used. Production used the direct
+  store, so the tests exercised one path and the deployment ran another — and a
+  run sponsored by a platform worker, whose sponsor is not the caller, could not
+  be issued a grant at all.
+- **Identity could not validate a delegated intent.** `cmd/identity` set neither
+  `Agents` nor `HMACSecret`, so the call back into the run owner that its
+  validation depends on had no client and no credential. The chart had been
+  passing `AGENTS_ADDR` all along.
+
+Admission failures are now logged. The reason was discarded, which is why the
+first of these took two deploy cycles to identify rather than one.
+
+**Not proven, and why.** Two suites do not pass, neither for a defect in this
+tree:
+
+- `work_ci` needs a dynamic credential provider to broker its job's secret.
+  None is deployed (see the limitation below). The suite now names that
+  prerequisite instead of reporting a bare CI failure.
+- `agent` needs several sequential model calls. The FastLLM gateway is flapping:
+  one of three identical requests succeeded and the others returned "no healthy
+  backend", while the upstream served the model directly in 12ms. The run failed
+  honestly — the model error is its recorded summary — rather than being marked
+  succeeded, which is the verification behaviour working. This is model
+  infrastructure, outside this repository.
+
+The deployment accounts below are historical evidence from revision 70 and
+earlier, and describe an older tree.
 
 See `.procoder/plans/integration-recovery.md` for the lanes' own records.
 
