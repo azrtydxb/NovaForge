@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"strings"
 	"time"
@@ -54,6 +55,9 @@ const reapOlderThan = time.Hour
 
 func main() {
 	cfg := service.LoadConfig()
+	if cfg.HMACSecret == "" {
+		log.Fatal("agent-runtime: HMAC_SECRET is required")
+	}
 	if cfg.DatabaseURL == "" {
 		log.Fatal("agent-runtime: DATABASE_URL is required")
 	}
@@ -75,9 +79,6 @@ func main() {
 
 	if err := database.Migrate(cfg.DatabaseURL, "agents", agents.MigrationsFS); err != nil {
 		log.Fatalf("agent-runtime: migrate agents schema: %v", err)
-	}
-	if err := database.Migrate(cfg.DatabaseURL, "gitplatform", capability.MigrationsFS); err != nil {
-		log.Fatalf("agent-runtime: migrate gitplatform (capability) schema: %v", err)
 	}
 
 	ctx := context.Background()
@@ -175,9 +176,30 @@ func main() {
 	store := agents.NewStore(pool)
 	// A deleted repository's Agent Runs, and a deleted organization's runs and
 	// agents, are cancelled and removed when the deletion is announced.
-	cleanup.AgentRuntime(store, cleanup.RedisRunsPublisher(rdb)).Run(ctx, rdb, "agent-runtime")
-	grants := capability.NewStore(pool)
+	grants := capability.RuntimeClient{Identity: identityClient, HMACSecret: cfg.HMACSecret}
+	store.GrantRevoker = grants.Revoke
+	store.GrantIssuanceCanceller = grants.CancelIssuance
+	store.WorkClaims = agents.WorkExecutionClient{Work: workClient, HMACSecret: cfg.HMACSecret}
 	audit := agents.NewAuditLog(pool)
+	auditRedis := agents.NewAuditRedisClient(redisOpts)
+	defer auditRedis.Close()
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			call, cancel := context.WithTimeout(ctx, 2*time.Second)
+			err := audit.MaintainAudit(call, auditRedis)
+			cancel()
+			if err != nil {
+				log.Print("agent-runtime: audit reconciliation pending")
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
 
 	var provisioner *workspace.Provisioner
 	if k8sConfig, err := rest.InClusterConfig(); err == nil {
@@ -185,15 +207,19 @@ func main() {
 		if err != nil {
 			log.Fatalf("agent-runtime: build kubernetes client: %v", err)
 		}
-		provisioner = workspace.NewProvisioner(clientset).WithRESTConfig(k8sConfig)
+		provisioner = workspace.NewProvisioner(clientset).WithRESTConfig(k8sConfig).WithCleanupRecorder(store.RecordWorkspaceCleanup)
 	} else {
 		// Not running in a cluster: workspace provisioning and the reaper
 		// are unavailable, exactly like graph.Assemble degrades when its
 		// dependency is unset. This lets the gRPC surface (CreateAgent,
 		// ListAgents, GetRun, CancelRun, StreamRunEvents) keep working in
 		// an environment with no Kubernetes API to reach.
-		log.Printf("agent-runtime: no in-cluster Kubernetes config available (%v); workspace provisioning and the reaper are disabled", err)
+		log.Fatalf("agent-runtime: Kubernetes is a mandatory execution dependency: %v", err)
 	}
+
+	store.WorkspaceCleaner = provisioner.DestroyConfirmed
+	store.WorkspaceRecoverer = provisioner.RecoveryIdentity
+	cleanup.AgentRuntime(store, cleanup.RedisRunsPublisher(rdb)).Run(ctx, rdb, "agent-runtime")
 
 	// A run's cost limit is enforced against the price of the model it runs
 	// on. A malformed price list stops the service: read as "no prices" it
@@ -210,10 +236,15 @@ func main() {
 		log.Printf("agent-runtime: AI_MODEL_PRICES has no price for %q; runs are bounded by wall clock and tokens, and a cost limit is refused", cfg.AIModel)
 	}
 
-	execute := newExecuteFunc(store, grants, audit, rdb, price, provisioner, gitClient, graphClient, workClient, reviewsClient, ciClient, mcpClient, cfg)
+	httpAuthorization, err := tools.LoadMCPHTTPPolicies(cfg.MCPHTTPConfigFile)
+	if err != nil {
+		log.Fatalf("agent-runtime: %v", err)
+	}
+	execute := newExecuteFunc(store, grants, audit, rdb, prices, provisioner, gitClient, graphClient, workClient, reviewsClient, ciClient, mcpClient, httpAuthorization, cfg)
 	grpcServer := agents.NewGRPCServer(store, grants, rdb, workClient, execute)
 	grpcServer.Audit = audit
 	grpcServer.Price = price
+	grpcServer.HasModelPrices = len(prices) > 0
 
 	// Callers are resolved the same way every other service resolves them:
 	// a person's credential through identity, or a platform service token
@@ -221,12 +252,10 @@ func main() {
 	// the latter, so an interceptor that only understood the former would
 	// silently refuse every autonomously started run.
 	srv := grpc.NewServer(grpc.UnaryInterceptor(
-		svcauth.UnaryServerInterceptor(identityClient, cfg.HMACSecret)))
+		svcauth.UnaryServerInterceptor(identityClient, cfg.HMACSecret)), grpc.StreamInterceptor(svcauth.StreamServerInterceptor(identityClient, cfg.HMACSecret)))
 	agentsv1.RegisterAgentServiceServer(srv, grpcServer)
 
-	if provisioner != nil {
-		go runReaper(ctx, provisioner)
-	}
+	// Durable cleanup owns teardown; the age reaper cannot erase termination evidence.
 	go runOrphanRecovery(ctx, store, rdb)
 
 	check := func(ctx context.Context) error {
@@ -261,6 +290,9 @@ func runOrphanRecovery(ctx context.Context, store *agents.Store, rdb *redis.Clie
 	ticker := time.NewTicker(orphanRecoveryInterval)
 	defer ticker.Stop()
 	for {
+		if err := store.ReconcileGrantCleanup(ctx); err != nil {
+			log.Printf("agent-runtime: resource cleanup pending: %v", err)
+		}
 		n, err := agents.RecoverOrphanedRuns(ctx, store, rdb, agents.OrphanGrace)
 		if err != nil {
 			log.Printf("agent-runtime: recover orphaned runs: %v", err)
@@ -303,7 +335,7 @@ func runReaper(ctx context.Context, provisioner *workspace.Provisioner) {
 // runs the model/tool loop, persists the resulting terminal state, and
 // tears the workspace down. When provisioner is nil (no Kubernetes API
 // reachable), it returns nil so StartRun's degrade path applies instead.
-func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents.AuditLog, rdb *redis.Client, price *agents.TokenPrice, provisioner *workspace.Provisioner, gitClient gitv1.GitServiceClient, graphClient graphv1.GraphServiceClient, workClient workv1.WorkServiceClient, reviewsClient reviewsv1.ReviewsServiceClient, ciClient civ1.CIServiceClient, mcpClient mcpv1.McpServiceClient, cfg service.Config) agents.ExecuteFunc {
+func newExecuteFunc(store *agents.Store, grants capability.RuntimeClient, audit *agents.AuditLog, rdb *redis.Client, prices map[string]agents.TokenPrice, provisioner *workspace.Provisioner, gitClient gitv1.GitServiceClient, graphClient graphv1.GraphServiceClient, workClient workv1.WorkServiceClient, reviewsClient reviewsv1.ReviewsServiceClient, ciClient civ1.CIServiceClient, mcpClient mcpv1.McpServiceClient, httpAuthorization func(context.Context, *mcpv1.McpServer) (tools.MCPAuthorization, error), cfg service.Config) agents.ExecuteFunc {
 	if provisioner == nil {
 		return nil
 	}
@@ -325,7 +357,12 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 
 		// The per-run namespace carries the run's isolation — its own
 		// network policy and resource quota — and is torn down with the run.
+		if err := store.BeginWorkspace(ctx, run.ID); err != nil {
+			finishRun(ctx, store, rdb, run, "failed", "workspace admission unavailable")
+			return
+		}
 		if _, err := provisioner.Create(ctx, run.ID, workspace.Spec{
+			OrgID: run.OrgID,
 			Image: workspace.DefaultImage, CPULimit: "2", MemLimit: "4Gi",
 			// The workspace must live at least as long as the run credential,
 			// including the margin reserved for settling evidence on timeout.
@@ -335,16 +372,16 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 			finishRun(ctx, store, rdb, run, "failed", fmt.Sprintf("could not provision the run workspace: %v", err))
 			return
 		}
-		defer func() {
-			if err := provisioner.Destroy(context.Background(), run.ID); err != nil {
-				log.Printf("agent-runtime: destroy workspace for run %s: %v", run.ID, err)
-			}
-		}()
+
 		// The workspace pod is where the run's files are staged and its
 		// commands run, so the run cannot start until the pod has.
 		if err := provisioner.WaitReady(ctx, run.ID, workspaceReadyTimeout); err != nil {
 			log.Printf("agent-runtime: workspace for run %s: %v", run.ID, err)
 			finishRun(ctx, store, rdb, run, "failed", fmt.Sprintf("the run workspace never became ready: %v", err))
+			return
+		}
+		if err := provisioner.RecordBoundary(ctx, run.ID); err != nil {
+			finishRun(ctx, store, rdb, run, "failed", "workspace boundary recording unavailable")
 			return
 		}
 		ref, err := seedWorkspace(ctx, gitClient, provisioner, run.ID, run.RepoID)
@@ -394,8 +431,19 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 				return agentrun.NewModelClient(agentrun.ModelConfig{Endpoint: cfg.AIEndpoint, Model: model, APIKey: cfg.AIAPIKey})
 			},
 			ProviderOptions: providerOptions,
-			Price:           price,
-			MCP:             mcpClient,
+			PriceForModel: func(model string) *agents.TokenPrice {
+				if model == "" {
+					model = cfg.AIModel
+				}
+				if p, ok := prices[model]; ok {
+					return &p
+				}
+				return nil
+			},
+			MCPOptions: tools.MCPOptions{HTTPAuthorization: httpAuthorization, OpenStdio: func(call context.Context, command string) (io.ReadWriteCloser, error) {
+				return provisioner.OpenStdio(call, run.ID, []string{"sh", "-c", command})
+			}},
+			MCP: mcpClient,
 		}
 		result := runner.Run(ctx, run, tools.Runtime{
 			Grant:     grant,
@@ -407,9 +455,13 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 			CI:        newCIAdapter(ciClient),
 			Knowledge: tools.NewKnowledgeClient(graphClient, run.RepoID.String(), run.ID.String()),
 		})
-		finishRun(ctx, store, rdb, run, result.State, "")
-		if result.State == "succeeded" {
-			openEngineeringRun(ctx, store, workClient, reviewsClient, gitClient, run, cfg)
+		durableState, err := finishResult(ctx, store, rdb, run, result)
+		if err != nil {
+			log.Printf("agent-runtime: run %s accounting unresolved: %v", run.ID, err)
+			return
+		}
+		if durableState == "succeeded" {
+			openEngineeringRun(ctx, store, workClient, reviewsClient, gitClient, run, result.Model, cfg)
 		}
 	}
 }
@@ -417,7 +469,7 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 // openEngineeringRun records which agent and model produced a succeeded run
 // and opens the Engineering Run its change is reviewed and merged through.
 // Failing to do either does not unmake the run's success, so it is logged.
-func openEngineeringRun(ctx context.Context, store *agents.Store, work workv1.WorkServiceClient, reviews reviewsv1.ReviewsServiceClient, git gitv1.GitServiceClient, run agents.Run, cfg service.Config) {
+func openEngineeringRun(ctx context.Context, store *agents.Store, work workv1.WorkServiceClient, reviews reviewsv1.ReviewsServiceClient, git gitv1.GitServiceClient, run agents.Run, effectiveModel string, cfg service.Config) {
 	// The run's own token was minted when it started and may have expired
 	// over a long run; this is new work on its behalf, with a fresh one.
 	callCtx, err := agentrun.WithRunIdentity(context.WithoutCancel(ctx), cfg.HMACSecret, run.OrgID, run.AgentID, agentrun.RunCredentialTTL(run))
@@ -431,21 +483,22 @@ func openEngineeringRun(ctx context.Context, store *agents.Store, work workv1.Wo
 		log.Printf("agent-runtime: run %s: resolve agent: %v", run.ID, err)
 		return
 	}
-	item, err := work.GetItem(callCtx, &workv1.GetItemRequest{Id: run.WorkItemID.String()})
+	item, err := run.FrozenWorkItem()
 	if err != nil {
-		log.Printf("agent-runtime: run %s: read work item: %v", run.ID, err)
+		log.Printf("agent-runtime: run %s: frozen intent unavailable: %v", run.ID, err)
 		return
 	}
+
 	if err := store.RecordProvenance(scoped, run.ID, agents.Provenance{
-		AgentName: agent.Name, ModelName: cfg.AIModel, WorkItemKey: item.GetItem().GetKey(),
+		AgentName: agent.Name, ModelName: effectiveModel, WorkItemKey: item.GetKey(),
 		RunRef: run.Branch, SponsorName: run.SponsorID.String(),
 	}); err != nil {
 		log.Printf("agent-runtime: run %s: record provenance: %v", run.ID, err)
 	}
 	opened, err := agentrun.OpenEngineeringRun(callCtx, reviews, git, agentrun.EngineeringRunSpec{
-		RepoID: run.RepoID, WorkItemID: run.WorkItemID, WorkItemKey: item.GetItem().GetKey(),
-		Goal: item.GetItem().GetGoal(), Acceptance: item.GetItem().GetAcceptance(),
-		Branch: run.Branch, AgentID: run.AgentID, AgentName: agent.Name, ModelName: cfg.AIModel,
+		RepoID: run.RepoID, WorkItemID: run.WorkItemID, WorkItemKey: item.GetKey(),
+		Goal: item.GetGoal(), Acceptance: item.GetAcceptance(),
+		Branch: run.Branch, AgentID: run.AgentID, AgentName: agent.Name, ModelName: effectiveModel,
 	})
 	switch {
 	case err != nil:
@@ -468,18 +521,36 @@ func finishRun(ctx context.Context, store *agents.Store, rdb *redis.Client, run 
 	// A run cancelled while its workspace was still being provisioned fails
 	// that step with "context canceled" and arrives here as "failed"; it was
 	// cancelled, and the row already says so.
-	if state == "failed" && errors.Is(ctx.Err(), context.Canceled) {
-		return
+	if errors.Is(context.Cause(ctx), agents.ErrOverBudget) {
+		state = "over_budget"
+	} else if errors.Is(ctx.Err(), context.Canceled) {
+		state = "cancelled"
 	}
-	if reason != "" {
-		scoped := authz.WithScope(context.WithoutCancel(ctx), authz.Scope{OrgID: run.OrgID, ActorID: run.AgentID, ActorKind: "agent"})
-		if err := store.RecordSpend(scoped, run.ID, agents.Spend{Reason: reason}); err != nil {
-			log.Printf("agent-runtime: record why run %s ended: %v", run.ID, err)
+	result := agentrun.Result{State: state, Summary: reason, Completion: agents.Completion{State: state, Summary: reason, Spend: agents.Spend{Reason: reason}}}
+	if _, err := finishResult(ctx, store, rdb, run, result); err != nil {
+		log.Printf("agent-runtime: run %s accounting unresolved: %v", run.ID, err)
+	}
+}
+
+// finishResult retries the identical retained receipt, including an ambiguous
+// commit response. Failure leaves accounting unresolved; never settle success
+// with default counters. Crash recovery labels missing receipts unavailable.
+func finishResult(ctx context.Context, store *agents.Store, rdb *redis.Client, run agents.Run, result agentrun.Result) (string, error) {
+	scoped := authz.WithScope(context.WithoutCancel(ctx), authz.Scope{OrgID: run.OrgID, ActorID: run.AgentID, ActorKind: "agent"})
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		writeCtx, cancel := context.WithTimeout(scoped, 10*time.Second)
+		var state string
+		state, err = store.CompleteRun(writeCtx, run.ID, result.Completion)
+		cancel()
+		if err == nil {
+			if cleanupErr := agents.SettleRun(scoped, store, rdb, run, state); cleanupErr != nil {
+				log.Printf("agent-runtime: cleanup for run %s: %v", run.ID, cleanupErr)
+			}
+			return state, nil
 		}
 	}
-	if err := agents.SettleRun(ctx, store, rdb, run, state); err != nil {
-		log.Printf("agent-runtime: %v", err)
-	}
+	return "", err
 }
 
 // authInterceptor resolves the caller from the request's "authorization"

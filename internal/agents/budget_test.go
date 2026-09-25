@@ -84,3 +84,18 @@ func TestBudgetConcurrentToolCallsAreSafe(t *testing.T) {
 		t.Fatalf("want nil, got %v", err)
 	}
 }
+
+func TestBudgetCountersCannotWrap(t *testing.T) {
+	b := agents.NewBudget(time.Hour, 1<<63-1, 1<<63-1)
+	b.AddTokens(1<<63 - 1)
+	b.AddTokens(1)
+	if !errors.Is(b.Check(), agents.ErrOverBudget) {
+		t.Fatal("token counter overflow disabled budget")
+	}
+	b = agents.NewBudget(time.Hour, 1<<63-1, 1<<63-1)
+	b.AddCostMicros(1<<63 - 1)
+	b.AddCostMicros(1)
+	if !errors.Is(b.Check(), agents.ErrOverBudget) {
+		t.Fatal("cost counter overflow disabled budget")
+	}
+}

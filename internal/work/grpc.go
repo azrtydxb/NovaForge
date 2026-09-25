@@ -49,18 +49,19 @@ func parseUUID(field, raw string) (uuid.UUID, error) {
 
 func toProtoItem(it Item) *workv1.WorkItem {
 	item := &workv1.WorkItem{
-		Id:            it.ID.String(),
-		OrgId:         it.OrgID.String(),
-		RepoId:        it.RepoID.String(),
-		Key:           it.Key,
-		Type:          it.Type,
-		Goal:          it.Goal,
-		Acceptance:    it.Acceptance,
-		Constraints:   it.Constraints,
-		RequiredGates: it.RequiredGates,
-		AssigneeKind:  it.AssigneeKind,
-		State:         it.State,
-		CreatedAt:     it.CreatedAt.Format(rfc3339),
+		Id:               it.ID.String(),
+		OrgId:            it.OrgID.String(),
+		RepoId:           it.RepoID.String(),
+		Key:              it.Key,
+		Type:             it.Type,
+		Goal:             it.Goal,
+		Acceptance:       it.Acceptance,
+		Constraints:      it.Constraints,
+		RequiredGates:    it.RequiredGates,
+		AssigneeKind:     it.AssigneeKind,
+		State:            it.State,
+		ExecutionClaimed: it.ExecutionClaimed,
+		CreatedAt:        it.CreatedAt.Format(rfc3339),
 	}
 	if it.AssigneeID != uuid.Nil {
 		item.AssigneeId = it.AssigneeID.String()
@@ -137,6 +138,10 @@ func (g *GRPCServer) GetItem(ctx context.Context, req *workv1.GetItemRequest) (*
 		return nil, status.Errorf(codes.Internal, "get work item: %v", err)
 	}
 	out.AwaitingApproval = awaiting
+	out.MaintenanceProposal, err = g.Store.isMaintenanceProposal(ctx, item.ID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "get proposal status: %v", err)
+	}
 	return &workv1.GetItemResponse{Item: out}, nil
 }
 

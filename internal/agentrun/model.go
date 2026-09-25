@@ -8,6 +8,7 @@ package agentrun
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 
 	"github.com/azrtydxb/go-ai-sdk/provider"
 	"github.com/azrtydxb/go-ai-sdk/providers/gateway"
@@ -37,6 +38,11 @@ type ModelConfig struct {
 func NewModelClient(cfg ModelConfig) (provider.LanguageModel, error) {
 	if cfg.Model == "" {
 		return nil, fmt.Errorf("agentrun: model config requires a Model")
+	}
+
+	endpoint, err := url.Parse(cfg.Endpoint)
+	if err != nil || endpoint.Hostname() == "" || (endpoint.Scheme != "http" && endpoint.Scheme != "https") || endpoint.User != nil || endpoint.Fragment != "" {
+		return nil, fmt.Errorf("agentrun: an explicit HTTP(S) gateway endpoint without embedded credentials is required")
 	}
 
 	var opts []gateway.Option

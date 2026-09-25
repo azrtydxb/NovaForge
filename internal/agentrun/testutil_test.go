@@ -56,7 +56,7 @@ func newAgentRun(t *testing.T, ctx context.Context, store *agents.Store, orgID u
 		OrgID:          orgID,
 		AgentID:        agent.ID,
 		SponsorID:      uuid.New(),
-		GrantID:        uuid.New(),
+		GrantID:        uuid.Nil, // loop-only fixture issues no capability grant
 		Branch:         "agents/NF-1/work",
 		WallclockLimit: time.Hour,
 	})

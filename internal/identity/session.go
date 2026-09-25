@@ -55,7 +55,7 @@ func (s *SessionStore) Resolve(ctx context.Context, token string) (uuid.UUID, er
 	val, err := s.client.Get(ctx, sessionKey(token)).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
-			return uuid.UUID{}, errors.New("session not found or expired")
+			return uuid.UUID{}, ErrInvalidCredential
 		}
 		return uuid.UUID{}, fmt.Errorf("resolve session: %w", err)
 	}
@@ -90,4 +90,20 @@ func (s *SessionStore) PendingTOTP(ctx context.Context, userID uuid.UUID) (strin
 // ClearPendingTOTP drops a completed or abandoned enrolment.
 func (s *SessionStore) ClearPendingTOTP(ctx context.Context, userID uuid.UUID) error {
 	return s.client.Del(ctx, "totp:pending:"+userID.String()).Err()
+}
+
+// RevokePresented removes only the exact presented session. GETDEL makes
+// concurrent logout atomic without enumerating a user's other sessions.
+func (s *SessionStore) RevokePresented(ctx context.Context, token string) error {
+	value, err := s.client.GetDel(ctx, sessionKey(token)).Result()
+	if errors.Is(err, redis.Nil) {
+		return ErrInvalidCredential
+	}
+	if err != nil {
+		return fmt.Errorf("revoke session: %w", err)
+	}
+	if _, err = uuid.Parse(value); err != nil {
+		return fmt.Errorf("invalid stored session: %w", err)
+	}
+	return nil
 }

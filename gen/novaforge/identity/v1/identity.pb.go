@@ -2641,6 +2641,420 @@ func (x *GetGrantResponse) GetGrant() *Grant {
 	return nil
 }
 
+// Immutable identity; provenance fields are verified against the run owner.
+type GrantIntent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	IssuerId      string                 `protobuf:"bytes,1,opt,name=issuer_id,json=issuerId,proto3" json:"issuer_id,omitempty"`
+	IssuerKind    string                 `protobuf:"bytes,2,opt,name=issuer_kind,json=issuerKind,proto3" json:"issuer_kind,omitempty"`
+	RunId         string                 `protobuf:"bytes,3,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	Grant         *Grant                 `protobuf:"bytes,4,opt,name=grant,proto3" json:"grant,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GrantIntent) Reset() {
+	*x = GrantIntent{}
+	mi := &file_novaforge_identity_v1_identity_proto_msgTypes[51]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GrantIntent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GrantIntent) ProtoMessage() {}
+
+func (x *GrantIntent) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_identity_v1_identity_proto_msgTypes[51]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GrantIntent.ProtoReflect.Descriptor instead.
+func (*GrantIntent) Descriptor() ([]byte, []int) {
+	return file_novaforge_identity_v1_identity_proto_rawDescGZIP(), []int{51}
+}
+
+func (x *GrantIntent) GetIssuerId() string {
+	if x != nil {
+		return x.IssuerId
+	}
+	return ""
+}
+
+func (x *GrantIntent) GetIssuerKind() string {
+	if x != nil {
+		return x.IssuerKind
+	}
+	return ""
+}
+
+func (x *GrantIntent) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *GrantIntent) GetGrant() *Grant {
+	if x != nil {
+		return x.Grant
+	}
+	return nil
+}
+
+type IssueIntentRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Intent        *GrantIntent           `protobuf:"bytes,1,opt,name=intent,proto3" json:"intent,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IssueIntentRequest) Reset() {
+	*x = IssueIntentRequest{}
+	mi := &file_novaforge_identity_v1_identity_proto_msgTypes[52]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IssueIntentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IssueIntentRequest) ProtoMessage() {}
+
+func (x *IssueIntentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_identity_v1_identity_proto_msgTypes[52]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IssueIntentRequest.ProtoReflect.Descriptor instead.
+func (*IssueIntentRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_identity_v1_identity_proto_rawDescGZIP(), []int{52}
+}
+
+func (x *IssueIntentRequest) GetIntent() *GrantIntent {
+	if x != nil {
+		return x.Intent
+	}
+	return nil
+}
+
+type IssueIntentResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Grant         *Grant                 `protobuf:"bytes,1,opt,name=grant,proto3" json:"grant,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IssueIntentResponse) Reset() {
+	*x = IssueIntentResponse{}
+	mi := &file_novaforge_identity_v1_identity_proto_msgTypes[53]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IssueIntentResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IssueIntentResponse) ProtoMessage() {}
+
+func (x *IssueIntentResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_identity_v1_identity_proto_msgTypes[53]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IssueIntentResponse.ProtoReflect.Descriptor instead.
+func (*IssueIntentResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_identity_v1_identity_proto_rawDescGZIP(), []int{53}
+}
+
+func (x *IssueIntentResponse) GetGrant() *Grant {
+	if x != nil {
+		return x.Grant
+	}
+	return nil
+}
+
+type CancelIssuanceRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Intent        *GrantIntent           `protobuf:"bytes,1,opt,name=intent,proto3" json:"intent,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelIssuanceRequest) Reset() {
+	*x = CancelIssuanceRequest{}
+	mi := &file_novaforge_identity_v1_identity_proto_msgTypes[54]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelIssuanceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelIssuanceRequest) ProtoMessage() {}
+
+func (x *CancelIssuanceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_identity_v1_identity_proto_msgTypes[54]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelIssuanceRequest.ProtoReflect.Descriptor instead.
+func (*CancelIssuanceRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_identity_v1_identity_proto_rawDescGZIP(), []int{54}
+}
+
+func (x *CancelIssuanceRequest) GetIntent() *GrantIntent {
+	if x != nil {
+		return x.Intent
+	}
+	return nil
+}
+
+type CancelIssuanceResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelIssuanceResponse) Reset() {
+	*x = CancelIssuanceResponse{}
+	mi := &file_novaforge_identity_v1_identity_proto_msgTypes[55]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelIssuanceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelIssuanceResponse) ProtoMessage() {}
+
+func (x *CancelIssuanceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_identity_v1_identity_proto_msgTypes[55]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelIssuanceResponse.ProtoReflect.Descriptor instead.
+func (*CancelIssuanceResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_identity_v1_identity_proto_rawDescGZIP(), []int{55}
+}
+
+func (x *CancelIssuanceResponse) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+type RevokeGrantRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RevokeGrantRequest) Reset() {
+	*x = RevokeGrantRequest{}
+	mi := &file_novaforge_identity_v1_identity_proto_msgTypes[56]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RevokeGrantRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RevokeGrantRequest) ProtoMessage() {}
+
+func (x *RevokeGrantRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_identity_v1_identity_proto_msgTypes[56]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RevokeGrantRequest.ProtoReflect.Descriptor instead.
+func (*RevokeGrantRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_identity_v1_identity_proto_rawDescGZIP(), []int{56}
+}
+
+func (x *RevokeGrantRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+type RevokeGrantResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RevokeGrantResponse) Reset() {
+	*x = RevokeGrantResponse{}
+	mi := &file_novaforge_identity_v1_identity_proto_msgTypes[57]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RevokeGrantResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RevokeGrantResponse) ProtoMessage() {}
+
+func (x *RevokeGrantResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_identity_v1_identity_proto_msgTypes[57]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RevokeGrantResponse.ProtoReflect.Descriptor instead.
+func (*RevokeGrantResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_identity_v1_identity_proto_rawDescGZIP(), []int{57}
+}
+
+func (x *RevokeGrantResponse) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+// Revokes only the session presented in authorization metadata, never a PAT.
+type LogoutSessionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogoutSessionRequest) Reset() {
+	*x = LogoutSessionRequest{}
+	mi := &file_novaforge_identity_v1_identity_proto_msgTypes[58]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogoutSessionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogoutSessionRequest) ProtoMessage() {}
+
+func (x *LogoutSessionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_identity_v1_identity_proto_msgTypes[58]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogoutSessionRequest.ProtoReflect.Descriptor instead.
+func (*LogoutSessionRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_identity_v1_identity_proto_rawDescGZIP(), []int{58}
+}
+
+type LogoutSessionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogoutSessionResponse) Reset() {
+	*x = LogoutSessionResponse{}
+	mi := &file_novaforge_identity_v1_identity_proto_msgTypes[59]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogoutSessionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogoutSessionResponse) ProtoMessage() {}
+
+func (x *LogoutSessionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_identity_v1_identity_proto_msgTypes[59]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogoutSessionResponse.ProtoReflect.Descriptor instead.
+func (*LogoutSessionResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_identity_v1_identity_proto_rawDescGZIP(), []int{59}
+}
+
+func (x *LogoutSessionResponse) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
 var File_novaforge_identity_v1_identity_proto protoreflect.FileDescriptor
 
 const file_novaforge_identity_v1_identity_proto_rawDesc = "" +
@@ -2802,10 +3216,35 @@ const file_novaforge_identity_v1_identity_proto_rawDesc = "" +
 	"\x0fGetGrantRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"F\n" +
 	"\x10GetGrantResponse\x122\n" +
-	"\x05grant\x18\x01 \x01(\v2\x1c.novaforge.identity.v1.GrantR\x05grant2\xab\x11\n" +
+	"\x05grant\x18\x01 \x01(\v2\x1c.novaforge.identity.v1.GrantR\x05grant\"\x96\x01\n" +
+	"\vGrantIntent\x12\x1b\n" +
+	"\tissuer_id\x18\x01 \x01(\tR\bissuerId\x12\x1f\n" +
+	"\vissuer_kind\x18\x02 \x01(\tR\n" +
+	"issuerKind\x12\x15\n" +
+	"\x06run_id\x18\x03 \x01(\tR\x05runId\x122\n" +
+	"\x05grant\x18\x04 \x01(\v2\x1c.novaforge.identity.v1.GrantR\x05grant\"P\n" +
+	"\x12IssueIntentRequest\x12:\n" +
+	"\x06intent\x18\x01 \x01(\v2\".novaforge.identity.v1.GrantIntentR\x06intent\"I\n" +
+	"\x13IssueIntentResponse\x122\n" +
+	"\x05grant\x18\x01 \x01(\v2\x1c.novaforge.identity.v1.GrantR\x05grant\"S\n" +
+	"\x15CancelIssuanceRequest\x12:\n" +
+	"\x06intent\x18\x01 \x01(\v2\".novaforge.identity.v1.GrantIntentR\x06intent\"(\n" +
+	"\x16CancelIssuanceResponse\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\"$\n" +
+	"\x12RevokeGrantRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"%\n" +
+	"\x13RevokeGrantResponse\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\"\x16\n" +
+	"\x14LogoutSessionRequest\"'\n" +
+	"\x15LogoutSessionResponse\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok2\xd2\x14\n" +
 	"\x0fIdentityService\x12[\n" +
 	"\bRegister\x12&.novaforge.identity.v1.RegisterRequest\x1a'.novaforge.identity.v1.RegisterResponse\x12R\n" +
-	"\x05Login\x12#.novaforge.identity.v1.LoginRequest\x1a$.novaforge.identity.v1.LoginResponse\x12m\n" +
+	"\x05Login\x12#.novaforge.identity.v1.LoginRequest\x1a$.novaforge.identity.v1.LoginResponse\x12j\n" +
+	"\rLogoutSession\x12+.novaforge.identity.v1.LogoutSessionRequest\x1a,.novaforge.identity.v1.LogoutSessionResponse\x12d\n" +
+	"\vIssueIntent\x12).novaforge.identity.v1.IssueIntentRequest\x1a*.novaforge.identity.v1.IssueIntentResponse\x12m\n" +
+	"\x0eCancelIssuance\x12,.novaforge.identity.v1.CancelIssuanceRequest\x1a-.novaforge.identity.v1.CancelIssuanceResponse\x12d\n" +
+	"\vRevokeGrant\x12).novaforge.identity.v1.RevokeGrantRequest\x1a*.novaforge.identity.v1.RevokeGrantResponse\x12m\n" +
 	"\x0eResolveSession\x12,.novaforge.identity.v1.ResolveSessionRequest\x1a-.novaforge.identity.v1.ResolveSessionResponse\x12g\n" +
 	"\fResolveToken\x12*.novaforge.identity.v1.ResolveTokenRequest\x1a+.novaforge.identity.v1.ResolveTokenResponse\x12y\n" +
 	"\x12ResolveFingerprint\x120.novaforge.identity.v1.ResolveFingerprintRequest\x1a1.novaforge.identity.v1.ResolveFingerprintResponse\x12^\n" +
@@ -2842,7 +3281,7 @@ func file_novaforge_identity_v1_identity_proto_rawDescGZIP() []byte {
 	return file_novaforge_identity_v1_identity_proto_rawDescData
 }
 
-var file_novaforge_identity_v1_identity_proto_msgTypes = make([]protoimpl.MessageInfo, 51)
+var file_novaforge_identity_v1_identity_proto_msgTypes = make([]protoimpl.MessageInfo, 60)
 var file_novaforge_identity_v1_identity_proto_goTypes = []any{
 	(*User)(nil),                       // 0: novaforge.identity.v1.User
 	(*SSHKey)(nil),                     // 1: novaforge.identity.v1.SSHKey
@@ -2895,6 +3334,15 @@ var file_novaforge_identity_v1_identity_proto_goTypes = []any{
 	(*IssueGrantResponse)(nil),         // 48: novaforge.identity.v1.IssueGrantResponse
 	(*GetGrantRequest)(nil),            // 49: novaforge.identity.v1.GetGrantRequest
 	(*GetGrantResponse)(nil),           // 50: novaforge.identity.v1.GetGrantResponse
+	(*GrantIntent)(nil),                // 51: novaforge.identity.v1.GrantIntent
+	(*IssueIntentRequest)(nil),         // 52: novaforge.identity.v1.IssueIntentRequest
+	(*IssueIntentResponse)(nil),        // 53: novaforge.identity.v1.IssueIntentResponse
+	(*CancelIssuanceRequest)(nil),      // 54: novaforge.identity.v1.CancelIssuanceRequest
+	(*CancelIssuanceResponse)(nil),     // 55: novaforge.identity.v1.CancelIssuanceResponse
+	(*RevokeGrantRequest)(nil),         // 56: novaforge.identity.v1.RevokeGrantRequest
+	(*RevokeGrantResponse)(nil),        // 57: novaforge.identity.v1.RevokeGrantResponse
+	(*LogoutSessionRequest)(nil),       // 58: novaforge.identity.v1.LogoutSessionRequest
+	(*LogoutSessionResponse)(nil),      // 59: novaforge.identity.v1.LogoutSessionResponse
 }
 var file_novaforge_identity_v1_identity_proto_depIdxs = []int32{
 	0,  // 0: novaforge.identity.v1.GetCurrentUserResponse.user:type_name -> novaforge.identity.v1.User
@@ -2912,55 +3360,67 @@ var file_novaforge_identity_v1_identity_proto_depIdxs = []int32{
 	32, // 12: novaforge.identity.v1.CreateOrgResponse.org:type_name -> novaforge.identity.v1.Org
 	31, // 13: novaforge.identity.v1.IssueGrantResponse.grant:type_name -> novaforge.identity.v1.Grant
 	31, // 14: novaforge.identity.v1.GetGrantResponse.grant:type_name -> novaforge.identity.v1.Grant
-	33, // 15: novaforge.identity.v1.IdentityService.Register:input_type -> novaforge.identity.v1.RegisterRequest
-	35, // 16: novaforge.identity.v1.IdentityService.Login:input_type -> novaforge.identity.v1.LoginRequest
-	37, // 17: novaforge.identity.v1.IdentityService.ResolveSession:input_type -> novaforge.identity.v1.ResolveSessionRequest
-	39, // 18: novaforge.identity.v1.IdentityService.ResolveToken:input_type -> novaforge.identity.v1.ResolveTokenRequest
-	41, // 19: novaforge.identity.v1.IdentityService.ResolveFingerprint:input_type -> novaforge.identity.v1.ResolveFingerprintRequest
-	43, // 20: novaforge.identity.v1.IdentityService.CreateOrg:input_type -> novaforge.identity.v1.CreateOrgRequest
-	45, // 21: novaforge.identity.v1.IdentityService.AddOrgMember:input_type -> novaforge.identity.v1.AddOrgMemberRequest
-	47, // 22: novaforge.identity.v1.IdentityService.IssueGrant:input_type -> novaforge.identity.v1.IssueGrantRequest
-	49, // 23: novaforge.identity.v1.IdentityService.GetGrant:input_type -> novaforge.identity.v1.GetGrantRequest
-	4,  // 24: novaforge.identity.v1.IdentityService.GetCurrentUser:input_type -> novaforge.identity.v1.GetCurrentUserRequest
-	6,  // 25: novaforge.identity.v1.IdentityService.ListOrgs:input_type -> novaforge.identity.v1.ListOrgsRequest
-	8,  // 26: novaforge.identity.v1.IdentityService.GetOrg:input_type -> novaforge.identity.v1.GetOrgRequest
-	10, // 27: novaforge.identity.v1.IdentityService.DeleteOrg:input_type -> novaforge.identity.v1.DeleteOrgRequest
-	12, // 28: novaforge.identity.v1.IdentityService.ListOrgMembers:input_type -> novaforge.identity.v1.ListOrgMembersRequest
-	14, // 29: novaforge.identity.v1.IdentityService.AddSSHKey:input_type -> novaforge.identity.v1.AddSSHKeyRequest
-	16, // 30: novaforge.identity.v1.IdentityService.ListSSHKeys:input_type -> novaforge.identity.v1.ListSSHKeysRequest
-	18, // 31: novaforge.identity.v1.IdentityService.DeleteSSHKey:input_type -> novaforge.identity.v1.DeleteSSHKeyRequest
-	20, // 32: novaforge.identity.v1.IdentityService.CreateToken:input_type -> novaforge.identity.v1.CreateTokenRequest
-	22, // 33: novaforge.identity.v1.IdentityService.ListTokens:input_type -> novaforge.identity.v1.ListTokensRequest
-	24, // 34: novaforge.identity.v1.IdentityService.DeleteToken:input_type -> novaforge.identity.v1.DeleteTokenRequest
-	26, // 35: novaforge.identity.v1.IdentityService.Setup2FA:input_type -> novaforge.identity.v1.Setup2FARequest
-	28, // 36: novaforge.identity.v1.IdentityService.Verify2FA:input_type -> novaforge.identity.v1.Verify2FARequest
-	34, // 37: novaforge.identity.v1.IdentityService.Register:output_type -> novaforge.identity.v1.RegisterResponse
-	36, // 38: novaforge.identity.v1.IdentityService.Login:output_type -> novaforge.identity.v1.LoginResponse
-	38, // 39: novaforge.identity.v1.IdentityService.ResolveSession:output_type -> novaforge.identity.v1.ResolveSessionResponse
-	40, // 40: novaforge.identity.v1.IdentityService.ResolveToken:output_type -> novaforge.identity.v1.ResolveTokenResponse
-	42, // 41: novaforge.identity.v1.IdentityService.ResolveFingerprint:output_type -> novaforge.identity.v1.ResolveFingerprintResponse
-	44, // 42: novaforge.identity.v1.IdentityService.CreateOrg:output_type -> novaforge.identity.v1.CreateOrgResponse
-	46, // 43: novaforge.identity.v1.IdentityService.AddOrgMember:output_type -> novaforge.identity.v1.AddOrgMemberResponse
-	48, // 44: novaforge.identity.v1.IdentityService.IssueGrant:output_type -> novaforge.identity.v1.IssueGrantResponse
-	50, // 45: novaforge.identity.v1.IdentityService.GetGrant:output_type -> novaforge.identity.v1.GetGrantResponse
-	5,  // 46: novaforge.identity.v1.IdentityService.GetCurrentUser:output_type -> novaforge.identity.v1.GetCurrentUserResponse
-	7,  // 47: novaforge.identity.v1.IdentityService.ListOrgs:output_type -> novaforge.identity.v1.ListOrgsResponse
-	9,  // 48: novaforge.identity.v1.IdentityService.GetOrg:output_type -> novaforge.identity.v1.GetOrgResponse
-	11, // 49: novaforge.identity.v1.IdentityService.DeleteOrg:output_type -> novaforge.identity.v1.DeleteOrgResponse
-	13, // 50: novaforge.identity.v1.IdentityService.ListOrgMembers:output_type -> novaforge.identity.v1.ListOrgMembersResponse
-	15, // 51: novaforge.identity.v1.IdentityService.AddSSHKey:output_type -> novaforge.identity.v1.AddSSHKeyResponse
-	17, // 52: novaforge.identity.v1.IdentityService.ListSSHKeys:output_type -> novaforge.identity.v1.ListSSHKeysResponse
-	19, // 53: novaforge.identity.v1.IdentityService.DeleteSSHKey:output_type -> novaforge.identity.v1.DeleteSSHKeyResponse
-	21, // 54: novaforge.identity.v1.IdentityService.CreateToken:output_type -> novaforge.identity.v1.CreateTokenResponse
-	23, // 55: novaforge.identity.v1.IdentityService.ListTokens:output_type -> novaforge.identity.v1.ListTokensResponse
-	25, // 56: novaforge.identity.v1.IdentityService.DeleteToken:output_type -> novaforge.identity.v1.DeleteTokenResponse
-	27, // 57: novaforge.identity.v1.IdentityService.Setup2FA:output_type -> novaforge.identity.v1.Setup2FAResponse
-	29, // 58: novaforge.identity.v1.IdentityService.Verify2FA:output_type -> novaforge.identity.v1.Verify2FAResponse
-	37, // [37:59] is the sub-list for method output_type
-	15, // [15:37] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	31, // 15: novaforge.identity.v1.GrantIntent.grant:type_name -> novaforge.identity.v1.Grant
+	51, // 16: novaforge.identity.v1.IssueIntentRequest.intent:type_name -> novaforge.identity.v1.GrantIntent
+	31, // 17: novaforge.identity.v1.IssueIntentResponse.grant:type_name -> novaforge.identity.v1.Grant
+	51, // 18: novaforge.identity.v1.CancelIssuanceRequest.intent:type_name -> novaforge.identity.v1.GrantIntent
+	33, // 19: novaforge.identity.v1.IdentityService.Register:input_type -> novaforge.identity.v1.RegisterRequest
+	35, // 20: novaforge.identity.v1.IdentityService.Login:input_type -> novaforge.identity.v1.LoginRequest
+	58, // 21: novaforge.identity.v1.IdentityService.LogoutSession:input_type -> novaforge.identity.v1.LogoutSessionRequest
+	52, // 22: novaforge.identity.v1.IdentityService.IssueIntent:input_type -> novaforge.identity.v1.IssueIntentRequest
+	54, // 23: novaforge.identity.v1.IdentityService.CancelIssuance:input_type -> novaforge.identity.v1.CancelIssuanceRequest
+	56, // 24: novaforge.identity.v1.IdentityService.RevokeGrant:input_type -> novaforge.identity.v1.RevokeGrantRequest
+	37, // 25: novaforge.identity.v1.IdentityService.ResolveSession:input_type -> novaforge.identity.v1.ResolveSessionRequest
+	39, // 26: novaforge.identity.v1.IdentityService.ResolveToken:input_type -> novaforge.identity.v1.ResolveTokenRequest
+	41, // 27: novaforge.identity.v1.IdentityService.ResolveFingerprint:input_type -> novaforge.identity.v1.ResolveFingerprintRequest
+	43, // 28: novaforge.identity.v1.IdentityService.CreateOrg:input_type -> novaforge.identity.v1.CreateOrgRequest
+	45, // 29: novaforge.identity.v1.IdentityService.AddOrgMember:input_type -> novaforge.identity.v1.AddOrgMemberRequest
+	47, // 30: novaforge.identity.v1.IdentityService.IssueGrant:input_type -> novaforge.identity.v1.IssueGrantRequest
+	49, // 31: novaforge.identity.v1.IdentityService.GetGrant:input_type -> novaforge.identity.v1.GetGrantRequest
+	4,  // 32: novaforge.identity.v1.IdentityService.GetCurrentUser:input_type -> novaforge.identity.v1.GetCurrentUserRequest
+	6,  // 33: novaforge.identity.v1.IdentityService.ListOrgs:input_type -> novaforge.identity.v1.ListOrgsRequest
+	8,  // 34: novaforge.identity.v1.IdentityService.GetOrg:input_type -> novaforge.identity.v1.GetOrgRequest
+	10, // 35: novaforge.identity.v1.IdentityService.DeleteOrg:input_type -> novaforge.identity.v1.DeleteOrgRequest
+	12, // 36: novaforge.identity.v1.IdentityService.ListOrgMembers:input_type -> novaforge.identity.v1.ListOrgMembersRequest
+	14, // 37: novaforge.identity.v1.IdentityService.AddSSHKey:input_type -> novaforge.identity.v1.AddSSHKeyRequest
+	16, // 38: novaforge.identity.v1.IdentityService.ListSSHKeys:input_type -> novaforge.identity.v1.ListSSHKeysRequest
+	18, // 39: novaforge.identity.v1.IdentityService.DeleteSSHKey:input_type -> novaforge.identity.v1.DeleteSSHKeyRequest
+	20, // 40: novaforge.identity.v1.IdentityService.CreateToken:input_type -> novaforge.identity.v1.CreateTokenRequest
+	22, // 41: novaforge.identity.v1.IdentityService.ListTokens:input_type -> novaforge.identity.v1.ListTokensRequest
+	24, // 42: novaforge.identity.v1.IdentityService.DeleteToken:input_type -> novaforge.identity.v1.DeleteTokenRequest
+	26, // 43: novaforge.identity.v1.IdentityService.Setup2FA:input_type -> novaforge.identity.v1.Setup2FARequest
+	28, // 44: novaforge.identity.v1.IdentityService.Verify2FA:input_type -> novaforge.identity.v1.Verify2FARequest
+	34, // 45: novaforge.identity.v1.IdentityService.Register:output_type -> novaforge.identity.v1.RegisterResponse
+	36, // 46: novaforge.identity.v1.IdentityService.Login:output_type -> novaforge.identity.v1.LoginResponse
+	59, // 47: novaforge.identity.v1.IdentityService.LogoutSession:output_type -> novaforge.identity.v1.LogoutSessionResponse
+	53, // 48: novaforge.identity.v1.IdentityService.IssueIntent:output_type -> novaforge.identity.v1.IssueIntentResponse
+	55, // 49: novaforge.identity.v1.IdentityService.CancelIssuance:output_type -> novaforge.identity.v1.CancelIssuanceResponse
+	57, // 50: novaforge.identity.v1.IdentityService.RevokeGrant:output_type -> novaforge.identity.v1.RevokeGrantResponse
+	38, // 51: novaforge.identity.v1.IdentityService.ResolveSession:output_type -> novaforge.identity.v1.ResolveSessionResponse
+	40, // 52: novaforge.identity.v1.IdentityService.ResolveToken:output_type -> novaforge.identity.v1.ResolveTokenResponse
+	42, // 53: novaforge.identity.v1.IdentityService.ResolveFingerprint:output_type -> novaforge.identity.v1.ResolveFingerprintResponse
+	44, // 54: novaforge.identity.v1.IdentityService.CreateOrg:output_type -> novaforge.identity.v1.CreateOrgResponse
+	46, // 55: novaforge.identity.v1.IdentityService.AddOrgMember:output_type -> novaforge.identity.v1.AddOrgMemberResponse
+	48, // 56: novaforge.identity.v1.IdentityService.IssueGrant:output_type -> novaforge.identity.v1.IssueGrantResponse
+	50, // 57: novaforge.identity.v1.IdentityService.GetGrant:output_type -> novaforge.identity.v1.GetGrantResponse
+	5,  // 58: novaforge.identity.v1.IdentityService.GetCurrentUser:output_type -> novaforge.identity.v1.GetCurrentUserResponse
+	7,  // 59: novaforge.identity.v1.IdentityService.ListOrgs:output_type -> novaforge.identity.v1.ListOrgsResponse
+	9,  // 60: novaforge.identity.v1.IdentityService.GetOrg:output_type -> novaforge.identity.v1.GetOrgResponse
+	11, // 61: novaforge.identity.v1.IdentityService.DeleteOrg:output_type -> novaforge.identity.v1.DeleteOrgResponse
+	13, // 62: novaforge.identity.v1.IdentityService.ListOrgMembers:output_type -> novaforge.identity.v1.ListOrgMembersResponse
+	15, // 63: novaforge.identity.v1.IdentityService.AddSSHKey:output_type -> novaforge.identity.v1.AddSSHKeyResponse
+	17, // 64: novaforge.identity.v1.IdentityService.ListSSHKeys:output_type -> novaforge.identity.v1.ListSSHKeysResponse
+	19, // 65: novaforge.identity.v1.IdentityService.DeleteSSHKey:output_type -> novaforge.identity.v1.DeleteSSHKeyResponse
+	21, // 66: novaforge.identity.v1.IdentityService.CreateToken:output_type -> novaforge.identity.v1.CreateTokenResponse
+	23, // 67: novaforge.identity.v1.IdentityService.ListTokens:output_type -> novaforge.identity.v1.ListTokensResponse
+	25, // 68: novaforge.identity.v1.IdentityService.DeleteToken:output_type -> novaforge.identity.v1.DeleteTokenResponse
+	27, // 69: novaforge.identity.v1.IdentityService.Setup2FA:output_type -> novaforge.identity.v1.Setup2FAResponse
+	29, // 70: novaforge.identity.v1.IdentityService.Verify2FA:output_type -> novaforge.identity.v1.Verify2FAResponse
+	45, // [45:71] is the sub-list for method output_type
+	19, // [19:45] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_novaforge_identity_v1_identity_proto_init() }
@@ -2974,7 +3434,7 @@ func file_novaforge_identity_v1_identity_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_novaforge_identity_v1_identity_proto_rawDesc), len(file_novaforge_identity_v1_identity_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   51,
+			NumMessages:   60,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

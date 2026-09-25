@@ -21,7 +21,7 @@ func (s *GRPCServer) GetExceptions(ctx context.Context, _ *reviewsv1.GetExceptio
 	if err != nil || sc.OrgID == uuid.Nil {
 		return nil, status.Error(codes.Unauthenticated, "authentication required")
 	}
-	summary, items, err := s.Store.Exceptions(ctx, sc.OrgID)
+	summary, items, err := s.Store.Exceptions(ctx, sc.OrgID, s.Git)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "exceptions: %v", err)
 	}

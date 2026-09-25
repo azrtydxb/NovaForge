@@ -22,6 +22,9 @@ func purgeOrg(ctx context.Context) (uuid.UUID, error) {
 // cascade) and indexed code chunks in the caller's organization. A deleted
 // repository's code otherwise went on answering searches.
 func (s *Store) PurgeRepository(ctx context.Context, repoID uuid.UUID) error {
+	if repoID == uuid.Nil {
+		return fmt.Errorf("purge requires repository ID")
+	}
 	orgID, err := purgeOrg(ctx)
 	if err != nil {
 		return err
@@ -40,20 +43,38 @@ func (s *Store) PurgeOrganization(ctx context.Context) error {
 }
 
 func (s *Store) purge(ctx context.Context, orgID uuid.UUID, repoID *uuid.UUID) error {
-	// References are retained by name so re-indexing either endpoint can
-	// rebuild edges. They have no node foreign key, so deleting nodes does
-	// not cascade to them. Leaving them behind retains deleted source data.
-	if _, err := s.pool.Exec(ctx,
-		`DELETE FROM graph.file_references WHERE org_id = $1 AND ($2::uuid IS NULL OR repo_id = $2)`, orgID, repoID); err != nil {
-		return fmt.Errorf("purge file references: %w", err)
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
 	}
-	if _, err := s.pool.Exec(ctx,
-		`DELETE FROM graph.code_chunks WHERE org_id = $1 AND ($2::uuid IS NULL OR repo_id = $2)`, orgID, repoID); err != nil {
-		return fmt.Errorf("purge code chunks: %w", err)
+	defer tx.Rollback(ctx) //nolint:errcheck
+	repo := uuid.Nil
+	if repoID == nil {
+		_, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, orgLockKey(orgID))
+	} else {
+		repo = *repoID
+		_, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock_shared(hashtextextended($1,0))`, orgLockKey(orgID))
+		if err == nil {
+			_, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, repoLockKey(orgID, repo))
+		}
 	}
-	if _, err := s.pool.Exec(ctx,
-		`DELETE FROM graph.graph_nodes WHERE org_id = $1 AND ($2::uuid IS NULL OR repo_id = $2)`, orgID, repoID); err != nil {
-		return fmt.Errorf("purge graph nodes: %w", err)
+	if err != nil {
+		return err
 	}
-	return nil
+	if _, err := tx.Exec(ctx, `INSERT INTO graph.index_tombstones(org_id,repo_id) VALUES($1,$2) ON CONFLICT DO NOTHING`, orgID, repo); err != nil {
+		return err
+	}
+	// References have no cascading foreign key. Purge all source evidence and
+	// its checkpoint atomically with the permanent write fence.
+	for _, table := range []string{"file_references", "code_chunks", "graph_nodes"} {
+		predicate := "org_id = $1 AND ($2::uuid IS NULL OR repo_id = $2)"
+		if table == "graph_nodes" {
+			// Legacy checkpoint nodes predate repo_id ownership.
+			predicate = "org_id = $1 AND ($2::uuid IS NULL OR repo_id = $2 OR (kind = 'commit' AND key = $2::text))"
+		}
+		if _, err := tx.Exec(ctx, "DELETE FROM graph."+table+" WHERE "+predicate, orgID, repoID); err != nil {
+			return fmt.Errorf("purge %s: %w", table, err)
+		}
+	}
+	return tx.Commit(ctx)
 }

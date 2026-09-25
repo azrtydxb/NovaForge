@@ -90,7 +90,7 @@ func (s *TokenStore) Resolve(ctx context.Context, plaintext string) (Token, erro
 	).Scan(&t.ID, &t.UserID, &t.Name, &t.Scopes, &expiresAt, &revokedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return Token{}, errors.New("token not found")
+			return Token{}, ErrInvalidCredential
 		}
 		return Token{}, fmt.Errorf("resolve token: %w", err)
 	}
@@ -98,10 +98,10 @@ func (s *TokenStore) Resolve(ctx context.Context, plaintext string) (Token, erro
 	t.RevokedAt = revokedAt
 
 	if revokedAt != nil {
-		return Token{}, errors.New("token revoked")
+		return Token{}, ErrInvalidCredential
 	}
 	if expiresAt != nil && expiresAt.Before(time.Now()) {
-		return Token{}, errors.New("token expired")
+		return Token{}, ErrInvalidCredential
 	}
 	return t, nil
 }

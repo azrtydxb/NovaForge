@@ -6,8 +6,10 @@ import (
 	"context"
 	"log"
 
+	agentsv1 "github.com/novaforge/novaforge/gen/novaforge/agents/v1"
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	identityv1 "github.com/novaforge/novaforge/gen/novaforge/identity/v1"
 	"github.com/novaforge/novaforge/internal/capability"
@@ -21,6 +23,9 @@ const defaultGRPCPort = 9091
 
 func main() {
 	cfg := service.LoadConfig()
+	if cfg.HMACSecret == "" || cfg.AgentsAddr == "" {
+		log.Fatal("identity: HMAC_SECRET and AGENTS_ADDR are required")
+	}
 	if cfg.DatabaseURL == "" {
 		log.Fatal("identity: DATABASE_URL is required")
 	}
@@ -63,7 +68,14 @@ func main() {
 	sshKeys := identity.NewSSHKeyStore(pool)
 	grants := capability.NewStore(pool)
 
+	agentConn, err := grpc.NewClient(cfg.AgentsAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatalf("identity: dial run owner: %v", err)
+	}
+	defer agentConn.Close()
 	grpcServer := identity.NewGRPCServer(store, sessions, tokens, sshKeys, grants)
+	grpcServer.HMACSecret = cfg.HMACSecret
+	grpcServer.Agents = agentsv1.NewAgentServiceClient(agentConn)
 	// An organization's deletion is announced here and every service removes
 	// its own share; without the publisher DeleteOrg refuses to delete.
 	grpcServer.SetOrgDeletedPublisher(identity.RedisOrgDeletedPublisher(rdb))

@@ -13,7 +13,7 @@ import {
   PanelHead,
   StatePill,
 } from "../components/ui";
-import { Dialog } from "../components/Dialog";
+import { RunReviews } from "../components/RunReviews";
 import type { ApprovalList, EngineeringRun, ProofRecord } from "../lib/types";
 import { ApprovalRows } from "../components/Approvals";
 
@@ -59,17 +59,6 @@ export function RunDetail() {
     enabled: w.org !== null,
   });
 
-  const [reviewing, setReviewing] = useState(false);
-
-  const review = useMutation({
-    mutationFn: (v: Record<string, string>) =>
-      api.post(`${base}/reviews`, { verdict: v.verdict, summary: v.summary }),
-    onSuccess: () => {
-      setReviewing(false);
-      qc.invalidateQueries();
-    },
-  });
-
   const merge = useMutation({
     mutationFn: () => api.post<{ merge_sha: string }>(`${base}/merge`, {}),
     onSuccess: () => qc.invalidateQueries(),
@@ -100,22 +89,6 @@ export function RunDetail() {
         run.data ? (
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <StatePill state={run.data.state} />
-            {run.data.state === "open" ? (
-              <button
-                onClick={() => setReviewing(true)}
-                style={{
-                  padding: "7px 14px",
-                  background: "transparent",
-                  border: "1px solid var(--line-2)",
-                  borderRadius: 8,
-                  color: "var(--fg-dim)",
-                  font: "12px var(--sans)",
-                  cursor: "pointer",
-                }}
-              >
-                Review
-              </button>
-            ) : null}
             {run.data.state === "open" ? (
               <button
                 onClick={() => evaluate.mutate()}
@@ -154,27 +127,6 @@ export function RunDetail() {
         ) : null
       }
     >
-      {reviewing ? (
-        <Dialog
-          title={`Review #${number}`}
-          submitLabel="Submit"
-          fields={[
-            {
-              name: "verdict",
-              label: "Verdict",
-              type: "select",
-              options: ["approve", "request_changes", "comment"],
-              required: true,
-              help: "An approval from the run's own author never counts; the platform refuses it.",
-            },
-            { name: "summary", label: "Summary", type: "textarea" },
-          ]}
-          busy={review.isPending}
-          error={review.error}
-          onSubmit={(v) => review.mutate(v)}
-          onClose={() => setReviewing(false)}
-        />
-      ) : null}
       {merge.error ? (
         <div style={{ marginBottom: 14 }}>
           <Failed error={merge.error} />
@@ -201,6 +153,10 @@ export function RunDetail() {
         </div>
       ) : null}
 
+      {run.error ? <Failed error={run.error} /> : null}
+      {w.org && run.data ? (
+        <RunReviews base={base} org={w.org} repo={repo} run={run.data} />
+      ) : null}
       {w.org !== null ? <RunApprovals org={w.org} base={base} /> : null}
 
       <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>

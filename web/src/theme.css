@@ -85,3 +85,20 @@ button {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* Inline prototype styles suppress outlines; keyboard focus must remain visible. */
+:focus-visible {
+  outline: 2px solid var(--link) !important;
+  outline-offset: 3px;
+}
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.65);
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

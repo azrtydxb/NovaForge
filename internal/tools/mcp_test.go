@@ -63,12 +63,13 @@ func externalMCPServer(t *testing.T, tool, answer string) (string, *atomic.Int32
 // server's tools are never offered. A server revoked mid-run stops answering
 // the run on its next call.
 func TestApprovedExternalMCPServersAreOfferedToAgents(t *testing.T) {
-	p := platformtest.Start(t)
+	p, control := platformtest.StartWithControlledRunner(t)
 	owner := p.NewUser(t, "mcpoffer")
 	org := p.NewOrg(t, owner, "mcpofferorg")
 	repo := p.NewRepo(t, owner, org, "offer", nil)
 	agentID := p.NewAgent(t, owner, org)
 	run := p.StartAgentRun(t, owner, org, repo, agentID, p.NewWorkItem(t, owner, org, repo))
+	control.Wait(t, run.GetId())
 	asOwner := p.AsUser(owner, org)
 
 	register := func(name, url, transport string, approve, revoke bool) string {
@@ -106,11 +107,14 @@ func TestApprovedExternalMCPServersAreOfferedToAgents(t *testing.T) {
 
 	audit := agents.NewAuditLog(p.Pool)
 	reg := tools.NewRegistry(tools.Runtime{RunID: runID}, audit)
-	offered, err := tools.OfferApprovedMCPServers(ctx, reg, p.MCP)
+	offered, err := tools.OfferApprovedMCPServersWithOptions(ctx, reg, p.MCP, tools.MCPOptions{HTTPAuthorization: func(_ context.Context, s *mcpv1.McpServer) (tools.MCPAuthorization, error) {
+		return tools.MCPAuthorization{Public: s.GetId() == jiraID}, nil
+	}})
 	if err != nil {
 		t.Fatalf("OfferApprovedMCPServers: %v", err)
 	}
 
+	defer offered.Close()
 	names := strings.Join(reg.Names(), ",")
 	if !strings.Contains(names, "mcp.jira.lookup") {
 		t.Fatalf("the approved server's tool is not offered; registry has %s", names)
@@ -151,7 +155,7 @@ func TestApprovedExternalMCPServersAreOfferedToAgents(t *testing.T) {
 	}
 	found := false
 	for _, e := range entries {
-		if e.Tool == "mcp.jira.lookup" && strings.Contains(string(e.ArgsJSON), "NF-7") && e.Outcome == "ok" {
+		if e.Tool == "mcp.jira.lookup" && strings.Contains(string(e.ArgsJSON), "argument_bytes") && !strings.Contains(string(e.ArgsJSON), "NF-7") && e.Outcome == "ok" {
 			found = true
 		}
 	}

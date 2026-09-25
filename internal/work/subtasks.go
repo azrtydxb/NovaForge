@@ -146,7 +146,7 @@ func (s *Store) Children(ctx context.Context, orgID, epicID uuid.UUID) ([]Item, 
 	rows, err := s.pool.Query(ctx, `
 		SELECT w.id, w.org_id, w.repo_id, w.key, w.type, w.goal, w.acceptance,
 		       w.constraints, w.required_gates, w.assignee_id, w.assignee_kind,
-		       w.state, w.created_at
+		       w.state, w.created_at, w.execution_claimed
 		FROM work.work_items w
 		WHERE w.org_id = $1 AND w.parent_id = $2
 		ORDER BY w.seq`,

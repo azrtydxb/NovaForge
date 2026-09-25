@@ -17,8 +17,8 @@ import (
 // against a real stopped server; this pins the classification alone.
 type downBroker struct{ code codes.Code }
 
-func (d downBroker) IssueJobLease(context.Context, ci.LeaseRequest) (string, error) {
-	return "", status.Error(d.code, "secret broker says no")
+func (d downBroker) IssueJobLease(context.Context, ci.LeaseRequest) (ci.JobCredentialLease, error) {
+	return ci.JobCredentialLease{}, status.Error(d.code, "secret broker says no")
 }
 
 func (d downBroker) RedeemJobLease(context.Context, uuid.UUID, uuid.UUID, string) (string, error) {
@@ -67,4 +67,8 @@ func TestJobStaysQueuedNotFailed(t *testing.T) {
 	if state := ci.StateAfterCredentialResolution(err); state != "failure" {
 		t.Fatalf("want a job needing a secret on a deployment with no broker to fail, got %q (%v)", state, err)
 	}
+}
+
+func (d downBroker) RevokeJobLeases(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (ci.CredentialCleanup, error) {
+	return ci.CredentialCleanup{}, status.Error(d.code, "broker unavailable")
 }

@@ -99,6 +99,8 @@ func ScopeFromToken(secret, token string) (authz.Scope, error) {
 	scope := authz.Scope{OrgID: c.OrgID, ActorKind: actorKindFor(c.Service)}
 	if scope.ActorKind == "agent" {
 		scope.ActorID = c.Actor
+	} else {
+		scope.ServiceName = c.Service
 	}
 	return scope, nil
 }

@@ -2,6 +2,7 @@ package identity_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -54,8 +55,8 @@ func TestRevokedTokenRejected(t *testing.T) {
 	}
 
 	_, err = tokens.Resolve(ctx, plaintext)
-	if err == nil || !contains(err.Error(), "revoked") {
-		t.Fatalf("want error containing %q, got %v", "revoked", err)
+	if !errors.Is(err, identity.ErrInvalidCredential) {
+		t.Fatalf("want invalid credential classification, got %v", err)
 	}
 }
 
@@ -70,7 +71,7 @@ func TestExpiredTokenRejected(t *testing.T) {
 	}
 
 	_, err = tokens.Resolve(ctx, plaintext)
-	if err == nil || !contains(err.Error(), "expired") {
-		t.Fatalf("want error containing %q, got %v", "expired", err)
+	if !errors.Is(err, identity.ErrInvalidCredential) {
+		t.Fatalf("want invalid credential classification, got %v", err)
 	}
 }

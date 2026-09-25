@@ -43,7 +43,7 @@ export function Knowledge() {
   const qc = useQueryClient();
   const [q, setQ] = useState("");
   const [recording, setRecording] = useState(false);
-  const repo = w.repo ?? w.repos[0]?.name ?? null;
+  const repo = w.repo;
 
   const entries = useQuery({
     queryKey: ["knowledge", w.org, repo, q],
@@ -135,7 +135,7 @@ export function Knowledge() {
       ) : null}
       {repo === null ? (
         <Panel>
-          <Empty>This organization has no repositories.</Empty>
+          <Empty>Select a repository in the workspace switcher.</Empty>
         </Panel>
       ) : (
         <Async query={entries}>

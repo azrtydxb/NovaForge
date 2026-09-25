@@ -172,13 +172,17 @@ func (s *Store) ResolveProposal(ctx context.Context, orgID, repoID uuid.UUID, fi
 		return fmt.Errorf("resolve proposal: mark resolved: %w", err)
 	}
 
-	if _, err := tx.Exec(ctx, `
-		UPDATE work.work_items
-		SET state = 'done', goal = goal || $2
-		WHERE id = $1`,
-		workItemID, fmt.Sprintf("\n\n[resolved automatically] %s", note),
-	); err != nil {
+	// An active execution owns its lifecycle. Leave the proposal unresolved
+	// for a later sweep rather than completing it behind the runtime's back.
+	tag, err := tx.Exec(ctx, `
+		UPDATE work.work_items SET state = 'done', goal = goal || $2
+		WHERE id = $1 AND org_id = $3 AND active_execution_run_id IS NULL`,
+		workItemID, fmt.Sprintf("\n\n[resolved automatically] %s", note), orgID)
+	if err != nil {
 		return fmt.Errorf("resolve proposal: close work item: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return fmt.Errorf("resolve proposal: work has active execution")
 	}
 
 	if err := tx.Commit(ctx); err != nil {

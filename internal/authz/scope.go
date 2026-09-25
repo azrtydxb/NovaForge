@@ -15,7 +15,10 @@ import (
 type Scope struct {
 	OrgID     uuid.UUID
 	ActorID   uuid.UUID
-	ActorKind string // "user" or "agent"
+	ActorKind string // "user", "agent", or "service"
+	// ServiceName is populated only from a verified org-scoped service token.
+	// It is empty for users, agents and platform workers, never a request label.
+	ServiceName string
 
 	// Role is a person's membership role in OrgID ("owner", "admin" or
 	// "member"), as identity reported it when it verified the membership.

@@ -1,6 +1,6 @@
-// Package secrets owns the secrets schema and the secret broker: short-lived,
-// single-use, scoped credential leases instead of durable secrets handed to
-// agents. The broker fails closed — an unreachable broker blocks any job
+// Package secrets owns the secrets schema and single-use, scoped redemption
+// leases. Stored static values never gain expiry or revocation from a lease.
+// The broker fails closed — an unreachable broker blocks any job
 // that declares a secret rather than letting it run unauthenticated (see
 // internal/ci/credentials.go).
 package secrets
@@ -11,11 +11,11 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"regexp"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -26,14 +26,15 @@ import (
 	"github.com/novaforge/novaforge/internal/capability"
 )
 
-// Lease is a short-lived, single-use credential issued to one run.
+// Lease is a single-use delivery token for an OpenBao dynamic credential.
+// ExpiresAt is the provider lease expiry, not proof of target-enforced expiry
+// during a provider outage; that guarantee is engine-specific.
 type Lease struct {
 	ID        uuid.UUID
 	Token     string
 	Name      string
 	ExpiresAt time.Time
-	// Environment is the environment the lease was issued for, or empty for
-	// a lease issued by Issue, which does not scope by environment.
+	// Environment is pinned at issuance, including when Issue resolves a name.
 	Environment string
 }
 
@@ -41,8 +42,9 @@ type Lease struct {
 // encrypted at rest with AES-GCM under a key derived from SECRETS_KEK; only
 // sha256(token) is ever stored for a lease, never the token itself.
 type Broker struct {
-	pool *pgxpool.Pool
-	key  [32]byte
+	pool     *pgxpool.Pool
+	provider *openBao
+	key      [32]byte
 }
 
 // NewBroker wraps pool as a secrets.Broker. kek is the raw SECRETS_KEK value
@@ -115,8 +117,14 @@ func (b *Broker) decrypt(blob []byte) (string, error) {
 
 // PutValue stores value for name in environment ("staging" or
 // "production"), encrypted at rest. Operators and org admins call this to
-// configure secrets; tests use it to seed fixtures.
+// retain static values. They are never handed out as expiring credentials.
 func (b *Broker) PutValue(ctx context.Context, orgID uuid.UUID, name, environment, value string) error {
+	if err := requireOrg(ctx, orgID); err != nil {
+		return err
+	}
+	if err := ValidateSecret(name, environment, value); err != nil {
+		return err
+	}
 	ciphertext, err := b.encrypt(value)
 	if err != nil {
 		return err
@@ -133,51 +141,16 @@ func (b *Broker) PutValue(ctx context.Context, orgID uuid.UUID, name, environmen
 	return nil
 }
 
-// queryRower is satisfied by both *pgxpool.Pool and pgx.Tx, so lookups can
-// run either standalone or inside Redeem's transaction.
-type queryRower interface {
-	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
-}
-
-type storedSecret struct {
-	environment string
-	ciphertext  []byte
-}
-
-// lookupValue finds the secret_values row for (orgID, name). A name is
-// expected to resolve to exactly one environment in practice; when more
-// than one exists, "production" is preferred so a stray staging duplicate
-// can never mask that a secret is in fact production-scoped.
-func lookupValue(ctx context.Context, q queryRower, orgID uuid.UUID, name string) (storedSecret, error) {
-	var s storedSecret
-	err := q.QueryRow(ctx, `
-		SELECT environment, ciphertext FROM secrets.secret_values
-		WHERE org_id = $1 AND name = $2
-		ORDER BY (environment = 'production') DESC
-		LIMIT 1`,
-		orgID, name,
-	).Scan(&s.environment, &s.ciphertext)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return storedSecret{}, fmt.Errorf("secret %q not found", name)
-		}
-		return storedSecret{}, fmt.Errorf("lookup secret %q: %w", name, err)
-	}
-	return s, nil
-}
-
-// Issue issues a short-lived, single-use lease for the secret named name,
-// scoped to runID and g's org. A production-scoped secret is refused to a
-// grant without SecretsProd.
+// Issue resolves a configured binding, preferring production when both exist.
+// It never treats stored static values as dynamic credentials.
 func (b *Broker) Issue(ctx context.Context, runID uuid.UUID, g capability.Grant, name string, ttl time.Duration) (Lease, error) {
-	stored, err := lookupValue(ctx, b.pool, g.OrgID, name)
-	if err != nil {
-		return Lease{}, err
+	environment := EnvironmentStaging
+	if b.provider != nil {
+		if _, ok := b.provider.bindings[bindingKey{g.OrgID, EnvironmentProduction, name}]; ok {
+			environment = EnvironmentProduction
+		}
 	}
-	if stored.environment == "production" && !g.SecretsProd {
-		return Lease{}, fmt.Errorf("secret %q is production-scoped; not permitted for this grant", name)
-	}
-	return b.insertLease(ctx, runID, g.OrgID, name, "", ttl)
+	return b.IssueFor(ctx, runID, g, name, environment, ttl)
 }
 
 // Environments are the two places a secret can be scoped to.
@@ -195,6 +168,10 @@ var ErrProductionScoped = errors.New("production-scoped secret not permitted")
 // fallback is precisely how a staging-scoped job would read a production
 // credential — and a production request needs a grant with SecretsProd.
 func (b *Broker) IssueFor(ctx context.Context, runID uuid.UUID, g capability.Grant, name, environment string, ttl time.Duration) (Lease, error) {
+	expires, err := leaseExpiry(ctx, runID, g, name, ttl)
+	if err != nil {
+		return Lease{}, err
+	}
 	switch environment {
 	case EnvironmentStaging:
 	case EnvironmentProduction:
@@ -204,80 +181,56 @@ func (b *Broker) IssueFor(ctx context.Context, runID uuid.UUID, g capability.Gra
 	default:
 		return Lease{}, fmt.Errorf("unknown environment %q", environment)
 	}
-	if _, err := lookupEnvValue(ctx, b.pool, g.OrgID, name, environment); err != nil {
+	if b.provider == nil {
+		return Lease{}, ErrProviderNotConfigured
+	}
+	binding, ok := b.provider.bindings[bindingKey{g.OrgID, environment, name}]
+	if !ok {
 		if environment == EnvironmentStaging {
-			if _, perr := lookupEnvValue(ctx, b.pool, g.OrgID, name, EnvironmentProduction); perr == nil {
-				return Lease{}, fmt.Errorf("%w: secret %q exists only in production; a staging job may not have it", ErrProductionScoped, name)
+			if _, production := b.provider.bindings[bindingKey{g.OrgID, EnvironmentProduction, name}]; production {
+				return Lease{}, ErrProductionScoped
 			}
 		}
-		return Lease{}, err
+		return Lease{}, ErrProviderNotConfigured
 	}
-	lease, err := b.insertLease(ctx, runID, g.OrgID, name, environment, ttl)
-	if err != nil {
-		return Lease{}, err
+	if binding.RequireHardExpiry {
+		return Lease{}, ErrHardExpiryUnavailable
 	}
-	lease.Environment = environment
-	return lease, nil
-}
-
-func (b *Broker) insertLease(ctx context.Context, runID, orgID uuid.UUID, name, environment string, ttl time.Duration) (Lease, error) {
-	tokenBytes := make([]byte, 32)
-	if _, err := rand.Read(tokenBytes); err != nil {
-		return Lease{}, fmt.Errorf("generate lease token: %w", err)
-	}
-	token := hex.EncodeToString(tokenBytes)
-	hash := sha256.Sum256([]byte(token))
-
-	lease := Lease{
-		ID:        uuid.New(),
-		Token:     token,
-		Name:      name,
-		ExpiresAt: time.Now().Add(ttl),
-	}
-	_, err := b.pool.Exec(ctx, `
-		INSERT INTO secrets.secret_leases (id, org_id, run_id, name, token_hash, expires_at, environment)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		lease.ID, orgID, runID, name, hash[:], lease.ExpiresAt, environment,
-	)
-	if err != nil {
-		return Lease{}, fmt.Errorf("issue lease for %q: %w", name, err)
-	}
-	return lease, nil
-}
-
-// lookupEnvValue finds the value of name in exactly one environment.
-func lookupEnvValue(ctx context.Context, q queryRower, orgID uuid.UUID, name, environment string) (storedSecret, error) {
-	s := storedSecret{environment: environment}
-	err := q.QueryRow(ctx, `
-		SELECT ciphertext FROM secrets.secret_values
-		WHERE org_id = $1 AND name = $2 AND environment = $3`,
-		orgID, name, environment,
-	).Scan(&s.ciphertext)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return storedSecret{}, fmt.Errorf("secret %q not found in %s", name, environment)
-		}
-		return storedSecret{}, fmt.Errorf("lookup secret %q: %w", name, err)
-	}
-	return s, nil
+	return b.issueDynamic(ctx, runID, g.OrgID, binding, expires)
 }
 
 type leaseRow struct {
-	id            uuid.UUID
-	orgID         uuid.UUID
-	runID         uuid.UUID
-	name          string
-	expiresAt     time.Time
-	revokedAt     *time.Time
-	redeemedCount int
-	environment   string
+	id                           uuid.UUID
+	orgID                        uuid.UUID
+	runID                        uuid.UUID
+	name                         string
+	expiresAt                    time.Time
+	revokedAt                    *time.Time
+	redeemedCount                int
+	environment                  string
+	providerID, providerEndpoint string
+	credential                   []byte
+	ready                        bool
 }
 
 // Redeem consumes token once, returning the decrypted secret value. A lease
 // can be redeemed only once, only before it expires, only if not revoked,
-// and — when ctx carries a run scope via WithRunID — only by the run it was
-// issued to.
+// and only with matching organization and run scopes.
 func (b *Broker) Redeem(ctx context.Context, token string) (string, error) {
+	scope, err := authz.FromContext(ctx)
+	if err != nil {
+		return "", err
+	}
+	if err := requireOrg(ctx, scope.OrgID); err != nil {
+		return "", err
+	}
+	if err := requireActor(scope); err != nil {
+		return "", err
+	}
+	runID, ok := runIDFromContext(ctx)
+	if !ok || runID == uuid.Nil {
+		return "", errors.New("redemption requires a run scope")
+	}
 	hash := sha256.Sum256([]byte(token))
 
 	tx, err := b.pool.Begin(ctx)
@@ -288,12 +241,12 @@ func (b *Broker) Redeem(ctx context.Context, token string) (string, error) {
 
 	var row leaseRow
 	err = tx.QueryRow(ctx, `
-		SELECT id, org_id, run_id, name, expires_at, revoked_at, redeemed_count, environment
+		SELECT id, org_id, run_id, name, expires_at, revoked_at, redeemed_count, environment, provider_lease_id, provider_endpoint, issued_ciphertext, provider_ready
 		FROM secrets.secret_leases
-		WHERE token_hash = $1
+		WHERE token_hash = $1 AND org_id = $2 AND run_id = $3 AND actor_id=$4 AND actor_kind=$5 AND service_name=$6
 		FOR UPDATE`,
-		hash[:],
-	).Scan(&row.id, &row.orgID, &row.runID, &row.name, &row.expiresAt, &row.revokedAt, &row.redeemedCount, &row.environment)
+		hash[:], scope.OrgID, runID, scope.ActorID, scope.ActorKind, scope.ServiceName,
+	).Scan(&row.id, &row.orgID, &row.runID, &row.name, &row.expiresAt, &row.revokedAt, &row.redeemedCount, &row.environment, &row.providerID, &row.providerEndpoint, &row.credential, &row.ready)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", errors.New("lease not found")
@@ -301,63 +254,93 @@ func (b *Broker) Redeem(ctx context.Context, token string) (string, error) {
 		return "", fmt.Errorf("lookup lease: %w", err)
 	}
 
-	if scopedRun, ok := runIDFromContext(ctx); ok && scopedRun != row.runID {
-		return "", fmt.Errorf("lease %s was issued to a different run; not permitted for run %s", row.id, scopedRun)
-	}
 	if row.revokedAt != nil {
 		return "", fmt.Errorf("lease %s has been revoked", row.id)
 	}
-	if time.Now().After(row.expiresAt) {
+	if !time.Now().Before(row.expiresAt) {
 		return "", fmt.Errorf("lease %s expired at %s", row.id, row.expiresAt)
 	}
 	if row.redeemedCount > 0 {
 		return "", fmt.Errorf("lease %s has already been redeemed", row.id)
 	}
 
-	var stored storedSecret
-	if row.environment != "" {
-		stored, err = lookupEnvValue(ctx, tx, row.orgID, row.name, row.environment)
-	} else {
-		stored, err = lookupValue(ctx, tx, row.orgID, row.name)
+	if !row.ready || row.providerID == "" {
+		return "", ErrProviderNotConfigured
 	}
-	if err != nil {
-		return "", err
-	}
-	value, err := b.decrypt(stored.ciphertext)
-	if err != nil {
-		return "", err
-	}
-
-	if _, err := tx.Exec(ctx, `UPDATE secrets.secret_leases SET redeemed_count = redeemed_count + 1 WHERE id = $1`, row.id); err != nil {
-		return "", fmt.Errorf("mark lease %s redeemed: %w", row.id, err)
+	if b.provider == nil || b.provider.endpoint != row.providerEndpoint {
+		return "", ErrProviderUnavailable
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return "", fmt.Errorf("commit redeem of lease %s: %w", row.id, err)
+		return "", err
+	}
+	// Re-check the authority, not just our local row: external revocation or
+	// renewal must never turn a single-use lease into stale authorization.
+	expires, err := b.provider.expiry(ctx, row.providerID)
+	if err != nil {
+		return "", err
+	}
+	if !time.Now().Before(expires) || !expires.Truncate(time.Microsecond).Equal(row.expiresAt) {
+		return "", ErrProviderContract
+	}
+	value, err := b.decrypt(row.credential)
+	if err != nil {
+		return "", err
+	}
+	if !time.Now().Before(row.expiresAt) {
+		return "", errors.New("credential expired during redemption")
+	}
+
+	tag, err := b.pool.Exec(ctx, `UPDATE secrets.secret_leases SET redeemed_count=1
+ WHERE id=$1 AND org_id=$2 AND run_id=$3 AND redeemed_count=0 AND revoked_at IS NULL
+ AND NOT revocation_requested AND provider_ready AND expires_at>clock_timestamp()`, row.id, scope.OrgID, runID)
+	if err != nil {
+		return "", err
+	}
+	if tag.RowsAffected() != 1 {
+		return "", ErrScopeClosed
 	}
 	return value, nil
 }
 
-// Revoke invalidates leaseID immediately, before it would otherwise expire.
+// ErrUnderlyingCredentialNotRevocable means the broker already released a
+// stored value. Updating its database row cannot invalidate that external
+// credential; an operator must rotate it at its issuer.
+var ErrUnderlyingCredentialNotRevocable = errors.New("underlying static credential cannot be revoked by the broker; rotate it at its issuer")
+
+// Revoke calls the issuing authority before recording success, including after
+// redemption. A failed provider revocation is retryable and never marked done.
 func (b *Broker) Revoke(ctx context.Context, leaseID uuid.UUID) error {
-	// Organizations are a hard boundary, and a lease id is guessable in the
-	// way any uuid is: without this predicate one organization could revoke
-	// another's live credential and stall its runs.
 	scope, err := authz.FromContext(ctx)
 	if err != nil {
 		return err
 	}
-	tag, err := b.pool.Exec(ctx, `
-		UPDATE secrets.secret_leases SET revoked_at = now()
-		WHERE id = $1 AND org_id = $2 AND revoked_at IS NULL`,
-		leaseID, scope.OrgID,
-	)
+	if err := requireOrg(ctx, scope.OrgID); err != nil {
+		return err
+	}
+	var redeemed int
+	var revoked *time.Time
+	var providerID, endpoint string
+	// Persist intent before the network call. Setting ready=false and the
+	// shared lease row lock serialize redemption, but no lock spans OpenBao.
+	err = b.pool.QueryRow(ctx, `UPDATE secrets.secret_leases SET revocation_requested=true,provider_ready=false,revocation_attempted_at=clock_timestamp()
+ WHERE id=$1 AND org_id=$2 RETURNING redeemed_count,revoked_at,provider_lease_id,provider_endpoint`, leaseID, scope.OrgID).Scan(&redeemed, &revoked, &providerID, &endpoint)
 	if err != nil {
-		return fmt.Errorf("revoke lease %s: %w", leaseID, err)
+		return err
 	}
-	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("lease %s not found or already revoked", leaseID)
+	if endpoint == "" && redeemed > 0 {
+		return ErrUnderlyingCredentialNotRevocable
 	}
-	return nil
+	if revoked != nil {
+		return nil
+	}
+	if endpoint == "" {
+		if redeemed > 0 {
+			return ErrUnderlyingCredentialNotRevocable
+		}
+		_, err = b.pool.Exec(ctx, `UPDATE secrets.secret_leases SET revoked_at=now() WHERE id=$1 AND org_id=$2`, leaseID, scope.OrgID)
+		return err
+	}
+	return b.revokeProvider(ctx, scope.OrgID, leaseID, providerID, endpoint)
 }
 
 // Reference names a stored secret without any of its material. Listing
@@ -368,11 +351,12 @@ type Reference struct {
 	Environment string
 }
 
-// List returns the secrets registered for orgID, names and environments only.
+// List returns stored references and configured dynamic bindings for orgID.
+// A stored reference alone is not an issuing authority.
 // The ciphertext column is never selected: a query that cannot read the
 // material cannot leak it, whatever a caller does with the result.
 func (b *Broker) List(ctx context.Context, orgID uuid.UUID) ([]Reference, error) {
-	if err := authz.RequireOrg(ctx, orgID); err != nil {
+	if err := requireOrg(ctx, orgID); err != nil {
 		return nil, err
 	}
 	rows, err := b.pool.Query(ctx, `
@@ -391,7 +375,31 @@ func (b *Broker) List(ctx context.Context, orgID uuid.UUID) ([]Reference, error)
 		}
 		out = append(out, r)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	seen := make(map[Reference]bool, len(out))
+	for _, r := range out {
+		seen[r] = true
+	}
+	if b.provider != nil {
+		for key := range b.provider.bindings {
+			if key.org == orgID {
+				r := Reference{Name: key.name, Environment: key.environment}
+				if !seen[r] {
+					out = append(out, r)
+					seen[r] = true
+				}
+			}
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Environment != out[j].Environment {
+			return out[i].Environment < out[j].Environment
+		}
+		return out[i].Name < out[j].Name
+	})
+	return out, nil
 }
 
 // LeaseRecord is one brokered credential as an operator sees it: which secret,
@@ -406,14 +414,14 @@ type LeaseRecord struct {
 }
 
 // ListLeases returns orgID's leases, newest first. State is derived rather
-// than stored: a lease is revoked, spent, expired, or issued, and deriving it
-// here means the four cannot disagree with the columns they come from.
+// than stored: pending/unknown provider operations are never rendered as a
+// completed revocation. Expired refers to OpenBao lease expiry, not target proof.
 func (b *Broker) ListLeases(ctx context.Context, orgID uuid.UUID) ([]LeaseRecord, error) {
-	if err := authz.RequireOrg(ctx, orgID); err != nil {
+	if err := requireOrg(ctx, orgID); err != nil {
 		return nil, err
 	}
 	rows, err := b.pool.Query(ctx, `
-		SELECT id, name, run_id, expires_at, revoked_at, redeemed_count
+		SELECT id, name, run_id, expires_at, revoked_at, redeemed_count, provider_ready,revocation_requested,provider_endpoint,provider_lease_id
 		FROM secrets.secret_leases
 		WHERE org_id = $1 ORDER BY expires_at DESC`, orgID)
 	if err != nil {
@@ -425,20 +433,30 @@ func (b *Broker) ListLeases(ctx context.Context, orgID uuid.UUID) ([]LeaseRecord
 	var out []LeaseRecord
 	for rows.Next() {
 		var (
-			l         LeaseRecord
-			revokedAt *time.Time
-			redeemed  int
+			l                    LeaseRecord
+			revokedAt            *time.Time
+			redeemed             int
+			ready, requested     bool
+			endpoint, providerID string
 		)
-		if err := rows.Scan(&l.ID, &l.SecretName, &l.RunID, &l.ExpiresAt, &revokedAt, &redeemed); err != nil {
+		if err := rows.Scan(&l.ID, &l.SecretName, &l.RunID, &l.ExpiresAt, &revokedAt, &redeemed, &ready, &requested, &endpoint, &providerID); err != nil {
 			return nil, fmt.Errorf("scan lease: %w", err)
 		}
 		switch {
+		case endpoint == "" && redeemed > 0:
+			l.State = "rotation_required"
 		case revokedAt != nil:
 			l.State = "revoked"
-		case redeemed > 0:
-			l.State = "spent"
+		case requested:
+			l.State = "revocation_pending"
+		case endpoint != "" && providerID == "":
+			l.State = "issuance_unknown"
+		case !ready && endpoint != "":
+			l.State = "issuance_pending"
 		case l.ExpiresAt.Before(now):
 			l.State = "expired"
+		case redeemed > 0:
+			l.State = "spent"
 		default:
 			l.State = "issued"
 		}
@@ -473,3 +491,59 @@ func ValidateSecret(name, environment, value string) error {
 
 // ValidName reports whether name can be a secret's name.
 func ValidName(name string) bool { return nameRe.MatchString(name) }
+
+// requireOrg also excludes platform workers: a nil org must never become a
+// tenant merely because both the supplied id and the scope happen to be nil.
+func requireOrg(ctx context.Context, orgID uuid.UUID) error {
+	if orgID == uuid.Nil {
+		return errors.New("an organization scope is required")
+	}
+	return authz.RequireOrg(ctx, orgID)
+}
+
+func leaseExpiry(ctx context.Context, runID uuid.UUID, g capability.Grant, name string, ttl time.Duration) (time.Time, error) {
+	if err := requireOrg(ctx, g.OrgID); err != nil {
+		return time.Time{}, err
+	}
+	scope, err := authz.FromContext(ctx)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if err := requireActor(scope); err != nil {
+		return time.Time{}, err
+	}
+	if runID == uuid.Nil {
+		return time.Time{}, errors.New("a run id is required")
+	}
+	if !ValidName(name) {
+		return time.Time{}, errors.New("invalid secret name")
+	}
+	if ttl <= 0 || ttl > time.Hour {
+		return time.Time{}, errors.New("lease TTL must be positive and at most one hour")
+	}
+	now := time.Now()
+	expires := now.Add(ttl)
+	if !g.ExpiresAt.IsZero() {
+		if !now.Before(g.ExpiresAt) {
+			return time.Time{}, errors.New("grant expired")
+		}
+		if g.ExpiresAt.Before(expires) {
+			expires = g.ExpiresAt
+		}
+	}
+	return expires, nil
+}
+
+func requireActor(scope authz.Scope) error {
+	switch scope.ActorKind {
+	case "user", "agent":
+		if scope.ActorID != uuid.Nil && scope.ServiceName == "" {
+			return nil
+		}
+	case "service":
+		if scope.ServiceName != "" {
+			return nil
+		}
+	}
+	return errors.New("authenticated credential actor required")
+}

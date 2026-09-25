@@ -25,6 +25,7 @@ const (
 	ReviewsService_AddPlanStep_FullMethodName   = "/novaforge.reviews.v1.ReviewsService/AddPlanStep"
 	ReviewsService_RecordProof_FullMethodName   = "/novaforge.reviews.v1.ReviewsService/RecordProof"
 	ReviewsService_SubmitReview_FullMethodName  = "/novaforge.reviews.v1.ReviewsService/SubmitReview"
+	ReviewsService_ListReviews_FullMethodName   = "/novaforge.reviews.v1.ReviewsService/ListReviews"
 	ReviewsService_AddComment_FullMethodName    = "/novaforge.reviews.v1.ReviewsService/AddComment"
 	ReviewsService_GetExceptions_FullMethodName = "/novaforge.reviews.v1.ReviewsService/GetExceptions"
 	ReviewsService_ListProof_FullMethodName     = "/novaforge.reviews.v1.ReviewsService/ListProof"
@@ -47,6 +48,7 @@ type ReviewsServiceClient interface {
 	AddPlanStep(ctx context.Context, in *AddPlanStepRequest, opts ...grpc.CallOption) (*AddPlanStepResponse, error)
 	RecordProof(ctx context.Context, in *RecordProofRequest, opts ...grpc.CallOption) (*RecordProofResponse, error)
 	SubmitReview(ctx context.Context, in *SubmitReviewRequest, opts ...grpc.CallOption) (*SubmitReviewResponse, error)
+	ListReviews(ctx context.Context, in *ListReviewsRequest, opts ...grpc.CallOption) (*ListReviewsResponse, error)
 	AddComment(ctx context.Context, in *AddCommentRequest, opts ...grpc.CallOption) (*AddCommentResponse, error)
 	GetExceptions(ctx context.Context, in *GetExceptionsRequest, opts ...grpc.CallOption) (*GetExceptionsResponse, error)
 	ListProof(ctx context.Context, in *ListProofRequest, opts ...grpc.CallOption) (*ListProofResponse, error)
@@ -119,6 +121,16 @@ func (c *reviewsServiceClient) SubmitReview(ctx context.Context, in *SubmitRevie
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SubmitReviewResponse)
 	err := c.cc.Invoke(ctx, ReviewsService_SubmitReview_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *reviewsServiceClient) ListReviews(ctx context.Context, in *ListReviewsRequest, opts ...grpc.CallOption) (*ListReviewsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListReviewsResponse)
+	err := c.cc.Invoke(ctx, ReviewsService_ListReviews_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -199,6 +211,7 @@ type ReviewsServiceServer interface {
 	AddPlanStep(context.Context, *AddPlanStepRequest) (*AddPlanStepResponse, error)
 	RecordProof(context.Context, *RecordProofRequest) (*RecordProofResponse, error)
 	SubmitReview(context.Context, *SubmitReviewRequest) (*SubmitReviewResponse, error)
+	ListReviews(context.Context, *ListReviewsRequest) (*ListReviewsResponse, error)
 	AddComment(context.Context, *AddCommentRequest) (*AddCommentResponse, error)
 	GetExceptions(context.Context, *GetExceptionsRequest) (*GetExceptionsResponse, error)
 	ListProof(context.Context, *ListProofRequest) (*ListProofResponse, error)
@@ -233,6 +246,9 @@ func (UnimplementedReviewsServiceServer) RecordProof(context.Context, *RecordPro
 }
 func (UnimplementedReviewsServiceServer) SubmitReview(context.Context, *SubmitReviewRequest) (*SubmitReviewResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SubmitReview not implemented")
+}
+func (UnimplementedReviewsServiceServer) ListReviews(context.Context, *ListReviewsRequest) (*ListReviewsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListReviews not implemented")
 }
 func (UnimplementedReviewsServiceServer) AddComment(context.Context, *AddCommentRequest) (*AddCommentResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddComment not implemented")
@@ -380,6 +396,24 @@ func _ReviewsService_SubmitReview_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ReviewsService_ListReviews_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListReviewsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReviewsServiceServer).ListReviews(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ReviewsService_ListReviews_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReviewsServiceServer).ListReviews(ctx, req.(*ListReviewsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ReviewsService_AddComment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AddCommentRequest)
 	if err := dec(in); err != nil {
@@ -518,6 +552,10 @@ var ReviewsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SubmitReview",
 			Handler:    _ReviewsService_SubmitReview_Handler,
+		},
+		{
+			MethodName: "ListReviews",
+			Handler:    _ReviewsService_ListReviews_Handler,
 		},
 		{
 			MethodName: "AddComment",
