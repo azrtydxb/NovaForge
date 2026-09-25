@@ -62,6 +62,8 @@ type Comment struct {
 
 // Review is a row in the reviews.run_reviews table.
 type Review struct {
+	SourceSHA    string
+	Summary      string
 	RunID        uuid.UUID
 	ReviewerID   uuid.UUID
 	ReviewerKind string
@@ -325,29 +327,60 @@ func (s *Store) AddComment(ctx context.Context, runID, authorID uuid.UUID, autho
 // regardless of author kind — which is the enforcement point for the
 // independent-review requirement.
 func (s *Store) SubmitReview(ctx context.Context, runID, reviewerID uuid.UUID, reviewerKind, verdict string) error {
-	var authorID uuid.UUID
-	err := s.pool.QueryRow(ctx, `SELECT author_id FROM reviews.runs WHERE id = $1`, runID).Scan(&authorID)
+	return s.SubmitReviewAt(ctx, runID, reviewerID, reviewerKind, verdict, "", "")
+}
+
+// SubmitReviewAt binds a verdict to the immutable source inspected by the
+// caller. An empty SHA is legacy evidence, never merge authority.
+func (s *Store) SubmitReviewAt(ctx context.Context, runID, reviewerID uuid.UUID, reviewerKind, verdict, sourceSHA, summary string) error {
+	run, err := s.GetRun(ctx, runID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return fmt.Errorf("run %s not found: %w", runID, err)
-		}
-		return fmt.Errorf("submit review: %w", err)
+		return err
 	}
-	if reviewerID == authorID {
+	if reviewerID == run.AuthorID {
 		return fmt.Errorf("author cannot approve their own run %s", runID)
 	}
-
-	_, err = s.pool.Exec(ctx, `
-		INSERT INTO reviews.run_reviews (run_id, reviewer_id, reviewer_kind, verdict)
-		VALUES ($1, $2, $3, $4)
+	if verdict != "approve" && verdict != "request_changes" && verdict != "comment" {
+		return fmt.Errorf("invalid review verdict %q", verdict)
+	}
+	tag, err := s.pool.Exec(ctx, `
+		INSERT INTO reviews.run_reviews (run_id, reviewer_id, reviewer_kind, verdict, source_sha, summary)
+		SELECT id, $3, $4, $5, $6, $7 FROM reviews.runs WHERE id = $1 AND org_id = $2 AND state = 'open'
 		ON CONFLICT (run_id, reviewer_id)
-		DO UPDATE SET verdict = EXCLUDED.verdict, reviewer_kind = EXCLUDED.reviewer_kind, created_at = now()`,
-		runID, reviewerID, reviewerKind, verdict,
-	)
+		DO UPDATE SET verdict = EXCLUDED.verdict, reviewer_kind = EXCLUDED.reviewer_kind,
+		 source_sha = EXCLUDED.source_sha, summary = EXCLUDED.summary, created_at = now()`,
+		runID, run.OrgID, reviewerID, reviewerKind, verdict, sourceSHA, summary)
 	if err != nil {
 		return fmt.Errorf("submit review: %w", err)
 	}
+	if tag.RowsAffected() != 1 {
+		return fmt.Errorf("run is not open")
+	}
 	return nil
+}
+
+// ListReviews returns durable evidence only within the caller's organization.
+func (s *Store) ListReviews(ctx context.Context, runID uuid.UUID) ([]Review, error) {
+	scope, err := authz.FromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.pool.Query(ctx, `SELECT v.run_id, v.reviewer_id, v.reviewer_kind, v.verdict, v.source_sha, v.summary, v.created_at
+	 FROM reviews.run_reviews v JOIN reviews.runs r ON r.id = v.run_id
+	 WHERE r.org_id = $1 AND r.id = $2 ORDER BY v.created_at, v.reviewer_id`, scope.OrgID, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Review{}
+	for rows.Next() {
+		var v Review
+		if err := rows.Scan(&v.RunID, &v.ReviewerID, &v.ReviewerKind, &v.Verdict, &v.SourceSHA, &v.Summary, &v.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
 }
 
 // ListPlanSteps returns runID's plan in order. A run presents its plan

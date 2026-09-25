@@ -90,7 +90,7 @@ function isPath(s: string) {
  * the indexer wrote from the default branch; nothing is inferred here. */
 export function Graph() {
   const w = useWorkspace();
-  const repo = w.repo ?? w.repos[0]?.name ?? null;
+  const repo = w.repo;
   const [name, setName] = useState("");
   const [submitted, setSubmitted] = useState("");
   const [query, setQuery] = useState("");
@@ -171,7 +171,11 @@ export function Graph() {
           </Async>
         </div>
       ) : null}
-      {submitted === "" ? (
+      {repo === null ? (
+        <Panel>
+          <Empty>Select a repository in the workspace switcher.</Empty>
+        </Panel>
+      ) : submitted === "" ? (
         <Panel>
           <Empty>
             Name a symbol, or a file path, to see what it relates to.

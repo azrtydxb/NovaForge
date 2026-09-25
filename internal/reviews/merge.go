@@ -72,7 +72,14 @@ func (m *Merger) Merge(ctx context.Context, runID uuid.UUID, method string) (str
 		return "", fmt.Errorf("get run %s: %w", runID, err)
 	}
 
-	independentlyApproved, err := m.Store.hasIndependentApproval(ctx, runID, run.AuthorID)
+	if run.State != "open" {
+		return "", fmt.Errorf("%w: run is not open", ErrMergeBlocked)
+	}
+	head, err := sourceHead(ctx, m.Git, run)
+	if err != nil {
+		return "", fmt.Errorf("%w: resolve source: %v", ErrMergeBlocked, err)
+	}
+	independentlyApproved, err := m.Store.hasIndependentApproval(ctx, runID, run.AuthorID, head)
 	if err != nil {
 		return "", err
 	}
@@ -81,10 +88,11 @@ func (m *Merger) Merge(ctx context.Context, runID uuid.UUID, method string) (str
 	}
 
 	resp, err := m.Git.Merge(ctx, &gitv1.MergeRequest{
-		Repo:      run.RepoID.String(),
-		SourceRef: run.SourceRef,
-		TargetRef: run.TargetRef,
-		Method:    method,
+		Repo:              run.RepoID.String(),
+		SourceRef:         run.SourceRef,
+		ExpectedSourceSha: head,
+		TargetRef:         run.TargetRef,
+		Method:            method,
 	})
 	if err != nil {
 		return "", fmt.Errorf("merge run %s: %w", runID, err)
@@ -102,12 +110,16 @@ func (m *Merger) Merge(ctx context.Context, runID uuid.UUID, method string) (str
 // reviews.Store.SubmitReview already refuses to record a self-approval, so
 // this is the only place an "approved" run can ever come from someone other
 // than its author.
-func (s *Store) hasIndependentApproval(ctx context.Context, runID, authorID uuid.UUID) (bool, error) {
+func (s *Store) hasIndependentApproval(ctx context.Context, runID, authorID uuid.UUID, head string) (bool, error) {
+	run, err := s.GetRun(ctx, runID)
+	if err != nil {
+		return false, err
+	}
 	var count int
-	err := s.pool.QueryRow(ctx, `
-		SELECT count(*) FROM reviews.run_reviews
-		WHERE run_id = $1 AND reviewer_id <> $2 AND verdict = 'approve'`,
-		runID, authorID,
+	err = s.pool.QueryRow(ctx, `
+		SELECT count(*) FROM reviews.run_reviews v JOIN reviews.runs r ON r.id = v.run_id
+		WHERE v.run_id = $1 AND v.reviewer_id <> $2 AND v.verdict = 'approve' AND v.source_sha = $3 AND v.source_sha <> '' AND r.org_id = $4`,
+		runID, authorID, head, run.OrgID,
 	).Scan(&count)
 	if err != nil {
 		return false, fmt.Errorf("check independent approval for run %s: %w", runID, err)

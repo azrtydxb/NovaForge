@@ -57,6 +57,7 @@ export function CI() {
   });
 
   const loading = queries.some((q) => q.isLoading);
+  const listError = queries.find((q) => q.error)?.error;
   const rows = queries
     .flatMap((q, i) =>
       (q.data?.runs ?? []).map((run) => ({ run, repo: repos[i]!.name })),
@@ -117,6 +118,8 @@ export function CI() {
           <PanelHead>RUNS</PanelHead>
           {loading ? (
             <Loading />
+          ) : listError ? (
+            <Failed error={listError} />
           ) : rows.length === 0 ? (
             <Empty>
               No CI runs in this scope.
@@ -239,7 +242,7 @@ function RunDetail({
     selectedJob?.status === "running" || selectedJob?.status === "pending";
 
   const logs = useQuery({
-    queryKey: ["ci-log", org, repo, selectedJob?.id],
+    queryKey: ["ci-log", org, repo, selectedJob?.id, selectedJob?.status],
     queryFn: () =>
       api.get<{ lines: string[] }>(`${base}/jobs/${enc(selectedJob!.id)}/logs`),
     enabled: selectedJob !== undefined,

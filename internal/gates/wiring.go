@@ -105,6 +105,7 @@ func NewServiceRunLookup(reviewsClient reviewsv1.ReviewsServiceClient, workClien
 			OrgID:         orgID,
 			RepoID:        repoID,
 			TargetRef:     run.GetTargetRef(),
+			TargetSHA:     heads[target],
 			HeadSHA:       headSHA,
 			WorkItemGates: requiredGates,
 			SourceRef:     run.GetSourceRef(),

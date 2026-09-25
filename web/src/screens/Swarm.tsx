@@ -3,6 +3,7 @@ import { api, enc } from "../lib/api";
 import { scopedRepos, useWorkspace } from "../lib/workspace";
 import {
   Empty,
+  Failed,
   Loading,
   Page,
   Panel,
@@ -50,6 +51,8 @@ export function Swarm() {
   const loading =
     work.some((q) => q.isLoading) || subtasks.some((q) => q.isLoading);
 
+  const listError = [...work, ...subtasks].find((q) => q.error)?.error;
+
   const decomposed = epics
     .map((e, i) => ({ ...e, subtasks: subtasks[i]?.data?.subtasks ?? [] }))
     .filter((e) => e.subtasks.length > 0);
@@ -63,6 +66,8 @@ export function Swarm() {
         <Panel>
           <Loading />
         </Panel>
+      ) : listError ? (
+        <Failed error={listError} />
       ) : decomposed.length === 0 ? (
         <Panel>
           <Empty>

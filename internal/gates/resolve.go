@@ -1,8 +1,10 @@
 package gates
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 
@@ -35,6 +37,28 @@ type gateFile struct {
 }
 
 const gatesDir = ".novaforge/gates"
+
+// Missing required is not explicit optional policy: a misspelled field must
+// never silently weaken a merge gate. Decode one complete document only.
+func decodeGateFile(content []byte) (gateFile, error) {
+	var wire struct {
+		Name     string         `yaml:"name"`
+		Required *bool          `yaml:"required"`
+		Params   map[string]any `yaml:"params"`
+	}
+	dec := yaml.NewDecoder(bytes.NewReader(content))
+	dec.KnownFields(true)
+	if err := dec.Decode(&wire); err != nil {
+		return gateFile{}, err
+	}
+	if wire.Required == nil {
+		return gateFile{}, fmt.Errorf("required must be explicitly true or false")
+	}
+	if err := dec.Decode(new(any)); err != io.EOF {
+		return gateFile{}, fmt.Errorf("exactly one YAML document is required")
+	}
+	return gateFile{Name: wire.Name, Required: *wire.Required, Params: wire.Params}, nil
+}
 
 // Resolve reads gate definitions from the repository's .novaforge/gates
 // directory at targetRef — the branch being merged into, never the source
@@ -84,8 +108,8 @@ func Resolve(ctx context.Context, git gitv1.GitServiceClient, orgID, repoID uuid
 			return nil, fmt.Errorf("read gate config %s: %w", path, err)
 		}
 
-		var gf gateFile
-		if err := yaml.Unmarshal(blob.Content, &gf); err != nil {
+		gf, err := decodeGateFile(blob.Content)
+		if err != nil {
 			return nil, fmt.Errorf("malformed gate config %s: %w", path, err)
 		}
 		if gf.Name == "" {
@@ -93,6 +117,9 @@ func Resolve(ctx context.Context, git gitv1.GitServiceClient, orgID, repoID uuid
 		}
 		if !knownGates[gf.Name] {
 			return nil, fmt.Errorf("unknown gate %q in %s", gf.Name, path)
+		}
+		if _, exists := defs[gf.Name]; exists {
+			return nil, fmt.Errorf("duplicate gate %q in %s", gf.Name, path)
 		}
 		defs[gf.Name] = Definition{Name: gf.Name, Params: gf.Params, Required: gf.Required}
 	}

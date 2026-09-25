@@ -234,6 +234,8 @@ export function Account() {
           <Failed error={beginTotp.error} />
         </div>
       ) : null}
+      {revokeToken.error ? <Failed error={revokeToken.error} /> : null}
+      {removeKey.error ? <Failed error={removeKey.error} /> : null}
       <div style={{ display: "grid", gap: 14, maxWidth: 760 }}>
         <Panel>
           <PanelHead>PERSONAL ACCESS TOKENS</PanelHead>
@@ -257,6 +259,7 @@ export function Account() {
                         {t.scopes.join(" ")}
                       </span>
                       <button
+                        disabled={revokeToken.isPending}
                         onClick={() => revokeToken.mutate(t.id)}
                         style={dangerButton}
                       >
@@ -292,6 +295,7 @@ export function Account() {
                         {k.fingerprint}
                       </span>
                       <button
+                        disabled={removeKey.isPending}
                         onClick={() => removeKey.mutate(k.id)}
                         style={dangerButton}
                       >

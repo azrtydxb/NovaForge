@@ -17,17 +17,17 @@ type heldBroker struct {
 	release chan struct{}
 }
 
-func (b *heldBroker) IssueJobLease(ctx context.Context, req ci.LeaseRequest) (string, error) {
+func (b *heldBroker) IssueJobLease(ctx context.Context, req ci.LeaseRequest) (ci.JobCredentialLease, error) {
 	select {
 	case b.entered <- struct{}{}:
 	case <-ctx.Done():
-		return "", ctx.Err()
+		return ci.JobCredentialLease{}, ctx.Err()
 	}
 	select {
 	case <-b.release:
 		return b.CredentialBroker.IssueJobLease(ctx, req)
 	case <-ctx.Done():
-		return "", ctx.Err()
+		return ci.JobCredentialLease{}, ctx.Err()
 	}
 }
 
@@ -36,7 +36,7 @@ func TestCredentialReservationStaysPending(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			s := newCredentialStack(t)
 			ctx := context.Background()
-			if err := s.broker.PutValue(ctx, s.org, "DEPLOY_TOKEN", "staging", secretValue("reservation")); err != nil {
+			if err := s.putDynamicSecret("DEPLOY_TOKEN", "staging", secretValue("reservation")); err != nil {
 				t.Fatal(err)
 			}
 			id := s.job("refs/heads/main", "wait-for-credentials", "staging", "DEPLOY_TOKEN")

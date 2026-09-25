@@ -1348,14 +1348,17 @@ func (x *GetDiffResponse) GetPathsComplete() bool {
 }
 
 type MergeRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Repo          string                 `protobuf:"bytes,1,opt,name=repo,proto3" json:"repo,omitempty"`
-	SourceRef     string                 `protobuf:"bytes,2,opt,name=source_ref,json=sourceRef,proto3" json:"source_ref,omitempty"`
-	TargetRef     string                 `protobuf:"bytes,3,opt,name=target_ref,json=targetRef,proto3" json:"target_ref,omitempty"`
-	Method        string                 `protobuf:"bytes,4,opt,name=method,proto3" json:"method,omitempty"`
-	Message       string                 `protobuf:"bytes,5,opt,name=message,proto3" json:"message,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Repo      string                 `protobuf:"bytes,1,opt,name=repo,proto3" json:"repo,omitempty"`
+	SourceRef string                 `protobuf:"bytes,2,opt,name=source_ref,json=sourceRef,proto3" json:"source_ref,omitempty"`
+	TargetRef string                 `protobuf:"bytes,3,opt,name=target_ref,json=targetRef,proto3" json:"target_ref,omitempty"`
+	Method    string                 `protobuf:"bytes,4,opt,name=method,proto3" json:"method,omitempty"`
+	Message   string                 `protobuf:"bytes,5,opt,name=message,proto3" json:"message,omitempty"`
+	// Mandatory for review-authorized merges. Compare atomically under the
+	// repository write lock, then merge this exact source commit.
+	ExpectedSourceSha string `protobuf:"bytes,6,opt,name=expected_source_sha,json=expectedSourceSha,proto3" json:"expected_source_sha,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *MergeRequest) Reset() {
@@ -1419,6 +1422,13 @@ func (x *MergeRequest) GetMethod() string {
 func (x *MergeRequest) GetMessage() string {
 	if x != nil {
 		return x.Message
+	}
+	return ""
+}
+
+func (x *MergeRequest) GetExpectedSourceSha() string {
+	if x != nil {
+		return x.ExpectedSourceSha
 	}
 	return ""
 }
@@ -1843,7 +1853,7 @@ const file_novaforge_git_v1_git_proto_rawDesc = "" +
 	"\x0fGetDiffResponse\x12\x18\n" +
 	"\aunified\x18\x01 \x01(\tR\aunified\x12#\n" +
 	"\rchanged_paths\x18\x02 \x03(\tR\fchangedPaths\x12%\n" +
-	"\x0epaths_complete\x18\x03 \x01(\bR\rpathsComplete\"\x92\x01\n" +
+	"\x0epaths_complete\x18\x03 \x01(\bR\rpathsComplete\"\xc2\x01\n" +
 	"\fMergeRequest\x12\x12\n" +
 	"\x04repo\x18\x01 \x01(\tR\x04repo\x12\x1d\n" +
 	"\n" +
@@ -1851,7 +1861,8 @@ const file_novaforge_git_v1_git_proto_rawDesc = "" +
 	"\n" +
 	"target_ref\x18\x03 \x01(\tR\ttargetRef\x12\x16\n" +
 	"\x06method\x18\x04 \x01(\tR\x06method\x12\x18\n" +
-	"\amessage\x18\x05 \x01(\tR\amessage\",\n" +
+	"\amessage\x18\x05 \x01(\tR\amessage\x12.\n" +
+	"\x13expected_source_sha\x18\x06 \x01(\tR\x11expectedSourceSha\",\n" +
 	"\rMergeResponse\x12\x1b\n" +
 	"\tmerge_sha\x18\x01 \x01(\tR\bmergeSha\"X\n" +
 	"\x13CreateBranchRequest\x12\x12\n" +

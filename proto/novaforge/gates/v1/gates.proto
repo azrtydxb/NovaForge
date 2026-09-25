@@ -21,6 +21,8 @@ service GatesService {
   rpc PutSecret(PutSecretRequest) returns (PutSecretResponse);
   rpc IssueJobLease(IssueJobLeaseRequest) returns (IssueJobLeaseResponse);
   rpc RevokeLease(RevokeLeaseRequest) returns (RevokeLeaseResponse);
+  rpc RevokeRunLeases(RevokeRunLeasesRequest) returns (RevokeRunLeasesResponse);
+  rpc RetryCredentialRevocations(RetryCredentialRevocationsRequest) returns (RetryCredentialRevocationsResponse);
   rpc ListGateConfig(ListGateConfigRequest) returns (ListGateConfigResponse);
   rpc ProposeGateChange(ProposeGateChangeRequest) returns (ProposeGateChangeResponse);
 }
@@ -58,11 +60,15 @@ message EvaluateResponse {
 
 message MayMergeRequest {
   string run_id = 1;
+  string expected_source_sha = 2;
+  string expected_target_sha = 3;
 }
 
 message MayMergeResponse {
   bool allowed = 1;
   repeated string reasons = 2;
+  string evaluated_source_sha = 3;
+  string evaluated_target_sha = 4;
 }
 
 message ListEvaluationsRequest {
@@ -164,6 +170,8 @@ message IssueJobLeaseRequest {
   string environment = 4;
   string name = 5;
   int64 ttl_seconds = 6;
+  // A fresh identifier for each all-or-nothing credential resolution attempt.
+  string attempt_id = 7;
 }
 
 message IssueJobLeaseResponse {
@@ -277,3 +285,16 @@ message ProposeGateChangeResponse {
   string commit_sha = 4;
   string title = 5;
 }
+
+// Empty attempt_id closes the entire run permanently; otherwise only the
+// failed attempt is fenced, permitting a new attempt to retry the job.
+message RevokeRunLeasesRequest {
+  string run_id = 1;
+  string attempt_id = 2;
+}
+message RevokeRunLeasesResponse {
+  bool fenced = 1;
+  int32 pending = 2;
+}
+message RetryCredentialRevocationsRequest {}
+message RetryCredentialRevocationsResponse {}

@@ -22,6 +22,9 @@ type ServerDef struct {
 	URL     string        `yaml:"url" json:"url"`
 	Token   string        `yaml:"token,omitempty" json:"token,omitempty"`
 	Timeout time.Duration `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	// BearerToken resolves an operator-bound credential for each request. It
+	// must return an error, not an empty token, when authentication is required.
+	BearerToken func(context.Context) (string, error) `yaml:"-" json:"-"`
 }
 
 // Result is one external tool call's output. Untrusted is always true: an
@@ -50,6 +53,9 @@ type Client struct {
 	session string
 	nextID  int64
 	ready   bool
+	stdio   io.ReadWriteCloser
+	scanner *bufio.Scanner
+	rpcMu   sync.Mutex
 }
 
 // DefaultExternalTimeout bounds every external call, so a hung third-party
@@ -71,7 +77,9 @@ func NewClient(def ServerDef, declared []string) *Client {
 	return &Client{
 		def:      def,
 		declared: declared,
-		http:     &http.Client{Timeout: def.Timeout},
+		http: &http.Client{Timeout: def.Timeout, CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse // approval and credentials bind one destination
+		}},
 	}
 }
 
@@ -127,6 +135,7 @@ func (c *Client) ListTools(ctx context.Context) ([]ToolDef, error) {
 	}
 	var all []ToolDef
 	cursor := ""
+	definitionBytes := 0
 	for page := 0; page < 100; page++ {
 		params := map[string]any{}
 		if cursor != "" {
@@ -138,6 +147,16 @@ func (c *Client) ListTools(ctx context.Context) ([]ToolDef, error) {
 		}
 		if err := c.request(ctx, "tools/list", params, &out); err != nil {
 			return nil, err
+		}
+		// Pages are bounded individually by the transport, but accumulating
+		// 100 hostile pages otherwise retained hundreds of MiB per run.
+		encoded, err := json.Marshal(out.Tools)
+		if err != nil {
+			return nil, err
+		}
+		definitionBytes += len(encoded)
+		if len(all)+len(out.Tools) > 256 || definitionBytes > 1<<20 {
+			return nil, fmt.Errorf("mcp server %q exceeds tool discovery bounds (256 tools, 1 MiB definitions)", c.def.Name)
 		}
 		all = append(all, out.Tools...)
 		if out.NextCursor == "" {
@@ -191,6 +210,9 @@ func (c *Client) request(ctx context.Context, method string, params any, out any
 	id := c.nextID
 	c.mu.Unlock()
 
+	if c.stdio != nil {
+		return c.stdioRequest(ctx, method, id, params, out)
+	}
 	resp, err := c.post(ctx, method, json.RawMessage(strconv.FormatInt(id, 10)), params)
 	if err != nil {
 		return err
@@ -216,6 +238,10 @@ func (c *Client) request(ctx context.Context, method string, params any, out any
 // notify sends one JSON-RPC notification, which a server acknowledges with
 // 202 and no body.
 func (c *Client) notify(ctx context.Context, method string) error {
+	if c.stdio != nil {
+		_, err := c.stdioMessage(ctx, method, nil, nil)
+		return err
+	}
 	resp, err := c.post(ctx, method, nil, nil)
 	if err != nil {
 		return err
@@ -256,8 +282,16 @@ func (c *Client) post(ctx context.Context, method string, id json.RawMessage, pa
 		req.Header.Set("MCP-Protocol-Version", ProtocolVersion)
 	}
 	c.mu.Unlock()
-	if c.def.Token != "" {
-		req.Header.Set("Authorization", "Bearer "+c.def.Token)
+	token := c.def.Token
+	if c.def.BearerToken != nil {
+		token, err = c.def.BearerToken(ctx)
+		if err != nil || token == "" {
+			cancel()
+			return nil, fmt.Errorf("mcp server %q: required credential unavailable", c.def.Name)
+		}
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -310,6 +344,9 @@ func readResponse(resp *http.Response, id int64) (rawResponse, error) {
 		var msg rawResponse
 		if err := json.NewDecoder(body).Decode(&msg); err != nil {
 			return rawResponse{}, fmt.Errorf("decode response: %w", err)
+		}
+		if msg.Method != "" || strings.TrimSpace(string(msg.ID)) != want {
+			return rawResponse{}, fmt.Errorf("response does not match request %s", want)
 		}
 		return msg, nil
 	}

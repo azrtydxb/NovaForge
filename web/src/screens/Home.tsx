@@ -5,6 +5,8 @@ import { scopedRepos, useWorkspace } from "../lib/workspace";
 import {
   Async,
   Empty,
+  Failed,
+  Loading,
   Page,
   Panel,
   PanelHead,
@@ -66,6 +68,15 @@ export function Home() {
       title="Home"
       subtitle={`${w.org ?? ""}${w.repo ? ` / ${w.repo}` : " — all projects"}`}
     >
+      <div
+        style={{
+          font: "12px var(--sans)",
+          color: "var(--fg-muted)",
+          marginBottom: 8,
+        }}
+      >
+        Organization-wide totals · {w.org}
+      </div>
       <Async query={dash}>
         {(d) => (
           <div
@@ -113,7 +124,11 @@ export function Home() {
               all work →
             </Link>
           </PanelHead>
-          {openWork.length === 0 ? (
+          {work.some((q) => q.isLoading) ? (
+            <Loading />
+          ) : work.some((q) => q.error) ? (
+            <Failed error={work.find((q) => q.error)!.error} />
+          ) : openWork.length === 0 ? (
             <Empty>
               No open Work Items in this scope.
               <br />
@@ -123,11 +138,12 @@ export function Home() {
           ) : (
             openWork.map(({ item, repo }) => (
               <Row key={item.id}>
-                <span
-                  style={{ font: "600 12px var(--mono)", color: "var(--link)" }}
+                <Link
+                  to={`/work/${enc(repo)}/${enc(item.key)}`}
+                  style={{ font: "600 12px var(--mono)" }}
                 >
                   {item.key}
-                </span>
+                </Link>
                 <span style={{ flex: 1, font: "13px var(--sans)" }}>
                   {item.goal}
                 </span>
@@ -150,7 +166,11 @@ export function Home() {
               all runs →
             </Link>
           </PanelHead>
-          {openRuns.length === 0 ? (
+          {runs.some((q) => q.isLoading) ? (
+            <Loading />
+          ) : runs.some((q) => q.error) ? (
+            <Failed error={runs.find((q) => q.error)!.error} />
+          ) : openRuns.length === 0 ? (
             <Empty>No open Engineering Runs in this scope.</Empty>
           ) : (
             openRuns.map(({ run, repo }) => (

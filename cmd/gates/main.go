@@ -18,7 +18,6 @@ import (
 	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
 	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
 	"github.com/novaforge/novaforge/internal/approvals"
-	"github.com/novaforge/novaforge/internal/capability"
 	"github.com/novaforge/novaforge/internal/cleanup"
 	"github.com/novaforge/novaforge/internal/database"
 	"github.com/novaforge/novaforge/internal/gates"
@@ -60,12 +59,6 @@ func main() {
 	if err := database.Migrate(cfg.DatabaseURL, "secrets", secrets.MigrationsFS); err != nil {
 		log.Fatalf("gates: migrate secrets schema: %v", err)
 	}
-	// capability_grants lives in the gitplatform schema; IssueLease resolves
-	// grants by id, so it needs the table to exist even on a fresh database
-	// the identity service has not touched yet (see cmd/identity/main.go).
-	if err := database.Migrate(cfg.DatabaseURL, "gitplatform", capability.MigrationsFS); err != nil {
-		log.Fatalf("gates: migrate gitplatform (capability) schema: %v", err)
-	}
 
 	ctx := context.Background()
 
@@ -104,8 +97,12 @@ func main() {
 
 	gatesStore := gates.NewStore(pool)
 	approvalsStore := approvals.NewStore(pool)
-	secretsBroker := secrets.NewBroker(pool, []byte(cfg.SecretsKEK))
-	grants := capability.NewStore(pool)
+	secretsBroker, err := secrets.NewConfiguredBroker(pool, []byte(cfg.SecretsKEK), os.Getenv("NF_OPENBAO_CONFIG_FILE"))
+	if err != nil {
+		log.Fatalf("gates: configure credential provider: %v", err)
+	}
+	go secretsBroker.RunRevocationWorker(ctx)
+	grants := gates.IdentityGrants{Client: identityClient, HMACSecret: cfg.HMACSecret}
 
 	// A deleted run's evaluations, approvals and leases, and a deleted
 	// organization's secrets, are removed when their deletion is announced.
@@ -119,6 +116,7 @@ func main() {
 	controller := gates.NewController(gatesStore, gitClient, reviewsClient, workClient, os.Getenv("NOVAFORGE_SEMGREP_RULES"))
 
 	grpcServer := gates.NewGRPCServer(controller, approvalsStore, secretsBroker, grants)
+	grpcServer.DefaultBranch = gates.DefaultBranchFromGit(gitClient)
 	grpcServer.Proposals = &gates.Proposer{Git: gitClient, Reviews: reviewsClient}
 
 	// Callers are resolved the same way every service resolves them: a

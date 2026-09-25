@@ -358,9 +358,9 @@ func TestRunConsumesPushEventsAndAcks(t *testing.T) {
 	idx.HMACSecret = testHMACSecret
 	idx.Consumer = "test-consumer-" + uuid.NewString()
 
-	// Run consumes events.StreamGitPush by its fixed name, so this test
-	// publishes there directly and cleans up afterward.
-	streamName := events.StreamGitPush
+	// The test owns this stream only; never delete or consume the shared push stream.
+	streamName := "stream:test:indexer:" + uuid.NewString()
+	idx.PushStream = streamName
 	t.Cleanup(func() { rdb.Del(context.Background(), streamName) })
 
 	evt := events.PushEvent{

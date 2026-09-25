@@ -2,6 +2,7 @@ package agentrun
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -41,9 +42,14 @@ type Runner struct {
 	ProviderOptions map[string]any
 	// Price, when the deployment configures one, accrues the run's cost.
 	Price *agents.TokenPrice
+	// PriceForModel resolves the same model name passed to NewModel (empty
+	// means the deployment default). Unknown prices return nil; a repository
+	// cannot evade a cost limit by pinning an unpriced model.
+	PriceForModel func(model string) *agents.TokenPrice
 	// MCP, when set, lists the organization's approved external MCP servers,
 	// whose tools the run is offered alongside the built-in ones.
-	MCP tools.ApprovedMCPServers
+	MCP        tools.ApprovedMCPServers
+	MCPOptions tools.MCPOptions
 }
 
 // Run executes run with rt's clients and workspace, returning its outcome.
@@ -52,11 +58,20 @@ type Runner struct {
 // failure is the configuration's author's to fix, and it is on the record
 // where they will look.
 func (r *Runner) Run(ctx context.Context, run agents.Run, rt tools.Runtime) Result {
+	ctx, stopRun := context.WithCancelCause(ctx)
+	defer stopRun(nil)
 	loop := NewLoop(nil, nil, r.Audit)
 	loop.Runs = r.Runs
 	fail := func(summary string) Result {
 		log.Printf("agentrun: run %s: %s", run.ID, summary)
-		res, _ := loop.finish(ctx, run, "failed", 0, spend{}, summary)
+		state := "failed"
+		if errors.Is(ctx.Err(), context.Canceled) {
+			state = "cancelled"
+		}
+		if errors.Is(context.Cause(ctx), agents.ErrOverBudget) {
+			state = "over_budget"
+		}
+		res, _ := loop.finish(ctx, run, state, 0, spend{}, summary)
 		return res
 	}
 
@@ -69,6 +84,21 @@ func (r *Runner) Run(ctx context.Context, run agents.Run, rt tools.Runtime) Resu
 		return fail(fmt.Sprintf("the run could not start: %v", err))
 	}
 
+	if !run.StartedAt.IsZero() {
+		var stopClock context.CancelFunc
+		ctx, stopClock = context.WithDeadlineCause(ctx, run.StartedAt.Add(plan.WallclockLimit), agents.ErrOverBudget)
+		defer stopClock()
+	}
+	var price *agents.TokenPrice
+	if r.PriceForModel != nil {
+		price = r.PriceForModel(plan.Model)
+	} else if plan.Model == "" {
+		price = r.Price
+	}
+	if plan.CostLimitMicros > 0 && price == nil {
+		return fail(fmt.Sprintf("the run could not start: no token price configured for effective model %q in AI_MODEL_PRICES; its cost limit cannot be enforced", plan.Model))
+	}
+
 	model, err := r.NewModel(plan.Model)
 	if err != nil {
 		return fail(fmt.Sprintf("the run could not start: build model client for %q: %v", plan.Model, err))
@@ -78,12 +108,30 @@ func (r *Runner) Run(ctx context.Context, run agents.Run, rt tools.Runtime) Resu
 	rt.RunID = run.ID
 	rt.Budget = budget
 	reg := tools.NewRegistry(rt, r.Audit)
-	// The organization's approved external MCP servers are offered before the
-	// repository's tool list is applied, so an agent whose definition lists
-	// its tools gets only the external tools it names. A register nobody read
-	// made approval meaningless.
+	// Filter before discovery: starting a stdio command already grants writable
+	// workspace access, even if its tools would later be removed.
 	if r.MCP != nil {
-		offered, err := tools.OfferApprovedMCPServers(ctx, reg, r.MCP)
+		opts := r.MCPOptions
+		opts.AllowedTools = plan.Tools
+		opts.StdioClosing = func() { stopRun(tools.ErrMCPStdioClosed) }
+		offered, err := tools.OfferApprovedMCPServersWithOptions(ctx, reg, r.MCP, opts)
+		defer offered.Close()
+		loop.BeforeFinish = func(finishCtx context.Context) error {
+			if err := offered.CloseForCompletion(); err != nil {
+				return err
+			}
+			// Only stdio creates this obligation today. Confirmation invokes the
+			// responsible cleaner again: a container exit alone is not namespace
+			// deletion/absence proof, even when every retained session closed.
+			saved, err := r.Runs.GetRun(finishCtx, run.ID)
+			if err != nil {
+				return err
+			}
+			if saved.WorkspaceCleanupPending {
+				return r.Runs.ConfirmWorkspaceCleanup(finishCtx, run.ID)
+			}
+			return nil
+		}
 		if err != nil {
 			log.Printf("agentrun: run %s: external MCP servers unavailable: %v", run.ID, err)
 		} else if len(offered.Tools) > 0 {
@@ -95,9 +143,16 @@ func (r *Runner) Run(ctx context.Context, run agents.Run, rt tools.Runtime) Resu
 	loop.Model = model
 	loop.Budget = budget
 	loop.ProviderOptions = r.ProviderOptions
-	loop.Price = r.Price
+	loop.Price = price
 	loop.Brief = plan.Brief
 	loop.Criteria = func(ctx context.Context, workItemID uuid.UUID) (Criteria, error) {
+		if run.WorkClaimRequired || run.GrantID != uuid.Nil {
+			item, err := run.FrozenWorkItem()
+			if err != nil {
+				return Criteria{}, err
+			}
+			return Criteria{Goal: item.GetGoal(), Acceptance: item.GetAcceptance()}, nil
+		}
 		resp, err := r.Work.GetItem(ctx, &workv1.GetItemRequest{Id: workItemID.String()})
 		if err != nil {
 			return Criteria{}, err
@@ -107,8 +162,9 @@ func (r *Runner) Run(ctx context.Context, run agents.Run, rt tools.Runtime) Resu
 
 	result, err := loop.Execute(ctx, run, reg)
 	if err != nil {
-		return fail(fmt.Sprintf("the run's loop failed: %v", err))
+		result.PersistenceError = err
 	}
+	result.Model = model.ModelID()
 	return result
 }
 

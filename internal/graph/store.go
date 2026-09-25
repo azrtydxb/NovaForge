@@ -157,16 +157,34 @@ func (s *Store) UpsertNode(ctx context.Context, n Node) (Node, error) {
 	if err := authz.RequireOrg(ctx, n.OrgID); err != nil {
 		return Node{}, err
 	}
-	return upsertNode(ctx, s.pool, n.OrgID, uuid.Nil, false, n)
+	tx, err := beginIndexWrite(ctx, s.pool, n.OrgID, uuid.Nil)
+	if err != nil {
+		return Node{}, err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+	saved, err := upsertNode(ctx, tx, n.OrgID, uuid.Nil, false, n)
+	if err != nil {
+		return Node{}, err
+	}
+	return saved, tx.Commit(ctx)
 }
 
 // UpsertEdge inserts e only when both endpoints belong to the caller's
 // organization, doing nothing if that authorized edge already exists.
 func (s *Store) UpsertEdge(ctx context.Context, e Edge) error {
-	if _, err := authz.FromContext(ctx); err != nil {
+	scope, err := authz.FromContext(ctx)
+	if err != nil {
 		return err
 	}
-	return upsertEdge(ctx, s.pool, e)
+	tx, err := beginIndexWrite(ctx, s.pool, scope.OrgID, uuid.Nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+	if err := upsertEdge(ctx, tx, e); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // Neighbours returns the nodes reachable from nodeID over one hop of
@@ -234,7 +252,7 @@ func (s *Store) ReplaceFileSubgraph(ctx context.Context, orgID, repoID uuid.UUID
 		return err
 	}
 
-	tx, err := s.pool.Begin(ctx)
+	tx, err := beginIndexWrite(ctx, s.pool, orgID, repoID)
 	if err != nil {
 		return fmt.Errorf("begin: %w", err)
 	}

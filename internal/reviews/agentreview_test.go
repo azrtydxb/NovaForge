@@ -77,6 +77,7 @@ func TestAuthorAgentExcludedFromReviewers(t *testing.T) {
 
 	securityAgentID := uuid.New()
 	r := &reviews.AgentReviewer{
+		Git:   &stubMergeGitClient{},
 		Store: store,
 		RoleAgent: map[string]agents.Agent{
 			"reviewer": {ID: authorAgentID, Name: "backend-agent", Role: "reviewer"},
@@ -114,6 +115,7 @@ func TestReviewersUseDistinctModelsWhenAvailable(t *testing.T) {
 	}
 
 	r := &reviews.AgentReviewer{
+		Git:   &stubMergeGitClient{},
 		Store: store,
 		RoleAgent: map[string]agents.Agent{
 			"reviewer": {ID: uuid.New(), Name: "reviewer-agent", Role: "reviewer"},
@@ -149,6 +151,7 @@ func TestRequestChangesBlocksMerge(t *testing.T) {
 	}
 
 	r := &reviews.AgentReviewer{
+		Git:   &stubMergeGitClient{},
 		Store: store,
 		RoleAgent: map[string]agents.Agent{
 			"reviewer": {ID: uuid.New(), Name: "reviewer-agent", Role: "reviewer"},
@@ -223,6 +226,7 @@ func TestAllApprovalsStillRequireGates(t *testing.T) {
 	}
 
 	r := &reviews.AgentReviewer{
+		Git:   &stubMergeGitClient{},
 		Store: store,
 		RoleAgent: map[string]agents.Agent{
 			"reviewer":     {ID: uuid.New(), Name: "reviewer-agent", Role: "reviewer"},
@@ -284,6 +288,7 @@ func TestReviewVerdictsRecordedAsProof(t *testing.T) {
 	}
 
 	r := &reviews.AgentReviewer{
+		Git:   &stubMergeGitClient{},
 		Store: store,
 		RoleAgent: map[string]agents.Agent{
 			"reviewer": {ID: uuid.New(), Name: "reviewer-agent", Role: "reviewer"},

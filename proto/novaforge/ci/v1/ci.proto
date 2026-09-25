@@ -51,6 +51,8 @@ message Heartbeat {
 message LogChunk {
   string job_id = 1;
   string line = 2;
+  // Contiguous per-job sequence, starting at one; replay must match bytes.
+  int64 sequence = 3;
 }
 
 // ConnectRequest is one frame a runner sends up its Connect stream, always
@@ -64,6 +66,8 @@ message ConnectRequest {
   // token is the secret Register returned for runner_id. A runner id is not
   // a secret — it appears in job records and logs — so it proves nothing.
   string token = 4;
+  // Empty only on the initial heartbeat; assigned by the server handshake.
+  string connection_id = 5;
 }
 
 // ConnectResponse is one job pushed down a runner's Connect stream.
@@ -81,6 +85,8 @@ message ConnectResponse {
   // variable name the job reads them from. They are kept apart from env so
   // the runner can keep them out of the pod spec and redact them from logs.
   map<string, string> secret_env = 10;
+  // Initial response has only connection_id; subsequent jobs bind to it.
+  string connection_id = 11;
 }
 
 message ReportStatusRequest {
@@ -91,6 +97,10 @@ message ReportStatusRequest {
   string detail = 5;
   // token is the secret Register returned for runner_id.
   string token = 6;
+  string connection_id = 7;
+  // Presence is mandatory for terminal receipts, including explicit zero
+  // for jobs with no output. Omission is an unsupported runner protocol.
+  optional int64 last_log_sequence = 8;
 }
 
 message ReportStatusResponse {
@@ -165,6 +175,7 @@ message UploadArtifactRequest {
   bytes content = 4;
   // token is the secret Register returned for runner_id.
   string token = 5;
+  string connection_id = 6;
 }
 message UploadArtifactResponse {
   string artifact_id = 1;

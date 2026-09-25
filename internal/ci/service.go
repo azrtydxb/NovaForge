@@ -62,6 +62,8 @@ func NewService(pool *pgxpool.Pool, rdb *redis.Client, blobs *blobstore.Client, 
 	pump := NewPump(store, dispatcher, cloneBase, hmacSecret)
 	pump.Redactions = redactions
 	sweeper := retention.NewSweeper(pool, blobs)
+	sweeper.BeforeLogDelete = store.retireRunnerLog
+	sweeper.AfterLogDelete = store.deleteRetiredRunnerLog
 
 	return &Service{
 		Store:      store,
@@ -92,6 +94,7 @@ func (s *Service) Run(ctx context.Context) {
 
 	go s.Pump.Run(ctx)
 	go s.runSweeper(ctx)
+	go s.reconcileRunnerLogs(ctx)
 }
 
 func (s *Service) runSweeper(ctx context.Context) {

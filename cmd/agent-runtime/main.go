@@ -407,8 +407,12 @@ func newExecuteFunc(store *agents.Store, grants *capability.Store, audit *agents
 			CI:        newCIAdapter(ciClient),
 			Knowledge: tools.NewKnowledgeClient(graphClient, run.RepoID.String(), run.ID.String()),
 		})
-		finishRun(ctx, store, rdb, run, result.State, "")
-		if result.State == "succeeded" {
+		durableState, err := finishResult(ctx, store, rdb, run, result)
+		if err != nil {
+			log.Printf("agent-runtime: run %s accounting unresolved: %v", run.ID, err)
+			return
+		}
+		if durableState == "succeeded" {
 			openEngineeringRun(ctx, store, workClient, reviewsClient, gitClient, run, cfg)
 		}
 	}
@@ -468,18 +472,36 @@ func finishRun(ctx context.Context, store *agents.Store, rdb *redis.Client, run 
 	// A run cancelled while its workspace was still being provisioned fails
 	// that step with "context canceled" and arrives here as "failed"; it was
 	// cancelled, and the row already says so.
-	if state == "failed" && errors.Is(ctx.Err(), context.Canceled) {
-		return
+	if errors.Is(context.Cause(ctx), agents.ErrOverBudget) {
+		state = "over_budget"
+	} else if errors.Is(ctx.Err(), context.Canceled) {
+		state = "cancelled"
 	}
-	if reason != "" {
-		scoped := authz.WithScope(context.WithoutCancel(ctx), authz.Scope{OrgID: run.OrgID, ActorID: run.AgentID, ActorKind: "agent"})
-		if err := store.RecordSpend(scoped, run.ID, agents.Spend{Reason: reason}); err != nil {
-			log.Printf("agent-runtime: record why run %s ended: %v", run.ID, err)
+	result := agentrun.Result{State: state, Summary: reason, Completion: agents.Completion{State: state, Summary: reason, Spend: agents.Spend{Reason: reason}}}
+	if _, err := finishResult(ctx, store, rdb, run, result); err != nil {
+		log.Printf("agent-runtime: run %s accounting unresolved: %v", run.ID, err)
+	}
+}
+
+// finishResult retries the identical retained receipt, including an ambiguous
+// commit response. Failure leaves accounting unresolved; never settle success
+// with default counters. Crash recovery labels missing receipts unavailable.
+func finishResult(ctx context.Context, store *agents.Store, rdb *redis.Client, run agents.Run, result agentrun.Result) (string, error) {
+	scoped := authz.WithScope(context.WithoutCancel(ctx), authz.Scope{OrgID: run.OrgID, ActorID: run.AgentID, ActorKind: "agent"})
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		writeCtx, cancel := context.WithTimeout(scoped, 10*time.Second)
+		var state string
+		state, err = store.CompleteRun(writeCtx, run.ID, result.Completion)
+		cancel()
+		if err == nil {
+			if cleanupErr := agents.SettleRun(scoped, store, rdb, run, state); cleanupErr != nil {
+				log.Printf("agent-runtime: cleanup for run %s: %v", run.ID, cleanupErr)
+			}
+			return state, nil
 		}
 	}
-	if err := agents.SettleRun(ctx, store, rdb, run, state); err != nil {
-		log.Printf("agent-runtime: %v", err)
-	}
+	return "", err
 }
 
 // authInterceptor resolves the caller from the request's "authorization"
