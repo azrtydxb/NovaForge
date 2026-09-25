@@ -23,6 +23,8 @@ const (
 	GitService_GetRepo_FullMethodName                           = "/novaforge.git.v1.GitService/GetRepo"
 	GitService_ListRepos_FullMethodName                         = "/novaforge.git.v1.GitService/ListRepos"
 	GitService_DeleteRepo_FullMethodName                        = "/novaforge.git.v1.GitService/DeleteRepo"
+	GitService_UpdateRepo_FullMethodName                        = "/novaforge.git.v1.GitService/UpdateRepo"
+	GitService_TransferRepo_FullMethodName                      = "/novaforge.git.v1.GitService/TransferRepo"
 	GitService_ListBranches_FullMethodName                      = "/novaforge.git.v1.GitService/ListBranches"
 	GitService_ListTags_FullMethodName                          = "/novaforge.git.v1.GitService/ListTags"
 	GitService_ListCommits_FullMethodName                       = "/novaforge.git.v1.GitService/ListCommits"
@@ -47,6 +49,8 @@ type GitServiceClient interface {
 	GetRepo(ctx context.Context, in *GetRepoRequest, opts ...grpc.CallOption) (*GetRepoResponse, error)
 	ListRepos(ctx context.Context, in *ListReposRequest, opts ...grpc.CallOption) (*ListReposResponse, error)
 	DeleteRepo(ctx context.Context, in *DeleteRepoRequest, opts ...grpc.CallOption) (*DeleteRepoResponse, error)
+	UpdateRepo(ctx context.Context, in *UpdateRepoRequest, opts ...grpc.CallOption) (*UpdateRepoResponse, error)
+	TransferRepo(ctx context.Context, in *TransferRepoRequest, opts ...grpc.CallOption) (*TransferRepoResponse, error)
 	ListBranches(ctx context.Context, in *ListBranchesRequest, opts ...grpc.CallOption) (*ListBranchesResponse, error)
 	ListTags(ctx context.Context, in *ListTagsRequest, opts ...grpc.CallOption) (*ListTagsResponse, error)
 	ListCommits(ctx context.Context, in *ListCommitsRequest, opts ...grpc.CallOption) (*ListCommitsResponse, error)
@@ -105,6 +109,26 @@ func (c *gitServiceClient) DeleteRepo(ctx context.Context, in *DeleteRepoRequest
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DeleteRepoResponse)
 	err := c.cc.Invoke(ctx, GitService_DeleteRepo_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gitServiceClient) UpdateRepo(ctx context.Context, in *UpdateRepoRequest, opts ...grpc.CallOption) (*UpdateRepoResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateRepoResponse)
+	err := c.cc.Invoke(ctx, GitService_UpdateRepo_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gitServiceClient) TransferRepo(ctx context.Context, in *TransferRepoRequest, opts ...grpc.CallOption) (*TransferRepoResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TransferRepoResponse)
+	err := c.cc.Invoke(ctx, GitService_TransferRepo_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -223,6 +247,8 @@ type GitServiceServer interface {
 	GetRepo(context.Context, *GetRepoRequest) (*GetRepoResponse, error)
 	ListRepos(context.Context, *ListReposRequest) (*ListReposResponse, error)
 	DeleteRepo(context.Context, *DeleteRepoRequest) (*DeleteRepoResponse, error)
+	UpdateRepo(context.Context, *UpdateRepoRequest) (*UpdateRepoResponse, error)
+	TransferRepo(context.Context, *TransferRepoRequest) (*TransferRepoResponse, error)
 	ListBranches(context.Context, *ListBranchesRequest) (*ListBranchesResponse, error)
 	ListTags(context.Context, *ListTagsRequest) (*ListTagsResponse, error)
 	ListCommits(context.Context, *ListCommitsRequest) (*ListCommitsResponse, error)
@@ -257,6 +283,12 @@ func (UnimplementedGitServiceServer) ListRepos(context.Context, *ListReposReques
 }
 func (UnimplementedGitServiceServer) DeleteRepo(context.Context, *DeleteRepoRequest) (*DeleteRepoResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteRepo not implemented")
+}
+func (UnimplementedGitServiceServer) UpdateRepo(context.Context, *UpdateRepoRequest) (*UpdateRepoResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateRepo not implemented")
+}
+func (UnimplementedGitServiceServer) TransferRepo(context.Context, *TransferRepoRequest) (*TransferRepoResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TransferRepo not implemented")
 }
 func (UnimplementedGitServiceServer) ListBranches(context.Context, *ListBranchesRequest) (*ListBranchesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListBranches not implemented")
@@ -376,6 +408,42 @@ func _GitService_DeleteRepo_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(GitServiceServer).DeleteRepo(ctx, req.(*DeleteRepoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GitService_UpdateRepo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateRepoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GitServiceServer).UpdateRepo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GitService_UpdateRepo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GitServiceServer).UpdateRepo(ctx, req.(*UpdateRepoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GitService_TransferRepo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TransferRepoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GitServiceServer).TransferRepo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GitService_TransferRepo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GitServiceServer).TransferRepo(ctx, req.(*TransferRepoRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -582,6 +650,14 @@ var GitService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteRepo",
 			Handler:    _GitService_DeleteRepo_Handler,
+		},
+		{
+			MethodName: "UpdateRepo",
+			Handler:    _GitService_UpdateRepo_Handler,
+		},
+		{
+			MethodName: "TransferRepo",
+			Handler:    _GitService_TransferRepo_Handler,
 		},
 		{
 			MethodName: "ListBranches",

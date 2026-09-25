@@ -154,7 +154,7 @@ func main() {
 	gitv1.RegisterGitServiceServer(srv, grpcServer)
 
 	// --- smart-HTTP ---
-	capFunc := newCapFunc(grants, newBranchLockGuard(agentsClient, cfg.HMACSecret, repoIDResolver(pool)))
+	capFunc := newCapFunc(grants, newBranchLockGuard(agentsClient, cfg.HMACSecret, repoIDResolver(pool)), newArchiveGuard(pool))
 	// Branches written through the API answer to the same rules as a push.
 	grpcServer.RefGuard = capFunc
 	httpHandler := gitops.NewHTTPHandler(cfg.GitDataDir,
@@ -252,11 +252,16 @@ func loadOrGenerateHostKey() (ssh.Signer, bool, error) {
 // newCapFunc is the capability check every write surface applies: a branch an
 // Agent Run holds is refused to everyone but that run's agent, and an agent is
 // held to its capability grant.
-func newCapFunc(grants *capability.Store, locks gitops.CapFunc) gitops.CapFunc {
+func newCapFunc(grants *capability.Store, locks gitops.CapFunc, archived gitops.CapFunc) gitops.CapFunc {
 	byGrant := gitops.NewGrantCapFunc(grants)
 	return func(ctx context.Context, s authz.Scope, orgID uuid.UUID, repo string, refs []string) error {
 		if len(refs) == 0 {
 			return nil
+		}
+		// An archived repository refuses writes before anything else is
+		// considered: whether the pusher holds a grant is not the question.
+		if err := archived(ctx, s, orgID, repo, refs); err != nil {
+			return err
 		}
 		if err := locks(ctx, s, orgID, repo, refs); err != nil {
 			return err

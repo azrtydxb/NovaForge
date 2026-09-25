@@ -37,6 +37,7 @@ type repoRow struct {
 	OrgID         uuid.UUID
 	Name          string
 	DefaultBranch string
+	Archived      bool
 }
 
 // Server implements gitv1.GitServiceServer. Every RPC derives its
@@ -433,6 +434,10 @@ func (s *Server) Merge(ctx context.Context, req *gitv1.MergeRequest) (*gitv1.Mer
 	if err != nil {
 		return nil, err
 	}
+	// An archive that still accepted a merge would not be an archive.
+	if row.Archived {
+		return nil, status.Errorf(codes.FailedPrecondition, "%v", ErrArchived)
+	}
 	repo, err := Open(s.root, scope.OrgID, row.Name)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "resolve repository path: %v", err)
@@ -486,9 +491,9 @@ func (s *Server) repoByName(ctx context.Context, orgID uuid.UUID, ref string) (r
 	}
 	var r repoRow
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, org_id, name, default_branch FROM gitplatform.repositories WHERE org_id = $1 AND `+column+` = $2`,
+		`SELECT id, org_id, name, default_branch, archived FROM gitplatform.repositories WHERE org_id = $1 AND `+column+` = $2`,
 		orgID, value,
-	).Scan(&r.ID, &r.OrgID, &r.Name, &r.DefaultBranch)
+	).Scan(&r.ID, &r.OrgID, &r.Name, &r.DefaultBranch, &r.Archived)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return repoRow{}, status.Errorf(codes.NotFound, "repository %q not found", ref)

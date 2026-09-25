@@ -10,6 +10,8 @@ service GitService {
   rpc GetRepo(GetRepoRequest) returns (GetRepoResponse);
   rpc ListRepos(ListReposRequest) returns (ListReposResponse);
   rpc DeleteRepo(DeleteRepoRequest) returns (DeleteRepoResponse);
+  rpc UpdateRepo(UpdateRepoRequest) returns (UpdateRepoResponse);
+  rpc TransferRepo(TransferRepoRequest) returns (TransferRepoResponse);
   rpc ListBranches(ListBranchesRequest) returns (ListBranchesResponse);
   rpc ListTags(ListTagsRequest) returns (ListTagsResponse);
   rpc ListCommits(ListCommitsRequest) returns (ListCommitsResponse);
@@ -36,6 +38,9 @@ message Repo {
   string org_id = 2;
   string name = 3;
   string default_branch = 4;
+  bool archived = 5;
+  // Set when this repository was forked from another (task 8); empty otherwise.
+  string parent_repo_id = 6;
 }
 
 message Ref {
@@ -64,6 +69,31 @@ message CreateRepoRequest {
   string name = 1;
 }
 message CreateRepoResponse {
+  Repo repo = 1;
+}
+
+// Administration of an existing repository. Each field is applied only when the
+// caller asked for it: a rename that also reset the default branch because the
+// field was empty would be a silent change nobody requested. Booleans need an
+// explicit set flag for the same reason — false is indistinguishable from unset.
+message UpdateRepoRequest {
+  string repo = 1;
+  string name = 2;
+  string default_branch = 3;
+  bool archived = 4;
+  bool set_archived = 5;
+}
+message UpdateRepoResponse {
+  Repo repo = 1;
+}
+// Moving a repository to another organization. The receiving organization is a
+// request field because it is the caller's intent; the sending organization comes
+// from the credential, and the caller must administer both.
+message TransferRepoRequest {
+  string repo = 1;
+  string to_org = 2;
+}
+message TransferRepoResponse {
   Repo repo = 1;
 }
 
