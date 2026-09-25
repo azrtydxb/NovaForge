@@ -131,6 +131,8 @@ services:
     # Image contents and sandbox RBAC must be separately qualified; this setting
     # does not grant cluster authority or select a local execution fallback.
     analysisImage: ""
+    # The sandbox needs to create its own namespace, network policy and pod.
+    sandboxRbac: true
   agent-runtime:
     grpcPort: 9095
     schema: agents

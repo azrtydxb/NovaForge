@@ -64,7 +64,7 @@ spec:
       imagePullSecrets:
         - name: {{ $.Values.image.pullSecret }}
       {{- end }}
-      {{- if $svc.rbac }}
+      {{- if or $svc.rbac $svc.sandboxRbac }}
       serviceAccountName: {{ $.Release.Name }}-{{ $name }}
       {{- end }}
       containers:
