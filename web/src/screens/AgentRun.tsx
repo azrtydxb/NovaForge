@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, enc } from "../lib/api";
@@ -50,27 +50,42 @@ export function AgentRun() {
   const [connected, setConnected] = useState(false);
   const [latest, setLatest] = useState<unknown>(null);
   const [attempt, setAttempt] = useState(0);
+  // The position is a ref, not state: a reconnect must resume from the last
+  // event actually handled, and storing it in state would restart the effect on
+  // every event and so tear the stream down to rebuild it.
+  const cursor = useRef<{ base: string; id?: string }>({ base });
   useEffect(() => {
     if (!live) return;
+    // A position belongs to one run's stream. Without this, opening a second
+    // run would resume it from the first run's last event.
+    if (cursor.current.base !== base) cursor.current = { base };
     const controller = new AbortController();
     setConnected(false);
     setStreamError(null);
     setLatest(null);
     void api
-      .events(`${base}/events`, controller.signal, (event, data) => {
-        if (event === "error")
-          throw new Error(
-            typeof data === "object" && data && "error" in data
-              ? String(data.error)
-              : "Event stream failed",
-          );
-        setConnected(true);
-        if (event === "message") {
-          setLatest(data);
-          void qc.invalidateQueries({ queryKey: ["agent-run", base] });
-          void qc.invalidateQueries({ queryKey: ["agent-run-tools", base] });
-        }
-      })
+      .events(
+        `${base}/events`,
+        controller.signal,
+        (event, data, id) => {
+          if (event === "error")
+            throw new Error(
+              typeof data === "object" && data && "error" in data
+                ? String(data.error)
+                : "Event stream failed",
+            );
+          setConnected(true);
+          if (event === "message") {
+            setLatest(data);
+            void qc.invalidateQueries({ queryKey: ["agent-run", base] });
+            void qc.invalidateQueries({ queryKey: ["agent-run-tools", base] });
+          }
+          // Only a frame that carries an id advances the position; a
+          // heartbeat or a state change without one must not reset it.
+          if (id) cursor.current = { base, id };
+        },
+        cursor.current.id,
+      )
       .then(() => {
         if (!controller.signal.aborted) {
           setConnected(false);

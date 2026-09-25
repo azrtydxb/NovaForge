@@ -863,9 +863,14 @@ These are real and are not worked around:
   line, and running an organization-supplied command inside agent-runtime would
   hand it that service's cluster credentials. The register carries no
   per-server credential, so a server needing a bearer token cannot be used yet.
-- **There is no deploy action.** Section 14's deploy-to-staging and
-  deploy-to-production paths exist only as `approvals.Decide` rules; nothing
-  deploys, so nothing follows them.
+- **A deploy action needs an operator-built image.** `internal/deployment`
+  schedules a Job whose command is `/usr/local/bin/deployment-runner`, and that
+  entrypoint now exists (`cmd/deployment-runner`). Its image is not built here:
+  `Dockerfile.deployment-runner` takes the operator's approved chart archive and
+  checksum as build arguments, so the published digest binds wrapper, chart
+  bytes and Helm binary together. Until an operator supplies one and configures
+  it, deploy-to-staging and deploy-to-production remain `approvals.Decide` rules
+  that nothing follows. No deployment has been executed on this cluster.
 - **A brokered credential is short-lived only as a lease.** The lease that
   hands a job its secret is single-use and expires, but the value it carries is
   the stored secret itself, not a rotated or scoped credential; a job that
@@ -873,11 +878,22 @@ These are real and are not worked around:
   the default branch, and any member can push to the default branch directly.
 - **Dependency detection reads four manifest kinds.** go.mod, package.json,
   requirements*.txt and Cargo.toml; a dependency added any other way is not
-  seen by the approval policy. The dependencies gate runs osv-scanner, which
-  needs network access to its advisory database.
-- **Run proof can be written by any member.** `RecordProof` checks the
-  organization, not the caller, so an `approval/...` proof row is display, not
-  authority: `MayMerge` reads the approvals store, never the proof.
+  seen by the approval policy. The advisory database is no longer a network
+  dependency: the analysis sandbox image carries an OSV snapshot for exactly
+  those four ecosystems at `/opt/analysis/osv`, and osv-scanner reads it
+  offline. The snapshot carries an explicit validity interval and an expired one
+  makes the scan unavailable rather than clean, so the image has to be rebuilt
+  within `ADVISORY_VALID_DAYS` (90) or the dependencies gate stops answering.
+- **A proof row is display, not merge authority.** `MayMerge` reads the
+  approvals store, never the proof. Who may write which row is constrained:
+  `proofProducer` admits a gate name only from the gates service, a `review:`
+  row only from work-reviews, and lets a person write only
+  `assertion/<their own id>/<label>`, with the producer and actor persisted and
+  an append-only audit beside the display row
+  (`TestProofAuthorityCannotBeForgedOrCrossOrganization`,
+  `TestProofRPCRequiresAuthenticatedProducer`). An earlier entry here said any
+  member could write any proof row; that stopped being true when the
+  edge-reviews lane landed and this record had not caught up.
 - **A push to an agent branch depends on agent-runtime.** git-platform asks
   agent-runtime whether a run holds a ref under `agents/` before accepting a
   push (or a CreateBranch/CreateCommit) there, and refuses when it cannot get

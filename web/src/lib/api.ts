@@ -172,16 +172,24 @@ async function download(path: string, filename: string): Promise<void> {
 
 /** Events use fetch, not EventSource: bearer credentials never enter a URL.
  * Cancellation tears down the reader when the route or principal changes. */
+/** A stream is resumed from the last event the caller actually handled, so a
+ * reconnect neither replays what was already shown nor skips what arrived while
+ * the connection was down. The server reads that position from Last-Event-ID
+ * and it was never sent: every reconnect started from wherever the server chose.
+ * Only frames carrying an id move the position — a heartbeat or a state change
+ * without one must not reset it. */
 async function events(
   path: string,
   signal: AbortSignal,
-  receive: (event: string, data: unknown) => void,
+  receive: (event: string, data: unknown, id?: string) => void,
+  cursor?: string,
 ): Promise<void> {
   const token = storedToken();
   const res = await fetch(path, {
     headers: {
       Accept: "text/event-stream",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(cursor ? { "Last-Event-ID": cursor } : {}),
     },
     signal,
   });
@@ -217,14 +225,16 @@ async function events(
         if (frame.length > 1_048_576)
           throw new Error("Event exceeds the 1 MiB frame limit.");
         let event = "message";
+        let id: string | undefined;
         const data: string[] = [];
         for (const line of frame.split(/\r?\n/)) {
           if (line.startsWith("event:")) event = line.slice(6).trim();
+          if (line.startsWith("id:")) id = line.slice(3).trim();
           if (line.startsWith("data:"))
             data.push(line.slice(5).replace(/^ /, ""));
         }
         if (data.length && !signal.aborted)
-          receive(event, JSON.parse(data.join("\n")));
+          receive(event, JSON.parse(data.join("\n")), id);
       }
       if (pending.length > 1_048_576)
         throw new Error("Event exceeds the 1 MiB frame limit.");
