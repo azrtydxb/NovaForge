@@ -694,3 +694,34 @@ or the spec stops claiming them.
 
 Options recorded for the user's selection: any combination of the above, the teams
 discrepancy, or none.
+
+## How a repository collaborator authenticates (task 3, S-26) (2026-09-25)
+
+The spec criterion says a person who is _not_ an organization member can be granted
+access to one repository and reaches only that repository. Identity currently
+refuses a non-member at credential resolution: `attachOrg` returns "organization
+membership required", so such a person cannot authenticate against that
+organization at all.
+
+Measured blast radius: only 10 places in the tree read `scope.Role`, while 35 files
+authorize with `RequireOrg`, which compares the organization and nothing else. So
+if Identity attached an organization for a non-member, that scope would pass
+authorization almost everywhere — Work Items, Engineering Runs, CI, the secrets
+listing, the graph. That is the hard-boundary rule, and a single missed path is a
+leak rather than a bug.
+
+- Git transports only. Identity gains a resolution mode used solely by the Git
+  transports, returning a scope marked repository-limited; git-platform's transport
+  checks the collaborator grant. The REST edge and every RPC keep refusing
+  non-members outright. Narrow, safe, and delivers the real value — someone outside
+  the organization can clone and push exactly one repository — but they get no API
+  and no GUI for it.
+- Full outside collaborator. Identity resolves them with the organization attached
+  and a non-member marker, and every one of the 35 RequireOrg paths is audited to
+  refuse a repository-limited scope unless it checks repository access. Matches
+  Gitea, and one missed path leaks an organization's data.
+- Members only. A collaborator must already be an organization member, and the
+  grant narrows which repositories they reach — which means every repository-scoped
+  path must consult the narrowing, or a "narrowed" member still reads everything.
+  Preserves the boundary, changes the feature, and is invasive in a different way.
+- Defer task 3 and move to webhooks, releases, LFS and the rest.
