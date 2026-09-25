@@ -80,7 +80,8 @@ func TestRequestResolvePending(t *testing.T) {
 	}
 
 	decider := uuid.New()
-	if _, err := store.Resolve(ctx, req.ID, decider, "approved", ""); err != nil {
+	adminCtx := authz.WithScope(context.Background(), authz.Scope{OrgID: orgID, ActorID: decider, ActorKind: "user", Role: "owner"})
+	if _, err := store.Resolve(adminCtx, req.ID, decider, "approved", ""); err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
 

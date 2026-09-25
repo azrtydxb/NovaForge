@@ -19,19 +19,20 @@ import (
 
 // Item is a row in the work.work_items table.
 type Item struct {
-	ID            uuid.UUID
-	OrgID         uuid.UUID
-	RepoID        uuid.UUID
-	Key           string
-	Type          string
-	Goal          string
-	Acceptance    []string
-	Constraints   []string
-	RequiredGates []string
-	AssigneeID    uuid.UUID
-	AssigneeKind  string
-	State         string
-	CreatedAt     time.Time
+	ID               uuid.UUID
+	OrgID            uuid.UUID
+	RepoID           uuid.UUID
+	Key              string
+	Type             string
+	Goal             string
+	Acceptance       []string
+	Constraints      []string
+	RequiredGates    []string
+	AssigneeID       uuid.UUID
+	AssigneeKind     string
+	State            string
+	CreatedAt        time.Time
+	ExecutionClaimed bool
 }
 
 var validTypes = map[string]bool{
@@ -130,12 +131,12 @@ func (s *Store) get(ctx context.Context, orgID, id uuid.UUID) (Item, error) {
 	var assigneeKind *string
 	err := s.pool.QueryRow(ctx, `
 		SELECT id, org_id, repo_id, key, type, goal, acceptance, constraints,
-		       required_gates, assignee_id, assignee_kind, state, created_at
+		       required_gates, assignee_id, assignee_kind, state, created_at, execution_claimed
 		FROM work.work_items WHERE org_id = $1 AND id = $2`,
 		orgID, id,
 	).Scan(&item.ID, &item.OrgID, &item.RepoID, &item.Key, &item.Type, &item.Goal,
 		&item.Acceptance, &item.Constraints, &item.RequiredGates,
-		&assigneeID, &assigneeKind, &item.State, &item.CreatedAt)
+		&assigneeID, &assigneeKind, &item.State, &item.CreatedAt, &item.ExecutionClaimed)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return Item{}, fmt.Errorf("work item %s not found: %w", id, err)
@@ -161,12 +162,12 @@ func (s *Store) GetByKey(ctx context.Context, orgID uuid.UUID, key string) (Item
 	var assigneeKind *string
 	err := s.pool.QueryRow(ctx, `
 		SELECT id, org_id, repo_id, key, type, goal, acceptance, constraints,
-		       required_gates, assignee_id, assignee_kind, state, created_at
+		       required_gates, assignee_id, assignee_kind, state, created_at, execution_claimed
 		FROM work.work_items WHERE org_id = $1 AND key = $2`,
 		orgID, key,
 	).Scan(&item.ID, &item.OrgID, &item.RepoID, &item.Key, &item.Type, &item.Goal,
 		&item.Acceptance, &item.Constraints, &item.RequiredGates,
-		&assigneeID, &assigneeKind, &item.State, &item.CreatedAt)
+		&assigneeID, &assigneeKind, &item.State, &item.CreatedAt, &item.ExecutionClaimed)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return Item{}, fmt.Errorf("work item %q not found: %w", key, err)
@@ -189,7 +190,7 @@ func (s *Store) List(ctx context.Context, orgID, repoID uuid.UUID, state string)
 	}
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, org_id, repo_id, key, type, goal, acceptance, constraints,
-		       required_gates, assignee_id, assignee_kind, state, created_at
+		       required_gates, assignee_id, assignee_kind, state, created_at, execution_claimed
 		FROM work.work_items
 		WHERE org_id = $1 AND repo_id = $2 AND ($3 = '' OR state = $3)
 		ORDER BY seq`,
@@ -207,7 +208,7 @@ func (s *Store) List(ctx context.Context, orgID, repoID uuid.UUID, state string)
 		var assigneeKind *string
 		if err := rows.Scan(&item.ID, &item.OrgID, &item.RepoID, &item.Key, &item.Type, &item.Goal,
 			&item.Acceptance, &item.Constraints, &item.RequiredGates,
-			&assigneeID, &assigneeKind, &item.State, &item.CreatedAt); err != nil {
+			&assigneeID, &assigneeKind, &item.State, &item.CreatedAt, &item.ExecutionClaimed); err != nil {
 			return nil, fmt.Errorf("scan work item: %w", err)
 		}
 		if assigneeID != nil {

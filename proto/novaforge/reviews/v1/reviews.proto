@@ -12,6 +12,7 @@ service ReviewsService {
   rpc AddPlanStep(AddPlanStepRequest) returns (AddPlanStepResponse);
   rpc RecordProof(RecordProofRequest) returns (RecordProofResponse);
   rpc SubmitReview(SubmitReviewRequest) returns (SubmitReviewResponse);
+  rpc ListReviews(ListReviewsRequest) returns (ListReviewsResponse);
   rpc AddComment(AddCommentRequest) returns (AddCommentResponse);
   rpc GetExceptions(GetExceptionsRequest) returns (GetExceptionsResponse);
   rpc ListProof(ListProofRequest) returns (ListProofResponse);
@@ -123,6 +124,9 @@ message SubmitReviewRequest {
   string reviewer_id = 2;
   string reviewer_kind = 3;
   string verdict = 4;
+  // The exact source commit the person inspected; a changed head is refused.
+  string expected_source_sha = 5;
+  string summary = 6;
 }
 
 message SubmitReviewResponse {
@@ -211,4 +215,24 @@ message ListPlanRequest {
 }
 message ListPlanResponse {
   repeated PlanStep steps = 1;
+}
+
+// Review is the latest durable verdict from one reviewer. Legacy rows have
+// no source_sha and cannot authorize a merge.
+message Review {
+  string reviewer_id = 1;
+  string reviewer_kind = 2;
+  string verdict = 3;
+  string summary = 4;
+  string source_sha = 5;
+  string created_at = 6;
+}
+message ListReviewsRequest {
+  string run_id = 1;
+}
+message ListReviewsResponse {
+  repeated Review reviews = 1;
+  string current_source_sha = 2;
+  // False means currency is unknown, not that durable reviews are stale.
+  bool current_source_available = 3;
 }

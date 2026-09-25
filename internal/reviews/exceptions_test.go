@@ -36,7 +36,7 @@ func TestSummaryCountsEachCategoryOnce(t *testing.T) {
 	if err := store.RecordProof(ctx, healthy.ID, "tests", "pass", "all tests passed"); err != nil {
 		t.Fatalf("RecordProof healthy: %v", err)
 	}
-	if err := store.SubmitReview(ctx, healthy.ID, uuid.New(), "user", "approve"); err != nil {
+	if err := store.SubmitReviewAt(ctx, healthy.ID, uuid.New(), "user", "approve", reviewedSHA, ""); err != nil {
 		t.Fatalf("SubmitReview healthy: %v", err)
 	}
 
@@ -61,7 +61,7 @@ func TestSummaryCountsEachCategoryOnce(t *testing.T) {
 		t.Fatalf("RecordProof blocked: %v", err)
 	}
 
-	summary, _, err := store.Exceptions(ctx, orgID)
+	summary, _, err := store.Exceptions(ctx, orgID, &revisionGit{head: reviewedSHA})
 	if err != nil {
 		t.Fatalf("Exceptions: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestRunWithFailedGateIsAnException(t *testing.T) {
 		t.Fatalf("RecordProof: %v", err)
 	}
 
-	summary, items, err := store.Exceptions(ctx, orgID)
+	summary, items, err := store.Exceptions(ctx, orgID, &revisionGit{head: reviewedSHA})
 	if err != nil {
 		t.Fatalf("Exceptions: %v", err)
 	}
@@ -119,11 +119,11 @@ func TestHealthyAutoMergeableRunIsNotAnException(t *testing.T) {
 	if err := store.RecordProof(ctx, run.ID, "tests", "pass", "all tests passed"); err != nil {
 		t.Fatalf("RecordProof: %v", err)
 	}
-	if err := store.SubmitReview(ctx, run.ID, uuid.New(), "user", "approve"); err != nil {
+	if err := store.SubmitReviewAt(ctx, run.ID, uuid.New(), "user", "approve", reviewedSHA, ""); err != nil {
 		t.Fatalf("SubmitReview: %v", err)
 	}
 
-	summary, items, err := store.Exceptions(ctx, orgID)
+	summary, items, err := store.Exceptions(ctx, orgID, &revisionGit{head: reviewedSHA})
 	if err != nil {
 		t.Fatalf("Exceptions: %v", err)
 	}
@@ -156,7 +156,7 @@ func TestSummaryIsOrgScoped(t *testing.T) {
 		t.Fatalf("RecordProof B: %v", err)
 	}
 
-	summary, items, err := store.Exceptions(ctxA, orgA)
+	summary, items, err := store.Exceptions(ctxA, orgA, &revisionGit{head: reviewedSHA})
 	if err != nil {
 		t.Fatalf("Exceptions: %v", err)
 	}

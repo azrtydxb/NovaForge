@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -27,6 +26,7 @@ import (
 	"github.com/novaforge/novaforge/internal/authz"
 	"github.com/novaforge/novaforge/internal/events"
 	"github.com/novaforge/novaforge/internal/graph"
+	"github.com/novaforge/novaforge/internal/semanticindex"
 	"github.com/novaforge/novaforge/internal/svcauth"
 )
 
@@ -65,6 +65,7 @@ type Indexer struct {
 	Graph    *graph.Store
 	Vectors  *graph.VectorStore
 	Embedder graph.Embedder
+	Semantic *semanticindex.Controller
 
 	// HMACSecret signs the service token the indexer presents to the git
 	// service for the organization whose push it is indexing.
@@ -75,6 +76,9 @@ type Indexer struct {
 	// single replica but a production deployment with several replicas
 	// should set one consumer name per pod.
 	Consumer string
+
+	// PushStream overrides the push stream for isolated consumers; empty uses the production stream.
+	PushStream string
 }
 
 // Run consumes events.StreamGitPush in the "indexer" consumer group until
@@ -83,9 +87,17 @@ type Indexer struct {
 // indexing and XACK simply redelivers the same push, which IndexCommit
 // handles idempotently.
 func (idx *Indexer) Run(ctx context.Context) error {
-	if err := events.EnsureGroup(ctx, idx.RDB, events.StreamGitPush, consumerGroup); err != nil {
+	if err := events.EnsureGroup(ctx, idx.RDB, idx.pushStream(), consumerGroup); err != nil {
 		return fmt.Errorf("ensure consumer group: %w", err)
 	}
+
+	// Refresh runs independently so an idle legacy repository needs no push,
+	// without making a slow inventory pass delay stream delivery. Both paths
+	// take the same database fence, including across service replicas.
+	refreshCtx, stopRefresh := context.WithCancel(ctx)
+	refreshed := make(chan struct{})
+	go func() { defer close(refreshed); idx.refreshLoop(refreshCtx) }()
+	defer func() { stopRefresh(); <-refreshed }()
 
 	consumer := idx.Consumer
 	if consumer == "" {
@@ -108,7 +120,7 @@ func (idx *Indexer) Run(ctx context.Context) error {
 		res, err := idx.RDB.XReadGroup(ctx, &redis.XReadGroupArgs{
 			Group:    consumerGroup,
 			Consumer: consumer,
-			Streams:  []string{events.StreamGitPush, ">"},
+			Streams:  []string{idx.pushStream(), ">"},
 			Count:    10,
 			Block:    2 * time.Second,
 		}).Result()
@@ -129,7 +141,7 @@ func (idx *Indexer) Run(ctx context.Context) error {
 					log.Printf("indexing: handle message %s: %v", msg.ID, err)
 					continue
 				}
-				if err := idx.RDB.XAck(ctx, events.StreamGitPush, consumerGroup, msg.ID).Err(); err != nil {
+				if err := idx.RDB.XAck(ctx, idx.pushStream(), consumerGroup, msg.ID).Err(); err != nil {
 					log.Printf("indexing: XAck %s: %v", msg.ID, err)
 				}
 			}
@@ -144,7 +156,7 @@ func (idx *Indexer) autoClaim(ctx context.Context, consumer string) {
 	start := "0"
 	for {
 		msgs, next, err := idx.RDB.XAutoClaim(ctx, &redis.XAutoClaimArgs{
-			Stream:   events.StreamGitPush,
+			Stream:   idx.pushStream(),
 			Group:    consumerGroup,
 			Consumer: consumer,
 			MinIdle:  minIdle,
@@ -162,7 +174,7 @@ func (idx *Indexer) autoClaim(ctx context.Context, consumer string) {
 				log.Printf("indexing: handle reclaimed message %s: %v", msg.ID, err)
 				continue
 			}
-			if err := idx.RDB.XAck(ctx, events.StreamGitPush, consumerGroup, msg.ID).Err(); err != nil {
+			if err := idx.RDB.XAck(ctx, idx.pushStream(), consumerGroup, msg.ID).Err(); err != nil {
 				log.Printf("indexing: XAck reclaimed %s: %v", msg.ID, err)
 			}
 		}
@@ -232,12 +244,15 @@ func (idx *Indexer) HandlePush(ctx context.Context, evt events.PushEvent) error 
 		return nil
 	}
 
-	lock, err := idx.lockRepository(ctx, evt.OrgID, evt.RepoID)
+	ctx = authz.WithScope(ctx, authz.Scope{OrgID: evt.OrgID, ActorKind: "service"})
+	ctx, release, err := idx.Graph.LockIndex(ctx, evt.OrgID, evt.RepoID)
+	if errors.Is(err, graph.ErrIndexDeleted) {
+		return nil
+	}
 	if err != nil {
 		return fmt.Errorf("lock index repository: %w", err)
 	}
-	defer releaseIndexLock(ctx, lock)
-	ctx = authz.WithScope(ctx, authz.Scope{OrgID: evt.OrgID, ActorKind: "service"})
+	defer release()
 	evt, full, done, err := idx.currentPush(ctx, evt)
 	if err != nil || done {
 		return err
@@ -248,7 +263,7 @@ func (idx *Indexer) HandlePush(ctx context.Context, evt events.PushEvent) error 
 	}
 	unified := delta.GetUnified()
 	paths := delta.GetChangedPaths()
-	if !full && slices.Contains(paths, "go.mod") {
+	if !full && (idx.Semantic != nil || slices.ContainsFunc(paths, moduleManifest)) {
 		// Imports in otherwise unchanged files resolve against the module
 		// path. Replacing only go.mod leaves both edges and evidence stale.
 		// Keep the original diff for attribution: refreshed files were not
@@ -278,14 +293,12 @@ func (idx *Indexer) HandlePush(ctx context.Context, evt events.PushEvent) error 
 			}
 		}
 	}
-	module, moduleHash := idx.goModule(ctx, evt.RepoID, evt.NewSHA)
-	if moduleHash == "" {
-		// An RPC failure is not a known absent module. Do not checkpoint
-		// source with unknown import-resolution context and suppress retries.
-		return fmt.Errorf("read module context at %s: unavailable", evt.NewSHA)
+	modules, err := idx.moduleContexts(ctx, evt.OrgID, evt.RepoID, evt.NewSHA, paths)
+	if err != nil {
+		return err
 	}
 	info := pushInfo{
-		module: module, moduleHash: moduleHash,
+		modules: modules,
 		changed: changedLines(unified),
 		commits: idx.attribute(ctx, evt.RepoID, evt.OldSHA, evt.NewSHA, paths),
 	}
@@ -293,12 +306,10 @@ func (idx *Indexer) HandlePush(ctx context.Context, evt events.PushEvent) error 
 	// checkpoint no longer describes the whole index. Invalidate it first so
 	// a crash or a force-push back to that old SHA cannot make partial state
 	// look complete. The next attempt then reconciles all current/known paths.
-	if _, err := idx.Graph.Pool().Exec(ctx, `
-		UPDATE graph.graph_nodes SET attrs = attrs - 'sha'
-		WHERE org_id = $1 AND kind = 'commit' AND key = $2
-	`, evt.OrgID, evt.RepoID.String()); err != nil {
+	if err := idx.Graph.SetIndexCheckpoint(ctx, evt.OrgID, evt.RepoID, "", extractionVersion); err != nil {
 		return fmt.Errorf("invalidate index checkpoint: %w", err)
 	}
+
 	_, err = idx.indexCommit(ctx, evt.OrgID, evt.RepoID, evt.NewSHA, paths, info)
 	return err
 }
@@ -353,6 +364,12 @@ func (idx *Indexer) diff(ctx context.Context, evt events.PushEvent) (*gitv1.GetD
 // graph, or the vector store again — making IndexCommit idempotent under
 // the at-least-once delivery Redis Streams gives every consumer.
 func (idx *Indexer) IndexCommit(ctx context.Context, orgID, repoID uuid.UUID, sha string, changedPaths []string) (indexed int, err error) {
+	ctx = authz.WithScope(ctx, authz.Scope{OrgID: orgID, ActorKind: "service"})
+	ctx, release, err := idx.Graph.LockIndex(ctx, orgID, repoID)
+	if err != nil {
+		return 0, err
+	}
+	defer release()
 	return idx.indexCommit(ctx, orgID, repoID, sha, changedPaths, pushInfo{})
 }
 
@@ -386,6 +403,14 @@ func (idx *Indexer) indexCommit(ctx context.Context, orgID, repoID uuid.UUID, sh
 		return indexed, fmt.Errorf("index incomplete at %s: failed paths %s", sha, strings.Join(failed, ", "))
 	}
 
+	if err := idx.indexDeclarations(ctx, orgID, repoID, sha); err != nil {
+		return indexed, err
+	}
+	if idx.Semantic != nil {
+		if err := idx.indexSemantic(ctx, orgID, repoID, sha); err != nil {
+			return indexed, err
+		}
+	}
 	if err := idx.recordIndexedSHA(ctx, orgID, repoID, sha); err != nil {
 		return indexed, fmt.Errorf("record indexed sha %s for repo %s: %w", sha, repoID, err)
 	}
@@ -441,10 +466,18 @@ func (idx *Indexer) indexPath(ctx context.Context, orgID, repoID uuid.UUID, sha,
 		})
 	}
 	fi := graph.FileIndex{OrgID: orgID, RepoID: repoID, Path: path, Symbols: nodes,
-		Evidence: &graph.FileEvidence{ContentHash: graph.SourceDigest(blob.GetContent()), ModuleHash: info.moduleHash, Complete: file.Complete},
+		Evidence: &graph.FileEvidence{ContentHash: graph.SourceDigest(blob.GetContent()), Complete: file.Complete},
 	}
 	if strings.HasSuffix(path, ".go") {
-		fi.Imports, fi.References = goEdges(path, info.module, file, keys)
+		if info.modules != nil {
+			var module goModuleContext
+			fi.Imports, fi.References, module = info.modules.edges(path, file, keys)
+			fi.Evidence.ModuleHash = module.hash
+			fi.Evidence.ModulePath = module.sourcePath
+			fi.Evidence.Complete = file.Complete && module.complete
+		} else {
+			fi.Imports, fi.References = goEdges(path, "", file, keys)
+		}
 	}
 	if commit, ok := info.commits[path]; ok {
 		fi.Commit = &commit
@@ -564,37 +597,32 @@ func chunksForFile(path string, content []byte, symbols []Symbol) []graph.Chunk 
 // extractionVersion invalidates checkpoints created by older extraction
 // contracts. Bump it when extraction semantics change; the next push
 // wake-up reconciles legacy files, even if the repository head did not move.
-const extractionVersion = "graph-evidence-v2-literal-paths"
+const extractionVersion = "graph-evidence-v5-module-path-declarations"
 
 // lastIndexedSHA reads a checkpoint produced by this extraction contract.
 // A legacy SHA is not evidence that today's graph extraction ran.
 func (idx *Indexer) lastIndexedSHA(ctx context.Context, orgID, repoID uuid.UUID) (string, error) {
-	var sha *string
-	err := idx.Graph.Pool().QueryRow(ctx, `
-		SELECT attrs->>'sha' FROM graph.graph_nodes
-		WHERE org_id = $1 AND kind = 'commit' AND key = $2 AND attrs->>'extraction_version' = $3
-	`, orgID, repoID.String(), extractionVersion).Scan(&sha)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return "", nil
-		}
-		return "", err
-	}
-	if sha == nil {
-		return "", nil
-	}
-	return *sha, nil
+	return idx.Graph.IndexCheckpoint(ctx, orgID, repoID, idx.extractionVersion())
 }
 
 // recordIndexedSHA upserts repoID's "commit" node with sha, so a later
 // redelivery of the same push can be detected and skipped immediately.
 func (idx *Indexer) recordIndexedSHA(ctx context.Context, orgID, repoID uuid.UUID, sha string) error {
-	_, err := idx.Graph.UpsertNode(ctx, graph.Node{
-		ID:    uuid.New(),
-		OrgID: orgID,
-		Kind:  "commit",
-		Key:   repoID.String(),
-		Attrs: map[string]string{"sha": sha, "extraction_version": extractionVersion},
-	})
-	return err
+	return idx.Graph.SetIndexCheckpoint(ctx, orgID, repoID, sha, idx.extractionVersion())
+}
+
+func (idx *Indexer) pushStream() string {
+	if idx.PushStream != "" {
+		return idx.PushStream
+	}
+	return events.StreamGitPush
+}
+
+func (idx *Indexer) extractionVersion() string {
+	if idx.Semantic != nil {
+		if d, err := idx.Semantic.ExecutionDigest(); err == nil {
+			return extractionVersion + ":" + d
+		}
+	}
+	return extractionVersion
 }

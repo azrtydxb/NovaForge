@@ -5,6 +5,7 @@ import { useWorkspace } from "../lib/workspace";
 import {
   Async,
   Empty,
+  Failed,
   Page,
   Panel,
   PanelHead,
@@ -120,6 +121,7 @@ export function Secrets() {
           onClose={() => setAdding(false)}
         />
       ) : null}
+      {revoke.error ? <Failed error={revoke.error} /> : null}
       <div
         style={{
           display: "grid",
@@ -149,11 +151,6 @@ export function Secrets() {
                       <span style={{ flex: 1, font: "12px var(--mono)" }}>
                         {s.name}
                       </span>
-                      <StatePill
-                        state={
-                          s.environment === "production" ? "failed" : "review"
-                        }
-                      />
                       <span
                         style={{
                           font: "11px var(--mono)",
@@ -207,6 +204,7 @@ export function Secrets() {
                       <StatePill state={l.state} />
                       {l.state === "issued" ? (
                         <button
+                          disabled={revoke.isPending}
                           onClick={() => revoke.mutate(l.id)}
                           style={{
                             padding: "4px 10px",

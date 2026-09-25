@@ -67,7 +67,7 @@ step(s) relied on, or says what is missing.`
 // an agent that read the work item and replied "done" succeeded exactly like
 // one that did the work. The criteria were never consulted — work.get did not
 // even return them to the agent.
-func (l *Loop) verify(ctx context.Context, run agents.Run, steps []evidenceStep, claim string) (state, summary string, usage provider.Usage) {
+func (l *Loop) verify(ctx context.Context, run agents.Run, steps []evidenceStep, claim string) (state, summary string, usage *provider.Usage) {
 	crit, err := l.Criteria(ctx, run.WorkItemID)
 	if err != nil {
 		return "failed", fmt.Sprintf("could not read the work item's acceptance criteria to verify the run: %v", err), usage
@@ -76,21 +76,32 @@ func (l *Loop) verify(ctx context.Context, run agents.Run, steps []evidenceStep,
 		// Nothing to judge against is recorded as such rather than invented:
 		// the run succeeds on the agent's own account, and the record says
 		// that is all it rests on.
-		l.recordVerification(ctx, run, verification{}, "the work item declares no acceptance criteria; the run was not verified")
+		if err := l.recordVerification(ctx, run, verification{}, "the work item declares no acceptance criteria; the run was not verified"); err != nil {
+			return "failed", "verification evidence unavailable", usage
+		}
 		return "succeeded", claim, usage
 	}
 
+	usage = &provider.Usage{}
 	result, err := ai.GenerateText(ctx, ai.GenerateTextOpts{
 		Model:           l.Model,
 		System:          verifySystemPrompt,
 		Prompt:          verifyPrompt(crit, steps, claim),
 		Output:          ai.OutputObject[verification](),
 		ProviderOptions: l.ProviderOptions,
+		OnModelCallEnd: func(end ai.ModelCallEnd) {
+			if end.Response != nil {
+				*usage = end.Response.Usage
+			}
+		},
 	})
 	if err != nil {
 		return "failed", fmt.Sprintf("verification against the acceptance criteria failed: %v", err), usage
 	}
-	usage = result.Usage
+	*usage = result.Usage
+	if err := modelUsage(*usage, l.Price != nil); err != nil {
+		return "failed", err.Error(), usage
+	}
 	v, err := ai.OutputAs[verification](result)
 	if err != nil {
 		return "failed", fmt.Sprintf("verification returned no decodable verdict: %v", err), usage
@@ -107,16 +118,18 @@ func (l *Loop) verify(ctx context.Context, run agents.Run, steps []evidenceStep,
 			unmet = append(unmet, fmt.Sprintf("%q (%s)", crit.Acceptance[i], v.Verdicts[i].Evidence))
 		}
 	}
-	l.recordVerification(ctx, run, v, "")
+	if err := l.recordVerification(ctx, run, v, ""); err != nil {
+		return "failed", "verification evidence unavailable", usage
+	}
 	if len(unmet) > 0 {
 		return "failed", "acceptance criteria not met: " + strings.Join(unmet, "; "), usage
 	}
 	return "succeeded", claim, usage
 }
 
-func (l *Loop) recordVerification(ctx context.Context, run agents.Run, v verification, note string) {
+func (l *Loop) recordVerification(ctx context.Context, run agents.Run, v verification, note string) error {
 	if l.Audit == nil {
-		return
+		return nil
 	}
 	body := map[string]any{"verdicts": v.Verdicts}
 	if v.Verdicts == nil {
@@ -127,12 +140,13 @@ func (l *Loop) recordVerification(ctx context.Context, run agents.Run, v verific
 	}
 	argsJSON, err := json.Marshal(body)
 	if err != nil {
-		return
+		return err
 	}
 	id, err := l.Audit.Record(ctx, agents.Entry{RunID: run.ID, Tool: "run.verification", ArgsJSON: argsJSON})
 	if err == nil {
-		_ = l.Audit.Complete(ctx, id, "ok", "")
+		err = l.Audit.Complete(ctx, id, "ok", "")
 	}
+	return err
 }
 
 func verifyPrompt(crit Criteria, steps []evidenceStep, claim string) string {

@@ -62,9 +62,40 @@ func (s *Store) staleRunning(ctx context.Context, grace time.Duration) ([]orphan
 // that replica dies — a crash, an eviction, a deploy that did not drain — the
 // row stays "running" with nothing behind it. Because the branch lock is the
 // run being running, the agent's branch would then be locked against every
-// person forever. No loop can legitimately still be executing such a run: the
-// loop enforces the wall-clock limit as a deadline on every call.
+// person forever. The deadline fences further intended work, but elapsed time
+// is not process-death evidence: Work release waits for a completion receipt.
 func RecoverOrphanedRuns(ctx context.Context, store *Store, rdb *redis.Client, grace time.Duration) (int, error) {
+	// The platform scan returns IDs only; every mutation re-enters the org
+	// and repeats eligibility under that predicate. It never sweeps shared state
+	// under an invented organization or overwrites a healthy admission lease.
+	rows, err := store.pool.Query(ctx, `SELECT org_id,id,agent_id FROM agents.agent_runs
+ WHERE state='queued' AND grant_issue_intent IS NOT NULL AND admission_lease_until<now()
+ ORDER BY admission_lease_until,id LIMIT 100`)
+	if err != nil {
+		return 0, err
+	}
+	var expired []orphan
+	for rows.Next() {
+		var o orphan
+		if err = rows.Scan(&o.OrgID, &o.RunID, &o.AgentID); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		expired = append(expired, o)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return 0, err
+	}
+	for _, o := range expired {
+		scoped := authz.WithScope(ctx, authz.Scope{OrgID: o.OrgID, ActorID: o.AgentID, ActorKind: "agent"})
+		if _, err = store.pool.Exec(scoped, `UPDATE agents.agent_runs SET state='failed',ended_at=now(),end_reason='admission replica lost before execution',grant_cleanup_pending=grant_id <> '00000000-0000-0000-0000-000000000000'
+ WHERE id=$1 AND org_id=$2 AND state='queued' AND grant_issue_intent IS NOT NULL AND admission_lease_until<now()`, o.RunID, o.OrgID); err != nil {
+			return 0, err
+		}
+	}
+
 	stale, err := store.staleRunning(ctx, grace)
 	if err != nil {
 		return 0, err
@@ -73,17 +104,25 @@ func RecoverOrphanedRuns(ctx context.Context, store *Store, rdb *redis.Client, g
 	var errs []error
 	for _, o := range stale {
 		orgCtx := authz.WithScope(ctx, authz.Scope{OrgID: o.OrgID, ActorID: o.AgentID, ActorKind: "agent"})
-		reason := fmt.Sprintf("no agent-runtime replica finished this run: it was still running %s past its wall-clock limit, so the replica executing it is gone; it was settled failed and its branch released", grace)
-		if err := store.RecordSpend(orgCtx, o.RunID, Spend{Reason: reason}); err != nil {
+		reason := fmt.Sprintf("no agent-runtime replica finished this run: it was still running %s past its wall-clock limit, execution termination and final accounting are unconfirmed; it was settled failed, authority cleanup scheduled and its branch released", grace)
+		// A stale scan is not authority to overwrite a completion that won the
+		// row race. Recovery never invents zero spend or replaces known counters.
+		tag, err := store.pool.Exec(orgCtx, `UPDATE agents.agent_runs SET state='failed',ended_at=now(),end_reason=$3,
+   grant_cleanup_pending=grant_id <> '00000000-0000-0000-0000-000000000000'
+   WHERE id=$1 AND org_id=$2 AND state='running' AND completion IS NULL
+   AND started_at + make_interval(secs => wallclock_limit_seconds) + make_interval(secs => $4) < now()`, o.RunID, o.OrgID, reason, grace.Seconds())
+		if err != nil {
 			errs = append(errs, err)
 			continue
 		}
-		if err := SettleRun(orgCtx, store, rdb, Run{ID: o.RunID, OrgID: o.OrgID, AgentID: o.AgentID}, "failed"); err != nil {
-			// Another replica settled it first; that is the outcome wanted.
-			errs = append(errs, err)
+		if tag.RowsAffected() == 0 {
 			continue
 		}
+		publishStateChange(rdb, o.RunID, "running", "failed")
 		settled++
+	}
+	if err := store.ReconcileGrantCleanup(ctx); err != nil {
+		errs = append(errs, err)
 	}
 	return settled, errors.Join(errs...)
 }

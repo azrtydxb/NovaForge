@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	"github.com/novaforge/novaforge/internal/authz"
 )
 
@@ -69,7 +70,7 @@ const reviewGatePrefix = "review:"
 // run matching more than one signal still lands in exactly one category —
 // what makes Summary's six counters sum to the number of non-healthy open
 // runs, no run double-counted.
-func classify(run Run, proofs []ProofRecord, reviews []reviewRow) (runCategory, string) {
+func classify(run Run, proofs []ProofRecord, reviews []Review, head string) (runCategory, string) {
 	for _, p := range proofs {
 		if strings.HasPrefix(p.Gate, reviewGatePrefix) || p.Gate == architectureDecisionGate || p.Gate == agentBlockedGate {
 			continue
@@ -86,7 +87,7 @@ func classify(run Run, proofs []ProofRecord, reviews []reviewRow) (runCategory, 
 	}
 
 	for _, r := range reviews {
-		if r.verdict == "request_changes" {
+		if head != "" && r.SourceSHA == head && r.Verdict == "request_changes" {
 			return categoryNeedHumanReview, "a reviewer requested changes"
 		}
 	}
@@ -104,7 +105,7 @@ func classify(run Run, proofs []ProofRecord, reviews []reviewRow) (runCategory, 
 
 	approved := false
 	for _, r := range reviews {
-		if r.verdict == "approve" && r.reviewerID != run.AuthorID {
+		if head != "" && r.SourceSHA == head && r.Verdict == "approve" && r.ReviewerID != run.AuthorID {
 			approved = true
 		}
 	}
@@ -121,41 +122,10 @@ func classify(run Run, proofs []ProofRecord, reviews []reviewRow) (runCategory, 
 		return categoryHealthy, ""
 	}
 
-	return categoryNeedHumanReview, "awaiting independent review"
-}
-
-// reviewRow is one row of reviews.run_reviews, read directly (there is no
-// exported "list reviews" method on Store; SubmitReview and the
-// independent-approval check are its only existing read/write paths for
-// this table) since exceptions.go lives in the same package as store.go
-// and merge.go.
-type reviewRow struct {
-	reviewerID uuid.UUID
-	verdict    string
-}
-
-func (s *Store) listReviews(ctx context.Context, runID uuid.UUID) ([]reviewRow, error) {
-	rows, err := s.pool.Query(ctx, `
-		SELECT reviewer_id, verdict FROM reviews.run_reviews WHERE run_id = $1`,
-		runID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("list reviews: %w", err)
+	if head == "" {
+		return categoryNeedHumanReview, "current source unavailable; review currency unknown"
 	}
-	defer rows.Close()
-
-	var out []reviewRow
-	for rows.Next() {
-		var r reviewRow
-		if err := rows.Scan(&r.reviewerID, &r.verdict); err != nil {
-			return nil, fmt.Errorf("scan review: %w", err)
-		}
-		out = append(out, r)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("list reviews: %w", err)
-	}
-	return out, nil
+	return categoryNeedHumanReview, "awaiting independent review of current source"
 }
 
 // openRuns returns every open run for orgID, read with an explicit org_id
@@ -206,11 +176,11 @@ func (s *Store) openRuns(ctx context.Context, orgID uuid.UUID) ([]Run, error) {
 // counting every open run by category, and the list of Items that need
 // attention (every run NOT classified categoryHealthy). It is built from
 // one query per category's raw material — openRuns, then each run's own
-// ListProof and listReviews — unioned in Go via classify, so a query
+// ListProof and ListReviews — unioned in Go via classify, so a query
 // missing its org_id predicate could never widen the result: openRuns is
 // the only query that spans more than one run, and it carries org_id
 // itself.
-func (s *Store) Exceptions(ctx context.Context, orgID uuid.UUID) (Summary, []Item, error) {
+func (s *Store) Exceptions(ctx context.Context, orgID uuid.UUID, git gitv1.GitServiceClient) (Summary, []Item, error) {
 	if err := authz.RequireOrg(ctx, orgID); err != nil {
 		return Summary{}, nil, err
 	}
@@ -227,12 +197,15 @@ func (s *Store) Exceptions(ctx context.Context, orgID uuid.UUID) (Summary, []Ite
 		if err != nil {
 			return Summary{}, nil, fmt.Errorf("exceptions: list proof for run %s: %w", run.ID, err)
 		}
-		revs, err := s.listReviews(ctx, run.ID)
+		revs, err := s.ListReviews(ctx, run.ID)
 		if err != nil {
 			return Summary{}, nil, fmt.Errorf("exceptions: list reviews for run %s: %w", run.ID, err)
 		}
 
-		category, reason := classify(run, proofs, revs)
+		// A ref failure is unknown eligibility, never a ready run. Durable
+		// evidence remains visible even if Git cannot resolve the source.
+		head, _ := currentSource(ctx, git, run)
+		category, reason := classify(run, proofs, revs, head)
 		switch category {
 		case categoryGateFailure:
 			summary.GateFailures++

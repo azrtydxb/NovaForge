@@ -1,5 +1,23 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Failed } from "./ui";
+
+// Native modal dialogs make the rest of the page inert, trap keyboard focus,
+// and restore the opener on close. A pending write cannot be dismissed: hiding
+// it would invite a duplicate action while the first is still in flight.
+function useModal() {
+  const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  useEffect(() => {
+    const dialog = ref.current!;
+    const opener = document.activeElement;
+    dialog.showModal();
+    return () => {
+      dialog.close();
+      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+    };
+  }, []);
+  return { ref, titleId };
+}
 
 /** Field is one input in a create dialog. */
 export interface Field {
@@ -10,6 +28,7 @@ export interface Field {
   options?: string[];
   required?: boolean;
   help?: string;
+  initialValue?: string;
 }
 
 /** Dialog is the one create form in this application. Every screen that
@@ -19,6 +38,7 @@ export function Dialog({
   title,
   description,
   submitLabel,
+  submitDisabled = false,
   fields,
   busy,
   error,
@@ -30,41 +50,53 @@ export function Dialog({
    * fields is a Dialog that is all description. */
   description?: ReactNode;
   submitLabel: string;
+  submitDisabled?: boolean;
   fields: Field[];
   busy: boolean;
   error: unknown;
   onSubmit: (values: Record<string, string>) => void;
   onClose: () => void;
 }) {
+  const { ref, titleId } = useModal();
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(
       fields.map((f) => [
         f.name,
-        f.type === "select" ? (f.options?.[0] ?? "") : "",
+        f.initialValue ?? (f.type === "select" ? (f.options?.[0] ?? "") : ""),
       ]),
     ),
   );
 
   return (
-    <div
-      onClick={onClose}
+    <dialog
+      ref={ref}
+      aria-labelledby={titleId}
+      aria-busy={busy}
+      onCancel={(e) => {
+        e.preventDefault();
+        if (!busy) onClose();
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !busy) onClose();
+      }}
       style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,.55)",
-        display: "grid",
-        placeItems: "center",
-        zIndex: 100,
+        padding: 0,
+        border: "none",
+        background: "transparent",
+        color: "var(--fg)",
+        maxWidth: "calc(100vw - 32px)",
       }}
     >
       <form
         onClick={(e) => e.stopPropagation()}
         onSubmit={(e) => {
           e.preventDefault();
-          onSubmit(values);
+          if (!busy && !submitDisabled && e.currentTarget.reportValidity())
+            onSubmit(values);
         }}
         style={{
           width: 420,
+          maxWidth: "calc(100vw - 32px)",
           maxHeight: "80vh",
           overflowY: "auto",
           background: "var(--panel)",
@@ -73,7 +105,10 @@ export function Dialog({
           padding: 22,
         }}
       >
-        <h2 style={{ font: "600 15px var(--sans)", margin: "0 0 16px" }}>
+        <h2
+          id={titleId}
+          style={{ font: "600 15px var(--sans)", margin: "0 0 16px" }}
+        >
           {title}
         </h2>
 
@@ -106,6 +141,8 @@ export function Dialog({
             </span>
             {f.type === "textarea" ? (
               <textarea
+                required={f.required}
+                disabled={busy}
                 value={values[f.name] ?? ""}
                 onChange={(e) =>
                   setValues((v) => ({ ...v, [f.name]: e.target.value }))
@@ -116,6 +153,8 @@ export function Dialog({
               />
             ) : f.type === "select" ? (
               <select
+                required={f.required}
+                disabled={busy}
                 value={values[f.name] ?? ""}
                 onChange={(e) =>
                   setValues((v) => ({ ...v, [f.name]: e.target.value }))
@@ -130,6 +169,8 @@ export function Dialog({
               </select>
             ) : (
               <input
+                required={f.required}
+                disabled={busy}
                 type={f.type ?? "text"}
                 value={values[f.name] ?? ""}
                 onChange={(e) =>
@@ -161,15 +202,24 @@ export function Dialog({
         ) : null}
 
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <button type="button" onClick={onClose} style={secondaryButton}>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onClose}
+            style={secondaryButton}
+          >
             Cancel
           </button>
-          <button type="submit" disabled={busy} style={primaryButton(busy)}>
+          <button
+            type="submit"
+            disabled={busy || submitDisabled}
+            style={primaryButton(busy || submitDisabled)}
+          >
             {busy ? "Working…" : submitLabel}
           </button>
         </div>
       </form>
-    </div>
+    </dialog>
   );
 }
 
@@ -198,19 +248,28 @@ export function Confirm({
   onConfirm: () => void;
   onClose: () => void;
 }) {
+  const { ref, titleId } = useModal();
   const [typed, setTyped] = useState("");
   const ready = typeToConfirm === undefined || typed === typeToConfirm;
 
   return (
-    <div
-      onClick={onClose}
+    <dialog
+      ref={ref}
+      aria-labelledby={titleId}
+      aria-busy={busy}
+      onCancel={(e) => {
+        e.preventDefault();
+        if (!busy) onClose();
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !busy) onClose();
+      }}
       style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,.55)",
-        display: "grid",
-        placeItems: "center",
-        zIndex: 100,
+        padding: 0,
+        border: "none",
+        background: "transparent",
+        color: "var(--fg)",
+        maxWidth: "calc(100vw - 32px)",
       }}
     >
       <form
@@ -228,7 +287,10 @@ export function Confirm({
           padding: 22,
         }}
       >
-        <h2 style={{ font: "600 15px var(--sans)", margin: "0 0 12px" }}>
+        <h2
+          id={titleId}
+          style={{ font: "600 15px var(--sans)", margin: "0 0 12px" }}
+        >
           {title}
         </h2>
         <div
@@ -273,7 +335,12 @@ export function Confirm({
         ) : null}
 
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <button type="button" onClick={onClose} style={secondaryButton}>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onClose}
+            style={secondaryButton}
+          >
             Keep it
           </button>
           <button
@@ -288,7 +355,7 @@ export function Confirm({
           </button>
         </div>
       </form>
-    </div>
+    </dialog>
   );
 }
 

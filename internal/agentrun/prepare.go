@@ -115,7 +115,12 @@ func Prepare(ctx context.Context, svc Services, run agents.Run, agent agents.Age
 	}
 
 	var item *workv1.WorkItem
-	if run.WorkItemID != uuid.Nil {
+	if run.WorkClaimRequired || run.GrantID != uuid.Nil {
+		item, err = run.FrozenWorkItem()
+		if err != nil {
+			return Plan{}, err
+		}
+	} else if run.WorkItemID != uuid.Nil {
 		resp, err := svc.Work.GetItem(ctx, &workv1.GetItemRequest{Id: run.WorkItemID.String()})
 		if err != nil {
 			gaps = append(gaps, fmt.Sprintf("the work item could not be read (%v); read it with work.get", err))

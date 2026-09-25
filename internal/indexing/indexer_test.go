@@ -168,9 +168,8 @@ func chunkCount(t *testing.T, pool *pgxpool.Pool, ctx context.Context, orgID uui
 
 const goSrc = "package p\n\nfunc F() int { return 1 }\n"
 
-// TestIndexesOnlyChangedPaths proves the indexer never touches a path
-// outside the changed set: in a three-file repository, only the one path
-// named in changedPaths is fetched (and therefore parsed) at all.
+// TestIndexesOnlyChangedPaths proves only changed source is parsed. The pinned
+// declaration manifest is read separately on every generation, even when absent.
 func TestIndexesOnlyChangedPaths(t *testing.T) {
 	git := newFakeGitClient()
 	orgID := uuid.New()
@@ -191,8 +190,8 @@ func TestIndexesOnlyChangedPaths(t *testing.T) {
 	if indexed != 1 {
 		t.Fatalf("indexed = %d, want 1", indexed)
 	}
-	if len(git.fetched) != 1 || git.fetched[0] != "b.go" {
-		t.Fatalf("fetched = %v, want exactly [b.go] — Parse must be invoked exactly once, on the changed file only", git.fetched)
+	if len(git.fetched) != 2 || git.fetched[0] != "b.go" || git.fetched[1] != ".novaforge/graph.json" {
+		t.Fatalf("fetched = %v, want exactly changed source b.go and pinned declaration metadata", git.fetched)
 	}
 
 	ctx := scopedCtx(orgID)
@@ -358,9 +357,9 @@ func TestRunConsumesPushEventsAndAcks(t *testing.T) {
 	idx.HMACSecret = testHMACSecret
 	idx.Consumer = "test-consumer-" + uuid.NewString()
 
-	// Run consumes events.StreamGitPush by its fixed name, so this test
-	// publishes there directly and cleans up afterward.
-	streamName := events.StreamGitPush
+	// The test owns this stream only; never delete or consume the shared push stream.
+	streamName := "stream:test:indexer:" + uuid.NewString()
+	idx.PushStream = streamName
 	t.Cleanup(func() { rdb.Del(context.Background(), streamName) })
 
 	evt := events.PushEvent{

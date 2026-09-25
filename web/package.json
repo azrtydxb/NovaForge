@@ -6,7 +6,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit && tsc -p tests/tsconfig.json",
+    "test": "node tests/run.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.62.7",

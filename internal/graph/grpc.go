@@ -165,7 +165,7 @@ func (s *GRPCServer) resolveSymbol(ctx context.Context, orgID, repoID uuid.UUID,
 		-- A name defined both in code and in a test helper means the code:
 		-- that is the symbol whose dependents and tests a caller is asking
 		-- about.
-		ORDER BY right(attrs->>'path', 8) = '_test.go', attrs->>'path', id
+		ORDER BY COALESCE(attrs->>'semantic','false') = 'true' DESC, right(attrs->>'path', 8) = '_test.go', attrs->>'path', id
 		LIMIT 1
 	`, orgID, repoID, name)
 	n, err := scanNode(row)
@@ -249,6 +249,12 @@ func (s *GRPCServer) Dependencies(ctx context.Context, req *graphv1.Dependencies
 	sym, err := s.resolveSymbol(ctx, orgID, repoID, req.GetSymbol())
 	if err != nil {
 		return nil, err
+	}
+	// Current compiler publication has exact targets but file-level callers.
+	// A symbol's empty adjacency is therefore unknown, not a successful claim
+	// of no dependencies. Never substitute every reference from its whole file.
+	if sym.Attrs["semantic"] == "true" {
+		return nil, status.Error(codes.Unavailable, "semantic symbol caller attribution unavailable; only file-level dependencies are indexed")
 	}
 	ctx = authz.WithScope(ctx, authz.Scope{OrgID: orgID, ActorKind: "service"})
 	neighbours, err := s.Store.Neighbours(ctx, sym.ID, "depends_on", "out")

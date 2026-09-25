@@ -72,7 +72,7 @@ func (g *GRPCServer) RevokeLease(ctx context.Context, req *gatesv1.RevokeLeaseRe
 	// Revoke carries the caller's organization predicate, so another
 	// organization's lease id simply finds nothing to revoke.
 	if err := g.Secrets.Revoke(ctx, id); err != nil {
-		return nil, status.Errorf(codes.NotFound, "revoke lease: %v", err)
+		return nil, CredentialStatus(err)
 	}
 	return &gatesv1.RevokeLeaseResponse{Revoked: true}, nil
 }
