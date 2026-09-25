@@ -944,18 +944,35 @@ These are real and are not worked around:
   bytes and Helm binary together. Until an operator supplies one and configures
   it, deploy-to-staging and deploy-to-production remain `approvals.Decide` rules
   that nothing follows. No deployment has been executed on this cluster.
-- **Brokered credentials need a dynamic provider this cluster does not have.**
+- **Brokered credentials are minted, and that is now proven on the cluster.**
   The broker no longer hands out a stored value dressed as an expiring
-  credential: without a provider binding it refuses, with "no dynamic credential
-  provider binding configured". That is the right behaviour and it means the
-  path is unavailable rather than weak — but it is also unavailable here. The
-  binding is operator-owned (`NF_OPENBAO_CONFIG_FILE`, the chart's `openbao`
-  secret, empty by default), no OpenBao is deployed on kw, and so the
-  brokered-secret job in `work_ci` cannot run. That suite fails and names this
-  prerequisite rather than reporting a bare CI failure. S-12 itself is covered
-  by Go tests against a real OpenBao HTTP fixture, not by this e2e step.
+  credential: without a provider binding it refuses. `deploy/dev/openbao.yaml`
+  provisions the provider — a separate OpenBao with a cert-manager certificate,
+  because the cluster's existing one belongs to another project and disables TLS
+  deliberately, and this hop carries credentials. The engine is PKI with
+  `generate_lease`, so an issued credential is a real lease and depends on
+  nothing outside the cluster. `secrets_test.sh` passes: a CI job receives a
+  credential no stored value could have produced, it is masked in the stored
+  log, and a lease is recorded against the job.
+
+  Two things had to be fixed for any of that to matter.
+  `NF_OPENBAO_CONFIG_FILE` was declared, rendered into the chart and mounted into
+  the gates pod, and nothing read it — `secrets.NewConfiguredBroker` exists to
+  turn it into a provider and no caller invoked it, so every deployment brokered
+  nothing whatever an operator configured. And `work_ci` asserted the job's
+  credential hashed to the value someone had registered, which is the behaviour
+  the broker deliberately removed; it pinned the weakness rather than the fix and
+  could never have passed against a real provider.
+
+  A binding is operator-owned, keyed on (organization, environment, name) and
+  read once at startup, so a repository cannot invent one — and no binding can
+  exist for the throwaway organization the other suites create. That is why the
+  brokered path has its own suite and its own long-lived organization rather than
+  a step inside `work_ci`.
+
   Production values still go to a production job on the default branch, and any
   member can push to the default branch directly.
+
 - **Dependency detection reads four manifest kinds.** go.mod, package.json,
   requirements*.txt and Cargo.toml; a dependency added any other way is not
   seen by the approval policy. The advisory database is no longer a network
