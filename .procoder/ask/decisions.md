@@ -778,3 +778,35 @@ hosted `docker` repository is shared with other projects, and a retention rule o
 all of it would delete their images too; that is theirs to decide, and the policy can
 be widened later. Attached to the hosted `docker` repository (`inUseCount: 1`); the
 cleanup service runs daily at 01:00 UTC, ahead of compaction.
+
+**Widened to every project on request (2026-09-26).** Created ten further cleanup
+policies and attached them across 23 repositories: proxy caches at 30 days not
+downloaded (docker-io, gcr-io, ghcr-io, public-ecr-aws, quay-io, registry-k8s-io,
+apt-debian, apt-ubuntu-ports, cargo, golang, npmjs, nuget.org-proxy, yum-rocky,
+maven-central and the six helm proxies), maven-snapshots at 30 days, the raw
+`sccache` compiler cache at 14 days, and the hosted `docker` repository widened from
+`novaforge/.*` to every image at 60 days not pushed and not pulled. Proxy caches are
+the safest thing to evict, because anything removed is refetched from upstream on the
+next request.
+
+Deliberately left with no policy: `maven-releases` and `nuget-hosted` — a published
+release is immutable and a build may reference it years later — and the raw `public`
+repository, which may hold deliberately published files. The four group repositories
+hold no content of their own.
+
+**Running the rules freed almost nothing, and that is the correct result.** The
+cleanup service deleted 4 assets in total, all from `sccache`; hosted `docker` and
+`docker-io` both reported 0. The reason is measurable: the entire live blob store
+spans **14.7 days** (oldest blob 2026-09-11 12:23 UTC, newest 2026-09-26 05:59 UTC),
+so nothing is old enough for a 30- or 60-day rule to match. There was no stale
+content to prune; the 167.7 GiB was uncollected garbage, not old images, and the
+missing compaction task was the whole defect.
+
+**Forward risk, not yet addressed.** 207 GiB of live content accumulated in those
+14.7 days — roughly 14 GiB/day net. Against 167.6 GiB free that is about twelve days
+before the volume is full again, and the 30- and 60-day windows will not have matched
+anything by then. Tightening them is not obviously safe: the criterion is
+`lastDownloaded`, and a node that has an image cached does not re-pull it, so a tag a
+running deployment still depends on can look untouched. Bounding this properly means
+either a shorter window on the hosted `docker` repository accepting that a
+rescheduled pod may need a refetch, or more capacity. Left for the user.
