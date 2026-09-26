@@ -870,7 +870,9 @@ criteria:
       so its egress is cluster-only and an import from GitHub or a public Gitea fails
       at connect until an operator removes it from that list. Import works from an
       in-cluster remote. values.yaml was deliberately left alone — that is the
-      operator's trade-off. No e2e suite, no nf CLI support, never run in a pod.
+      operator's trade-off. The code is deployed at dc5f70f, but no e2e suite exercises
+      import or mirroring and nf has no import command, so nothing has imported a
+      repository on the cluster.
     go_tests:
       - ./internal/gitops TestImportFromRemote
   S-27/TestMirrorRefresh:
@@ -893,7 +895,8 @@ criteria:
       changes, indistinguishable from an upstream nobody has pushed to. Verified red
       by replacing the goroutine with "_ = mirrorer".
 
-      Not proven on the cluster: never run in a pod.
+      Not proven on the cluster: the code is deployed at dc5f70f, but no e2e suite
+      refreshes a mirror, so the mirrorer has never been observed running in a pod.
     go_tests:
       - ./internal/gitops TestMirrorRefresh
       - ./internal/gitops TestMirrorCredentialIsEncryptedAndNeverLogged
@@ -912,14 +915,14 @@ criteria:
       recorded size is what arrived rather than what the uploader claimed.
 
       Not proven on the cluster: the blobstore construction, the stream interceptor and
-      the novaforge-releases bucket have never run in a pod, and platformtest starts
-      git-platform without a release store.
+      the novaforge-releases bucket are deployed at dc5f70f but exercised by no e2e
+      suite, and platformtest starts git-platform without a release store.
     go_tests:
       - ./internal/gitops TestReleaseWithAssets
       - ./internal/gitops TestReleaseAssetKeysAreOrgScoped
       - ./internal/gitops TestReleaseAssetStreamsThroughTheRPC
   S-29/TestGitOverHTTPS:
-    status: partial
+    status: covered
     note: >-
       A clone and a push complete over HTTPS, including by the certificate's DNS name;
       a plaintext request on the TLS port is refused; an unreadable keypair refuses at
@@ -928,15 +931,28 @@ criteria:
       what a naive implementation does and what would break every clone at renewal.
       TestChartTLSPortMatchesTheServedPort pins the chart's port to the served one.
 
-      Partial, not covered: the e2e HTTPS step in tests/e2e/deploy_test.sh is written
-      and has never executed, so nothing here has been exercised against a real
-      cert-manager certificate in a pod. A test never run proves nothing.
+      Proven on the cluster at dc5f70f (helm revision 9): step 4b of
+      tests/e2e/deploy_test.sh cloned and pushed 1e67201 over HTTPS to
+      novaforge-git-platform.novaforge.svc:8443, verifying the chain against the
+      certificate's own DNS name with sslVerify on and cert-manager's issuing CA, and
+      a plaintext request on the TLS port was refused. This step had been written and
+      never executed until then.
+
+      Both clauses of the criterion — an unmodified git client over HTTPS against the
+      served certificate, and a refused plaintext attempt — are proven, so this is
+      covered. Beyond the criterion: certificate renewal has not been observed in a
+      pod. The Go test proves the server reloads a renewed keypair without a restart,
+      and was seen red with a load-once keypair; no deployment has yet lived through
+      cert-manager actually rotating it.
     go_tests:
       - ./internal/gitops TestCloneAndPushOverHTTPS
       - ./internal/gitops TestCloneOverHTTPSByTheCertificateDNSName
       - ./internal/gitops TestPlaintextRequestOnTheTLSPortIsRefused
       - ./internal/gitops TestNewTLSServerRefusesAnUnreadableKeypair
       - ./internal/gitops TestTLSServerPicksUpARenewedCertificate
+    e2e:
+      - script: tests/e2e/deploy_test.sh
+        step: "4b. the same clone and push work over HTTPS, and plaintext on the TLS port is refused"
   S-30/TestForkAndCrossForkRun:
     status: partial
     note: >-
@@ -968,7 +984,8 @@ criteria:
       change's tree, because a gate runner materializes the workspace from the target
       repository, where a fork's objects are absent until the merge fetches them. Such
       a run is refused, never waved through. Forking into another organization is
-      refused outright. No e2e suite, no nf CLI support, never run in a pod.
+      refused outright. The code is deployed at dc5f70f, but no e2e suite forks a
+      repository and nf has no fork command, so no fork has been made on the cluster.
     go_tests:
       - ./internal/gitops TestForkCarriesHistoryAndIsolatesWrites
       - ./internal/reviews TestCrossForkRun

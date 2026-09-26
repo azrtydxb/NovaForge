@@ -3,29 +3,28 @@
 Autonomous build of the backend described in `.procoder/specs/backend-platform.md`,
 executed against the six plans in `.procoder/plans/`.
 
-## Git-parity checkpoint (2026-09-26) — built and tested, NOT deployed
+## Git-parity checkpoint (2026-09-26) — deployed at dc5f70f, revision 9
 
-The nine parity tasks in `.procoder/plans/git-parity.md` are all merged to `main`.
-Spec traceability is now **42 of 47 covered, 5 partial, none uncovered**, and
-`TestSpecTraceability` enforces that every cited test exists. `go test ./...`
-reports no failures; `go build`, `go vet`, `gofmt`, `tsc -b` and the web build are
-clean.
+The nine parity tasks in `.procoder/plans/git-parity.md` are all merged, and all nine
+are now closed. Spec traceability is **43 of 47 covered, 4 partial, none uncovered**,
+and `TestSpecTraceability` enforces that every cited test and e2e step exists.
+`go test ./...` reports no failures; `go build`, `go vet`, `gofmt`, `tsc -b` and the
+web build are clean.
 
-**None of it has run on the cluster, and that is the headline.** The deployment
-still serves `b84ffec`. Images could not be pushed: the Nexus registry answers
-every blob upload with HTTP 500 —
+**All 13 in-cluster suites pass at this revision** — airgap, deploy, work_ci, secrets,
+gui, search, graph, factory, agent, agent_ci, merge, cli, crossorg — run through
+`hack/e2e-in-cluster.sh`, with every service on `dc5f70f`.
 
-```
-POST https://192.168.10.131:5000/v2/novaforge/<svc>/blobs/uploads/
-  -> 500 {"errors":[{"code":"UNKNOWN","message":"unknown","detail":null}]}
-```
-
-Reads from the registry are fine (catalog and tag lists answer, nodes can still
-pull), so this is the registry host's write path, not NovaForge code and not
-BuildKit — the builds themselves succeed and fail only at export. Until that is
-fixed, everything from tasks 4 through 9 is **built and unit-proven, not
-platform-proven**, which by this document's own standard means not proven. Nothing
-below should be read as "works on the cluster".
+Deployment was blocked for most of this session, and the cause is worth recording
+because it looked like a NovaForge failure and was not. Every image push returned
+`500 {"code":"UNKNOWN"}`. `/nexus-data` was **100% full — 20.8 MB free of 392.7 GB** —
+and Nexus's embedded H2 database had logged **1,560 `IOException: No space left on
+device`**, so the registry's metadata was being written on a full volume. The defect
+was a missing task rather than a full disk: Nexus soft-deletes blobs and reclaims them
+in a separate `blobstore.compact` task, no such task existed, and **18,266 blobs
+(167.7 GiB, 43% of the volume) had accumulated as uncollected garbage**. Compaction
+freed exactly that and is now scheduled daily; retention policies were added across 23
+repositories. Details and the reasoning are in `.procoder/ask/decisions.md`.
 
 What landed, and how much each is actually worth:
 
@@ -41,10 +40,12 @@ What landed, and how much each is actually worth:
 - **Import and mirroring (S-27)** — partial. Import works from an in-cluster
   remote; `git-platform` is in `networkPolicy.airGapped`, so an import from GitHub
   or a public Gitea fails at connect until an operator removes it from that list.
-- **HTTPS on the Git endpoint (S-29)** — partial. The Go tests cover a clone and
-  push over TLS, refusal of plaintext on the TLS port, refusal of an unreadable
-  keypair, and certificate renewal without a restart. The e2e HTTPS step in
-  `tests/e2e/deploy_test.sh` is written and **has never executed**.
+- **HTTPS on the Git endpoint (S-29)** — **proven on the cluster.** Step 4b of the
+  deploy suite cloned and pushed `1e67201` over HTTPS to
+  `novaforge-git-platform.novaforge.svc:8443`, verifying the chain against the
+  certificate's own DNS name with `sslVerify` on and cert-manager's issuing CA, and a
+  plaintext request on the TLS port was refused. Certificate renewal is still only
+  proven in-process: no deployment has yet lived through cert-manager rotating it.
 - **Forks and cross-fork runs (S-30)** — partial. A cross-fork run is judged by the
   parent's gates and approval rules with no path around them, but it cannot
   _satisfy_ a gate that reads the change's tree: a gate runner materializes the
@@ -987,12 +988,16 @@ two-factor. Four of those needed edge routes that were never written.
 
 These are real and are not worked around:
 
-- **The registry will not accept a push, so nothing since `b84ffec` is deployed.**
-  Nexus answers every blob upload with HTTP 500 and an error body of
-  `{"code":"UNKNOWN"}`; reads are unaffected. Builds succeed and fail only at
-  export. Everything from git-parity tasks 4 through 9 is therefore built and
-  unit-proven and **not platform-proven**. This is the registry host, outside this
-  repository.
+- **The registry's volume refills in roughly twelve days and the retention rules will
+  not have bitten by then.** 207 GiB of live content accumulated in 14.7 days — about
+  14 GiB/day — against 167.6 GiB free after compaction. The policies added are 30 days
+  (proxy caches, maven snapshots) and 60 days (hosted images), so nothing they cover is
+  yet old enough to match: a run of the cleanup service deleted 4 assets in total.
+  Tightening the hosted-docker window is not obviously safe, because the criterion is
+  `lastDownloaded` and a node holding an image in its local cache does not re-pull it,
+  so a tag a running deployment still depends on can look untouched. Bounding this
+  properly needs either a shorter window, accepting that a rescheduled pod may have to
+  refetch, or more capacity.
 - **A repository cannot be imported from a host outside the cluster.**
   `git-platform` is in `networkPolicy.airGapped`, so import and mirror refresh
   reach in-cluster remotes only; an import from GitHub or a public Gitea fails at
@@ -1014,9 +1019,11 @@ These are real and are not worked around:
   entire history into another is authorized by neither side, so `to_org` is
   validated rather than ignored. Cross-fork runs stay within one organization. This
   deviates from the plan, which implied cross-org forks.
-- **HTTPS on the Git endpoint has never been exercised in a pod.** The e2e step is
-  written and has not run, so the interaction with a real cert-manager certificate
-  — renewal in particular — is unproven, whatever the Go tests show.
+- **Certificate renewal has never been exercised in a pod.** The HTTPS clone and push
+  are now proven on the cluster, but no deployment has lived through cert-manager
+  rotating the certificate. The Go test proves the server reloads a renewed keypair
+  without a restart and was seen red with a load-once keypair; the interaction with
+  cert-manager's actual rotation is still inference.
 - **Neither `nf` nor any e2e script covers forks, import or mirroring.** They are
   reachable through the REST API and the GUI only, which by this document's standard
   means the CLI path is untested rather than working.
