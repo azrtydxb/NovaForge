@@ -725,3 +725,56 @@ leak rather than a bug.
   path must consult the narrowing, or a "narrowed" member still reads everything.
   Preserves the boundary, changes the feature, and is invasive in a different way.
 - Defer task 3 and move to webhooks, releases, LFS and the rest.
+
+## Reclaiming the Nexus blob store, which is 100% full (2026-09-26)
+
+Deployment of everything since `b84ffec` is blocked because the registry refuses
+every blob upload with HTTP 500. The cause is not NovaForge and not BuildKit:
+`/nexus-data` on `nexus/nexus-5645c89dfb-z6dqx` (kw) is **100% full — 20.8 MB free of
+392.7 GB**. Nexus's embedded H2 database has recorded **1,560
+`IOException: No space left on device`** in `nexus.trace.db`, the most recent at
+2026-09-25 21:43, so this is not only blocking pushes — the database is failing
+writes on a full volume, which risks corrupting the registry's metadata for every
+project that uses it, not just NovaForge.
+
+Measured: 38,830 blobs, 375.1 GiB. **18,266 of them (167.7 GiB, 43% of the disk) are
+already soft-deleted and awaiting compaction.** Live content is 207.4 GiB, of which
+the hosted `docker` repository holds 164.6 GiB and the `docker-io` proxy cache
+34.5 GiB. NovaForge itself accounts for **772 tags** across 11 images — one per
+commit per service, with no cleanup policy, which is what grew the hosted repository
+to that size.
+
+This is shared infrastructure: kuvryn, dhole, fastllm-proxy and coder-devbox push to
+the same registry. The `ci` credential is push-only and gets 403 on the tasks API,
+so none of the remedies can be applied without admin access. Put to the user rather
+than decided here, because it deletes data and affects other projects.
+
+- Compact the blob store only. Reclaims ~167 GiB immediately by removing blobs that
+  are already logically deleted; touches no live content. Needs admin.
+- Compact, and add a cleanup policy to the hosted `docker` repository. Also
+  addresses the cause: 772 never-pruned NovaForge tags. Choosing how many to keep is
+  a policy decision.
+- Prune NovaForge's own old tags first, as the project that caused most of the
+  growth, and leave the shared blob store alone.
+- Grow the volume instead, and change nothing about retention.
+
+**Decided:** compact the blob store and add a cleanup policy to the hosted `docker`
+repository, using the admin credential at `/nexus-data/admin.password` in the pod.
+
+**Applied (2026-09-26).** Nexus had no `blobstore.compact` task at all, which is the
+root cause of the backlog: the `assetBlob.cleanup` tasks and the cleanup service
+soft-delete blobs, and nothing ever reclaimed them. Created and ran
+`blobstore.compact` on the `default` blob store — `/nexus-data` went from
+374.6G used / 20.8M free (100%) to **206.7G used / 167.9G free (55%)**, matching the
+167.7 GiB measured beforehand — and scheduled it daily at 05:23 UTC so a backlog
+cannot build up again. The registry accepted a blob upload immediately afterwards
+(`202`, previously `500`).
+
+For retention, docker in this version offers `regex`, `lastDownloaded` and
+`lastBlobUpdated` but not `retain` (keep N newest). Created cleanup policy
+`novaforge-stale-images` — neither pushed nor pulled in 60 days — and scoped it with
+`criteriaAssetRegex: novaforge/.*` so only NovaForge's own images are affected. The
+hosted `docker` repository is shared with other projects, and a retention rule over
+all of it would delete their images too; that is theirs to decide, and the policy can
+be widened later. Attached to the hosted `docker` repository (`inUseCount: 1`); the
+cleanup service runs daily at 01:00 UTC, ahead of compaction.
