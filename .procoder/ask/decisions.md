@@ -810,3 +810,23 @@ anything by then. Tightening them is not obviously safe: the criterion is
 running deployment still depends on can look untouched. Bounding this properly means
 either a shorter window on the hosted `docker` repository accepting that a
 rescheduled pod may need a refetch, or more capacity. Left for the user.
+
+**Capacity raised on request (2026-09-26).** The registry's PVC `nexus-data-iscsi` was
+expanded from 400Gi to **1Ti** — `truenas-iscsi` has `allowVolumeExpansion: true`, the
+CSI resizer sidecar is running, and Pool0 had 40.6 TiB free, so 600 GiB was 1.5% of
+free space. ext4 grew online with **zero pod restarts**: 1006.9 GB total, 207.1 GB
+used, 756.8 GB available (21%). That retires the twelve-day refill risk recorded above:
+at the measured ~14 GiB/day the volume now has roughly eight months of headroom, and
+the 30-day retention rules begin matching content around 2026-10-11.
+
+A second problem surfaced while checking the zvol. It is thin-provisioned and mounted
+without `discard`, so the 167.7 GiB compaction freed had NOT been returned to the pool
+— the filesystem reported 207 GiB used while ZFS still counted 374.2 GiB. An `fstrim`
+from a privileged pod on the node (the container itself lacks CAP_SYS_ADMIN) trimmed
+799.4 GiB and brought the zvol's pool usage to 206.7 GiB, matching the filesystem.
+
+That trim was one-off and is left that way deliberately. Keeping it honest means either
+`discard` in the volume's mountOptions, which requires a remount and so a Nexus
+restart, or a scheduled `fstrim`, which means a standing privileged workload. Both are
+choices about a host shared with other projects, and neither is implied by "expand the
+disk", so both are the user's call.

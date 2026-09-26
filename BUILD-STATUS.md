@@ -988,16 +988,16 @@ two-factor. Four of those needed edge routes that were never written.
 
 These are real and are not worked around:
 
-- **The registry's volume refills in roughly twelve days and the retention rules will
-  not have bitten by then.** 207 GiB of live content accumulated in 14.7 days — about
-  14 GiB/day — against 167.6 GiB free after compaction. The policies added are 30 days
-  (proxy caches, maven snapshots) and 60 days (hosted images), so nothing they cover is
-  yet old enough to match: a run of the cleanup service deleted 4 assets in total.
-  Tightening the hosted-docker window is not obviously safe, because the criterion is
-  `lastDownloaded` and a node holding an image in its local cache does not re-pull it,
-  so a tag a running deployment still depends on can look untouched. Bounding this
-  properly needs either a shorter window, accepting that a rescheduled pod may have to
-  refetch, or more capacity.
+- **Thin-provisioned storage drifts unless something trims it, and nothing does.** The
+  registry's volume is ext4 on an iSCSI zvol mounted without the `discard` option, so
+  blocks freed in the filesystem are not returned to the ZFS pool. After compaction the
+  filesystem used 207 GiB while ZFS still counted 374 GiB; an explicit `fstrim` returned
+  167.5 GiB to the pool. That trim was manual and one-off — as blobs churn the zvol's
+  pool usage will climb again toward its 1 TiB size regardless of how little the
+  filesystem holds. A durable fix is either `discard` in the volume's mountOptions,
+  which needs a remount and so a Nexus restart, or a scheduled `fstrim`, which needs a
+  privileged pod. Neither was done: both are decisions about a host shared with other
+  projects. The pool has 40.6 TiB free, so the drift is wasteful rather than dangerous.
 - **A repository cannot be imported from a host outside the cluster.**
   `git-platform` is in `networkPolicy.airGapped`, so import and mirror refresh
   reach in-cluster remotes only; an import from GitHub or a public Gitea fails at
