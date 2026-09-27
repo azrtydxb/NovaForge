@@ -7,6 +7,9 @@ compromised agent-runtime cannot reach the rest of the cluster.
 {{- if and (eq $name "gates") $svc.rbac }}
 {{- fail "Gates cannot use generic cluster RBAC; set services.gates.sandboxRbac instead" }}
 {{- end }}
+{{- if and (eq $name "engineering-graph") $svc.rbac }}
+{{- fail "Engineering graph uses dedicated semantic producer RBAC, not generic cluster RBAC" }}
+{{- end }}
 {{- if $svc.rbac }}
 apiVersion: v1
 kind: ServiceAccount
@@ -100,4 +103,46 @@ subjects:
     name: {{ $.Release.Name }}-{{ $name }}
     namespace: {{ $.Release.Namespace }}
 {{- end }}
+{{- end }}
+
+{{- /* Only an explicitly configured semantic producer needs controller authority.
+No Secret, ConfigMap, PVC or resource quota access is needed by this controller. */ -}}
+{{- $producer := get (.Values.operatorConfigs | default dict) "semanticProducer" | default dict }}
+{{- if $producer.secretName }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}-engineering-graph
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Name }}-engineering-graph
+rules:
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [create, get, list, delete]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [create, get, delete]
+  - apiGroups: [""]
+    resources: [pods/exec]
+    verbs: [create, get]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Name }}-engineering-graph
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Release.Name }}-engineering-graph
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Release.Name }}-engineering-graph
+    namespace: {{ .Release.Namespace }}
 {{- end }}

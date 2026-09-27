@@ -71,7 +71,7 @@ spec:
       imagePullSecrets:
         - name: {{ $.Values.image.pullSecret }}
       {{- end }}
-      {{- if or $svc.rbac $svc.sandboxRbac }}
+      {{- if or $svc.rbac $svc.sandboxRbac (hasKey $mounts "semanticProducer") }}
       serviceAccountName: {{ $.Release.Name }}-{{ $name }}
       {{- end }}
       containers:
