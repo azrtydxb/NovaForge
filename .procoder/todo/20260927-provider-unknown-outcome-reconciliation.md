@@ -25,3 +25,15 @@ retry issuance, or delete the row.
 - Unknown lease reservation: `c20b6e47-1ac1-4236-b62c-e14621264566` in the existing `nfsecrets` organization.
 - Provider returned HTTP 400; no credential reached the job and no lease handle was returned. The configured issuer had expired September 26 at 13:14:28 UTC.
 - The issuer was renewed September 27 through the bounded development fixture tool. The reservation remains visible as unknown; no database state was falsified.
+
+### Follow-up provider inspection
+
+On September 27 the actual provider's `bao audit list -format=json` returned no
+enabled audit devices. The mounted `NF_CI_CERT` binding exports `private_key`
+from `pki/issue/novaforge-ci`, not a certificate-only target credential. Thus a
+CA expiry or local ten-minute lifetime cannot establish that an arbitrary private
+key is unusable at every target. No historical request ID or provider lease handle
+is recorded. This is an evidence blocker for clearing this particular reservation,
+not grounds to silently mark it revoked. Future operator reconciliation must bind
+provider evidence and authenticated operator identity; a signed human assertion
+without verifiable target/provider evidence is insufficient.

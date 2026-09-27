@@ -3,6 +3,7 @@ package egress
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -113,9 +114,15 @@ func (p *Policy) GitConfig(ctx context.Context, remote string) ([]string, error)
 	return []string{"-c", "http.proxy=", "-c", "http.followRedirects=false", "-c", "http.curloptResolve=", "-c", "http.curloptResolve=" + u.Hostname() + ":" + port + ":" + ip}, nil
 }
 
-func (p *Policy) Client() *http.Client {
+func (p *Policy) Client() *http.Client { return p.ClientWithTLS(nil) }
+
+// ClientWithTLS permits operator CA roots while retaining destination enforcement.
+func (p *Policy) ClientWithTLS(config *tls.Config) *http.Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.Proxy = nil
+	if config != nil {
+		transport.TLSClientConfig = config.Clone()
+	}
 	transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
 		// RoundTrip resolves and pins once, retaining the original URL for TLS/SNI.
 		pinned, ok := ctx.Value(addressKey{}).(string)

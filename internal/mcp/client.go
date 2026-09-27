@@ -18,10 +18,12 @@ import (
 
 // ServerDef is one external MCP server an agent may be offered.
 type ServerDef struct {
-	Name    string        `yaml:"name" json:"name"`
-	URL     string        `yaml:"url" json:"url"`
-	Token   string        `yaml:"token,omitempty" json:"token,omitempty"`
-	Timeout time.Duration `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	HTTPClient *http.Client                `yaml:"-" json:"-"`
+	Authorize  func(context.Context) error `yaml:"-" json:"-"`
+	Name       string                      `yaml:"name" json:"name"`
+	URL        string                      `yaml:"url" json:"url"`
+	Token      string                      `yaml:"token,omitempty" json:"token,omitempty"`
+	Timeout    time.Duration               `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 	// BearerToken resolves an operator-bound credential for each request. It
 	// must return an error, not an empty token, when authentication is required.
 	BearerToken func(context.Context) (string, error) `yaml:"-" json:"-"`
@@ -49,13 +51,14 @@ type Client struct {
 	declared []string
 	http     *http.Client
 
-	mu      sync.Mutex
-	session string
-	nextID  int64
-	ready   bool
-	stdio   io.ReadWriteCloser
-	scanner *bufio.Scanner
-	rpcMu   sync.Mutex
+	credentials []string
+	mu          sync.Mutex
+	session     string
+	nextID      int64
+	ready       bool
+	stdio       io.ReadWriteCloser
+	scanner     *bufio.Scanner
+	rpcMu       sync.Mutex
 }
 
 // DefaultExternalTimeout bounds every external call, so a hung third-party
@@ -74,13 +77,20 @@ func NewClient(def ServerDef, declared []string) *Client {
 	if def.Timeout <= 0 {
 		def.Timeout = DefaultExternalTimeout
 	}
-	return &Client{
+	client := &Client{
 		def:      def,
 		declared: declared,
 		http: &http.Client{Timeout: def.Timeout, CheckRedirect: func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse // approval and credentials bind one destination
 		}},
 	}
+	if def.HTTPClient != nil {
+		owned := *def.HTTPClient
+		owned.Timeout = def.Timeout
+		owned.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+		client.http = &owned
+	}
+	return client
 }
 
 // Name is the server's registered name.
@@ -221,16 +231,20 @@ func (c *Client) request(ctx context.Context, method string, params any, out any
 
 	msg, err := readResponse(resp, id)
 	if err != nil {
-		return fmt.Errorf("%s on mcp server %q: %w", method, c.def.Name, err)
+		return fmt.Errorf("%s on mcp server %q: %s", method, c.def.Name, c.redactText(err.Error()))
 	}
 	if msg.Error != nil {
-		return fmt.Errorf("mcp server %q: %s", c.def.Name, msg.Error.Message)
+		return fmt.Errorf("mcp server %q: %s", c.def.Name, c.redactText(msg.Error.Message))
 	}
 	if out == nil {
 		return nil
 	}
-	if err := json.Unmarshal(msg.Result, out); err != nil {
-		return fmt.Errorf("decode %s from %q: %w", method, c.def.Name, err)
+	sanitized, err := c.redactJSON(msg.Result)
+	if err != nil {
+		return fmt.Errorf("invalid MCP result")
+	}
+	if err := json.Unmarshal(sanitized, out); err != nil {
+		return fmt.Errorf("decode %s from %q: %s", method, c.def.Name, c.redactText(err.Error()))
 	}
 	return nil
 }
@@ -253,6 +267,12 @@ func (c *Client) notify(ctx context.Context, method string) error {
 
 func (c *Client) post(ctx context.Context, method string, id json.RawMessage, params any) (*http.Response, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.def.Timeout)
+	if c.def.Authorize != nil {
+		if err := c.def.Authorize(ctx); err != nil {
+			cancel()
+			return nil, fmt.Errorf("mcp server %q: operator authorization unavailable", c.def.Name)
+		}
+	}
 	var p json.RawMessage
 	if params != nil {
 		b, err := json.Marshal(params)
@@ -291,17 +311,18 @@ func (c *Client) post(ctx context.Context, method string, id json.RawMessage, pa
 		}
 	}
 	if token != "" {
+		c.rememberCredential(token)
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
 		cancel()
-		return nil, fmt.Errorf("%s on mcp server %q: %w", method, c.def.Name, err)
+		return nil, fmt.Errorf("%s on mcp server %q: %s", method, c.def.Name, c.redactText(err.Error()))
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		resp.Body.Close()
 		cancel()
-		return nil, fmt.Errorf("%s on mcp server %q: %s", method, c.def.Name, resp.Status)
+		return nil, fmt.Errorf("%s on mcp server %q: %s", method, c.def.Name, http.StatusText(resp.StatusCode))
 	}
 	if s := resp.Header.Get("Mcp-Session-Id"); s != "" {
 		c.mu.Lock()

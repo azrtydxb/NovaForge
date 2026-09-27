@@ -48,8 +48,9 @@ Current boundaries and explicit follow-ups:
   operator-resolution follow-up is
   `.procoder/todo/20260927-provider-unknown-outcome-reconciliation.md`.
   Issuer renewal does not falsify historical cleanup evidence.
-- Nexus recurring trim remains a concrete, dry-run-validated proposal awaiting
-  shared-infrastructure review. Accepted development OpenBao custody is unchanged.
+- Nexus recurring trim is qualified and active weekly after the authorized follow-up:
+  backing allocation decreased 4.88 GiB; Nexus remained ready with zero restarts.
+  See `.procoder/evidence/nexus-trim-20260927.md`. Development OpenBao custody is unchanged.
 - Earlier ambiguous disposable deployment attempts retain uncertain audit history
   with resolved credentials; their target namespaces are now removed.
 - The agent suite succeeded. Agent-CI passed outcome propagation with an agent/job

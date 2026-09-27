@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"strings"
 	"time"
@@ -189,7 +190,8 @@ func main() {
 		if err != nil {
 			log.Fatalf("agent-runtime: build kubernetes client: %v", err)
 		}
-		provisioner = workspace.NewProvisioner(clientset).WithRESTConfig(k8sConfig)
+		provisioner = workspace.NewProvisioner(clientset).WithRESTConfig(k8sConfig).WithCleanupRecorder(store.RecordWorkspaceCleanup)
+		store.WorkspaceCleaner = provisioner.DestroyConfirmed
 	} else {
 		// Not running in a cluster: workspace provisioning and the reaper
 		// are unavailable, exactly like graph.Assemble degrades when its
@@ -219,10 +221,15 @@ func main() {
 	// tests, so every run this service was asked to start was refused.
 	store.WorkClaims = agents.WorkExecutionClient{Work: workClient, HMACSecret: cfg.HMACSecret}
 
-	execute := newExecuteFunc(store, grants, audit, rdb, price, provisioner, gitClient, graphClient, workClient, reviewsClient, ciClient, mcpClient, cfg)
+	mcpPolicy, err := tools.LoadOperatorMCP(cfg.MCPHTTPConfigFile)
+	if err != nil {
+		log.Fatal("agent-runtime: invalid operator MCP configuration")
+	}
+	execute := newExecuteFunc(store, grants, audit, rdb, prices, mcpPolicy, provisioner, gitClient, graphClient, workClient, reviewsClient, ciClient, mcpClient, cfg)
 	grpcServer := agents.NewGRPCServer(store, grants, rdb, workClient, execute)
 	grpcServer.Audit = audit
 	grpcServer.Price = price
+	grpcServer.HasModelPrices = len(prices) > 0
 
 	// Callers are resolved the same way every other service resolves them:
 	// a person's credential through identity, or a platform service token
@@ -313,7 +320,7 @@ func runReaper(ctx context.Context, provisioner *workspace.Provisioner) {
 // runs the model/tool loop, persists the resulting terminal state, and
 // tears the workspace down. When provisioner is nil (no Kubernetes API
 // reachable), it returns nil so StartRun's degrade path applies instead.
-func newExecuteFunc(store *agents.Store, grants capability.RuntimeClient, audit *agents.AuditLog, rdb *redis.Client, price *agents.TokenPrice, provisioner *workspace.Provisioner, gitClient gitv1.GitServiceClient, graphClient graphv1.GraphServiceClient, workClient workv1.WorkServiceClient, reviewsClient reviewsv1.ReviewsServiceClient, ciClient civ1.CIServiceClient, mcpClient mcpv1.McpServiceClient, cfg service.Config) agents.ExecuteFunc {
+func newExecuteFunc(store *agents.Store, grants capability.RuntimeClient, audit *agents.AuditLog, rdb *redis.Client, prices map[string]agents.TokenPrice, mcpPolicy *tools.OperatorMCP, provisioner *workspace.Provisioner, gitClient gitv1.GitServiceClient, graphClient graphv1.GraphServiceClient, workClient workv1.WorkServiceClient, reviewsClient reviewsv1.ReviewsServiceClient, ciClient civ1.CIServiceClient, mcpClient mcpv1.McpServiceClient, cfg service.Config) agents.ExecuteFunc {
 	if provisioner == nil {
 		return nil
 	}
@@ -336,7 +343,7 @@ func newExecuteFunc(store *agents.Store, grants capability.RuntimeClient, audit 
 		// The per-run namespace carries the run's isolation — its own
 		// network policy and resource quota — and is torn down with the run.
 		if _, err := provisioner.Create(ctx, run.ID, workspace.Spec{
-			Image: workspace.DefaultImage, CPULimit: "2", MemLimit: "4Gi",
+			OrgID: run.OrgID, Image: workspace.DefaultImage, CPULimit: "2", MemLimit: "4Gi",
 			// The workspace must live at least as long as the run credential,
 			// including the margin reserved for settling evidence on timeout.
 			ExpiresAt: time.Now().Add(agentrun.RunCredentialTTL(run)),
@@ -346,7 +353,20 @@ func newExecuteFunc(store *agents.Store, grants capability.RuntimeClient, audit 
 			return
 		}
 		defer func() {
-			if err := provisioner.Destroy(context.Background(), run.ID); err != nil {
+			cleanupCtx, stop := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+			defer stop()
+			saved, lookupErr := store.GetRun(cleanupCtx, run.ID)
+			if lookupErr != nil {
+				log.Printf("agent-runtime: workspace cleanup lookup failed for %s", run.ID)
+				return
+			}
+			if saved.WorkspaceCleanupPending {
+				if err := store.ConfirmWorkspaceCleanup(cleanupCtx, run.ID); err != nil {
+					log.Printf("agent-runtime: workspace cleanup pending for %s", run.ID)
+				}
+				return
+			}
+			if err := provisioner.Destroy(cleanupCtx, run.ID); err != nil {
 				log.Printf("agent-runtime: destroy workspace for run %s: %v", run.ID, err)
 			}
 		}()
@@ -404,8 +424,11 @@ func newExecuteFunc(store *agents.Store, grants capability.RuntimeClient, audit 
 				return agentrun.NewModelClient(agentrun.ModelConfig{Endpoint: cfg.AIEndpoint, Model: model, APIKey: cfg.AIAPIKey})
 			},
 			ProviderOptions: providerOptions,
-			Price:           price,
-			MCP:             mcpClient,
+			PriceForModel:   func(model string) *agents.TokenPrice { return effectivePrice(prices, cfg.AIModel, model) },
+			MCPOptions: mcpPolicy.Options(run.OrgID, run.RepoID, func(call context.Context, command []string) (io.ReadWriteCloser, error) {
+				return provisioner.OpenStdio(call, run.ID, command)
+			}),
+			MCP: mcpClient,
 		}
 		result := runner.Run(ctx, run, tools.Runtime{
 			Grant:     grant,
@@ -591,4 +614,16 @@ func bearerTokenFromContext(ctx context.Context) string {
 		return ""
 	}
 	return strings.TrimPrefix(values[0], "Bearer ")
+}
+
+// effectivePrice uses precisely the same defaulting rule as NewModel.
+func effectivePrice(prices map[string]agents.TokenPrice, fallback, model string) *agents.TokenPrice {
+	if model == "" {
+		model = fallback
+	}
+	p, ok := prices[model]
+	if !ok {
+		return nil
+	}
+	return &p
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"regexp"
 	"strings"
 	"time"
@@ -65,6 +66,8 @@ func (o *Offered) CloseForCompletion() error {
 // must be explicit; required authentication needs a live per-request resolver.
 // A static token remains a static credential, not an expiring broker lease.
 type MCPAuthorization struct {
+	Client      *http.Client
+	Check       func(context.Context) error
 	Public      bool
 	BearerToken func(context.Context) (string, error)
 }
@@ -74,7 +77,9 @@ type MCPAuthorization struct {
 // returning a public policy or credential resolver. An absent policy fails closed.
 type MCPOptions struct {
 	// StdioClosing invalidates the entire run before transport teardown begins.
-	StdioClosing func()
+	OpenApprovedStdio func(context.Context, *mcpv1.McpServer) (io.ReadWriteCloser, error)
+	Revalidate        func(context.Context, *mcpv1.McpServer) error
+	StdioClosing      func()
 	// AllowedTools is the effective repository list: nil allows all, empty denies all.
 	AllowedTools      []string
 	OpenStdio         func(context.Context, string) (io.ReadWriteCloser, error)
@@ -163,11 +168,17 @@ func OfferApprovedMCPServersWithOptions(ctx context.Context, reg *Registry, serv
 		var client *mcp.Client
 		switch s.GetTransport() {
 		case "stdio":
-			if opts.OpenStdio == nil {
+			if opts.OpenStdio == nil && opts.OpenApprovedStdio == nil {
 				offered.Skipped = append(offered.Skipped, fmt.Sprintf("%s: stdio sandbox unavailable", name))
 				continue
 			}
-			stream, openErr := opts.OpenStdio(ctx, s.GetUrl())
+			var stream io.ReadWriteCloser
+			var openErr error
+			if opts.OpenApprovedStdio != nil {
+				stream, openErr = opts.OpenApprovedStdio(ctx, s)
+			} else {
+				stream, openErr = opts.OpenStdio(ctx, s.GetUrl())
+			}
 			if stream == nil {
 				offered.Skipped = append(offered.Skipped, fmt.Sprintf("%s: stdio sandbox unavailable", name))
 				continue
@@ -194,7 +205,7 @@ func OfferApprovedMCPServersWithOptions(ctx context.Context, reg *Registry, serv
 				offered.Skipped = append(offered.Skipped, fmt.Sprintf("%s: HTTP authorization policy unavailable", name))
 				continue
 			}
-			client = mcp.NewClient(mcp.ServerDef{Name: name, URL: s.GetUrl(), BearerToken: auth.BearerToken}, []string{name})
+			client = mcp.NewClient(mcp.ServerDef{Name: name, URL: s.GetUrl(), BearerToken: auth.BearerToken, Authorize: auth.Check, HTTPClient: auth.Client}, []string{name})
 		default:
 			offered.Skipped = append(offered.Skipped, fmt.Sprintf("%s: unsupported transport", name))
 			continue
@@ -249,7 +260,7 @@ func OfferApprovedMCPServersWithOptions(ctx context.Context, reg *Registry, serv
 					name, strings.TrimSpace(def.Description)),
 				Schema: schema,
 			}
-			reg.registerExternal(toolName, spec, externalHandler(servers, client, s, def.Name))
+			reg.registerExternal(toolName, spec, externalHandler(servers, client, s, def.Name, opts.Revalidate))
 			offered.Tools = append(offered.Tools, toolName)
 		}
 		if len(offered.Tools) == before {
@@ -262,10 +273,15 @@ func OfferApprovedMCPServersWithOptions(ctx context.Context, reg *Registry, serv
 	return offered, nil
 }
 
-func externalHandler(servers ApprovedMCPServers, client *mcp.Client, server *mcpv1.McpServer, tool string) Handler {
+func externalHandler(servers ApprovedMCPServers, client *mcp.Client, server *mcpv1.McpServer, tool string, revalidate func(context.Context, *mcpv1.McpServer) error) Handler {
 	return func(ctx context.Context, _ Runtime, argsJSON []byte) ([]byte, error) {
 		if err := stillApproved(ctx, servers, server); err != nil {
 			return nil, errors.Join(err, client.Close())
+		}
+		if revalidate != nil {
+			if err := revalidate(ctx, server); err != nil {
+				return nil, errors.Join(err, client.Close())
+			}
 		}
 		res, err := client.Call(ctx, tool, argsJSON)
 		if err != nil {

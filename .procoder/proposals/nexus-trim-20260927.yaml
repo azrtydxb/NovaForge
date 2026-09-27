@@ -1,4 +1,4 @@
-# Proposal only: not applied. See nexus-trim-20260927.md.
+# Qualified and activated September 27. See ../evidence/nexus-trim-20260927.md.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -7,7 +7,7 @@ metadata:
 spec:
   schedule: "0 0 * * 0"
   timeZone: Etc/UTC
-  suspend: true
+  suspend: false
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 2
   failedJobsHistoryLimit: 3
@@ -24,7 +24,7 @@ spec:
             podAffinity:
               requiredDuringSchedulingIgnoredDuringExecution:
                 - labelSelector:
-                    matchLabels: {app: nexus}
+                    matchLabels: { app: nexus }
                   topologyKey: kubernetes.io/hostname
           containers:
             - name: trim
@@ -38,10 +38,10 @@ spec:
                   drop: [ALL]
                   add: [SYS_ADMIN]
               resources:
-                requests: {cpu: 10m, memory: 16Mi}
-                limits: {cpu: 100m, memory: 64Mi}
+                requests: { cpu: 10m, memory: 16Mi }
+                limits: { cpu: 100m, memory: 64Mi }
               volumeMounts:
-                - {name: data, mountPath: /nexus-data}
+                - { name: data, mountPath: /nexus-data }
           volumes:
             - name: data
-              persistentVolumeClaim: {claimName: nexus-data-iscsi}
+              persistentVolumeClaim: { claimName: nexus-data-iscsi }

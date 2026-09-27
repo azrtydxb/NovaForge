@@ -1,6 +1,8 @@
 # Nexus trim proposal — 2026-09-27
 
-This is a reviewable shared-infrastructure proposal, not an applied change.
+**Activated September 27 after the user authorized the follow-ups.** See
+[qualification evidence](../evidence/nexus-trim-20260927.md). The text below records
+the original proposal and baseline, before qualification.
 The gap-closure plan G11 explicitly reserves this decision for the shared
 infrastructure owner. NovaForge's implementation does not need it to proceed.
 

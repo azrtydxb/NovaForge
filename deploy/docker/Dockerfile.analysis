@@ -40,10 +40,9 @@ RUN curl -sSfL -o /tmp/gitleaks.tgz \
 # manifest.json before trusting it, so a truncated or swapped download makes the
 # scan unavailable rather than silently clean.
 #
-# The four ecosystems here are exactly the manifest kinds the approval policy
-# detects — go.mod, package.json, requirements*.txt and Cargo.toml. Adding an
-# ecosystem to that list means adding it here too, or dependencies declared that
-# way are scanned against no advisories.
+# These advisory ecosystems are independent of dependency-change approval
+# manifests. OSV requires supported resolved package inputs; recognizing a
+# package.json/Cargo.toml change does not establish vulnerability coverage.
 #
 # The snapshot carries an explicit validity interval, and an expired manifest
 # makes the scan unavailable rather than clean. The image therefore has to be
@@ -54,6 +53,9 @@ ARG ADVISORY_VALID_DAYS=90
 RUN apt-get update \
  && apt-get install -y --no-install-recommends unzip \
  && rm -rf /var/lib/apt/lists/*
+# A reviewed marker change invalidates the download layer; rebuilding a new
+# service commit alone can otherwise reuse a stale advisory snapshot.
+COPY deploy/analysis/advisory-refresh.txt /opt/advisory-refresh.txt
 RUN set -eu; \
     root=/opt/analysis/osv; mkdir -p "$root/osv-scalibr"; \
     : >/tmp/ecosystems; \
