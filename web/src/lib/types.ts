@@ -255,6 +255,14 @@ export interface ProofRecord {
  * controller from what the change's diff does — never from what the run says
  * about itself. It is bound to the head it saw: a later push supersedes it. */
 export interface Approval {
+  deployment?: {
+    id: string;
+    target: string;
+    artifact: string;
+    environment: string;
+    destination: string;
+    target_revision: string;
+  };
   id: string;
   run_id: string;
   action: string;

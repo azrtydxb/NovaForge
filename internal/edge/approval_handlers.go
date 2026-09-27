@@ -1,6 +1,7 @@
 package edge
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -117,7 +118,7 @@ func ApprovalJSON(req *gatesv1.ApprovalRequestMsg) map[string]any {
 	if paths == nil {
 		paths = []string{}
 	}
-	return map[string]any{
+	out := map[string]any{
 		"id":          req.GetId(),
 		"run_id":      req.GetRunId(),
 		"action":      req.GetAction(),
@@ -133,4 +134,18 @@ func ApprovalJSON(req *gatesv1.ApprovalRequestMsg) map[string]any {
 		"decided_at":  req.GetDecidedAt(),
 		"created_at":  req.GetCreatedAt(),
 	}
+	if req.GetAction() == "deploy_staging" || req.GetAction() == "deploy_production" {
+		var raw map[string]json.RawMessage
+		if json.Unmarshal([]byte(req.GetDetailJson()), &raw) == nil {
+			detail := map[string]string{}
+			for _, key := range []string{"id", "target", "artifact", "environment", "destination", "target_revision"} {
+				var value string
+				if json.Unmarshal(raw[key], &value) == nil {
+					detail[key] = value
+				}
+			}
+			out["deployment"] = detail
+		}
+	}
+	return out
 }

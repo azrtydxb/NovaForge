@@ -58,9 +58,15 @@ export function ApprovalRows({
             <>
               {asking.approval.reason}
               <br />
-              This decision holds for commit{" "}
-              <code>{asking.approval.head_sha.slice(0, 12)}</code> only. A later
-              push to the change asks again.
+              {asking.approval.deployment ? (
+                <DeploymentIntent approval={asking.approval} />
+              ) : (
+                <>
+                  This decision holds for commit{" "}
+                  <code>{asking.approval.head_sha.slice(0, 12)}</code> only. A
+                  later push to the change asks again.
+                </>
+              )}
             </>
           }
           submitLabel={asking.decision === "approved" ? "Approve" : "Deny"}
@@ -140,7 +146,7 @@ export function ApprovalRows({
                   wordBreak: "break-all",
                 }}
               >
-                {describe(a)}
+                {a.deployment ? <DeploymentIntent approval={a} /> : describe(a)}
               </div>
               {a.decided_by ? (
                 <div
@@ -211,4 +217,38 @@ function buttonStyle(color: string) {
     font: "11px var(--sans)",
     cursor: "pointer",
   } as const;
+}
+
+function DeploymentIntent({ approval }: { approval: Approval }) {
+  const d = approval.deployment;
+  if (!d) return null;
+  let destination = d.destination;
+  try {
+    const parts: unknown = JSON.parse(destination);
+    if (Array.isArray(parts) && parts.every((p) => typeof p === "string"))
+      destination = parts.join(" / ");
+  } catch {
+    /* Display the recorded destination unchanged. */
+  }
+  return (
+    <div style={{ overflowWrap: "anywhere" }}>
+      <div>
+        Target: {d.target} · {d.environment}
+      </div>
+      <div>Destination: {destination}</div>
+      <div>
+        Image: <code>{d.artifact}</code>
+      </div>
+      <div>
+        Target revision: <code>{d.target_revision}</code>
+      </div>
+      <div>
+        Request: <code>{d.id}</code>
+      </div>
+      <p>
+        This decision authorizes only this deployment request, image and target
+        revision.
+      </p>
+    </div>
+  );
 }
