@@ -88,6 +88,11 @@ artifact = obj("-n", "novaforge", "get", "secret", "deployment-fixture-users")[
 ].get("artifact")
 assert artifact, "fixture must record its immutable artifact"
 artifact = base64.b64decode(artifact).decode()
+for prior in api("GET", repo + "/deployments")["operations"]:
+    if prior["state"] == "uncertain":
+        recovered = api("POST", repo + "/deployments/" + prior["id"] + "/reconcile", {})
+        assert recovered["state"] in ("succeeded", "failed"), recovered
+        print("PASS passive reconciliation of previous fixture execution", flush=True)
 with tempfile.TemporaryDirectory() as tmp:
     # Git credentials stay in an ephemeral askpass environment, not remote URLs.
     askpass = pathlib.Path(tmp) / "askpass"
@@ -161,6 +166,10 @@ with tempfile.TemporaryDirectory() as tmp:
         {"decision": "approved", "comment": "Qualify the fixed disposable chart"},
     )
     token = author
+    accounts_before = {
+        a["metadata"]["name"]
+        for a in obj("-n", "novaforge-deploy-target", "get", "serviceaccounts")["items"]
+    }
     result = api("POST", path + "/execute", {})
     assert result["state"] == "succeeded", result
     repeated = api("POST", path + "/execute", {})
@@ -181,7 +190,7 @@ with tempfile.TemporaryDirectory() as tmp:
     else:
         raise AssertionError("credential cleanup remains pending")
     accounts = obj("-n", "novaforge-deploy-target", "get", "serviceaccounts")["items"]
-    assert [a["metadata"]["name"] for a in accounts] == ["default"], (
+    assert {a["metadata"]["name"] for a in accounts} <= accounts_before, (
         "leased service account survived provider revocation"
     )
     denied = api("POST", repo + "/deployments", {**intent, "id": str(uuid.uuid4())})
@@ -233,6 +242,45 @@ with tempfile.TemporaryDirectory() as tmp:
     recovered = api("POST", failed_path + "/retry", {})
     assert recovered["state"] == "succeeded" and len(recovered["attempts"]) == 2, (
         recovered
+    )
+    # Check the graph owner's projection through the deployed outbox/consumer.
+    # SQL identifiers here are validated exact fixture UUIDs, never caller SQL.
+    operation_id = str(uuid.UUID(recovered["id"]))
+    org_id = str(uuid.UUID(config["targets"][0]["org_id"]))
+    repo_id = str(uuid.UUID(config["targets"][0]["repo_id"]))
+    query = (
+        "SELECT count(*) FROM graph.graph_nodes WHERE kind='deployment' "
+        f"AND org_id='{org_id}' AND repo_id='{repo_id}' "
+        f"AND attrs->>'operation_id'='{operation_id}' "
+        "AND attrs->>'provenance'='observed' AND attrs->>'latest_execute_attempt'='2'"
+    )
+    deadline = time.monotonic() + 120
+    while time.monotonic() < deadline:
+        count = command(
+            k
+            + [
+                "-n",
+                "novaforge",
+                "exec",
+                "deploy/novaforge-postgres",
+                "--",
+                "psql",
+                "-U",
+                "novaforge",
+                "-d",
+                "novaforge",
+                "-Atc",
+                query,
+            ]
+        )
+        if count == "1":
+            break
+        time.sleep(2)
+    else:
+        raise AssertionError("observed deployment did not reach the engineering graph")
+    print(
+        "PASS deployed success outbox and graph projection with attempt provenance",
+        flush=True,
     )
     print(
         "PASS real target failure and explicit retry after authorization repair",

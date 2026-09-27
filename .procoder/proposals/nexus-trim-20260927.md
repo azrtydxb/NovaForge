@@ -25,6 +25,12 @@ It does not replace Nexus retention or blob compaction. Compared with adding
 mount-time `discard`, a bounded job avoids changing the PV mount options and
 remounting/restarting Nexus, and gives a discrete maintenance interval and logs.
 
+A second `df -B1` observation on September 27 at 10:20 UTC reported
+231,066,275,840 bytes used and 803,877,593,088 available, versus
+230,503,055,360 used at the earlier same-day observation: about 0.525 GiB net
+growth during the qualification builds. This short build-heavy interval is not
+a daily retention trend and does not justify extrapolating a capacity date.
+
 Before activation, the owner should qualify FITRIM support and latency on this
 exact PVC during the window, watch Nexus request latency, and confirm a decrease
 in the zvol's allocated bytes. A successful command is not proof of recovered
@@ -51,7 +57,7 @@ No CronJob exists in namespace `nexus`. The PV specifies no mountOptions.
 Historical compaction reduced filesystem usage to about 207 GiB; the current
 reading is about 214.7 GiB. These differently timed observations are not a stable
 post-retention growth series. Collect daily readings for at least a week before
-forecasting. At the *old assumed* 14 GiB/day, current headroom is about 53.5 days;
+forecasting. At the _old assumed_ 14 GiB/day, current headroom is about 53.5 days;
 756.8 GiB / 14 GiB/day is about 54 days, never eight months.
 
 ## Accepted OpenBao development posture
