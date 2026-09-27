@@ -231,7 +231,11 @@ with tempfile.TemporaryDirectory() as tmp:
     apply(reduced)
     failed_path = repo + "/deployments/" + failing["id"]
     try:
-        failure = api("POST", failed_path + "/execute", {})
+        try:
+            api("POST", failed_path + "/execute", {})
+        except urllib.error.HTTPError as error:
+            assert error.code in (400, 409, 412, 500), error.code
+        failure = api("GET", failed_path)
         assert failure["state"] == "failed", failure
         assert failure["attempts"][-1]["error"] or failure["attempts"][-1]["summary"], (
             failure
