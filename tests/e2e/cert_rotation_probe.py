@@ -64,12 +64,15 @@ try:
         ca=tmp+"/ca.pem";pathlib.Path(ca).write_bytes(base64.b64decode(get("secret",name)["data"]["ca.crt"]))
         context=ssl.create_default_context(cafile=ca)
         def serial():
-            with socket.create_connection((dns,8443),timeout=10) as raw:
-                with context.wrap_socket(raw,server_hostname=dns) as conn:return conn.getpeercert()["serialNumber"]
-        before=serial()
+            try:
+                with socket.create_connection((dns,8443),timeout=10) as raw:
+                    with context.wrap_socket(raw,server_hostname=dns) as conn:return conn.getpeercert()["serialNumber"]
+            except (ConnectionError, TimeoutError, OSError):
+                return None
+        before=wait(serial)
         env=os.environ.copy();env.update(GIT_SSL_CAINFO=ca,GIT_TERMINAL_PROMPT="0",GIT_CONFIG_NOSYSTEM="1",GIT_CONFIG_GLOBAL="/dev/null")
         # Credentials remain in an ephemeral askpass environment, never URL/argv.
-        helper=pathlib.Path(tmp+"/askpass");helper.write_text('#!/bin/sh\ncase "$1" in Username*) printf %s "$NF_TEST_USER";; *) printf %s "$NF_TEST_TOKEN";; esac\n');helper.chmod(0o700)
+        helper=pathlib.Path(tmp+"/askpass");helper.write_text('#!/bin/sh\ncase "$1" in *Username*) printf %s "$NF_TEST_USER";; *) printf %s "$NF_TEST_TOKEN";; esac\n');helper.chmod(0o700)
         env.update(GIT_ASKPASS=str(helper),NF_TEST_USER=user,NF_TEST_TOKEN=token)
         remote="https://"+dns+":8443/"+user+"/rotation.git"
         work=tmp+"/before";cmd(["git","clone",remote,work],env=env)

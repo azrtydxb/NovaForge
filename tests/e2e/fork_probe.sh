@@ -26,7 +26,7 @@ verify_cross_fork_gates() {
 	printf 'name: tests\nrequired: false\n' >"$child/.novaforge/gates/tests.yaml"
 	git -C "$child" commit -qam 'broken fork attempts to relax parent policy'
 	git -C "$child" push -q origin HEAD:main || fail "push failing fork"
-	result="$(call POST "/orgs/$ORG/repos/$parent/runs" "$A_TOKEN" "{\"title\":\"Fork gates\",\"source_ref\":\"main\",\"target_ref\":\"main\",\"source_repo_id\":\"$fork_id\"}")"
+	result="$(call POST "/orgs/$ORG/repos/$parent/runs" "$A_TOKEN" "{\"title\":\"Fork gates\",\"source_ref\":\"main\",\"target_ref\":\"main\",\"source_repo\":\"$fork\"}")"
 	case "$result" in 2*) ;; *) fail "open cross-fork run: $result" ;; esac
 	number="$(printf '%s' "${result#* }" | python3 -c 'import json,sys; print(json.load(sys.stdin)["number"])')"
 	result="$(call POST "/orgs/$ORG/repos/$parent/runs/$number/gates/evaluate" "$A_TOKEN" '{}')"
