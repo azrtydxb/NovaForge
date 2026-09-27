@@ -39,6 +39,11 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# A previous run removes its namespace asynchronously. Reusing a Terminating
+# namespace can start tests in a pod that Kubernetes is already deleting.
+if [ "$(k get namespace "$RUNNER_NS" -o jsonpath='{.status.phase}' 2>/dev/null || true)" = Terminating ]; then
+	k wait --for=delete namespace/"$RUNNER_NS" --timeout=180s >/dev/null
+fi
 k create namespace "$RUNNER_NS" --dry-run=client -o yaml | k apply -f - >/dev/null
 k -n "$NS" get secret nexus-pull -o json |
 	python3 -c 'import json,sys; s=json.load(sys.stdin); m=s["metadata"]; s["metadata"]={"name":m["name"],"namespace":"'"$RUNNER_NS"'"}; print(json.dumps(s))' |
