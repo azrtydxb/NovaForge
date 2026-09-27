@@ -35,14 +35,14 @@ are explicit in both code and chart configuration.
 
 ## Sequence and milestones
 
-| Milestone | Work | Exit condition |
-| --- | --- | --- |
-| M0: trustworthy baseline | G01 | Requirements, limitations and current evidence agree |
-| M1: complete core Git flows | G02–G05 | Fork gates, webhook events, SSH LFS and object cleanup work through deployed paths |
-| M2: migration and user workflows | G06–G07 | Controlled external connectivity and complete CLI/GUI workflows are proven |
-| M3: operational proof | G08–G09 | Certificate renewal and an approved deployment execute on kw |
+| Milestone                        | Work    | Exit condition                                                                               |
+| -------------------------------- | ------- | -------------------------------------------------------------------------------------------- |
+| M0: trustworthy baseline         | G01     | Requirements, limitations and current evidence agree                                         |
+| M1: complete core Git flows      | G02–G05 | Fork gates, webhook events, SSH LFS and object cleanup work through deployed paths           |
+| M2: migration and user workflows | G06–G07 | Controlled external connectivity and complete CLI/GUI workflows are proven                   |
+| M3: operational proof            | G08–G09 | Certificate renewal and an approved deployment execute on kw                                 |
 | M4: broader platform disposition | G10–G11 | Every remaining limitation has evidence, a concrete follow-up, or an explicit scope decision |
-| M5: release acceptance | G12 | Final immutable deployment and all old/new acceptance suites pass |
+| M5: release acceptance           | G12     | Final immutable deployment and all old/new acceptance suites pass                            |
 
 Recommended execution order: G01 → G02 → G03 → G04 → G05 → G06 → G07 → G08
 → G09 → G10 → G11 → G12. G07 acceptance cases should be added alongside their
@@ -53,18 +53,18 @@ assigned before G01 and the deeper source/target gate audit in G02.
 
 Dependencies: none. Areas: spec, traceability, existing plans, BUILD-STATUS.
 
-- [ ] Correct superseded scope prose: GUI is implemented; S-27 adds import and
+- [x] Correct superseded scope prose: GUI is implemented; S-27 adds import and
       mirroring despite the old exclusion; specify SSH-authenticated LFS scope.
       Preserve wiki, portfolio management and other actual exclusions.
-- [ ] Separate historical failures from current limitations. The September 25
+- [x] Separate historical failures from current limitations. The September 25
       agent timeout is not a current failing-suite verdict after the September
       26 full pass. Preserve the history and identify what remains unverified.
-- [ ] Reconcile old unchecked plan steps with newer task and deployment evidence;
+- [x] Reconcile old unchecked plan steps with newer task and deployment evidence;
       do not mechanically reopen or close them. Track new work through the
       existing task workflow when implementation starts.
-- [ ] Read kw deployment image IDs, Helm state, service readiness and datastore
+- [x] Read kw deployment image IDs, Helm state, service readiness and datastore
       availability. Refresh remote refs before deciding what needs pushing.
-- [ ] Establish a reproducible test baseline with `hack/env.sh` sourced and real
+- [x] Establish a reproducible test baseline with `hack/env.sh` sourced and real
       datastores; record failures as code, environment, or external dependency.
 
 Acceptance: a dated baseline with exact commit/image identities, tests actually
@@ -77,15 +77,15 @@ Dependencies: G01. Requirements: S-10, S-11, S-30.
 Areas: `internal/gates/{controller,wiring,approvals}.go`, gate persistence and
 sandbox evidence, `internal/reviews/`, Git RPCs, `web/src/screens/RunDetail.tsx`.
 
-- [ ] Carry immutable source repository identity alongside source SHA and target
+- [x] Carry immutable source repository identity alongside source SHA and target
       repository/policy SHA through lookup, materialization and evaluation.
-- [ ] Read changed files from the fork; read gate definitions and approval policy
+- [x] Read changed files from the fork; read gate definitions and approval policy
       from the target. Audit diff-based approvals and API-compatibility baseline
       reads too: fixing workspace checkout alone is insufficient.
-- [ ] Bind cached evaluations and evidence to the relevant source and target
+- [x] Bind cached evaluations and evidence to the relevant source and target
       identities/revisions; fail closed on deletion, lost access or changed heads.
-- [ ] Show the source repository/ref and useful gate errors through API and GUI.
-- [ ] Add a real cross-fork cluster acceptance flow with an executable tests gate.
+- [x] Show the source repository/ref and useful gate errors through API and GUI.
+- [x] Add a real cross-fork cluster acceptance flow with an executable tests gate.
 
 Acceptance: a passing fork change satisfies the parent's gate and merges after
 independent approval; a failing change is refused for that gate; weakening gate
@@ -102,15 +102,15 @@ Dependencies: G01. Requirement: S-24.
 Areas: `internal/events/`, `internal/reviews/`, `internal/ci/`,
 `internal/webhooks/`, service entrypoints, hook API and Repos screen.
 
-- [ ] Define versioned event payloads with stable event ID, organization,
+- [x] Define versioned event payloads with stable event ID, organization,
       repository, object identity, transition and timestamp. Specify Engineering
       Run transitions and aggregate CI terminal outcomes, including cancellation.
-- [ ] Persist publication intent atomically with the owning service's state
+- [x] Persist publication intent atomically with the owning service's state
       transition and relay it to Redis; follow the existing deployment outbox
       pattern where appropriate. No direct cross-schema queries.
-- [ ] Extend worker routing, subscriptions, signed payloads and delivery history.
+- [x] Extend worker routing, subscriptions, signed payloads and delivery history.
       Persist retry accounting across restarts and deduplicate event scheduling.
-- [ ] Expose event selection and delivery outcome in the GUI and API contract.
+- [x] Expose event selection and delivery outcome in the GUI and API contract.
 
 Acceptance: actual run transitions and completed CI runs produce signed,
 repository-scoped notifications; Redis outage and worker restart do not lose
@@ -123,12 +123,12 @@ Dependencies: G01. Requirement: S-25.
 Areas: `internal/gitops/{ssh,lfs,http}.go`, transport authentication,
 `cmd/git-platform/`, configuration/chart, Repos clone instructions.
 
-- [ ] Add the narrowly parsed `git-lfs-authenticate` SSH command and return the
+- [x] Add the narrowly parsed `git-lfs-authenticate` SSH command and return the
       existing HTTPS LFS endpoint plus an expiring, repository/operation-scoped
       credential. This is SSH authentication with HTTPS object transfer.
-- [ ] Apply the same actor, collaborator, archive and capability restrictions as
+- [x] Apply the same actor, collaborator, archive and capability restrictions as
       the existing transports; never exchange an SSH key for a broad PAT.
-- [ ] Configure an externally usable TLS endpoint and explain the transport in
+- [x] Configure an externally usable TLS endpoint and explain the transport in
       user-facing clone instructions without exposing credentials.
 
 Acceptance: an unmodified git-lfs client clones and pushes large random content
@@ -142,14 +142,14 @@ Dependencies: G01. Requirements: repository/organization deletion, S-25, S-28.
 Areas: `internal/gitops/{purge,grpc,lfs,releases}.go`, migrations,
 `internal/blobstore/`, existing deletion consumers.
 
-- [ ] Persist scoped cleanup work before cascading metadata deletion; implement
+- [x] Persist scoped cleanup work before cascading metadata deletion; implement
       bounded, retryable cleanup through the production worker entrypoint.
-- [ ] Cover repository and organization deletion, individual release deletion,
+- [x] Cover repository and organization deletion, individual release deletion,
       replaced assets and interrupted uploads. Fence concurrent uploads so they
       cannot recreate garbage after deletion has been marked complete.
-- [ ] Account for repository transfer and fork object ownership before selecting
+- [x] Account for repository transfer and fork object ownership before selecting
       keys. Use durable IDs, not a repository name that can be reused.
-- [ ] Plan a bounded reconciliation pass for already orphaned objects, with a
+- [x] Plan a bounded reconciliation pass for already orphaned objects, with a
       grace period and report-only mode before deleting historical candidates.
 
 Acceptance: real MinIO objects disappear after committed deletion; unrelated
@@ -167,14 +167,14 @@ Proposed posture: retain air-gapped defaults and add an explicitly configured
 connected mode with operator-approved destinations. Do not simply remove
 git-platform from `networkPolicy.airGapped` and grant unrestricted egress.
 
-- [ ] Define application destination rules and enforceable cluster egress rules
+- [x] Define application destination rules and enforceable cluster egress rules
       together, including DNS, redirects, IPv4/IPv6, internal endpoints and proxy
       behavior. Choose the enforcement mechanism after checking kw capabilities.
-- [ ] Allow deliberately approved internal hosts while preventing arbitrary
+- [x] Allow deliberately approved internal hosts while preventing arbitrary
       access to metadata/control-plane endpoints. Preserve credential secrecy.
-- [ ] Distinguish policy refusal from remote authentication and availability
+- [x] Distinguish policy refusal from remote authentication and availability
       errors in REST/GUI responses and mirror status.
-- [ ] Prepare rendered manifests and rollback instructions for the selected
+- [x] Prepare rendered manifests and rollback instructions for the selected
       destinations before applying any network-policy expansion.
 
 Acceptance: import from an approved external Git host, refresh after an upstream
@@ -188,14 +188,14 @@ Dependencies: G02–G06 for the full checkpoint. Requirements: S-21, S-24–S-30
 Areas: `internal/cli/`, edge/OpenAPI, `web/src/lib/api.ts`, Repos/RunDetail screens,
 `tests/e2e/`, `hack/e2e-in-cluster.sh`.
 
-- [ ] Inventory existing commands before adding fork, import, mirror status,
+- [x] Inventory existing commands before adding fork, import, mirror status,
       refresh and stop-mirroring commands. Cover cross-fork run creation too.
-- [ ] Supply credentials without command-line arguments or printed secrets.
-- [ ] Verify GUI creation, status, failure and recovery paths using actual users
+- [x] Supply credentials without command-line arguments or printed secrets.
+- [x] Verify GUI creation, status, failure and recovery paths using actual users
       and repositories, not pre-seeded display data.
-- [ ] Add cluster suites for webhook events, SSH LFS, forks, import/mirroring and
+- [x] Add cluster suites for webhook events, SSH LFS, forks, import/mirroring and
       blob cleanup; register them in the acceptance harness.
-- [ ] Document migration fidelity: refs/history are distinct from LFS payloads,
+- [x] Document migration fidelity: refs/history are distinct from LFS payloads,
       release assets, users, issues and CI metadata. Test what import actually
       copies and make any unsupported data explicit before calling it migration.
 
@@ -208,11 +208,11 @@ as documented; no unsupported Gitea parity is implied by Git-history import.
 Dependencies: G01. Requirement: S-29.
 Areas: certificate Helm template, TLS reload implementation, deploy acceptance.
 
-- [ ] Add a dedicated test certificate/service fixture using the deployed reload
+- [x] Add a dedicated test certificate/service fixture using the deployed reload
       path; induce cert-manager renewal without modifying a shared issuer.
-- [ ] Observe the changed certificate serial and a fresh TLS connection serving
+- [x] Observe the changed certificate serial and a fresh TLS connection serving
       it, with hostname/CA verification enabled and unchanged pod restart count.
-- [ ] Clone and push before and after renewal; preserve HTTP refusal on TLS port.
+- [x] Clone and push before and after renewal; preserve HTTP refusal on TLS port.
 
 Acceptance: evidence ties cert-manager renewal, mounted Secret update and live
 server reload together. An in-process keypair replacement alone does not close it.
@@ -244,16 +244,16 @@ Dependencies: G01; reconcile G09 results. Requirements: S-7, S-13–S-18, S-20.
 The following are candidate gaps, not automatically new implementation scope.
 Inspect existing production callers and tests before writing follow-up tasks:
 
-| Area | Required disposition/evidence |
-| --- | --- |
-| Index/graph breadth | Map Tree-sitter/LSP/SCIP paths, languages, graph edge kinds and branch scope to S-14/S-15; identify unsupported requirements explicitly |
-| Knowledge recall | Prove a recorded decision enters a later relevant agent run on the real cluster; preserve provenance and disclose retrieval limitations |
-| External MCP | Verify production HTTP authentication support and stdio routing; if missing, design credential references and isolated stdio execution before enabling them |
-| Agent CI sponsorship | Define whether delegated sponsorship for agent/service pushes is required; never silently invent a human actor |
-| Workspace dependencies | Document offline vendoring/cache workflow and test it; do not open agent internet egress to make builds pass |
-| Cost budgets | Demonstrate configured pricing and budget enforcement in an isolated fixture; retain explicit refusal when pricing is absent |
-| Dependency scanning | Verify manifest coverage against promised ecosystems and define offline advisory refresh before expiry |
-| Direct default-branch push | Reconcile member push rights with production-credential and deployment approval requirements |
+| Area                       | Required disposition/evidence                                                                                                                               |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Index/graph breadth        | Map Tree-sitter/LSP/SCIP paths, languages, graph edge kinds and branch scope to S-14/S-15; identify unsupported requirements explicitly                     |
+| Knowledge recall           | Prove a recorded decision enters a later relevant agent run on the real cluster; preserve provenance and disclose retrieval limitations                     |
+| External MCP               | Verify production HTTP authentication support and stdio routing; if missing, design credential references and isolated stdio execution before enabling them |
+| Agent CI sponsorship       | Define whether delegated sponsorship for agent/service pushes is required; never silently invent a human actor                                              |
+| Workspace dependencies     | Document offline vendoring/cache workflow and test it; do not open agent internet egress to make builds pass                                                |
+| Cost budgets               | Demonstrate configured pricing and budget enforcement in an isolated fixture; retain explicit refusal when pricing is absent                                |
+| Dependency scanning        | Verify manifest coverage against promised ecosystems and define offline advisory refresh before expiry                                                      |
+| Direct default-branch push | Reconcile member push rights with production-credential and deployment approval requirements                                                                |
 
 Acceptance: each row gets implementation evidence, a bounded follow-up with
 acceptance criteria, or an explicit scope decision. A 43/47 structural traceability

@@ -107,6 +107,7 @@ if [ "$1" = status ]; then
  printf '{"name":"fixture","namespace":"target","version":1,"info":{"status":"%s","description":"%s"}}' "$STATUS_STATE" "$STATUS_BINDING"
  exit 0
 fi
+if [ "$1" = list ]; then printf '[]'; exit 0; fi
 printf 'upgrade\n' >> "$CALLS"
 if [ "$UPGRADE_FAILS" = true ]; then exit 1; fi
 printf '{"name":"fixture","namespace":"target","version":2,"info":{"status":"deployed","description":"%s"}}' "$UPGRADE_BINDING"
