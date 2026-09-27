@@ -109,7 +109,9 @@ kubectl --context kw -n novaforge get repositories.sync.kuvryn.io,applications.s
 kubectl --context kw -n novaforge get revisions.sync.kuvryn.io --sort-by=.metadata.creationTimestamp
 ```
 
-The kw console is `https://sync.kw.watteel.lab`. Manual changes to Git-managed
-fields will be reconciled back to Git by self-healing. Suspending an Application
+The kw console is `https://sync.kw.watteel.lab`. Self-healing reconciles drift where field ownership permits it. A manual merge
+patch can acquire separate Update ownership, even with the same manager name;
+`conflictPolicy: fail` then refuses takeover until the operator resolves that
+conflict. This behavior was verified with a metadata-only qualification probe. Suspending an Application
 alone does not permit the legacy deployment script to overwrite its resources;
 an emergency ownership transfer must be explicit and reviewed.
