@@ -1,6 +1,6 @@
 # NovaForge gap closure
 
-Baseline: 2026-09-27. Implementation authorized by the user: “ok lets do it all”. Work is in progress; checkboxes require the stated evidence.
+Baseline: 2026-09-27. Implementation authorized by the user: “ok lets do it all”. Completed through the task workflow; evidence and explicit follow-ups are recorded in `.procoder/evidence/gap-closure-20260927.md`.
 
 ## Goal and completion rule
 
@@ -283,20 +283,30 @@ an owner rather than being misreported as NovaForge implementation failures.
 
 Dependencies: core milestones complete; broader follow-ups explicitly accounted for.
 
-- [ ] Run relevant red/green regressions during implementation using real Git,
+- [x] Run relevant red/green regressions during implementation using real Git,
       PostgreSQL, Redis and MinIO; use isolated test databases for destructive
       fixtures. Add negative authorization and failure/restart cases where needed.
-- [ ] Run the full Go suite with datastore prerequisites loaded, build/vet/format,
+- [x] Run the full Go suite with datastore prerequisites loaded, build/vet/format,
       frontend types/build, generated-contract checks and repository commit gates.
-- [ ] Build immutable images and deploy through `hack/deploy.sh`; never bypass
+- [x] Build immutable images and deploy through `hack/deploy.sh`; never bypass
       Helm ownership or the image/credential preflight.
-- [ ] Run the original 13 acceptance suites plus all new registered suites on the
+- [x] Run the original 13 acceptance suites plus all new registered suites on the
       exact deployed revision; browser-test the changed user flows.
-- [ ] Update traceability, task evidence and BUILD-STATUS with commit, image IDs,
+- [x] Update traceability, task evidence and BUILD-STATUS with commit, image IDs,
       suite results and remaining limitations; close tasks through their workflow.
-- [ ] Verify the remote state and publish the verified commits under the release
+- [x] Verify the remote state and publish the verified commits under the release
       scope agreed for implementation. Planning alone does not push anything.
 
 Release criterion: the four partial criteria become covered only when their own
 missing behaviors have evidence. Any broader deferred decision stays visible;
 do not label this full Gitea equivalence or production readiness from suite counts.
+
+## Final checkpoint
+
+Application 19b29cc is deployed through Helm revision 17. All 16 registered suites
+have passing evidence; the expired-development-issuer failure and successful
+rerun are retained in the report. Original broker configuration is restored and
+disposable fixtures are removed. G01–G12 close through procoder. The intelligence
+qualification and unknown-provider-outcome reconciliation tasks remain open;
+Nexus trim remains an unapplied owner-review proposal. Main was published through
+8670e00, followed by this final workflow checkpoint.
