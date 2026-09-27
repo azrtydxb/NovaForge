@@ -287,7 +287,11 @@ func renderBrief(run agents.Run, plan Plan, item *workv1.WorkItem, project repoc
 		s.WriteString("\n## Project knowledge recorded by earlier work\n" +
 			"Follow these unless the work item says otherwise; record a new decision with knowledge.record if you depart from one.\n")
 		for _, k := range bundle.GetKnowledge() {
-			fmt.Fprintf(&s, "- [%s] %s: %s\n", k.GetKind(), k.GetTitle(), clipBytes(strings.TrimSpace(k.GetBody()), maxSnippetBytes))
+			source := "person-recorded"
+			if k.GetSourceRunId() != "" {
+				source = "run " + k.GetSourceRunId()
+			}
+			fmt.Fprintf(&s, "- [%s] %s (entry %s; key %s; created %s; source %s): %s\n", k.GetKind(), k.GetTitle(), k.GetId(), k.GetKey(), k.GetCreatedAt(), source, clipBytes(strings.TrimSpace(k.GetBody()), maxSnippetBytes))
 		}
 		w.write(s.String())
 	}
