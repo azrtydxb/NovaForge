@@ -77,3 +77,21 @@ OpenBao custody is unchanged; production custody remains a separate decision.
 Detailed execution logs are retained locally under
 /tmp/novaforge-gap-20260927/ and /tmp/e2e.*.log. This checked-in record preserves
 results and limitations without credentials or raw deployment manifests.
+
+## Qualified deployment executor
+
+- Source: c9b6778.
+- Runner: `192.168.10.131/novaforge/deployment-runner@sha256:8b9429c0f433e3cf09905bd3950a37983ee8a040b9205acce02056f35663ac6e`.
+- Embedded chart SHA-256: `86fb4114694d85bcbbcc51b182a12e3f1b43f6a1fab2cae8dc06728158737ffe`.
+- Controlled release: approved-app-final in novaforge-deploy-target.
+- Targeted governed_deploy passed real workload success, independent approval,
+  self-approval refusal, denial, changed-intent refusal, replay without execution,
+  credential cleanup, revoked target write permission producing failed evidence,
+  explicit retry after permission repair and attempt-2 observed graph provenance.
+- Browser review found the approval dialog omitted deployment intent. The REST
+  representation now exposes only the public bound-intent fields, and the dialog
+  renders the exact artifact/destination/revision/request before decision.
+  Application source 19b29cc includes this correction; final browser qualification
+  is pending its rollout.
+- Final changed-package run: edge 81.020s, deployment 104.079s, spectrace 2.257s,
+  all passed. A serialization test refuses unrelated raw approval detail leakage.

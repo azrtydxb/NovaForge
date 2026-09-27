@@ -1,30 +1,45 @@
-## September 27 gap-closure implementation checkpoint (acceptance in progress)
+# September 27 gap-closure checkpoint — final acceptance in progress
 
-The user approved the full `.procoder/plans/gap-closure-20260927.md` execution.
-The initial live baseline was Helm revision 9, application image `dc5f70f`; local
-`main` began at `f314f75`, 38 commits ahead of refreshed `origin/main`.
-Cross-fork policy evaluation/diffs, durable Run/CI webhook publication and retries,
-SSH-authenticated HTTPS LFS, blob cleanup/ownership, approved outbound destinations,
-and CLI/GUI migration controls are deployed at `9733e2d` through Helm. Cluster
-acceptance is in progress; imports, mirror refresh and approved public egress have
-passed, while the new fixtures are being corrected and rerun. The historical limitations below describe the previous
-release until the new cluster evidence supersedes them.
+The authorized core Git gaps are implemented and proven on kw: cross-fork parent
+policy evaluation, durable signed Run/CI webhooks, SSH-authenticated HTTPS LFS,
+physical blob cleanup and fork ownership, approved outbound destinations, and
+CLI/GUI import, refresh, conversion and fork workflows. Actual cert-manager
+renewal reloads Git TLS without restarting the process.
 
-Local evidence: cross-fork executable test fails broken code and passes fixed code
-under the parent's policy; ordinary git-lfs pushes/clones over verified TLS using
-SSH authentication; durable webhook outage/restart tests pass; PostgreSQL/MinIO
-ownership and cleanup tests pass. Latest Git/CLI/egress/config regression sweep,
-Go build/vet, and frontend production build pass. The first full baseline had three
-transient datastore connection failures; all three passed their targeted rerun.
-Logs are under `/tmp/novaforge-gap-20260927/` during execution.
+The governed deployment suite now passes actual approval, denial, immutable
+intent, workload creation, provider credential cleanup, real target failure,
+explicit retry and graph projection. OpenBao-issued Kubernetes credentials were
+accepted and subsequently rejected by the target after their signed 600-second
+expiry. Browser qualification additionally found and fixed missing deployment
+intent in the approval dialog. Final application images are building from
+`19b29cc`; the qualified operator runner is built from `c9b6778`.
 
-A further audit found that governed deployment's package was not wired into
-`cmd/gates` or REST/GUI. Commit `2bb3a65` adds this integration and qualified
-OpenBao Kubernetes credentials. Deployment/secrets/edge package regressions pass;
-its immutable images and real operator fixture are being qualified.
-Broader intelligence dispositions are in
-`.procoder/plans/intelligence-audit-20260927.md`; remaining qualification has an
-explicit open follow-up rather than a blanket completeness claim.
+Full Go regression passed (46 tested packages), with the changed deployment,
+runner, Git and edge packages additionally checked after corrections. Frontend
+build/types, generated contracts and traceability checks pass. Structural
+traceability is **47 of 47 covered**; it verifies cited acceptance criteria and
+must not be read as a claim that every broader intelligence feature is qualified.
+The all-suite final cluster checkpoint and browser approval flow are pending.
+
+Current boundaries:
+
+- Real staging/production deployment targets require explicit operator onboarding.
+  The disposable qualification target and temporary broker token will be removed.
+- Cross-organization forks remain refused. Git import preserves refs/history,
+  not LFS payloads, release assets, issues, accounts or CI metadata.
+- Connected destinations require explicit application and cluster policies;
+  defaults remain disconnected. Workspaces remain offline.
+- Intelligence qualification remains tracked in the open
+  `.procoder/todo/20260927-intelligence-production-qualification.md` follow-up.
+  See `.procoder/plans/intelligence-audit-20260927.md` for the eight dispositions.
+- Nexus recurring trim is a concrete, dry-run-validated proposal, not an applied
+  shared-infrastructure change. Accepted development OpenBao custody is unchanged.
+- Earlier ambiguous deployment fixture attempts remain uncertain in audit
+  history; their credentials were resolved. They are not relabeled as successes.
+
+Durable evidence: `.procoder/evidence/gap-closure-20260927.md`.
+Operator setup and cleanup: `docs/gap-closure-operations.md`.
+All older checkpoints below retain their historical context.
 
 # NovaForge build status
 
@@ -1019,9 +1034,10 @@ the interface can decompose an epic, run CI, submit a review verdict, create a
 branch, assign work, add a member, add an SSH key, mint a token and enable
 two-factor. Four of those needed edge routes that were never written.
 
-## Known limitations
+## Historical limitations before September 27 gap closure
 
-These are real and are not worked around:
+This preserved list describes the earlier release. The current checkpoint and
+intelligence audit above supersede resolved or reclassified entries:
 
 - **Thin-provisioned storage drifts unless something trims it, and nothing does.** The
   registry's volume is ext4 on an iSCSI zvol mounted without the `discard` option, so
