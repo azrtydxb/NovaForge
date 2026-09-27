@@ -98,5 +98,90 @@
       "ready": true,
       "restarts": 0
     }
+  ],
+  "restored_helm_revision": 17,
+  "restored_configuration": {
+    "openbao_secret": "novaforge-openbao",
+    "disposable_deployment_target": false,
+    "outbound_hosts": ["github.com:443"]
+  },
+  "qualified_operator": {
+    "source": "c9b6778",
+    "runner_image": "192.168.10.131/novaforge/deployment-runner@sha256:8b9429c0f433e3cf09905bd3950a37983ee8a040b9205acce02056f35663ac6e",
+    "chart_sha256": "86fb4114694d85bcbbcc51b182a12e3f1b43f6a1fab2cae8dc06728158737ffe"
+  },
+  "restored_pods": [
+    {
+      "pod": "novaforge-agent-runtime-559dbf9888-2lvrq",
+      "image_id": "192.168.10.131/novaforge/agent-runtime@sha256:ff961b6f61ded079de3125478201cc4a64c272f8a251a1ddb100419a0232bdf6",
+      "ready": true,
+      "restarts": 0
+    },
+    {
+      "pod": "novaforge-ci-runner-b559f8587-t82jh",
+      "image_id": "192.168.10.131/novaforge/ci-runner@sha256:875624cd26bd2a5ec2cd575d254c06a374a2781760c2ba37b36d1f9385800f47",
+      "ready": true,
+      "restarts": 0
+    },
+    {
+      "pod": "novaforge-edge-6cc6495684-ghglt",
+      "image_id": "192.168.10.131/novaforge/edge@sha256:aefbf5aa34ad68ac4802bad756219648feb9270969647d655ab707fa270f4347",
+      "ready": true,
+      "restarts": 0
+    },
+    {
+      "pod": "novaforge-engineering-graph-6685bfbc6d-96xbl",
+      "image_id": "192.168.10.131/novaforge/engineering-graph@sha256:38de50b89b5db6df0e280888f6cde7db16c58d4f66c07e6911b9e505e1a617f7",
+      "ready": true,
+      "restarts": 0
+    },
+    {
+      "pod": "novaforge-gates-7b776cdf8-z66mw",
+      "image_id": "192.168.10.131/novaforge/gates@sha256:8103c6029c4ed593ce7d26a116fd61760594ea727f0311ca4870a5b3a5c0472e",
+      "ready": true,
+      "restarts": 0
+    },
+    {
+      "pod": "novaforge-git-platform-5bfdc9fc56-bt5gv",
+      "image_id": "192.168.10.131/novaforge/git-platform@sha256:13b0a781cd2b0519149fa5d9119fcc36b93efcf609c56b0d57479d69db2611e2",
+      "ready": true,
+      "restarts": 0
+    },
+    {
+      "pod": "novaforge-identity-675cfb5b9c-wv8l2",
+      "image_id": "192.168.10.131/novaforge/identity@sha256:9c2ab79f0a743b1e327b98afc2d2b4a1ddd0b25b0f06d17f84370a9e210e3597",
+      "ready": true,
+      "restarts": 0
+    },
+    {
+      "pod": "novaforge-mcp-server-5c7b556476-5w9fm",
+      "image_id": "192.168.10.131/novaforge/mcp-server@sha256:7b63224c7acc65afaa9e6aeac17446e11f774de76e6de6c32162f9cf627c6605",
+      "ready": true,
+      "restarts": 0
+    },
+    {
+      "pod": "novaforge-minio-58cf886859-pg8zl",
+      "image_id": "docker.io/minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+      "ready": true,
+      "restarts": 0
+    },
+    {
+      "pod": "novaforge-postgres-684b64f44f-55tbr",
+      "image_id": "docker.io/pgvector/pgvector@sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b",
+      "ready": true,
+      "restarts": 0
+    },
+    {
+      "pod": "novaforge-redis-8558547456-qhbz4",
+      "image_id": "docker.io/library/redis@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2",
+      "ready": true,
+      "restarts": 0
+    },
+    {
+      "pod": "novaforge-work-reviews-5bbd69595b-xmtdg",
+      "image_id": "192.168.10.131/novaforge/work-reviews@sha256:620a202bdd2fdbe500d5ea074ce929f96d2c7abecd78994a1f44e8ca1e21447a",
+      "ready": true,
+      "restarts": 0
+    }
   ]
 }

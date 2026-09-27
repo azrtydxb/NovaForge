@@ -1,7 +1,7 @@
 # September 27 gap-closure release evidence
 
-Qualification in progress. The final release checkpoint will append the complete
-cluster acceptance and cleanup results below.
+Core release qualification is complete. The final sections record all-suite
+acceptance, the expired-issuer rerun, cleanup and explicit remaining follow-ups.
 
 ## Identities and baseline
 
@@ -121,3 +121,37 @@ reached the job. An explicit open operator-reconciliation task records this
 limitation; renewing the issuer is not evidence to erase the obligation.
 Both agent and agent_ci passed in the final run; the historical gateway failure
 did not recur.
+
+## Final cluster run and restored installation
+
+At application 19b29cc / Helm revision 16, the full harness passed 15 suites:
+airgap, deploy, work_ci, gui, search, graph, factory, agent, agent_ci, merge, cli,
+crossorg, git_host, cert_rotation and governed_deploy. Secrets failed on the
+expired development issuer described above; its rerun passed under restored
+Helm revision 17 after issuer renewal. The agent suite
+ended succeeded. Agent-CI passed its terminal-outcome propagation criterion with
+an agent/job failure; that is not a claim of a successful model review. No gateway
+timeout was observed in the runtime log inspection.
+
+Final rotation changed serial B4E47592A9BBCCA44B423378F90BAD79 to
+1AB5C01DBBCB2B810B3BD28AB684810C with unchanged pod UID/restart count and verified
+Git before and after. Final governed deployment again passed actual failure/retry,
+cleanup and observed graph projection on the qualified runner digest.
+
+Helm revision 17 restores the original novaforge-openbao broker Secret and disables
+the disposable deployment target. The temporary outbound fixture rule is removed;
+only the explicit GitHub HTTPS connected rule remains. Application images remain
+19b29cc. All deployment-fixture credential obligations were resolved before
+cleanup. The fixture organization, provider mount/policy/token and operator
+Secrets and namespaces were removed. Restored secrets and readiness acceptance
+passed, confirming the original broker configuration works.
+The fixture browser session was signed out.
+
+Restored acceptance completed: secrets PASS, deploy PASS, airgap PASS at Helm
+revision 17 with unchanged application images. The complete 16-suite evidence
+therefore consists of the 15 passing full-run suites plus the corrected secrets
+rerun; the initial issuer failure remains documented. All 12 restored pods are
+ready with zero restarts. The three fixture namespaces and three operator Secrets
+are absent. Seven owned build worktrees, local registry/BuildKit tunnels and the
+temporary secret-bearing Helm values copy were removed; user configuration and
+non-secret execution evidence remain intact.

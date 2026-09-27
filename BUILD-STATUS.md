@@ -1,45 +1,63 @@
-# September 27 gap-closure checkpoint — final acceptance in progress
+# September 27 gap-closure release — application 19b29cc
 
-The authorized core Git gaps are implemented and proven on kw: cross-fork parent
-policy evaluation, durable signed Run/CI webhooks, SSH-authenticated HTTPS LFS,
-physical blob cleanup and fork ownership, approved outbound destinations, and
-CLI/GUI import, refresh, conversion and fork workflows. Actual cert-manager
+The authorized core Git gaps are implemented and deployed on kw: cross-fork
+parent-policy evaluation, durable signed Run/CI webhooks, SSH-authenticated HTTPS
+LFS, physical blob cleanup and fork ownership, approved outbound destinations,
+and CLI/GUI import, refresh, conversion and fork workflows. Actual cert-manager
 renewal reloads Git TLS without restarting the process.
 
-The governed deployment suite now passes actual approval, denial, immutable
-intent, workload creation, provider credential cleanup, real target failure,
-explicit retry and graph projection. OpenBao-issued Kubernetes credentials were
-accepted and subsequently rejected by the target after their signed 600-second
-expiry. Browser qualification additionally found and fixed missing deployment
-intent in the approval dialog. Final application images are building from
-`19b29cc`; the qualified operator runner is built from `c9b6778`.
+**All 16 registered cluster suites have passing evidence on 19b29cc.** The initial
+run passed 15; secrets failed because its development CI issuer had expired. After
+renewing that dedicated issuer, secrets passed using the restored original broker
+configuration. The same-image restored-installation readiness and air-gap checks also pass.
+This is not a claim that the initial run was entirely green.
 
-Full Go regression passed (46 tested packages), with the changed deployment,
-runner, Git and edge packages additionally checked after corrections. Frontend
-build/types, generated contracts and traceability checks pass. Structural
-traceability is **47 of 47 covered**; it verifies cited acceptance criteria and
-must not be read as a claim that every broader intelligence feature is qualified.
-The all-suite final cluster checkpoint and browser approval flow are pending.
+Governed deployment passes actual independent approval, denial, immutable intent,
+workload creation, real target failure, explicit retry, credential cleanup and
+observed graph projection. Real OpenBao Kubernetes credentials were accepted and
+then rejected after their signed 600-second expiry. Actual browser checks cover
+request, separate reviewer approval of the displayed exact intent, successful
+author execution, and refusal of a stale approval after a newer deployment.
 
-Current boundaries:
+Application images were built on kw from `19b29cc`. The qualified operator runner
+is independently pinned from `c9b6778`; its image/chart digests and runtime image
+identities are in `.procoder/evidence/gap-closure-20260927-images.json` and the
+companion evidence report. Qualification used Helm revision 16. **Revision 17**
+restores the original broker configuration, disables the disposable target, and
+removes its network rule. Temporary provider token, mount/policy, organization,
+operator Secrets and namespaces are removed. All 12 deployment pods are ready.
 
-- Real staging/production deployment targets require explicit operator onboarding.
-  The disposable qualification target and temporary broker token will be removed.
+Full Go regression passed (46 tested packages, 22 packages with no tests), with
+changed packages additionally verified after corrections. Go build/vet,
+frontend build/types, all 32 existing browser regression cases, generated-contract
+checks and repository gates pass. Structural traceability is **47 of 47 covered**;
+that count is not a claim of complete broader intelligence qualification.
+
+Current boundaries and explicit follow-ups:
+
+- Real staging/production targets require operator onboarding; the disposable
+  target proved the production path and has been removed.
 - Cross-organization forks remain refused. Git import preserves refs/history,
-  not LFS payloads, release assets, issues, accounts or CI metadata.
-- Connected destinations require explicit application and cluster policies;
-  defaults remain disconnected. Workspaces remain offline.
-- Intelligence qualification remains tracked in the open
-  `.procoder/todo/20260927-intelligence-production-qualification.md` follow-up.
-  See `.procoder/plans/intelligence-audit-20260927.md` for the eight dispositions.
-- Nexus recurring trim is a concrete, dry-run-validated proposal, not an applied
-  shared-infrastructure change. Accepted development OpenBao custody is unchanged.
-- Earlier ambiguous deployment fixture attempts remain uncertain in audit
-  history; their credentials were resolved. They are not relabeled as successes.
+  not LFS payloads, release assets, issues, accounts or CI metadata. Workspaces
+  remain offline. Connected hosts require explicit application/cluster rules.
+- Intelligence qualification remains open in
+  `.procoder/todo/20260927-intelligence-production-qualification.md`; the eight
+  audited dispositions are in `.procoder/plans/intelligence-audit-20260927.md`.
+- The expired-issuer attempt returned no provider lease handle and retains an
+  unknown-outcome cleanup record. No credential reached the CI job. Its bounded
+  operator-resolution follow-up is
+  `.procoder/todo/20260927-provider-unknown-outcome-reconciliation.md`.
+  Issuer renewal does not falsify historical cleanup evidence.
+- Nexus recurring trim remains a concrete, dry-run-validated proposal awaiting
+  shared-infrastructure review. Accepted development OpenBao custody is unchanged.
+- Earlier ambiguous disposable deployment attempts retain uncertain audit history
+  with resolved credentials; their target namespaces are now removed.
+- The agent suite succeeded. Agent-CI passed outcome propagation with an agent/job
+  failure; this does not claim a successful model review. No gateway timeout was
+  observed in the runtime log inspection.
 
-Durable evidence: `.procoder/evidence/gap-closure-20260927.md`.
-Operator setup and cleanup: `docs/gap-closure-operations.md`.
-All older checkpoints below retain their historical context.
+Evidence: `.procoder/evidence/gap-closure-20260927.md`.
+Operations: `docs/gap-closure-operations.md`. Older checkpoints below are historical.
 
 # NovaForge build status
 
