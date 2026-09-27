@@ -7,8 +7,14 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=1 GOOS=linux go build -trimpath -o /out/app ./cmd/engineering-graph
+# SCIP v0.9.0 uses local replacement modules: install its pinned source tree,
+# since go install package@version deliberately rejects those replacements.
 RUN go install github.com/scip-code/scip-go/cmd/scip-go@v0.2.7 \
- && go install github.com/scip-code/scip/cmd/scip@v0.9.0 \
+ && git init /tmp/scip \
+ && git -C /tmp/scip remote add origin https://github.com/scip-code/scip.git \
+ && git -C /tmp/scip fetch --depth 1 origin e8ee0ae6038f8298e2195812eea9d7b1196748ae \
+ && git -C /tmp/scip checkout --detach FETCH_HEAD \
+ && (cd /tmp/scip && go install ./cmd/scip) \
  && go install golang.org/x/tools/gopls@v0.21.1
 
 FROM node:22.22.0-bookworm-slim AS node
