@@ -22,4 +22,4 @@ open(p, "w").write(head + "## Evidence\n\n" + ev + "\n")
 PY
 rm -f "$TMP"
 prettier --write "$F" >/dev/null 2>&1 || true
-"/Users/pascal/.claude/plugins/cache/procoder/procoder/3.6.0/hooks/launcher.sh" todo close "$ID"
+"/Users/pascal/.claude/plugins/cache/procoder/procoder/3.7.0/hooks/launcher.sh" todo close "$ID"
