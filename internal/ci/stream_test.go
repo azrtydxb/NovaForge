@@ -41,6 +41,28 @@ const streamTestSecret = "stream-test-secret"
 // log was ever sealed, listing a job's artifacts ignored the job id, and an
 // artifact's content had no way out.
 func TestRunnerJobStreamAndArtifact(t *testing.T) {
+	testRunnerJobStreamAndArtifact(t, false)
+}
+
+func TestRunnerRetriesReceiptWhileFinalLogIsInTransit(t *testing.T) {
+	testRunnerJobStreamAndArtifact(t, true)
+}
+
+type delayedFinalLog struct{ grpc.ServerStream }
+
+func (s delayedFinalLog) RecvMsg(message any) error {
+	err := s.ServerStream.RecvMsg(message)
+	if request, ok := message.(*civ1.ConnectRequest); err == nil && ok && request.GetLogChunk().GetLine() == "widgets built" {
+		select {
+		case <-time.After(7 * time.Second):
+		case <-s.Context().Done():
+			return s.Context().Err()
+		}
+	}
+	return err
+}
+
+func testRunnerJobStreamAndArtifact(t *testing.T, delayFinalLog bool) {
 	t.Setenv("NOVAFORGE_ALLOW_LOCAL_EXEC", "1")
 	pool := ciPool(t)
 	rdb := ciRedis(t)
@@ -56,7 +78,12 @@ func TestRunnerJobStreamAndArtifact(t *testing.T) {
 	}
 	srv := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(svcauth.UnaryServerInterceptor(nil, streamTestSecret)),
-		grpc.ChainStreamInterceptor(svcauth.StreamServerInterceptor(nil, streamTestSecret)),
+		grpc.ChainStreamInterceptor(svcauth.StreamServerInterceptor(nil, streamTestSecret), func(server any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+			if delayFinalLog {
+				stream = delayedFinalLog{stream}
+			}
+			return handler(server, stream)
+		}),
 	)
 	civ1.RegisterRunnerServiceServer(srv, svc.Server)
 	civ1.RegisterCIServiceServer(srv, svc.Query)

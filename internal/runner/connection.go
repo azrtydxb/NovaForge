@@ -3,10 +3,13 @@ package runner
 import (
 	"context"
 	"fmt"
-	"google.golang.org/protobuf/proto"
 	"log"
 	"sync"
 	"time"
+
+	"google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 
 	civ1 "github.com/novaforge/novaforge/gen/novaforge/ci/v1"
 	"github.com/novaforge/novaforge/internal/redact"
@@ -116,7 +119,12 @@ func (s *Session) Run(ctx context.Context) error {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				s.runJob(ctx, send, job)
+				if err := s.runJob(ctx, send, job); err != nil {
+					select {
+					case recvErrCh <- err:
+					case <-ctx.Done():
+					}
+				}
 			}()
 		}
 	}
@@ -126,7 +134,7 @@ func (s *Session) Run(ctx context.Context) error {
 // produced and reporting its final status once it exits. The status is
 // reported only after every chunk has been handed to the stream, so the
 // platform never seals a log before the last lines the job printed.
-func (s *Session) runJob(ctx context.Context, send func(*civ1.ConnectRequest) error, job *civ1.ConnectResponse) {
+func (s *Session) runJob(ctx context.Context, send func(*civ1.ConnectRequest) error, job *civ1.ConnectResponse) error {
 	log.Printf("runner: starting job %s", job.GetJobId())
 
 	// The job's brokered credentials are masked before a line leaves this
@@ -171,7 +179,7 @@ func (s *Session) runJob(ctx context.Context, send func(*civ1.ConnectRequest) er
 
 	reportCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if _, err := s.Client.ReportStatus(reportCtx, &civ1.ReportStatusRequest{
+	receipt := &civ1.ReportStatusRequest{
 		RunnerId:        s.RunnerID,
 		ConnectionId:    job.GetConnectionId(),
 		Token:           s.Token,
@@ -180,10 +188,30 @@ func (s *Session) runJob(ctx context.Context, send func(*civ1.ConnectRequest) er
 		ExitCode:        int32(exitCode),
 		LastLogSequence: proto.Int64(lastLogSequence),
 		Detail:          mask.Line(detail),
-	}); err != nil {
-		log.Printf("runner: report status for job %s: %v", job.GetJobId(), err)
+	}
+	// Stream Send only queues a log frame. Its durable database admission may
+	// finish after the separate unary receipt reaches the server. Retry the exact
+	// immutable receipt; the owner deduplicates it, including lost responses.
+	for {
+		_, err := s.Client.ReportStatus(reportCtx, receipt)
+		if err == nil {
+			break
+		}
+		code := grpcstatus.Code(err)
+		pending := code == codes.FailedPrecondition && grpcstatus.Convert(err).Message() == "log sequence barrier incomplete"
+		if !pending && code != codes.Unavailable && code != codes.DeadlineExceeded {
+			return fmt.Errorf("report job %s at log sequence %d: %w", job.GetJobId(), lastLogSequence, err)
+		}
+		select {
+		case <-reportCtx.Done():
+			// Closing this incarnation lets the owner reconcile an unacknowledged
+			// execution instead of leaving a healthy heartbeat over a stuck job.
+			return fmt.Errorf("report job %s at log sequence %d: %w", job.GetJobId(), lastLogSequence, err)
+		case <-time.After(250 * time.Millisecond):
+		}
 	}
 	log.Printf("runner: finished job %s: %s", job.GetJobId(), status)
+	return nil
 }
 
 // UploadArtifactsThrough returns the OnArtifacts hook that sends a finished

@@ -15,6 +15,8 @@ def command(args, **kw):
     return subprocess.check_output(args, stderr=subprocess.PIPE, **kw).decode().strip()
 def obj(*args):
     return json.loads(command(k + list(args) + ["-o", "json"]))
+def apply(data):
+    subprocess.run(k + ["apply", "-f", "-"], input=json.dumps(data).encode(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
 secret = obj("-n", "novaforge", "get", "secret", "deployment-fixture-users")
 users = {key: base64.b64decode(value).decode() for key, value in secret["data"].items()}
 edge = obj("-n", "novaforge", "get", "svc", "novaforge-edge")["status"]["loadBalancer"]["ingress"][0]["ip"]
@@ -91,4 +93,27 @@ with tempfile.TemporaryDirectory() as tmp:
     api("POST", root + "/approvals/" + denied["id"] + "/decision", {"decision": "denied"})
     token = author
     refuse("POST", repo + "/deployments/" + denied["id"] + "/execute", {})
+    # A real target authorization failure is definitive and visible. Restore
+    # exactly the fixture Role before explicitly retrying the same intent.
+    failing = api("POST", repo + "/deployments", {**intent, "id": str(uuid.uuid4())})
+    token = reviewer
+    api("POST", root + "/approvals/" + failing["id"] + "/decision", {"decision": "approved"})
+    token = author
+    role = obj("-n", "novaforge-deploy-target", "get", "role", "approved-fixture")
+    reduced = json.loads(json.dumps(role))
+    for rule in reduced["rules"]:
+        if "apps" in rule["apiGroups"]: rule["verbs"] = ["get", "list", "watch"]
+    command(k + ["-n", "novaforge-deploy-target", "delete", "deployment", "approved-app", "--wait=true"])
+    apply(reduced)
+    failed_path = repo + "/deployments/" + failing["id"]
+    try:
+        failure = api("POST", failed_path + "/execute", {})
+        assert failure["state"] == "failed", failure
+        assert failure["attempts"][-1]["error"] or failure["attempts"][-1]["summary"], failure
+    finally:
+        role["metadata"].pop("resourceVersion", None)
+        apply(role)
+    recovered = api("POST", failed_path + "/retry", {})
+    assert recovered["state"] == "succeeded" and len(recovered["attempts"]) == 2, recovered
+    print("PASS real target failure and explicit retry after authorization repair", flush=True)
     print("PASS real approved workload, independent approval, denial, immutable intent, replay and credential cleanup", flush=True)
