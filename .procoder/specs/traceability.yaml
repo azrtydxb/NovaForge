@@ -727,31 +727,20 @@ criteria:
       - ./internal/work TestCompletedSinceCountsOnlyItemsThatAreDoneNow
       - ./internal/work TestCompletedSinceIsOrganizationScoped
   S-24/TestWebhookDelivered:
-    status: partial
+    status: covered
     note: >-
-      A push delivers a signed POST and the delivery is recorded with the endpoint's
-      response status; a hook whose endpoint always fails is retried to a bound and
-      then left failed rather than retried forever, and the message is acked so a pod
-      restart does not re-deliver to a broken endpoint. The worker is a Redis consumer
-      group and TestGitPlatformStartsTheDeliveryWorker asserts cmd/git-platform starts
-      it — verified red by unstarting it. Mutation-checked: signing body+0x27 and
-      ignoring the retry bound each make the corresponding test fail.
-
-      Partial, not covered: S-24 names pushes, Engineering Runs and CI results, and
-      only pushes are delivered. Neither an Engineering Run nor a CI result is
-      published on any stream today, and StreamRunsDeleted carries run ids with no
-      repository, so there is nothing routable to a repository's hooks. Closing this
-      needs a publisher in internal/ci and work-reviews.
-
-      Also unproven on the cluster: nothing was built or deployed, and git-platform is
-      listed under networkPolicy.airGapped, so in the deployed configuration a hook
-      reaches an in-cluster endpoint and a public-internet endpoint is dropped by
-      Cilium.
+      Pushes, Engineering Run transitions and aggregate CI outcomes deliver signed, repository-scoped versioned events with stable IDs. Owning services commit outbox intent atomically; Redis outages and worker restarts preserve publication and bounded delivery retries. The deployed git_host suite verifies signed push, Run and successful CI completion notifications to an explicitly approved receiver. Delivery is at least once.
     go_tests:
       - ./internal/webhooks TestWebhookDelivered
       - ./internal/webhooks TestWebhookRetriesAreBounded
       - ./internal/webhooks TestGitPlatformStartsTheDeliveryWorker
       - ./internal/webhooks TestHooksAreScopedToTheirOrganization
+      - ./internal/webhooks TestRunAndCIWebhookOutbox
+      - ./internal/webhooks TestWebhookRetryBudgetSurvivesRestart
+    e2e:
+      - script: tests/e2e/git_host_test.sh
+        step: "1. connected Git migration, signed events, SSH LFS and physical cleanup"
+
   S-24/TestWebhookSecretNeverReadBack:
     status: covered
     note: >-
@@ -765,24 +754,17 @@ criteria:
     go_tests:
       - ./internal/webhooks TestWebhookSecretNeverReadBack
   S-25/TestLFSRoundTrip:
-    status: partial
+    status: covered
     note: >-
-      An unmodified git-lfs client pushes a 5 MiB file over HTTP and a fresh clone
-      retrieves it byte for byte. The proof that the payload is not in the git
-      directory is that the whole bare repository is under 1 MiB afterwards — random
-      data does not compress, so that is evidence rather than an assertion about
-      pointers.
-
-      Partial: LFS is served over HTTP only. There is no git-lfs-authenticate on the
-      SSH transport, so a clone that reaches the platform over ssh:// will not fetch
-      LFS objects. The batch verify operation and non-basic transfer adapters are
-      refused with a 422 saying so rather than implemented.
-
-      Also unproven on the cluster, and deleting a repository or organization leaves
-      its LFS payloads in the bucket — the rows cascade, the objects do not, which
-      matches the pre-existing behaviour for release assets.
+      Unmodified git-lfs clients round-trip payloads over HTTP and over verified HTTPS after SSH git-lfs-authenticate. Short-lived tickets are repository- and operation-scoped and recheck current authorization. The deployed git_host suite verifies SSH LFS, fork ownership, archived upload refusal, repository-name reuse and physical cleanup after repository and organization deletion. Durable cleanup survives real storage disconnection and worker restart. Non-basic transfer adapters remain unsupported.
     go_tests:
       - ./internal/gitops TestLFSRoundTrip
+      - ./internal/gitops TestLFSOverSSHWithVerifiedHTTPS
+      - ./internal/gitops TestBlobCleanupSurvivesStorageDisconnectAndWorkerRestart
+    e2e:
+      - script: tests/e2e/git_host_test.sh
+        step: "1. connected Git migration, signed events, SSH LFS and physical cleanup"
+
   S-25/TestLFSQuotaAndOwnership:
     status: covered
     note: >-
@@ -856,25 +838,15 @@ criteria:
       - ./internal/gitops TestRepositoryCollaboratorGrants
       - ./internal/authz TestRepoLimitedScopeIsRefusedByRequireOrg
   S-27/TestImportFromRemote:
-    status: partial
+    status: covered
     note: >-
-      An imported repository carries the remote's commits, branches and tags. The
-      clone lands in a throwaway directory moved into place only once complete, so a
-      failed import leaves no row and no directory — verified red by removing the
-      cleanup. That assertion had to be strengthened: git removes its own target
-      directory when a clone fails, so the obvious test passed with no cleanup at all;
-      what catches the leak is a clone that succeeds and an insert that is then
-      refused as a duplicate name.
-
-      Partial, not covered: git-platform is in the chart's networkPolicy.airGapped,
-      so its egress is cluster-only and an import from GitHub or a public Gitea fails
-      at connect until an operator removes it from that list. Import works from an
-      in-cluster remote. values.yaml was deliberately left alone — that is the
-      operator's trade-off. The code is deployed at dc5f70f, but no e2e suite exercises
-      import or mirroring and nf has no import command, so nothing has imported a
-      repository on the cluster.
+      Import preserves remote commits, branches and tags and removes incomplete imports. Application rules and Cilium egress jointly restrict exact approved destinations; redirects, proxies and unapproved destinations are refused. The deployed git_host suite imports an approved public GitHub repository and controlled upstream, observes refresh and writable conversion, and checks policy refusal. CLI and actual GUI import/mirror workflows are exercised. Git history import does not migrate LFS payloads, release assets, issues, users or CI metadata.
     go_tests:
       - ./internal/gitops TestImportFromRemote
+    e2e:
+      - script: tests/e2e/git_host_test.sh
+        step: "1. connected Git migration, signed events, SSH LFS and physical cleanup"
+
   S-27/TestMirrorRefresh:
     status: covered
     note: >-
@@ -895,8 +867,8 @@ criteria:
       changes, indistinguishable from an upstream nobody has pushed to. Verified red
       by replacing the goroutine with "_ = mirrorer".
 
-      Not proven on the cluster: the code is deployed at dc5f70f, but no e2e suite
-      refreshes a mirror, so the mirrorer has never been observed running in a pod.
+      The git_host cluster suite now refreshes the controlled upstream after a new
+      commit, and the actual GUI exercises refresh and mirror-to-writable conversion.
     go_tests:
       - ./internal/gitops TestMirrorRefresh
       - ./internal/gitops TestMirrorCredentialIsEncryptedAndNeverLogged
@@ -938,12 +910,10 @@ criteria:
       a plaintext request on the TLS port was refused. This step had been written and
       never executed until then.
 
-      Both clauses of the criterion — an unmodified git client over HTTPS against the
-      served certificate, and a refused plaintext attempt — are proven, so this is
-      covered. Beyond the criterion: certificate renewal has not been observed in a
-      pod. The Go test proves the server reloads a renewed keypair without a restart,
-      and was seen red with a load-once keypair; no deployment has yet lived through
-      cert-manager actually rotating it.
+      The cert_rotation cluster suite now induces actual cert-manager renewal and
+      observes the changed serial through a verified TLS connection while pod UID
+      and restart count remain unchanged. Git clone/push pass before and after
+      renewal; plaintext remains refused.
     go_tests:
       - ./internal/gitops TestCloneAndPushOverHTTPS
       - ./internal/gitops TestCloneOverHTTPSByTheCertificateDNSName
@@ -953,43 +923,21 @@ criteria:
     e2e:
       - script: tests/e2e/deploy_test.sh
         step: "4b. the same clone and push work over HTTPS, and plaintext on the TLS port is refused"
+      - script: tests/e2e/cert_rotation_test.sh
+        step: "1. cert-manager renewal reaches verified Git without a process restart"
   S-30/TestForkAndCrossForkRun:
-    status: partial
+    status: covered
     note: >-
-      A fork carries the parent's history, records its parent id, and a push to the
-      fork leaves the parent's refs unchanged. It is a real clone with no alternates,
-      and its origin remote is removed — a bare clone leaves a remote whose refspec
-      lets a plain git fetch overwrite the fork's own refs from upstream.
-
-      A cross-fork run merges through the one existing merge path: mergeRefs gained a
-      single sourceRepoPath parameter and fetches the fork's ref into the throwaway
-      clone, never into the bare target, which would publish a ref before any gate had
-      authorized it. Verified red by dropping SourceRepo from the MergeRequest.
-
-      Gate authority is the criterion that mattered most and the one the first test
-      did not earn: refusal alone does not distinguish "the parent's gate was not
-      satisfied" from "the gates could not be read at all", and naming the fork as the
-      run's repository still refused the merge. The test now requires the refusal to
-      name the gate the PARENT declared. Resolve is given the target branch's SHA
-      rather than a ref name, so definitions are pinned by content address and a fork
-      cannot substitute its own.
-
-      The default is pinned at the layer that can regress it. Removing
-      COALESCE(source_repo_id, repo_id) from both read queries broke no test, because
-      the Go-side default masked it; the case it protects is a rolling deploy where an
-      older binary inserts a run without the column, and a nil source repository makes
-      the gate lookup resolve a repository that does not exist.
-
-      Partial, not covered: a cross-fork run cannot SATISFY a gate that reads the
-      change's tree, because a gate runner materializes the workspace from the target
-      repository, where a fork's objects are absent until the merge fetches them. Such
-      a run is refused, never waved through. Forking into another organization is
-      refused outright. The code is deployed at dc5f70f, but no e2e suite forks a
-      repository and nf has no fork command, so no fork has been made on the cluster.
+      Forks isolate refs and payload ownership. Run evaluation carries immutable source repository identity while the target SHA pins policy. Changed files and executable workspaces come from the fork; policy and API baselines come from the parent. Local tests prove a broken contribution fails, a corrected contribution passes, and weakened fork policy cannot replace parent policy. The deployed merge suite satisfies the parent's executable gate and independently approves a same-branch cross-fork merge. CLI and GUI expose source identity; cross-organization forks remain refused.
     go_tests:
       - ./internal/gitops TestForkCarriesHistoryAndIsolatesWrites
       - ./internal/reviews TestCrossForkRun
       - ./internal/reviews TestRunWithNoSourceRepositoryReadsAsItsOwn
+      - ./internal/gates TestCrossForkExecutableGate
+    e2e:
+      - script: tests/e2e/merge_test.sh
+        step: "7. a fork satisfies its parent's executable gates"
+
   S-31/TestTeamAccess:
     status: covered
     note: >-

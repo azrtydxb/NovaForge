@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/util/validation"
@@ -94,7 +95,41 @@ func RunHelmJob(ctx context.Context, args []string, out io.Writer) error {
 		return got, nil
 	}
 	common := []string{"--namespace", namespace, "--kubeconfig", "/credentials/config", "--output", "json"}
-	observe := func() (helmRelease, error) { return invoke(append([]string{"status", release}, common...)...) }
+	observe := func() (helmRelease, error) {
+		got, err := invoke(append([]string{"status", release}, common...)...)
+		if err != nil {
+			return got, err
+		}
+		// Helm omits release Labels from status JSON. Its storage selector does
+		// read them; bind only when the selected release is this exact revision.
+		for _, candidate := range []string{binding, previous} {
+			if candidate == "-" {
+				continue
+			}
+			cmd := exec.CommandContext(ctx, "helm", append([]string{"list", "--all", "--filter", "^" + release + "$", "--selector", "novaforge.dev/binding=" + releaseBindingLabel(candidate), "--max", "1"}, common...)...)
+			var stdout boundedOutput
+			cmd.Stdout = &stdout
+			cmd.Stderr = io.Discard
+			if cmd.Run() != nil {
+				continue
+			}
+			var rows []struct {
+				Name      string `json:"name"`
+				Namespace string `json:"namespace"`
+				Revision  string `json:"revision"`
+				Status    string `json:"status"`
+			}
+			if json.Unmarshal(stdout.Bytes(), &rows) != nil || len(rows) != 1 {
+				continue
+			}
+			row := rows[0]
+			if row.Name == got.Name && row.Namespace == got.Namespace && row.Revision == strconv.Itoa(got.Version) && row.Status == got.Info.Status {
+				got.Labels = map[string]string{"novaforge.dev/binding": releaseBindingLabel(candidate)}
+				break
+			}
+		}
+		return got, nil
+	}
 	emit := func(got helmRelease) error {
 		evidence := HelmEvidence{State: StateUncertain, Release: release, Namespace: namespace, Binding: binding}
 		if got.Name == release && got.Namespace == namespace && releaseMatchesBinding(got, binding) && got.Version > 0 {
