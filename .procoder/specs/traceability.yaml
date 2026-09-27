@@ -413,11 +413,11 @@ criteria:
       part of the test). Adding a dependency follows the policy path (no
       person asked, dependencies gate made required, decision recorded as
       proof); a schema change needs an owner/admin approval bound to the head,
-      denial blocks, a later push needs a new approval. Deploying to staging
-      or production has no action in this platform, so only Decide's rule is
-      asserted for it (TestDeployProductionForbiddenWithoutGrant). The
-      approvals inbox is exercised by gui_test.sh only as an endpoint that
-      answers. Not run on the cluster in this change.
+      denial blocks, a later push needs a new approval. Governed application
+      deployment now has production service/REST/GUI callers and exact immutable
+      intent approval. The governed_deploy cluster suite proves independent
+      approval, denial, changed-intent refusal, observed workload creation and
+      explicit retry after a real target authorization failure.
     go_tests:
       - ./internal/gates TestApprovalPaths
       - ./internal/gates TestManifestParsersFindEveryDeclaredDependency
@@ -427,6 +427,11 @@ criteria:
       - ./internal/approvals TestPolicyIsNotDerivedFromModelOutput
       - ./internal/approvals TestRulesMatchDecide
       - ./internal/gates TestResolveApprovalRequiresOrgScope
+      - ./internal/deployment TestReviewRetryCannotUseOldFailedDelivery
+      - ./internal/edge TestDeploymentApprovalShowsBoundIntentWithoutUnrelatedDetail
+    e2e:
+      - script: tests/e2e/governed_deploy_test.sh
+        step: "1. governed deployment through real approval, provider and executor"
 
   S-12/TestShortLivedCredential:
     status: covered
@@ -445,7 +450,11 @@ criteria:
       does not appear in the stored log, and a lease is recorded for the job.
       It is a separate suite because a binding is operator-owned and read at
       startup, so it cannot exist for the throwaway organization the other
-      suites create.
+      suites create. Governed deployment additionally qualifies OpenBao Kubernetes
+      engine credentials against the actual target, revokes generated accounts
+      after use, and refuses unqualified provider bindings. The real 600-second
+      expiry probe observed target authentication succeed and then become
+      Unauthorized after signed expiry; the fixture suite proves cleanup.
     go_tests:
       - ./internal/ci TestShortLivedCredential
       - ./internal/ci TestJobLogNeverCarriesItsCredential
@@ -686,8 +695,8 @@ criteria:
       defaulting (skipped only where helm is absent). On the cluster the
       expected Deployments are rendered from the release's own values and must
       all exist and be ready, readiness being /healthz. The expected-set part
-      of step 1 was written in this change and has not yet been run against
-      the cluster. Agent runs as pods in per-run namespaces are S-7's evidence.
+      of step 1 passed in the deployed acceptance suite. Agent runs as pods in
+      per-run namespaces are S-7's evidence.
     go_tests:
       - ./internal/service TestHelmChartDeploysEveryServiceWithTheEnvironmentItsBinaryReads
     e2e:
