@@ -1,0 +1,16 @@
+identity verified c8ade67 sha256:9c2ab79f0a743b1e327b98afc2d2b4a1ddd0b25b0f06d17f84370a9e210e3597
+git-platform verified c8ade67 sha256:d0db8636fdcfae02b8aa1920a09e174779f52e5e3c77e43a69a0cb8eca93d51b
+work-reviews verified c8ade67 sha256:c5d191ced35923d12399f2d403392e05b8372525c6d1419996140662288773c1
+ci-runner verified c8ade67 sha256:692a6f6e4e7a07577639e0741f59c3c398f224bdbf44ba45d5353464ea742382
+gates verified c8ade67 sha256:67d47aee0f7afbc99c6fa7d440e69445bd6c9a394358c01c73fbff77c2d32bfb
+agent-runtime verified c8ade67 sha256:669da808738cc720c35a3eb8705189b5f93869d199a78d741920f161225f1864
+engineering-graph verified c8ade67 sha256:d571aace92780f643a7e9cd146c22bb1405d0f97b00003778a578f7e7127b113
+mcp-server verified c8ade67 sha256:30ee0bdfb12cfcc441ff36368c6728cbf6f71fab8108dbb48813ff09136cc152
+edge verified c8ade67 sha256:27c9269b0c22a2236c3bd8fc408b03bfd0e80c33e12603e6c0e811019a350d11
+runner verified c8ade67 sha256:65ba61e5e29b4ca29adde0243c0c7d62b9d81c561e683b62898766ce4b58b3d2
+gate-analysis verified c8ade67 sha256:18c5135159600a81a9aa66d2bdc19ceea08c7be762e46c271855f67d12dc3116
+==> Linting deploy/helm/novaforge
+[INFO] Chart.yaml: icon is recommended
+
+1 chart(s) linted, 0 chart(s) failed
+Review, commit and push these values to main; Kuvryn Sync performs deployment.

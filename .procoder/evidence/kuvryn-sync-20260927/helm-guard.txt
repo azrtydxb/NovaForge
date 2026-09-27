@@ -1,0 +1,1 @@
+Kuvryn Sync manages this namespace; promote images/configuration in Git (deploy/kuvryn-sync/README.md)

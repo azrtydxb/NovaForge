@@ -1,0 +1,10 @@
+{
+  "format": "PostgreSQL custom archive",
+  "sha256": "3fd6a63160a30096dc948be489ca4ba0dc495237ed7c87204b21766e5f6ba061",
+  "restored_database": "novaforge_sync_restore_check",
+  "restored_application_tables": 94,
+  "restore_exit": "successful; pg_restore --exit-on-error produced no errors",
+  "temporary_restore_database_removed": true,
+  "private_backup_location": "/tmp/novaforge-kuvryn-migration-20260927",
+  "access": "directory mode 0700, private files mode 0600; not committed"
+}

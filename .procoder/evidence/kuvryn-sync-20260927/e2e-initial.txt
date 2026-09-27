@@ -1,0 +1,8 @@
+airgap: PASS — PASS: agent-runtime is confined to the cluster and its model gateway.
+gui: PASS — PASS: the NovaForge GUI is served by the cluster and every screen's data answers.
+deploy: FAIL — FAIL: Kuvryn Sync Application is not healthy
+work_ci: PASS — PASS: Work Items and CI work end to end on the kw cluster.
+graph: PASS — PASS: pushes write graph edges for the default branch, and knowledge is recorded and found, on the kw cluster.
+agent: FAIL — FAIL: the run ended failed, not succeeded
+agent_ci: PASS — PASS: a CI agent job runs as an Agent Run and reports its status (job: success).
+crossorg: PASS — PASS: one organization's credentials reach nothing in another on the kw cluster.

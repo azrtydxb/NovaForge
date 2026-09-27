@@ -1,0 +1,26 @@
+[
+  {
+    "name": "novaforge-minio-data",
+    "uid": "d37589a4-30db-4f77-ab66-b550e4521f23",
+    "volume": "pvc-d37589a4-30db-4f77-ab66-b550e4521f23",
+    "capacity": {
+      "storage": "20Gi"
+    }
+  },
+  {
+    "name": "novaforge-pg-data",
+    "uid": "f7e5b7b4-976c-4903-83a8-86e0ea0acc1f",
+    "volume": "pvc-f7e5b7b4-976c-4903-83a8-86e0ea0acc1f",
+    "capacity": {
+      "storage": "20Gi"
+    }
+  },
+  {
+    "name": "novaforge-repos",
+    "uid": "a4dfbbc5-ddb7-4333-b716-68c4fc3a3162",
+    "volume": "pvc-a4dfbbc5-ddb7-4333-b716-68c4fc3a3162",
+    "capacity": {
+      "storage": "50Gi"
+    }
+  }
+]

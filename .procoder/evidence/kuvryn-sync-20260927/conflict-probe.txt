@@ -1,0 +1,5 @@
+Metadata-only drift via merge patch created an Update owner distinct from the Apply owner.
+conflictPolicy=fail refused takeover as configured; no pod template was changed.
+Operator restored the label and removed only the probe Update ownership entry.
+This verifies conflict refusal, NOT automatic self-healing.
+The concurrently running deploy suite failed its Healthy prerequisite and must be rerun.

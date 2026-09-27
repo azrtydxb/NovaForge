@@ -1,0 +1,3 @@
+Three PVC UIDs, PV bindings and capacities unchanged.
+Existing service Secret UID and all original credential bytes unchanged.
+Deployer denied Secret read/write, PVC deletion, cross-namespace deployment changes and cluster RBAC creation.

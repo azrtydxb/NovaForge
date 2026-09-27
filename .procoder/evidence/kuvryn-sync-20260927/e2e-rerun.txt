@@ -1,0 +1,2 @@
+deploy: PASS — PASS: NovaForge is deployed on the kw cluster and a real git round trip works.
+agent: PASS — PASS: an Agent Run executes end to end on the kw cluster (final state: succeeded).

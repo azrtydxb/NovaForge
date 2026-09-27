@@ -46,7 +46,9 @@ observations. It cannot read/write Secrets, manage RBAC, delete PVCs or touch
 another namespace. Runtime service accounts and permissions remain operator-owned
 in `runtime-rbac.yaml`, excluded from the Application's Helm render. Apply changes
 to those permissions separately, after reviewing their scope. This separation
-keeps the GitOps deployer from granting itself runtime cluster authority.
+keeps runtime RBAC changes out of automatic reconciliation. These are direct API
+permissions: trusted Git can still change workloads that use the existing runtime
+identities and mounted Secrets. Repository write access remains deployment authority.
 
 All three persistent claims carry `sync.kuvryn.io/prune: disabled`; the deployer
 also lacks PVC delete permission. The Application uses `deletionPolicy: Orphan`.

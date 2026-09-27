@@ -1,0 +1,49 @@
+{
+  "conditions": [
+    {
+      "lastTransitionTime": "2026-09-27T13:23:09Z",
+      "message": "Application is Synced and Healthy",
+      "observedGeneration": 1,
+      "reason": "Healthy",
+      "status": "True",
+      "type": "Ready"
+    }
+  ],
+  "deployedRevision": "4c4d5f8bbed97f86687f80651b69a30891f24052",
+  "desiredRevision": "4c4d5f8bbed97f86687f80651b69a30891f24052",
+  "health": {
+    "state": "Healthy"
+  },
+  "managedKinds": [
+    {
+      "apiVersion": "v1",
+      "kind": "PersistentVolumeClaim"
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Service"
+    },
+    {
+      "apiVersion": "apps/v1",
+      "kind": "Deployment"
+    },
+    {
+      "apiVersion": "cert-manager.io/v1",
+      "kind": "Certificate"
+    },
+    {
+      "apiVersion": "cilium.io/v2",
+      "kind": "CiliumNetworkPolicy"
+    }
+  ],
+  "observedGeneration": 1,
+  "resources": {
+    "healthy": 35,
+    "total": 35
+  },
+  "serviceAccountName": "kuvryn-sync-deployer",
+  "state": "Healthy",
+  "sync": {
+    "state": "Synced"
+  }
+}

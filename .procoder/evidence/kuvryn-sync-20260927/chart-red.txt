@@ -1,0 +1,22 @@
+--- FAIL: TestGitOpsChartPreservesOperatorCredentialsAndAuthority (0.16s)
+    gitops_chart_test.go:21: GitOps rendered operator-owned ServiceAccount
+    gitops_chart_test.go:21: GitOps rendered operator-owned ServiceAccount
+    gitops_chart_test.go:21: GitOps rendered operator-owned ServiceAccount
+    gitops_chart_test.go:21: GitOps rendered operator-owned ServiceAccount
+    gitops_chart_test.go:21: GitOps rendered operator-owned Secret
+    gitops_chart_test.go:21: GitOps rendered operator-owned ClusterRole
+    gitops_chart_test.go:21: GitOps rendered operator-owned ClusterRole
+    gitops_chart_test.go:21: GitOps rendered operator-owned ClusterRole
+    gitops_chart_test.go:21: GitOps rendered operator-owned ClusterRoleBinding
+    gitops_chart_test.go:21: GitOps rendered operator-owned ClusterRoleBinding
+    gitops_chart_test.go:21: GitOps rendered operator-owned ClusterRoleBinding
+    gitops_chart_test.go:21: GitOps rendered operator-owned Role
+    gitops_chart_test.go:21: GitOps rendered operator-owned RoleBinding
+    gitops_chart_test.go:30: credential literal rendered: change-me-in-production
+    gitops_chart_test.go:30: credential literal rendered: value: novaforge
+    gitops_chart_test.go:30: credential literal rendered: value: "minioadmin"
+    gitops_chart_test.go:34: all 10 app/runner plus 3 datastore references must use operator secret
+    gitops_chart_test.go:37: all three claims require prune protection
+FAIL
+FAIL	github.com/novaforge/novaforge/internal/service	0.962s
+FAIL

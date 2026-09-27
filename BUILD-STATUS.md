@@ -1,3 +1,33 @@
+# September 27 deployment ownership — Kuvryn Sync on kw
+
+NovaForge is now managed by Kuvryn Sync v0.7.1, following `main` and rendering
+`deploy/helm/novaforge/values-kw.yaml`. The Application is Synced/Healthy with
+35 managed resources and all 12 deployments ready. Application images remain
+at qualified tag `c8ade67`; migration changed deployment ownership, not application
+binaries. The qualified analysis and semantic producer digests remain in place.
+
+Existing service credentials and all three PVC identities/bound volumes were
+preserved. PostgreSQL backup restoration succeeded with 94 application tables.
+The datastore credential-reference migration required brief restarts, and several
+dependent services restarted while PostgreSQL was unavailable. They recovered.
+Helm release records were archived and retired; do not use Helm upgrades or
+uninstall this former release. The direct deployment script now refuses.
+
+Release workflow: build through `hack/build-images.sh`, run
+`hack/promote-kw.sh <built-commit-tag>`, review and push the values commit.
+Sync deploys Git configuration automatically; building/publishing images remains
+an explicit operator step. No image-building CI workflow has been added.
+Operator Secrets and runtime cluster RBAC remain outside Sync's namespace-scoped
+ownership. PVC pruning is disabled and PVC delete permission is absent.
+
+Eight targeted cluster suites have passing evidence: six in the initial batch,
+then deploy and agent on rerun. The initial failures and ownership-conflict probe
+are retained in the report; this was not an all-green initial batch.
+
+See [migration evidence](.procoder/evidence/kuvryn-sync-20260927.md) and the
+[deployment workflow](deploy/kuvryn-sync/README.md). Earlier Helm checkpoints below
+are historical. The separate provider-reconciliation evidence blocker remains.
+
 # September 27 follow-ups — application c8ade67, Helm revision 19
 
 Intelligence production qualification is complete: Go/TypeScript/Python semantic
