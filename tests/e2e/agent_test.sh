@@ -130,7 +130,13 @@ echo "== 7. the agent actually did the work =="
 # "succeeded" only means the model stopped asking for tools. The bar is
 # evidence: the agent's branch must exist, which it can only do if a commit
 # went through git.commit and the capability check let it.
-[ "$STATE" = "succeeded" ] || fail "the run ended $STATE, not succeeded"
+if [ "$STATE" != "succeeded" ]; then
+	# Capture the run's observable failure before the disposable org is purged.
+	# A state alone cannot distinguish a model refusal from a deployment defect.
+	REASON="$(curl -fsS "http://$EDGE_IP:$EDGE_PORT/api/v1/orgs/$ORG/agent-runs/$RUN" \
+		-H "Authorization: Bearer $TOKEN" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("end_reason", ""))')"
+	fail "the run ended $STATE, not succeeded: $REASON"
+fi
 /tmp/nf repo branches "$REPO" 2>/dev/null | grep -q "$BRANCH" ||
 	fail "the agent's branch $BRANCH does not exist: nothing was committed"
 ok "the agent committed to $BRANCH"
