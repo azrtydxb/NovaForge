@@ -100,3 +100,24 @@ Frontend qualification: all 32 existing ego-browser regression cases passed in
 the same TaskSpace used for actual cluster GUI checks. TypeScript build/types,
 final Go build/vet and procoder check passed; the latter reported zero blocking
 findings. No additional browser or mock backend was introduced.
+
+Final application rollout: 19b29cc, Helm revision 16; all 12 pods ready with
+zero restarts. Exact runtime image identities are preserved in
+`gap-closure-20260927-images.json`. Full 16-suite cluster acceptance is running.
+
+Actual browser success on 19b29cc: request
+`f7a40bff-278f-4fd0-ad43-fbd7953bb015`, independent reviewer approval after the
+exact immutable intent was displayed, then author execution with attempt 1
+succeeded. Stale prior request `9ac7397b-3442-471b-9ed9-e5c31ff048fa` was correctly
+refused after a newer destination operation. Local browser transcript is retained.
+
+The first full cluster run failed the secrets suite because its existing
+NovaForge development CI issuer expired September 26 at 13:14:28 UTC. It was
+renewed with the exact-scope fixture tool; the new CA expires October 27 at
+11:10:31 UTC, with unchanged 600-second default/3600-second maximum leaf policy.
+The failed issuance's reservation `c20b6e47-1ac1-4236-b62c-e14621264566` remains
+`issuance_unknown`, as no provider lease handle was returned. No credential
+reached the job. An explicit open operator-reconciliation task records this
+limitation; renewing the issuer is not evidence to erase the obligation.
+Both agent and agent_ci passed in the final run; the historical gateway failure
+did not recur.

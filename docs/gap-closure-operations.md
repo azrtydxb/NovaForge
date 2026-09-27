@@ -89,3 +89,20 @@ The Nexus recurring-trim proposal is in
 `.procoder/proposals/nexus-trim-20260927.md` and its suspended manifest. It was
 server-dry-run validated, not applied. Accepted OpenBao development custody remains
 unchanged; production unseal custody is an explicit separate readiness decision.
+
+## Development CI issuer lifetime
+
+The dedicated OpenBao PKI fixture initially had a one-day root CA and expired on
+September 26. `python3 hack/renew-dev-ci-issuer.py` reports its identity and expiry.
+`--renew-expired` renews only the expired NovaForge CI fixture CA after checking
+that the mount has exactly its expected role and domain. The renewed CA lasts
+30 days; the existing leaf role remains 600 seconds by default and 3600 maximum.
+Old issuer history and development unseal custody are preserved. This is fixture
+maintenance, not a production PKI lifecycle design. Inspect expiry before running
+`secrets_test.sh`; do not classify an issuer rejection as a working credential.
+
+Provider errors with no returned lease handle intentionally retain an
+`issuance_unknown` cleanup record. Renewing the issuer does not erase that audit
+obligation. The September 27 expired-issuer attempt is recorded in the release
+evidence and a bounded operator-reconciliation follow-up; never clear unknown
+records by a direct database edit or by assuming local token expiry.

@@ -223,13 +223,13 @@ Dependencies: G01. Requirements: S-11, S-12, S-22.
 Areas: `internal/deployment/`, `internal/secrets/`, `cmd/deployment-runner/`,
 `deploy/docker/Dockerfile.deployment-runner`, deployment configuration and GUI.
 
-- [ ] Supply a small controlled chart and build the operator-owned runner image
+- [x] Supply a small controlled chart and build the operator-owned runner image
       through kw BuildKit, pinning chart checksum and image digest.
-- [ ] Configure a disposable target, narrowly scoped credentials and approval
+- [x] Configure a disposable target, narrowly scoped credentials and approval
       rules through the existing configuration path.
-- [ ] Exercise requested → approved → executing → observed result through API
+- [x] Exercise requested → approved → executing → observed result through API
       and GUI; prove denial, expiry, failure and retry behavior as well.
-- [ ] Verify cleanup and credential revocation, plus deployment evidence reaching
+- [x] Verify cleanup and credential revocation, plus deployment evidence reaching
       the graph through the production event path.
 
 Acceptance: an approved action creates the expected workload at the permitted
@@ -263,15 +263,15 @@ count is not proof that the broader prose requirements are completely fulfilled.
 
 Dependencies: G01. These items have different owners from NovaForge code.
 
-- [ ] Nexus storage: recommend scheduled bounded trim during a maintenance
+- [x] Nexus storage: recommend scheduled bounded trim during a maintenance
       window, compare it with mount-time discard, and prepare the exact target,
       privilege scope, schedule and rollback for review. Do not operate broadly
       on every host filesystem. Existing one-off trim is not recurring cleanup.
-- [ ] OpenBao: preserve the explicitly accepted development setup; document a
+- [x] OpenBao: preserve the explicitly accepted development setup; document a
       separate production readiness path for off-cluster unseal custody.
-- [ ] Model gateway: verify recurrence before reopening the old incident. Update
+- [x] Model gateway: verify recurrence before reopening the old incident. Update
       the existing issue in its own project if needed; do not modify its code.
-- [ ] Measure registry growth after retention begins; do not repeat the old
+- [x] Measure registry growth after retention begins; do not repeat the old
       “eight months” estimate (756.8 GiB / roughly 14 GiB per day is about 54
       days before retention effects, not eight months).
 
