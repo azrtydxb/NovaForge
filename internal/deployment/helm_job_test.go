@@ -12,6 +12,18 @@ import (
 	"testing"
 )
 
+func TestFailedHelmReleaseRetainsImmutableBinding(t *testing.T) {
+	r := helmRelease{Labels: map[string]string{"novaforge.dev/binding": releaseBindingLabel("operation/attempt-1")}}
+	r.Info.Description = "Upgrade failed: target refused resource creation"
+	if !releaseMatchesBinding(r, "operation/attempt-1") || releaseMatchesBinding(r, "operation/attempt-2") {
+		t.Fatal("failed release lost or widened its attempt binding")
+	}
+	r.Info.Description = "operation/attempt-2"
+	if releaseMatchesBinding(r, "operation/attempt-2") {
+		t.Fatal("description overrode a conflicting durable label")
+	}
+}
+
 func TestHelmJobExecutesFixedCommandAndSanitizesEvidence(t *testing.T) {
 	dir := t.TempDir()
 	log := filepath.Join(dir, "argv")

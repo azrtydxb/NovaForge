@@ -3,6 +3,8 @@ package deployment
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/base32"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,13 +31,26 @@ type HelmEvidence struct {
 }
 
 type helmRelease struct {
-	Name      string `json:"name"`
-	Namespace string `json:"namespace"`
-	Version   int    `json:"version"`
+	Name      string            `json:"name"`
+	Namespace string            `json:"namespace"`
+	Version   int               `json:"version"`
+	Labels    map[string]string `json:"labels"`
 	Info      struct {
 		Status      string `json:"status"`
 		Description string `json:"description"`
 	} `json:"info"`
+}
+
+func releaseBindingLabel(binding string) string {
+	digest := sha256.Sum256([]byte(binding))
+	return strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(digest[:]))
+}
+
+func releaseMatchesBinding(release helmRelease, binding string) bool {
+	label := release.Labels["novaforge.dev/binding"]
+	// Older qualified executors used Description. Preserve exact observation
+	// of those releases, but never let it override a conflicting binding label.
+	return label == releaseBindingLabel(binding) || (label == "" && release.Info.Description == binding)
 }
 
 // Do not embed bytes.Buffer: its promoted ReadFrom lets io.Copy bypass Write
@@ -82,7 +97,7 @@ func RunHelmJob(ctx context.Context, args []string, out io.Writer) error {
 	observe := func() (helmRelease, error) { return invoke(append([]string{"status", release}, common...)...) }
 	emit := func(got helmRelease) error {
 		evidence := HelmEvidence{State: StateUncertain, Release: release, Namespace: namespace, Binding: binding}
-		if got.Name == release && got.Namespace == namespace && got.Info.Description == binding && got.Version > 0 {
+		if got.Name == release && got.Namespace == namespace && releaseMatchesBinding(got, binding) && got.Version > 0 {
 			evidence.Revision = got.Version
 			switch got.Info.Status {
 			case "deployed":
@@ -103,16 +118,19 @@ func RunHelmJob(ctx context.Context, args []string, out io.Writer) error {
 	if mode == "observe" {
 		return emit(before)
 	}
-	if beforeErr == nil && before.Info.Description == binding {
+	if beforeErr == nil && releaseMatchesBinding(before, binding) {
 		// A delivery attempt is never submitted twice, even if it failed.
 		return emit(before)
 	}
 	// A retry must not roll back a later deployment. If the previous attempt
 	// cannot be identified, observation is required instead of a blind upgrade.
-	if previous != "-" && (beforeErr != nil || before.Info.Description != previous || before.Info.Status != "failed") {
+	if previous != "-" && (beforeErr != nil || !releaseMatchesBinding(before, previous) || before.Info.Status != "failed") {
 		return emit(helmRelease{})
 	}
-	argv := []string{"upgrade", "--install", release, chart, "--set-string", key + "=" + digest, "--description", binding, "--wait", "--wait-for-jobs", "--timeout", "240s"}
+	// Helm replaces Description with failure prose when an upgrade fails. A
+	// release metadata label survives that transition and binds its failed
+	// revision to the exact operation/attempt for safe explicit retry.
+	argv := []string{"upgrade", "--install", release, chart, "--set-string", key + "=" + digest, "--description", binding, "--labels", "novaforge.dev/binding=" + releaseBindingLabel(binding), "--wait", "--wait-for-jobs", "--timeout", "240s"}
 	got, upgradeErr := invoke(append(argv, common...)...)
 	if upgradeErr == nil {
 		return emit(got)

@@ -83,13 +83,19 @@ root = "/orgs/" + users["org"]
 repo = root + "/repos/approved-app"
 config_secret = obj("-n", "novaforge", "get", "secret", "novaforge-deployment-config")
 config = json.loads(base64.b64decode(config_secret["data"]["config.json"]))
+release = config["targets"][0]["helm"]["Release"]
+current_revision = next(
+    t["revision"]
+    for t in api("GET", repo + "/deployment-targets")["targets"]
+    if t["name"] == "fixture"
+)
 artifact = obj("-n", "novaforge", "get", "secret", "deployment-fixture-users")[
     "data"
 ].get("artifact")
 assert artifact, "fixture must record its immutable artifact"
 artifact = base64.b64decode(artifact).decode()
 for prior in api("GET", repo + "/deployments")["operations"]:
-    if prior["state"] == "uncertain":
+    if prior["state"] == "uncertain" and prior["target_revision"] == current_revision:
         recovered = api("POST", repo + "/deployments/" + prior["id"] + "/reconcile", {})
         assert recovered["state"] in ("succeeded", "failed"), recovered
         print("PASS passive reconciliation of previous fixture execution", flush=True)
@@ -174,7 +180,7 @@ with tempfile.TemporaryDirectory() as tmp:
     assert result["state"] == "succeeded", result
     repeated = api("POST", path + "/execute", {})
     assert len(repeated["attempts"]) == len(result["attempts"]) == 1, repeated
-    workload = obj("-n", "novaforge-deploy-target", "get", "deploy", "approved-app")
+    workload = obj("-n", "novaforge-deploy-target", "get", "deploy", release)
     assert workload["status"].get("availableReplicas") == 1
     assert workload["spec"]["template"]["spec"]["containers"][0]["image"].endswith(
         "@" + artifact
@@ -224,7 +230,7 @@ with tempfile.TemporaryDirectory() as tmp:
             "novaforge-deploy-target",
             "delete",
             "deployment",
-            "approved-app",
+            release,
             "--wait=true",
         ]
     )
