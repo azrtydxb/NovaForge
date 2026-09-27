@@ -86,6 +86,25 @@ func (s *Server) forkRepo(ctx context.Context, srcRepoID, toOrg uuid.UUID, name 
 		_, _ = s.pool.Exec(ctx, `DELETE FROM gitplatform.repositories WHERE id = $1`, fork.ID)
 		return repoRow{}, status.Errorf(codes.Internal, "copy repository history: %v", err)
 	}
+	// Lock the source rows while copying references so parent deletion cannot
+	// race reclamation. Payloads are immutable; each fork owns its own references.
+	tx, err := s.pool.Begin(ctx)
+	if err == nil {
+		defer tx.Rollback(ctx)
+		_, err = tx.Exec(ctx, `INSERT INTO gitplatform.lfs_objects(org_id,repo_id,oid,size,blob_key)
+            SELECT $1,$2,oid,size,blob_key FROM gitplatform.lfs_objects
+            WHERE org_id=$1 AND repo_id=$3 FOR SHARE`, fork.OrgID, fork.ID, parent.ID)
+		if err == nil {
+			err = tx.Commit(ctx)
+		}
+	}
+	if err != nil {
+		_, _ = s.pool.Exec(ctx, `DELETE FROM gitplatform.repositories WHERE id=$1 AND org_id=$2`, fork.ID, fork.OrgID)
+		if path, e := resolvePath(s.root, fork.OrgID, fork.Name); e == nil {
+			_ = os.RemoveAll(path)
+		}
+		return repoRow{}, status.Errorf(codes.Internal, "copy LFS ownership: %v", err)
+	}
 	return fork, nil
 }
 

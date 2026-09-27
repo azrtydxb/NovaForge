@@ -74,6 +74,14 @@ func addMirrorHandlers(h map[string]http.HandlerFunc, c gitv1.GitServiceClient) 
 		WriteJSON(w, http.StatusOK, MirrorJSON(resp.GetMirror()))
 	}
 
+	h["refreshMirror"] = func(w http.ResponseWriter, r *http.Request) {
+		resp, err := c.RefreshMirror(r.Context(), &gitv1.RefreshMirrorRequest{Repo: chi.URLParam(r, "repo")})
+		if err != nil {
+			WriteError(w, StatusFromGRPC(err), err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, MirrorJSON(resp.GetMirror()))
+	}
 	h["deleteMirror"] = func(w http.ResponseWriter, r *http.Request) {
 		if _, err := c.DeleteMirror(r.Context(), &gitv1.DeleteMirrorRequest{
 			Repo: chi.URLParam(r, "repo"),

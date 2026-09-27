@@ -118,14 +118,21 @@ func NewCredentialAuthFunc(identity identityv1.IdentityServiceClient, hmacSecret
 }
 
 // NewFingerprintFunc is the SSH transport's key lookup, through identity.
-func NewFingerprintFunc(identity identityv1.IdentityServiceClient) FingerprintFunc {
+func NewFingerprintFunc(identity identityv1.IdentityServiceClient, grants ...*CollaboratorStore) FingerprintFunc {
 	return func(ctx context.Context, fingerprint, orgRef string) (authz.Scope, error) {
 		resp, err := identity.ResolveFingerprint(ctx,
-			&identityv1.ResolveFingerprintRequest{Fingerprint: fingerprint, Org: orgRef})
+			&identityv1.ResolveFingerprintRequest{Fingerprint: fingerprint, Org: orgRef, AllowNonMember: len(grants) > 0})
 		if err != nil {
 			return authz.Scope{}, fmt.Errorf("resolve fingerprint: %w", err)
 		}
-		return SubjectToScope(resp.GetSubject()), nil
+		scope := SubjectToScope(resp.GetSubject())
+		if scope.RepoLimited && len(grants) > 0 && grants[0] != nil {
+			scope.Repos, err = grants[0].ReposForUser(ctx, scope.OrgID, scope.ActorID)
+			if err != nil {
+				return authz.Scope{}, err
+			}
+		}
+		return scope, nil
 	}
 }
 

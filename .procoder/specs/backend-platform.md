@@ -15,8 +15,9 @@ line-by-line by humans, which erases the leverage they were meant to provide.
 NovaForge's backend is the control plane that fixes this: Git stays fully standard, but
 permissions, execution isolation, context assembly, verification, and merge authority live in
 the platform rather than in the model. This spec covers that entire backend across all six
-phases of section 26. The web GUI is deferred to a later spec — the backend must be complete
-and driveable without it.
+phases of section 26. The web GUI was subsequently implemented and integrated;
+the backend must remain complete and driveable without it. New user-facing
+features include their API, CLI and GUI paths where applicable.
 
 ## Users
 
@@ -36,7 +37,8 @@ and driveable without it.
 
 ## In scope
 
-Backend only. Service decomposition follows the section 2 architecture diagram: identity,
+The original scope was backend only; later work added the integrated GUI and
+S-23 through S-31. Service decomposition follows the section 2 architecture diagram: identity,
 git-platform, work-reviews, ci-runner, agent-runtime, gates, engineering-graph, and
 mcp-server.
 
@@ -122,15 +124,17 @@ integrations) stay excluded.
 
 ## Out of scope
 
-- **The web GUI** — deferred to its own spec. No React, Vite, TanStack, Shadcn, or Monaco work
-  here. The backend must be fully driveable through OpenAPI, the nf CLI, and MCP without it.
-- **GitHub/GitLab mirroring and import** — treated as part of the SCM integrations section 25
-  defers.
+- The original GUI deferral was superseded by its implementation and integration.
+  The backend remains driveable through OpenAPI, the nf CLI, and MCP without it.
+- General GitHub/GitLab product integrations remain deferred. Git repository
+  import and mirroring are in scope under S-27; their inclusion supersedes the
+  earlier exclusion. This does not imply migration of issues, users or CI metadata.
 - Everything else section 25 defers: large wiki systems, portfolio management, full Kubernetes
   management as a product feature, observability suites, enterprise project management.
 - Building model inference — FastLLM, vLLM, and DGX Spark are integrated, not implemented.
 - Building go-ai-sdk or ProCoder — both are consumed as dependencies.
-- Git LFS beyond what standard Git transport provides.
+- Proprietary LFS transfer extensions. Standard LFS batch/object transfer and
+  SSH authentication for HTTPS object transfer are in scope under S-25.
 - Firecracker isolation — section 8 lists it as an eventual step; Kubernetes pods are the
   isolation boundary for this build.
 - docker-compose deployment — Kubernetes and Helm are the only supported deployment path.

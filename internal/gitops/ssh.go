@@ -47,6 +47,7 @@ type SSHServer struct {
 	passwords PasswordFunc
 	caps      CapFunc
 	sshConfig *ssh.ServerConfig
+	lfsAuth   *LFSAuth
 
 	listener net.Listener
 }
@@ -176,6 +177,10 @@ func (s *SSHServer) handleSession(sconn *ssh.ServerConn, channel ssh.Channel, re
 }
 
 func (s *SSHServer) runGitCommand(sconn *ssh.ServerConn, channel ssh.Channel, command string) {
+	if strings.HasPrefix(command, "git-lfs-authenticate ") {
+		s.authenticateLFS(sconn, channel, command)
+		return
+	}
 	m := gitCommandRe.FindStringSubmatch(command)
 	if m == nil {
 		fmt.Fprintf(channel.Stderr(), "unsupported command\n")

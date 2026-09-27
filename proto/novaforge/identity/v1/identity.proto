@@ -302,6 +302,8 @@ message ResolveFingerprintRequest {
   // Optional organization the caller is acting in, by name or id. See
   // ResolveTokenRequest.org.
   string org = 2;
+  // Git transports resolve repository grants for non-members.
+  bool allow_non_member = 3;
 }
 message ResolveFingerprintResponse {
   Subject subject = 1;

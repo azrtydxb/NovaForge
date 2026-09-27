@@ -117,7 +117,7 @@ func (w *ReviewWorker) execute(ctx context.Context, r reviewRequest) error {
 	if err != nil || target != r.TargetSHA {
 		return finish("failed", "target changed or is unavailable; no model invoked")
 	}
-	diff, err := w.Git.GetDiff(ctx, &gitv1.GetDiffRequest{Repo: run.RepoID.String(), From: r.TargetSHA, To: r.SourceSHA, MergeBase: true})
+	diff, err := w.Git.GetDiff(ctx, &gitv1.GetDiffRequest{Repo: run.RepoID.String(), SourceRepo: run.sourceRepo().String(), From: r.TargetSHA, To: r.SourceSHA, MergeBase: true})
 	if err != nil {
 		return finish("failed", "diff unavailable")
 	}

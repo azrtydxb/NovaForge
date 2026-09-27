@@ -26,7 +26,7 @@ KUBECTL_VERSION="v1.34.4"
 HELM_VERSION="v3.19.0"
 suites=("$@")
 if [ ${#suites[@]} -eq 0 ]; then
-	suites=(airgap deploy work_ci secrets gui search graph factory agent agent_ci merge cli crossorg)
+	suites=(airgap deploy work_ci secrets gui search graph factory agent agent_ci merge cli crossorg git_host cert_rotation)
 fi
 k() { kubectl --context "$KUBE_CONTEXT" "$@"; }
 

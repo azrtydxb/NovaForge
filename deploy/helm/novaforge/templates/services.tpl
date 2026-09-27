@@ -120,6 +120,10 @@ spec:
             # deployment whose object storage one push can fill.
             - name: NF_LFS_MAX_OBJECT_BYTES
               value: {{ $.Values.lfs.maxObjectBytes | quote }}
+            - name: NF_OUTBOUND_DESTINATIONS
+              value: {{ $.Values.outbound.destinations | toJson | quote }}
+            - name: NF_GIT_PUBLIC_URL
+              value: {{ $.Values.lfs.publicURL | default (printf "https://%s-git-platform.%s.svc:8443" $.Release.Name $.Release.Namespace) | quote }}
             {{- end }}
             {{- /*
             Peer addresses use the canonical names the services read, not names

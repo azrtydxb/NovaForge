@@ -171,7 +171,17 @@ func (s *LFSStore) PutObject(ctx context.Context, orgID, repoID uuid.UUID, oid s
 		return 0, fmt.Errorf("%d bytes exceeds the %d byte limit: %w", declared, s.maxObjectBytes, ErrLFSObjectTooLarge)
 	}
 
-	key := lfsKey(orgID, repoID, oid)
+	key := lfsKey(orgID, repoID, oid) + "/" + uuid.NewString()
+	tx, err := beginBlobUpload(ctx, s.pool, orgID, key)
+	if err != nil {
+		return 0, fmt.Errorf("record upload intent: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	// Serialize ownership changes/deletion with publication, after scoping the repository.
+	var owner uuid.UUID
+	if err := tx.QueryRow(ctx, `SELECT org_id FROM gitplatform.repositories WHERE id=$1 AND org_id=$2 FOR SHARE`, repoID, orgID).Scan(&owner); err != nil {
+		return 0, err
+	}
 	// Hashing on the way past is the only option: the body is a stream that
 	// cannot be rewound, and buffering it would put a multi-gigabyte binary in
 	// this process's memory once per concurrent upload.
@@ -190,20 +200,22 @@ func (s *LFSStore) PutObject(ctx context.Context, orgID, repoID uuid.UUID, oid s
 		return 0, fmt.Errorf("received %s under %s: %w", got, oid, ErrLFSOIDMismatch)
 	}
 
-	// ON CONFLICT DO NOTHING because a client re-uploading an object the
-	// repository already has is normal (a second branch, a second clone) and is
-	// not an error: the content is identical by definition of the oid.
-	if _, err := s.pool.Exec(ctx, `
-		INSERT INTO gitplatform.lfs_objects (org_id, repo_id, oid, size)
-		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (repo_id, oid) DO NOTHING`,
-		orgID, repoID, oid, guard.n); err != nil {
-		// The row is what makes the object reachable; an object with no row is
-		// unreachable and would grow the bucket forever.
-		if delErr := s.blobs.Delete(ctx, key); delErr != nil {
-			return 0, fmt.Errorf("record LFS object: %w (and its object %s could not be removed: %v)", err, key, delErr)
-		}
+	result, err := tx.Exec(ctx, `INSERT INTO gitplatform.lfs_objects (org_id,repo_id,oid,size,blob_key)
+        VALUES($1,$2,$3,$4,$5) ON CONFLICT(repo_id,oid) DO NOTHING`, orgID, repoID, oid, guard.n, key)
+	if err != nil {
 		return 0, fmt.Errorf("record LFS object: %w", err)
+	}
+	if result.RowsAffected() > 0 {
+		if _, err = tx.Exec(ctx, `DELETE FROM gitplatform.blob_cleanup WHERE blob_key=$1`, key); err != nil {
+			return 0, err
+		}
+	} else {
+		if _, err = tx.Exec(ctx, `UPDATE gitplatform.blob_cleanup SET available_at=now() WHERE blob_key=$1`, key); err != nil {
+			return 0, err
+		}
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return 0, err
 	}
 	return guard.n, nil
 }
@@ -219,20 +231,21 @@ func (s *LFSStore) OpenObject(ctx context.Context, orgID, repoID uuid.UUID, oid 
 		return nil, 0, fmt.Errorf("invalid LFS object id %q", oid)
 	}
 	var size int64
+	var key string
 	// The organization predicate is applied here as well as on the repository
 	// lookup that produced repoID. It is redundant by construction and stays
 	// anyway: this is the query that hands out bytes, and it should be readable
 	// on its own as scoped.
 	err := s.pool.QueryRow(ctx,
-		`SELECT size FROM gitplatform.lfs_objects WHERE org_id = $1 AND repo_id = $2 AND oid = $3`,
-		orgID, repoID, oid).Scan(&size)
+		`SELECT size, blob_key FROM gitplatform.lfs_objects WHERE org_id = $1 AND repo_id = $2 AND oid = $3`,
+		orgID, repoID, oid).Scan(&size, &key)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, 0, fmt.Errorf("%s: %w", oid, ErrLFSObjectNotFound)
 		}
 		return nil, 0, fmt.Errorf("lookup LFS object: %w", err)
 	}
-	rc, err := s.blobs.Get(ctx, lfsKey(orgID, repoID, oid))
+	rc, err := s.blobs.Get(ctx, key)
 	if err != nil {
 		return nil, 0, fmt.Errorf("open LFS object: %w", err)
 	}
@@ -359,6 +372,10 @@ func (h *httpHandler) lfsBatch(w http.ResponseWriter, r *http.Request, scope aut
 		// optional transfer adapters are not implemented, and saying so beats
 		// answering as if they were.
 		writeLFSError(w, http.StatusUnprocessableEntity, "unsupported LFS operation %q: this server does upload and download", req.Operation)
+		return
+	}
+	if operation, ok := r.Context().Value(lfsOperationKey{}).(string); ok && operation != req.Operation {
+		writeLFSError(w, http.StatusForbidden, "LFS credential is scoped to another operation")
 		return
 	}
 	if len(req.Transfers) > 0 && !containsString(req.Transfers, "basic") {

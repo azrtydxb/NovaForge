@@ -7,6 +7,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"fmt"
+	"github.com/novaforge/novaforge/internal/egress"
 	"log"
 	"net"
 	"net/http"
@@ -168,6 +169,10 @@ func main() {
 	// lfsStore stays nil without object storage, and the LFS endpoints then
 	// answer "not available in this deployment" rather than 404ing as if the
 	// protocol were unheard of — the distinction a clone's error message needs.
+	outbound, err := egress.Parse(cfg.OutboundDestinations)
+	if err != nil {
+		log.Fatalf("git-platform: %v", err)
+	}
 	var lfsStore *gitops.LFSStore
 
 	// Releases carry uploaded files, which live in object storage next to CI
@@ -194,6 +199,11 @@ func main() {
 		// rather than defaulted here — gitops.NewLFSStore holds the fallback, so
 		// an unset variable is a bounded deployment, not an unbounded one.
 		lfsStore = gitops.NewLFSStore(pool, blobs, int64(cfg.LFSMaxObjectBytes))
+		go func() {
+			if err := (&gitops.BlobCollector{Pool: pool, Blobs: blobs}).Run(ctx); err != nil && ctx.Err() == nil {
+				log.Printf("git-platform: blob collector stopped: %v", err)
+			}
+		}()
 	}
 
 	// Both interceptors, not just the unary one. The release asset RPCs stream,
@@ -215,7 +225,7 @@ func main() {
 	if rdb != nil {
 		// The consumer name is the pod's, so each replica has a stable identity
 		// in the group and a crashed pod's in-flight message can be reclaimed.
-		worker := &webhooks.Worker{RDB: rdb, Store: hooks, Consumer: os.Getenv("HOSTNAME")}
+		worker := &webhooks.Worker{RDB: rdb, Store: hooks, Client: outbound.Client(), Consumer: os.Getenv("HOSTNAME")}
 		go func() {
 			if err := worker.Run(ctx); err != nil {
 				log.Printf("git-platform: webhook delivery worker stopped: %v", err)
@@ -233,6 +243,7 @@ func main() {
 	// repository has been caught by more than once. internal/gitops asserts this
 	// call exists.
 	mirrors := gitops.NewMirrorStore(pool, cfg.GitDataDir, []byte(cfg.SecretsKEK))
+	mirrors.Outbound = outbound
 	grpcServer.Mirrors = mirrors
 	if cfg.SecretsKEK == "" {
 		log.Println("git-platform: SECRETS_KEK is unset; a repository can be imported from a public remote, but no upstream credential can be stored")
@@ -266,8 +277,17 @@ func main() {
 	// LFS is served by this same handler, with this same AuthFunc and capFunc:
 	// an LFS object must be reachable exactly when the repository is, and a
 	// second handler with its own authenticator is how that stops being true.
+	keyLookup := gitops.NewFingerprintFunc(identityClient, collaborators)
+	passwordLookup := gitops.NewAgentPasswordFunc(cfg.HMACSecret)
+	var lfsAuth *gitops.LFSAuth
+	if lfsStore != nil && cfg.GitPublicURL != "" {
+		lfsAuth, err = gitops.NewLFSAuth(cfg.HMACSecret, cfg.GitPublicURL, lfsStore, keyLookup, passwordLookup)
+		if err != nil {
+			log.Fatalf("git-platform: SSH LFS: %v", err)
+		}
+	}
 	httpHandler := gitops.NewHTTPHandlerWithLFS(cfg.GitDataDir,
-		gitops.NewCredentialAuthFunc(identityClient, cfg.HMACSecret, collaborators), capFunc, lfsStore)
+		gitops.NewCredentialAuthFunc(identityClient, cfg.HMACSecret, collaborators), capFunc, lfsStore, lfsAuth)
 
 	// --- SSH ---
 	hostKey, ephemeral, err := loadOrGenerateHostKey()
@@ -277,8 +297,8 @@ func main() {
 	if ephemeral {
 		log.Printf("git-platform: SSH_HOST_KEY not set; generated an ephemeral ed25519 host key for this process")
 	}
-	sshServer := gitops.NewSSHServer(cfg.GitDataDir, hostKey, gitops.NewFingerprintFunc(identityClient), capFunc).
-		WithPasswords(gitops.NewAgentPasswordFunc(cfg.HMACSecret))
+	sshServer := gitops.NewSSHServer(cfg.GitDataDir, hostKey, keyLookup, capFunc).
+		WithPasswords(passwordLookup).WithLFS(lfsAuth)
 
 	check := func(ctx context.Context) error {
 		if err := pool.Ping(ctx); err != nil {

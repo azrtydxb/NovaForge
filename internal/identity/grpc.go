@@ -199,7 +199,7 @@ func (s *Server) ResolveFingerprint(ctx context.Context, req *identityv1.Resolve
 		return nil, status.Error(codes.Internal, "identity datastore unavailable")
 	}
 	subj := &identityv1.Subject{UserId: userID.String(), ActorKind: "user"}
-	if err := s.attachOrg(ctx, subj, userID, req.GetOrg(), false); err != nil {
+	if err := s.attachOrg(ctx, subj, userID, req.GetOrg(), req.GetAllowNonMember()); err != nil {
 		return nil, err
 	}
 	return &identityv1.ResolveFingerprintResponse{Subject: subj}, nil

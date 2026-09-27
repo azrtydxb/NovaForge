@@ -30,6 +30,7 @@ import (
 	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
 	"github.com/novaforge/novaforge/internal/authz"
 	"github.com/novaforge/novaforge/internal/database"
+	"github.com/novaforge/novaforge/internal/events"
 	"github.com/novaforge/novaforge/internal/reviews"
 	"github.com/novaforge/novaforge/internal/service"
 	"github.com/novaforge/novaforge/internal/svcauth"
@@ -83,6 +84,7 @@ func main() {
 		log.Fatalf("work-reviews: %v", err)
 	}
 	defer eventBus.Close()
+	go (events.Outbox{Pool: pool, Redis: eventBus, Schema: "reviews"}).Run(ctx)
 	cleanup.WorkReviews(workStore, reviewsStore, cleanup.RedisRunsPublisher(eventBus)).Run(ctx, eventBus, "work-reviews")
 
 	workServer := work.NewGRPCServer(workStore)

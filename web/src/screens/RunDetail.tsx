@@ -486,18 +486,15 @@ function Changes({
   // source ref is a branch of the fork, so there is nothing here to compare
   // against in this repository, and asking would answer "unknown ref" — which
   // reads as a broken run rather than as a diff this deployment cannot draw.
-  const crossFork = Boolean(
-    run && run.source_repo_id && run.source_repo_id !== run.repo_id,
-  );
   const diff = useQuery({
-    queryKey: ["diff", org, repo, run?.source_ref, run?.target_ref],
+    queryKey: ["diff", org, repo, run?.source_repo_id, run?.source_ref, run?.target_ref],
     queryFn: () =>
       api.get<{ unified: string }>(
         `/api/v1/orgs/${enc(org!)}/repos/${enc(repo)}/diff?from=${enc(
           run!.target_ref,
-        )}&to=${enc(run!.source_ref)}&merge_base=true`,
+        )}&to=${enc(run!.source_ref)}&merge_base=true&source_repo=${enc(run!.source_repo_id || run!.repo_id)}`,
       ),
-    enabled: org !== null && run !== undefined && !crossFork,
+    enabled: org !== null && run !== undefined,
   });
 
   if (!run) return <Loading />;
@@ -511,14 +508,7 @@ function Changes({
           : ""}
         {run.source_ref}
       </PanelHead>
-      {crossFork ? (
-        <Empty>
-          This change lives in {run.source_repo_name || "another repository"}.
-          This deployment diffs refs within one repository, so the change is
-          reviewed from the fork itself — the gates and the approval it needs to
-          merge are unchanged.
-        </Empty>
-      ) : (
+      {
         <Async query={diff}>
           {(d) =>
             !d.unified.trim() ? (
@@ -528,7 +518,7 @@ function Changes({
             )
           }
         </Async>
-      )}
+      }
     </Panel>
   );
 }

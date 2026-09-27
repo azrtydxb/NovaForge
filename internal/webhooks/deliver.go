@@ -12,6 +12,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -30,17 +31,11 @@ const ConsumerGroup = "webhooks"
 // EventPush is the event name a push is delivered under. Event names are part of
 // the contract with whoever registered the hook — they are what a hook filters
 // on — so they are constants here rather than strings spelled out at each use.
-//
-// It is the only event delivered today, and not because the others were
-// forgotten: a hook belongs to a repository, so an event can only be routed to
-// one if it says which repository it happened in. events.StreamGitPush does.
-// Engineering Run and CI result events are not published on any stream at all
-// yet (grep events.Publish: identity, agents, cleanup, deployment and gitops are
-// the only publishers), and events.StreamRunsDeleted carries run ids with no
-// repository. Adding either means a publisher in the service that owns it; this
-// worker then needs one more stream and one more constant, and a hook already
-// filters by name.
 const EventPush = "push"
+const EventEngineeringRun = "engineering_run"
+const EventCIResult = "ci_result"
+
+var errMalformedEvent = errors.New("malformed repository event")
 
 // defaultMaxAttempts bounds how many times one event is offered to one endpoint.
 // An endpoint that is simply broken must not become permanent load: five attempts
@@ -97,7 +92,8 @@ type Worker struct {
 
 	// PushStream overrides events.StreamGitPush, so a test consumes a stream of
 	// its own rather than the one every other consumer on the cluster shares.
-	PushStream string
+	PushStream    string
+	DomainStreams []string
 
 	// MaxAttempts and Backoff bound the retries. Zero means the defaults.
 	MaxAttempts int
@@ -152,9 +148,20 @@ func (w *Worker) Run(ctx context.Context) error {
 	if w.RDB == nil || w.Store == nil {
 		return errors.New("webhooks: the worker needs both Redis and a store")
 	}
-	stream := w.pushStream()
-	if err := events.EnsureGroup(ctx, w.RDB, stream, ConsumerGroup); err != nil {
-		return fmt.Errorf("ensure consumer group: %w", err)
+	streams := []string{w.pushStream()}
+	if len(w.DomainStreams) > 0 {
+		streams = append(streams, w.DomainStreams...)
+	} else if w.PushStream == "" {
+		streams = append(streams, events.StreamEngineeringRuns, events.StreamCIResults)
+	}
+	for _, stream := range streams {
+		if err := events.EnsureGroup(ctx, w.RDB, stream, ConsumerGroup); err != nil {
+			return err
+		}
+	}
+	readStreams := append([]string{}, streams...)
+	for range streams {
+		readStreams = append(readStreams, ">")
 	}
 	consumer := w.Consumer
 	if consumer == "" {
@@ -169,7 +176,9 @@ func (w *Worker) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			w.autoClaim(ctx, consumer)
+			for _, stream := range streams {
+				w.autoClaim(ctx, consumer, stream)
+			}
 			continue
 		default:
 		}
@@ -177,7 +186,7 @@ func (w *Worker) Run(ctx context.Context) error {
 		res, err := w.RDB.XReadGroup(ctx, &redis.XReadGroupArgs{
 			Group:    ConsumerGroup,
 			Consumer: consumer,
-			Streams:  []string{stream, ">"},
+			Streams:  readStreams,
 			Count:    10,
 			Block:    2 * time.Second,
 		}).Result()
@@ -193,7 +202,7 @@ func (w *Worker) Run(ctx context.Context) error {
 		}
 		for _, s := range res {
 			for _, msg := range s.Messages {
-				w.handleAndAck(ctx, stream, msg)
+				w.handleAndAck(ctx, s.Stream, msg)
 			}
 		}
 	}
@@ -202,8 +211,7 @@ func (w *Worker) Run(ctx context.Context) error {
 // autoClaim takes over messages idle for longer than minIdle and handles them as
 // the main loop does, so a consumer that died mid-delivery does not strand its
 // event.
-func (w *Worker) autoClaim(ctx context.Context, consumer string) {
-	stream := w.pushStream()
+func (w *Worker) autoClaim(ctx context.Context, consumer, stream string) {
 	start := "0"
 	for {
 		msgs, next, err := w.RDB.XAutoClaim(ctx, &redis.XAutoClaimArgs{
@@ -228,10 +236,12 @@ func (w *Worker) autoClaim(ctx context.Context, consumer string) {
 
 func (w *Worker) handleAndAck(ctx context.Context, stream string, msg redis.XMessage) {
 	if err := w.handle(ctx, msg); err != nil {
-		// A message that could not even be understood is acknowledged too: it
-		// will never become understandable, and leaving it pending would have
-		// every pass trip over it instead of doing the deliveries behind it.
 		log.Printf("webhooks: handle message %s: %v", msg.ID, err)
+		// Database/network cancellation is retryable; only a malformed event is
+		// permanently rejected. Acknowledging every error silently lost deliveries.
+		if !errors.Is(err, errMalformedEvent) {
+			return
+		}
 	}
 	if err := w.RDB.XAck(ctx, stream, ConsumerGroup, msg.ID).Err(); err != nil && ctx.Err() == nil {
 		log.Printf("webhooks: XAck %s: %v", msg.ID, err)
@@ -242,93 +252,98 @@ func (w *Worker) handleAndAck(ctx context.Context, stream string, msg redis.XMes
 // name, rather than being the event flattened: a receiver written against "push"
 // must not break the day a second event type is delivered with different fields.
 type payload struct {
-	Event    string            `json:"event"`
-	Delivery string            `json:"delivery"`
-	OrgID    uuid.UUID         `json:"org_id"`
-	RepoID   uuid.UUID         `json:"repo_id"`
-	RepoName string            `json:"repository"`
-	At       time.Time         `json:"at"`
-	Push     *events.PushEvent `json:"push,omitempty"`
+	Event    string                  `json:"event"`
+	Delivery string                  `json:"delivery"`
+	OrgID    uuid.UUID               `json:"org_id"`
+	RepoID   uuid.UUID               `json:"repo_id"`
+	RepoName string                  `json:"repository"`
+	At       time.Time               `json:"at"`
+	Push     *events.PushEvent       `json:"push,omitempty"`
+	Run      *events.RepositoryEvent `json:"run,omitempty"`
 }
 
 func (w *Worker) handle(ctx context.Context, msg redis.XMessage) error {
 	raw, ok := msg.Values["data"].(string)
 	if !ok {
-		return fmt.Errorf("message %s carries no data field", msg.ID)
+		return fmt.Errorf("%w: missing data", errMalformedEvent)
 	}
-	var evt events.PushEvent
-	// Unknown fields are refused: a stream message that is not the event this
-	// worker thinks it is would otherwise be delivered as a push with every
-	// field zero, and a receiver cannot tell that from a real push.
-	dec := json.NewDecoder(bytes.NewReader([]byte(raw)))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&evt); err != nil {
-		return fmt.Errorf("decode push event: %w", err)
+	var header struct {
+		Event string `json:"event"`
 	}
-	if evt.OrgID == uuid.Nil || evt.RepoID == uuid.Nil {
-		// A push event with no repository id cannot be routed to a repository's
-		// hooks. This was a real defect for the CI scheduler, which matched
-		// nothing and silently scheduled no run; here it would be silence too.
-		return fmt.Errorf("push event %s names no organization or repository", msg.ID)
+	if err := json.Unmarshal([]byte(raw), &header); err != nil {
+		return fmt.Errorf("%w: invalid JSON", errMalformedEvent)
 	}
-
-	// The organization is re-entered from the event, which git-platform published
-	// itself — never from a client request. Every store read below then takes its
-	// predicate from this scope, exactly as the indexer does for the same stream.
-	ctx = authz.WithScope(ctx, authz.Scope{OrgID: evt.OrgID, ActorKind: "service"})
-
-	targets, err := w.Store.targets(ctx, evt.RepoID, EventPush)
+	body := payload{Event: EventPush, Delivery: msg.ID}
+	if header.Event != "" {
+		var evt events.RepositoryEvent
+		dec := json.NewDecoder(strings.NewReader(raw))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&evt); err != nil || evt.Version != 1 || evt.EventID == uuid.Nil || evt.RunID == uuid.Nil || (evt.Event != EventEngineeringRun && evt.Event != EventCIResult) {
+			return fmt.Errorf("%w: unsupported lifecycle payload", errMalformedEvent)
+		}
+		body.Event, body.Delivery, body.OrgID, body.RepoID, body.At, body.Run = evt.Event, evt.EventID.String(), evt.OrgID, evt.RepoID, evt.At, &evt
+	} else {
+		var evt events.PushEvent
+		dec := json.NewDecoder(strings.NewReader(raw))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&evt); err != nil {
+			return fmt.Errorf("%w: invalid push", errMalformedEvent)
+		}
+		body.OrgID, body.RepoID, body.RepoName, body.At, body.Push = evt.OrgID, evt.RepoID, evt.RepoName, evt.At, &evt
+	}
+	if body.OrgID == uuid.Nil || body.RepoID == uuid.Nil {
+		return fmt.Errorf("%w: missing scope", errMalformedEvent)
+	}
+	ctx = authz.WithScope(ctx, authz.Scope{OrgID: body.OrgID, ActorKind: "service"})
+	targets, err := w.Store.targets(ctx, body.RepoID, body.Event)
 	if err != nil {
-		return fmt.Errorf("hooks for %s: %w", evt.RepoID, err)
+		return err
 	}
-	if len(targets) == 0 {
-		return nil
-	}
-
-	body, err := json.Marshal(payload{
-		Event: EventPush, Delivery: msg.ID, OrgID: evt.OrgID, RepoID: evt.RepoID,
-		RepoName: evt.RepoName, At: evt.At, Push: &evt,
-	})
+	encoded, err := json.Marshal(body)
 	if err != nil {
-		return fmt.Errorf("marshal delivery body: %w", err)
+		return err
 	}
-
-	for _, t := range targets {
-		w.deliver(ctx, t, EventPush, msg.ID, body)
+	for _, target := range targets {
+		if err := w.deliver(ctx, target, body.Event, body.Delivery, encoded); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-// deliver posts body to one endpoint, retrying to the bound and recording every
-// attempt. The bytes are identical on every attempt — including the delivery id —
-// so a receiver that already processed one can recognize the repeat, and so the
-// signature it verified the first time still verifies.
-func (w *Worker) deliver(ctx context.Context, t target, event, delivery string, body []byte) {
-	max := w.maxAttempts()
-	wait := w.backoff()
-	for attempt := 1; attempt <= max; attempt++ {
-		status, reqErr := w.post(ctx, t, event, delivery, body)
-		record := Delivery{HookID: t.hook.ID, Event: event, StatusCode: status, Attempt: attempt}
+// Persist the attempt reservation before HTTP. A crash can produce an uncertain
+// attempt, but cannot reset the retry budget or change the receiver's event ID.
+func (w *Worker) deliver(ctx context.Context, t target, event, delivery string, body []byte) error {
+	for {
+		claim, err := w.Store.reserveAttempt(ctx, t.hook.ID, event, delivery, w.maxAttempts())
+		if err != nil {
+			return err
+		}
+		if claim.Number == 0 {
+			return nil
+		}
+		call, cancel := context.WithTimeout(ctx, defaultTimeout)
+		code, reqErr := w.post(call, t, event, delivery, body)
+		cancel()
+		detail := ""
 		if reqErr != nil {
-			record.Error = reqErr.Error()
+			detail = reqErr.Error()
 		}
-		if err := w.Store.recordDelivery(ctx, record); err != nil && ctx.Err() == nil {
-			// The notification has already been sent. Failing the delivery here
-			// would send it again, so the loss of the record is logged instead.
-			log.Printf("webhooks: record delivery for hook %s: %v", t.hook.ID, err)
+		if err := w.Store.finishAttempt(ctx, t.hook.ID, delivery, claim, code, detail, w.maxAttempts()); err != nil {
+			return err
 		}
-		if record.Delivered() {
-			return
+		if (code >= 200 && code < 300) || claim.Number >= w.maxAttempts() {
+			return nil
 		}
-		if attempt == max || ctx.Err() != nil {
-			return
+		wait := w.backoff()
+		for n := 1; n < claim.Number; n++ {
+			wait *= 2
 		}
 		select {
 		case <-ctx.Done():
-			return
+			return ctx.Err()
 		case <-time.After(wait):
 		}
-		wait *= 2
 	}
 }
 

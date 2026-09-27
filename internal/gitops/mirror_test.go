@@ -23,6 +23,7 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"github.com/novaforge/novaforge/internal/authz"
+	"github.com/novaforge/novaforge/internal/capability"
 	"github.com/novaforge/novaforge/internal/database"
 	"github.com/novaforge/novaforge/internal/gitops"
 )
@@ -85,6 +86,9 @@ func withMirrorDatabase(admin string, m *testing.M) (int, error) {
 	u.Path = "/" + name
 	mirrorSuite.url = u.String()
 
+	if err := database.Migrate(mirrorSuite.url, "gitplatform", capability.MigrationsFS); err != nil {
+		return 0, err
+	}
 	if err := database.MigrateAs(mirrorSuite.url, "gitplatform", "gitplatform_git", gitops.MigrationsFS); err != nil {
 		return 0, fmt.Errorf("migrate gitplatform (repositories, mirrors): %w", err)
 	}

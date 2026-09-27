@@ -1149,7 +1149,7 @@ paths:
   /api/v1/orgs/{org}/repos/{repo}/diff:
     get:
       operationId: getDiff
-      summary: Unified diff between two refs
+      summary: Unified diff between from/to refs; optional source_repo selects the same-organization repository containing to, and merge_base=true selects the branch change
       parameters:
         - name: org
           in: path
@@ -1161,6 +1161,22 @@ paths:
           required: true
           schema:
             type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+        - name: to
+          in: query
+          schema:
+            type: string
+        - name: source_repo
+          in: query
+          schema:
+            type: string
+        - name: merge_base
+          in: query
+          schema:
+            type: boolean
       responses:
         "200":
           description: Success
@@ -1631,6 +1647,30 @@ paths:
     post:
       operationId: setMirror
       summary: Point a repository at an upstream, or repoint an existing mirror
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/orgs/{org}/repos/{repo}/mirror/refresh:
+    post:
+      operationId: refreshMirror
+      summary: Refresh this mirror from its approved upstream now
       parameters:
         - name: org
           in: path

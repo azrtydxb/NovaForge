@@ -123,7 +123,7 @@ func (r *AgentReviewer) ReviewRun(ctx context.Context, runID uuid.UUID, roles []
 	if err != nil {
 		return nil, fmt.Errorf("review target: %w", err)
 	}
-	diff, err := r.Git.GetDiff(ctx, &gitv1.GetDiffRequest{Repo: run.RepoID.String(), From: target, To: head, MergeBase: true})
+	diff, err := r.Git.GetDiff(ctx, &gitv1.GetDiffRequest{Repo: run.RepoID.String(), SourceRepo: run.sourceRepo().String(), From: target, To: head, MergeBase: true})
 	if err != nil {
 		return nil, fmt.Errorf("review diff: %w", err)
 	}

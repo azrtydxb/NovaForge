@@ -251,12 +251,11 @@ func TestCrossForkRun(t *testing.T) {
 
 	// Now the gate authority, on a second cross-fork run: the parent declares a
 	// required gate, so the merge must be refused until that gate is satisfied.
-	// It cannot be satisfied here — a gate runner reads the change from the
-	// target repository, where a fork's objects are not present until the merge
-	// fetches them — and that is the point: the run is refused, not waved
-	// through. Definitions are read from the target, so a fork can never relax
-	// the gates it has to pass.
-	commit(parent.GetRepo().GetId(), "main", ".novaforge/gates/api.yaml", "name: api-compatibility\nrequired: true\n")
+	// This fixture deliberately has no reachable analysis sandbox, so the tests
+	// gate cannot execute. The separate TestCrossForkExecutableGate uses a real
+	// pod and proves a passing fork can merge. The refusal here must still name
+	// the parent's definition rather than an unrelated checkout failure.
+	commit(parent.GetRepo().GetId(), "main", ".novaforge/gates/tests.yaml", "name: tests\nrequired: true\n")
 	guarded := head(parent.GetRepo().GetId(), "main")
 	if _, err := git.CreateBranch(ctx, &gitv1.CreateBranchRequest{Repo: fork.GetRepo().GetId(), Name: "second", FromRef: "main"}); err != nil {
 		t.Fatal(err)
@@ -287,7 +286,7 @@ func TestCrossForkRun(t *testing.T) {
 	// report the fork as the run's repository. The merge was still refused — but
 	// with "unknown ref or path", the parent's gate never resolved at all. That is
 	// the failure this assertion distinguishes.
-	if !strings.Contains(err.Error(), "api-compatibility") {
+	if !strings.Contains(err.Error(), "tests") {
 		t.Fatalf("the refusal does not name the gate the parent declared, so the parent's definition was never applied: %v", err)
 	}
 	if got := head(parent.GetRepo().GetId(), "main"); got != guarded {
@@ -305,7 +304,7 @@ func TestCrossForkRun(t *testing.T) {
 	// definition file is a malformed one, which the resolver rejects outright.
 	if _, err := git.CreateCommit(ctx, &gitv1.CreateCommitRequest{
 		Repo: parent.GetRepo().GetId(), Branch: "main", Message: "drop the gate definition",
-		Files: []*gitv1.FileChange{{Path: ".novaforge/gates/api.yaml", Deleted: true}},
+		Files: []*gitv1.FileChange{{Path: ".novaforge/gates/tests.yaml", Deleted: true}},
 	}); err != nil {
 		t.Fatal(err)
 	}

@@ -165,3 +165,26 @@ func mirrorStatus(err error) error {
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
 }
+
+// RefreshMirror performs an authorized on-demand fetch and returns fresh status.
+func (s *Server) RefreshMirror(ctx context.Context, req *gitv1.RefreshMirrorRequest) (*gitv1.RefreshMirrorResponse, error) {
+	if s.Mirrors == nil {
+		return nil, status.Error(codes.FailedPrecondition, "mirroring unavailable")
+	}
+	org, err := s.Mirrors.managing(ctx)
+	if err != nil {
+		return nil, mirrorStatus(err)
+	}
+	row, err := s.repoByName(ctx, org, req.GetRepo())
+	if err != nil {
+		return nil, err
+	}
+	if err = s.Mirrors.Refresh(ctx, row.ID); err != nil {
+		return nil, mirrorStatus(err)
+	}
+	m, err := s.Mirrors.GetMirror(ctx, row.ID)
+	if err != nil {
+		return nil, mirrorStatus(err)
+	}
+	return &gitv1.RefreshMirrorResponse{Mirror: toProtoMirror(&m)}, nil
+}

@@ -31,7 +31,7 @@ func (c *Controller) changeRequirements(ctx context.Context, head RunHead) ([]Re
 		target = head.TargetSHA
 		source = head.HeadSHA
 	}
-	reqs, err := ClassifyChange(ctx, c.Git, head.RepoID, target, source)
+	reqs, err := ClassifyChange(ctx, c.Git, head.RepoID, target, source, head.sourceRepo())
 	if err != nil {
 		return nil, fmt.Errorf("classify change: %w", err)
 	}

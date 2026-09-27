@@ -124,14 +124,13 @@ func (g *GRPCServer) CreateRun(ctx context.Context, req *reviewsv1.CreateRunRequ
 	if err != nil {
 		return nil, err
 	}
-	if err := validateRunRefs(req.GetTitle(), req.GetSourceRef(), req.GetTargetRef()); err != nil {
-		return nil, err
-	}
-
 	// An absent source repository means this run's own, which is every run that
 	// existed before forks did.
 	sourceRepoID, err := optionalUUID("source_repo_id", req.GetSourceRepoId())
 	if err != nil {
+		return nil, err
+	}
+	if err := validateRunRefs(req.GetTitle(), req.GetSourceRef(), req.GetTargetRef(), sourceRepoID != uuid.Nil && sourceRepoID != repoID); err != nil {
 		return nil, err
 	}
 
@@ -169,14 +168,14 @@ func (g *GRPCServer) CreateRun(ctx context.Context, req *reviewsv1.CreateRunRequ
 // with no title, a missing branch, or a branch that would merge into itself.
 // "main" and "refs/heads/main" name the same branch — the merge strips the
 // prefix — so they are compared without it.
-func validateRunRefs(title, source, target string) error {
+func validateRunRefs(title, source, target string, crossFork ...bool) error {
 	if strings.TrimSpace(title) == "" {
 		return status.Error(codes.InvalidArgument, "title is required")
 	}
 	if strings.TrimSpace(source) == "" || strings.TrimSpace(target) == "" {
 		return status.Error(codes.InvalidArgument, "source_ref and target_ref are both required")
 	}
-	if strings.TrimPrefix(source, "refs/heads/") == strings.TrimPrefix(target, "refs/heads/") {
+	if !(len(crossFork) > 0 && crossFork[0]) && strings.TrimPrefix(source, "refs/heads/") == strings.TrimPrefix(target, "refs/heads/") {
 		return status.Errorf(codes.InvalidArgument, "source_ref and target_ref are the same branch %q", strings.TrimPrefix(source, "refs/heads/"))
 	}
 	return nil

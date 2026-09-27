@@ -130,6 +130,9 @@ gitTLS:
 # deployment's object storage, so LFS is available exactly when S3_ENDPOINT is
 # configured and git-platform says so on the batch endpoint when it is not.
 lfs:
+  # HTTPS origin advertised by SSH authentication. Empty uses the certificate's
+  # in-cluster DNS name; connected deployments should set their reachable origin.
+  publicURL: ""
   # The largest single LFS object this deployment accepts, in bytes (5 GiB). An
   # upload declaring more is refused at the batch call, before a byte is sent,
   # and an upload that understates its length is cut off at the same limit.
@@ -202,3 +205,9 @@ runner:
   replicas: 2
   labels: ["linux"]
   jobNamespace: novaforge
+
+# Exact operator-approved HTTP(S) destinations for Git import/mirror and webhooks.
+# Empty retains closed external egress. Private addresses require private CIDRs.
+# Example: [{scheme: https, host: github.com, port: 443, cidrs: [140.82.112.0/20]}]
+outbound:
+  destinations: []

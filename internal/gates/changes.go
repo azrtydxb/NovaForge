@@ -36,14 +36,22 @@ type Requirement struct {
 // from targetRef and returns the governed actions it performs, in a fixed
 // order: gate definitions edited, database schema changed, dependencies
 // added.
-func ClassifyChange(ctx context.Context, git gitv1.GitServiceClient, repoID uuid.UUID, targetRef, sourceRef string) ([]Requirement, error) {
+func ClassifyChange(ctx context.Context, git gitv1.GitServiceClient, repoID uuid.UUID, targetRef, sourceRef string, sourceRepos ...uuid.UUID) ([]Requirement, error) {
+	sourceRepo := repoID
+	if len(sourceRepos) > 0 && sourceRepos[0] != uuid.Nil {
+		sourceRepo = sourceRepos[0]
+	}
 	diff, err := git.GetDiff(ctx, &gitv1.GetDiffRequest{
 		Repo: repoID.String(), From: targetRef, To: sourceRef, MergeBase: true,
+		SourceRepo: sourceRepo.String(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("diff %s...%s: %w", targetRef, sourceRef, err)
 	}
-	changed := ChangedPaths(diff.GetUnified())
+	changed := diff.GetChangedPaths()
+	if !diff.GetPathsComplete() {
+		changed = ChangedPaths(diff.GetUnified())
+	}
 
 	var gateFiles, schemaFiles, manifests []string
 	for _, p := range changed {
@@ -81,7 +89,7 @@ func ClassifyChange(ctx context.Context, git gitv1.GitServiceClient, repoID uuid
 		if err != nil {
 			return nil, err
 		}
-		after, err := manifestDeps(ctx, git, repoID, sourceRef, m)
+		after, err := manifestDeps(ctx, git, sourceRepo, sourceRef, m)
 		if err != nil {
 			return nil, err
 		}

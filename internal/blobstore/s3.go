@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -101,4 +102,32 @@ func (c *Client) mapErr(key string, err error) error {
 		return fmt.Errorf("%s: %w", key, ErrNotFound)
 	}
 	return fmt.Errorf("get %s: %w", key, err)
+}
+
+// ObjectInfo is the read-only inventory needed for bounded orphan reporting.
+type ObjectInfo struct {
+	Key      string    `json:"key"`
+	Size     int64     `json:"size"`
+	Modified time.Time `json:"modified"`
+}
+
+// ListPage examines at most limit keys after startAfter. Cancellation stops the
+// SDK paginator even when the caller stops before exhausting the bucket.
+func (c *Client) ListPage(ctx context.Context, prefix, startAfter string, limit int) ([]ObjectInfo, error) {
+	if limit < 1 || limit > 10000 {
+		return nil, fmt.Errorf("object inventory limit must be 1..10000")
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	out := make([]ObjectInfo, 0, limit)
+	for obj := range c.mc.ListObjects(ctx, c.bucket, minio.ListObjectsOptions{Prefix: prefix, StartAfter: startAfter, Recursive: true}) {
+		if obj.Err != nil {
+			return nil, obj.Err
+		}
+		out = append(out, ObjectInfo{Key: obj.Key, Size: obj.Size, Modified: obj.LastModified})
+		if len(out) == limit {
+			break
+		}
+	}
+	return out, nil
 }

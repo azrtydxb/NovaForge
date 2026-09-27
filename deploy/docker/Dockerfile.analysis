@@ -83,7 +83,7 @@ RUN set -eu; \
 FROM golang:${GO_VERSION} AS sandbox
 ARG SEMGREP_VERSION=1.173.0
 RUN apt-get update \
- && apt-get install -y --no-install-recommends git ca-certificates openssh-client python3 python3-venv \
+ && apt-get install -y --no-install-recommends git git-lfs ca-certificates openssh-client python3 python3-venv \
  && rm -rf /var/lib/apt/lists/* \
  && python3 -m venv /opt/semgrep \
  && /opt/semgrep/bin/pip install --no-cache-dir "semgrep==${SEMGREP_VERSION}" \

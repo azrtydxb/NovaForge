@@ -125,4 +125,8 @@ echo "== 6. tests-gate measurements feed coverage maintenance =="
 source tests/e2e/coverage_probe.sh
 verify_coverage_history
 
+echo "== 7. a fork satisfies its parent's executable gates =="
+source tests/e2e/fork_probe.sh
+verify_cross_fork_gates
+
 echo "PASS: an Engineering Run is reviewed independently and merges on the kw cluster."

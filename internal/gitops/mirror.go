@@ -36,6 +36,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"github.com/novaforge/novaforge/internal/egress"
 	"io"
 	"log"
 	"net/url"
@@ -133,8 +134,9 @@ type Imported struct {
 // the database because an import is mostly a clone, and a refresh is a fetch
 // into a repository on disk.
 type MirrorStore struct {
-	pool *pgxpool.Pool
-	root string
+	Outbound *egress.Policy
+	pool     *pgxpool.Pool
+	root     string
 	// key is sha256(KEK), the same derivation secrets.NewBroker and
 	// webhooks.NewStore use: all three encrypt at rest under SECRETS_KEK, and
 	// two derivations of one key would mean a value written by one is
@@ -667,6 +669,19 @@ func validateRemote(remote string) error {
 // nobody is attached to.
 func (s *MirrorStore) git(ctx context.Context, dir, credential string, args ...string) ([]byte, error) {
 	env := append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	if s.Outbound != nil {
+		for _, arg := range args {
+			if strings.HasPrefix(arg, "http://") || strings.HasPrefix(arg, "https://") {
+				config, err := s.Outbound.GitConfig(ctx, arg)
+				if err != nil {
+					return nil, err
+				}
+				args = append(config, args...)
+				break
+			}
+		}
+		env = append(env, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_COUNT=0", "HTTP_PROXY=", "HTTPS_PROXY=", "ALL_PROXY=", "http_proxy=", "https_proxy=", "all_proxy=")
+	}
 	if credential != "" {
 		helper, cleanup, err := writeAskpass()
 		if err != nil {

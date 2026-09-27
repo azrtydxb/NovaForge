@@ -41,8 +41,10 @@ type Config struct {
 	// Both empty leaves the TLS port unbound — HTTPS is not enabled merely by
 	// rendering the chart — and one without the other is a misconfiguration
 	// git-platform refuses to start with rather than quietly serving plaintext.
-	GitTLSCertFile string
-	GitTLSKeyFile  string
+	GitTLSCertFile       string
+	GitTLSKeyFile        string
+	GitPublicURL         string
+	OutboundDestinations string
 
 	IdentityAddr string
 	GitAddr      string
@@ -121,6 +123,8 @@ func LoadConfig() Config {
 		GitDataDir:                 env("GIT_DATA_DIR", "/data/repos"),
 		GitTLSCertFile:             env("NF_GIT_TLS_CERT_FILE", ""),
 		GitTLSKeyFile:              env("NF_GIT_TLS_KEY_FILE", ""),
+		GitPublicURL:               env("NF_GIT_PUBLIC_URL", ""),
+		OutboundDestinations:       env("NF_OUTBOUND_DESTINATIONS", ""),
 		IdentityAddr:               env("IDENTITY_ADDR", ""),
 		GitAddr:                    env("GIT_ADDR", ""),
 		WorkAddr:                   env("WORK_ADDR", ""),

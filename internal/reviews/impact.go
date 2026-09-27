@@ -30,12 +30,17 @@ type Impact struct {
 // landed on the target after the branch was cut was counted as the branch's,
 // in reverse — so a two-file change could read as a twenty-file one, and
 // auto-merge's size cap was judged against changes the run never made.
-func ComputeImpact(ctx context.Context, git gitv1.GitServiceClient, orgID, repoID uuid.UUID, from, to string) (Impact, error) {
+func ComputeImpact(ctx context.Context, git gitv1.GitServiceClient, orgID, repoID uuid.UUID, from, to string, sourceRepos ...uuid.UUID) (Impact, error) {
+	sourceRepo := repoID
+	if len(sourceRepos) > 0 && sourceRepos[0] != uuid.Nil {
+		sourceRepo = sourceRepos[0]
+	}
 	resp, err := git.GetDiff(ctx, &gitv1.GetDiffRequest{
-		Repo:      repoID.String(),
-		From:      from,
-		To:        to,
-		MergeBase: true,
+		Repo:       repoID.String(),
+		SourceRepo: sourceRepo.String(),
+		From:       from,
+		To:         to,
+		MergeBase:  true,
 	})
 	if err != nil {
 		return Impact{}, fmt.Errorf("get diff: %w", err)
@@ -146,7 +151,7 @@ func (g *GRPCServer) GetRunImpact(ctx context.Context, req *reviewsv1.GetRunImpa
 	if g.Git == nil {
 		return nil, status.Error(codes.Unimplemented, "this deployment has no git service wired to measure change impact")
 	}
-	im, err := ComputeImpact(ctx, g.Git, run.OrgID, run.RepoID, run.TargetRef, run.SourceRef)
+	im, err := ComputeImpact(ctx, g.Git, run.OrgID, run.RepoID, run.TargetRef, run.SourceRef, run.sourceRepo())
 	if err != nil {
 		if status.Code(err) == codes.NotFound || strings.Contains(err.Error(), "NotFound") {
 			return nil, status.Errorf(codes.NotFound, "measure change impact: %v", err)

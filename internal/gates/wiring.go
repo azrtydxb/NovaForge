@@ -112,6 +112,7 @@ func NewServiceRunLookup(reviewsClient reviewsv1.ReviewsServiceClient, workClien
 		// gate. Gate *definitions* are still read from the target (see Resolve), so
 		// a fork cannot relax the gates its change has to pass.
 		sourceHeads := heads
+		sourceRepoID := repoID
 		if srcRepo := run.GetSourceRepoId(); srcRepo != "" && srcRepo != run.GetRepoId() {
 			srcRepoID, err := uuid.Parse(srcRepo)
 			if err != nil {
@@ -121,6 +122,7 @@ func NewServiceRunLookup(reviewsClient reviewsv1.ReviewsServiceClient, workClien
 			if err != nil {
 				return RunHead{}, err
 			}
+			sourceRepoID = srcRepoID
 			srcBranches, err := gitClient.ListBranches(ctx, &gitv1.ListBranchesRequest{Repo: srcName})
 			if err != nil {
 				return RunHead{}, fmt.Errorf("list branches for %s: %w", srcName, err)
@@ -142,6 +144,7 @@ func NewServiceRunLookup(reviewsClient reviewsv1.ReviewsServiceClient, workClien
 		return RunHead{
 			OrgID:         orgID,
 			RepoID:        repoID,
+			SourceRepoID:  sourceRepoID,
 			TargetRef:     run.GetTargetRef(),
 			TargetSHA:     heads[target],
 			HeadSHA:       headSHA,
@@ -192,6 +195,13 @@ func NewWorkspaceInputBuilder(gitClient gitv1.GitServiceClient, semgrepRules str
 		if err != nil {
 			return Input{}, err
 		}
+		sourceName := repoName
+		if head.sourceRepo() != head.RepoID {
+			sourceName, err = resolveRepoName(ctx, gitClient, head.sourceRepo())
+			if err != nil {
+				return Input{}, err
+			}
+		}
 
 		workdir, err := os.MkdirTemp("", "nf-gate-"+gate+"-*")
 		if err != nil {
@@ -202,7 +212,7 @@ func NewWorkspaceInputBuilder(gitClient gitv1.GitServiceClient, semgrepRules str
 			_ = os.RemoveAll(workdir)
 		}()
 
-		if err := materializeTree(ctx, gitClient, repoName, head.HeadSHA, "", workdir); err != nil {
+		if err := materializeTree(ctx, gitClient, sourceName, head.HeadSHA, "", workdir); err != nil {
 			_ = os.RemoveAll(workdir)
 			return Input{}, fmt.Errorf("materialize workspace for %s@%s: %w", repoName, head.HeadSHA, err)
 		}
@@ -230,10 +240,14 @@ func NewWorkspaceInputBuilder(gitClient gitv1.GitServiceClient, semgrepRules str
 			if !ok || (sha != head.HeadSHA && sha != head.TargetSHA) || path != openapiSpecPath {
 				return nil, 0, fmt.Errorf("unbound gate Git read")
 			}
-			if _, err := gitClient.GetTree(execCtx, &gitv1.GetTreeRequest{Repo: repoName, Ref: sha}); err != nil {
+			readRepo := repoName
+			if sha == head.HeadSHA {
+				readRepo = sourceName
+			}
+			if _, err := gitClient.GetTree(execCtx, &gitv1.GetTreeRequest{Repo: readRepo, Ref: sha}); err != nil {
 				return nil, 0, fmt.Errorf("verify API evidence revision: %w", err)
 			}
-			blob, err := gitClient.GetBlob(execCtx, &gitv1.GetBlobRequest{Repo: repoName, Ref: sha, Path: path})
+			blob, err := gitClient.GetBlob(execCtx, &gitv1.GetBlobRequest{Repo: readRepo, Ref: sha, Path: path})
 			if status.Code(err) == codes.NotFound {
 				return nil, 44, nil
 			}

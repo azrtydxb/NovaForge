@@ -64,7 +64,7 @@ func Routes() []Route {
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/commits/{ref}", "listCommits", "Commit history for a ref"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/tree/{ref}/*", "getTree", "Tree listing at a path"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/blob/{ref}/*", "getBlob", "File contents"},
-		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/diff", "getDiff", "Unified diff between two refs"},
+		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/diff", "getDiff", "Unified diff between from/to refs; optional source_repo selects the same-organization repository containing to, and merge_base=true selects the branch change"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/releases", "listReleases", "Releases and their downloadable assets"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/releases", "createRelease", "Publish an existing tag as a release"},
 		{http.MethodDelete, "/api/v1/orgs/{org}/repos/{repo}/releases/{tag}", "deleteRelease", "Delete a release and the objects its assets hold"},
@@ -75,6 +75,7 @@ func Routes() []Route {
 		// PATCH and DELETE, and a fifth verb added for one route is a verb every
 		// future caller has to discover. /transfer is POSTed for the same reason.
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/mirror", "setMirror", "Point a repository at an upstream, or repoint an existing mirror"},
+		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/mirror/refresh", "refreshMirror", "Refresh this mirror from its approved upstream now"},
 		{http.MethodDelete, "/api/v1/orgs/{org}/repos/{repo}/mirror", "deleteMirror", "Stop following upstream, which makes the repository writable again"},
 		{http.MethodGet, "/api/v1/orgs/{org}/repos/{repo}/hooks", "listHooks", "Webhooks registered for a repository; a secret is never returned"},
 		{http.MethodPost, "/api/v1/orgs/{org}/repos/{repo}/hooks", "createHook", "Register a webhook endpoint, optionally with a signing secret"},

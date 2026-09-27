@@ -447,7 +447,21 @@ func (s *Server) GetDiff(ctx context.Context, req *gitv1.GetDiffRequest) (*gitv1
 	if err != nil {
 		return nil, err
 	}
-	unified, paths, err := repo.DiffDetails(req.GetFrom(), req.GetTo(), req.GetMergeBase())
+	var unified string
+	var paths []string
+	if req.GetSourceRepo() != "" {
+		source, sourceErr := s.openScopedRepo(ctx, req.GetSourceRepo())
+		if sourceErr != nil {
+			return nil, sourceErr
+		}
+		if source.Path() != repo.Path() {
+			unified, paths, err = repo.diffAcross(ctx, source, req.GetFrom(), req.GetTo(), req.GetMergeBase())
+		} else {
+			unified, paths, err = repo.DiffDetails(req.GetFrom(), req.GetTo(), req.GetMergeBase())
+		}
+	} else {
+		unified, paths, err = repo.DiffDetails(req.GetFrom(), req.GetTo(), req.GetMergeBase())
+	}
 	if err != nil {
 		if isGitNotFound(err) {
 			return nil, status.Errorf(codes.NotFound, "unknown ref %q or %q", req.GetFrom(), req.GetTo())
@@ -724,14 +738,14 @@ func mergeRefs(repoPath, sourceRef, targetRef, method, message, expectedSource, 
 		return "", "", err
 	}
 
-	// The fork's branch is fetched into the throwaway clone under the very
-	// remote-tracking name a branch of the target would have, so the rest of this
-	// function cannot tell the difference. Fetching into the bare target instead
-	// would publish a ref in it before any gate had authorized the merge, and the
-	// objects imported below are only ever the merge result.
+	// Keep the fork under a separate ref: both sides commonly call their branch
+	// main. Reusing origin/main would replace the target baseline before checkout
+	// and make the expected-target comparison fail on every such contribution.
+	sourceTrackingRef := "refs/remotes/origin/" + sourceBranch
 	if sourceRepoPath != "" {
+		sourceTrackingRef = "refs/novaforge/fork-source"
 		if _, err := run(tmpDir, "fetch", "--no-write-fetch-head", "--no-tags", sourceRepoPath,
-			"+"+refHeadsPrefix+sourceBranch+":refs/remotes/origin/"+sourceBranch); err != nil {
+			"+"+refHeadsPrefix+sourceBranch+":"+sourceTrackingRef); err != nil {
 			return "", "", err
 		}
 	}
@@ -757,7 +771,7 @@ func mergeRefs(repoPath, sourceRef, targetRef, method, message, expectedSource, 
 		message = fmt.Sprintf("Merge %s into %s", sourceRef, targetRef)
 	}
 
-	sourceHead, err := run(tmpDir, "rev-parse", "--verify", "refs/remotes/origin/"+sourceBranch+"^{commit}")
+	sourceHead, err := run(tmpDir, "rev-parse", "--verify", sourceTrackingRef+"^{commit}")
 	if err != nil {
 		return "", "", err
 	}

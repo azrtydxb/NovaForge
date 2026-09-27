@@ -49,6 +49,7 @@ func cmdRun(args []string, stdout, stderr io.Writer) error {
 		fs.SetOutput(stderr)
 		title := fs.String("title", "", "what the change does")
 		source := fs.String("source", "", "the branch carrying the change")
+		sourceRepo := fs.String("source-repo", "", "same-organization fork name or ID containing the source branch")
 		target := fs.String("target", "", "the branch it merges into; the repository's default if empty")
 		item := fs.String("work-item", "", "the Work Item key the change is for")
 		if err := fs.Parse(args[2:]); err != nil {
@@ -61,7 +62,7 @@ func cmdRun(args []string, stdout, stderr io.Writer) error {
 			Number int    `json:"number"`
 			State  string `json:"state"`
 		}
-		body := map[string]string{"title": *title, "source_ref": *source, "target_ref": *target, "work_item": *item}
+		body := map[string]string{"title": *title, "source_ref": *source, "source_repo": *sourceRepo, "target_ref": *target, "work_item": *item}
 		if err := c.Do("POST", base, body, &out); err != nil {
 			return err
 		}

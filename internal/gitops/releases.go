@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/novaforge/novaforge/internal/authz"
 )
 
 // Errors a caller has to be able to tell apart. A missing tag is the caller's
@@ -327,6 +328,15 @@ func (s *ReleaseStore) AddAsset(ctx context.Context, orgID, releaseID uuid.UUID,
 		BlobKey: assetKey(orgID, repoID, releaseID, assetID),
 	}
 
+	tx, err := beginBlobUpload(ctx, s.pool, orgID, a.BlobKey)
+	if err != nil {
+		return Asset{}, err
+	}
+	defer tx.Rollback(ctx)
+	if err = tx.QueryRow(ctx, `SELECT repo_id FROM gitplatform.releases WHERE id=$1 AND org_id=$2 FOR SHARE`, releaseID, orgID).Scan(&repoID); err != nil {
+		return Asset{}, err
+	}
+
 	// Counting on the way past means the recorded size is what actually arrived,
 	// not what the uploader claimed. A declared Content-Length that did not match
 	// the body would otherwise be published as the download's size and every
@@ -337,7 +347,7 @@ func (s *ReleaseStore) AddAsset(ctx context.Context, orgID, releaseID uuid.UUID,
 	}
 	a.Size = counter.n
 
-	if _, err := s.pool.Exec(ctx, `
+	if _, err := tx.Exec(ctx, `
 		INSERT INTO gitplatform.release_assets (id, release_id, name, size, content_type, blob_key)
 		VALUES ($1, $2, $3, $4, $5, $6)`,
 		a.ID, a.ReleaseID, a.Name, a.Size, a.ContentType, a.BlobKey); err != nil {
@@ -351,6 +361,12 @@ func (s *ReleaseStore) AddAsset(ctx context.Context, orgID, releaseID uuid.UUID,
 			return Asset{}, fmt.Errorf("this release already has an asset named %q", name)
 		}
 		return Asset{}, fmt.Errorf("record release asset: %w", err)
+	}
+	if _, err = tx.Exec(ctx, `DELETE FROM gitplatform.blob_cleanup WHERE blob_key=$1`, a.BlobKey); err != nil {
+		return Asset{}, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return Asset{}, err
 	}
 	return a, nil
 }
@@ -404,34 +420,25 @@ func (s *ReleaseStore) OpenAsset(ctx context.Context, orgID uuid.UUID, repoRef, 
 	return a, rc, nil
 }
 
-// DeleteRelease removes a release, its assets' rows and its assets' objects.
-//
-// The objects go first. An object deleted with its row still present is found
-// again by the next delete and retried; a row deleted with its object still
-// present leaves an object nothing references, which nothing will ever find and
-// which grows the bucket forever. So a failure to delete an object aborts the
-// whole operation with the rows intact.
+// DeleteRelease atomically removes metadata and queues every physical key.
+// Best-effort immediate cleanup preserves prompt reclamation; the durable worker
+// retries storage failures, including failures after repository cascade deletion.
 func (s *ReleaseStore) DeleteRelease(ctx context.Context, orgID uuid.UUID, repoRef, tag string) error {
 	rel, err := s.GetRelease(ctx, orgID, repoRef, tag)
 	if err != nil {
 		return err
 	}
-	if len(rel.Assets) > 0 && s.blobs == nil {
-		return errors.New("this release has assets and this deployment has no object storage configured, so it cannot be deleted without leaving them behind")
-	}
-	for _, a := range rel.Assets {
-		if err := s.blobs.Delete(ctx, a.BlobKey); err != nil {
-			return fmt.Errorf("delete release asset object %s: %w", a.BlobKey, err)
-		}
-	}
-	// release_assets is removed by the ON DELETE CASCADE on release_id.
-	tag2, err := s.pool.Exec(ctx,
-		`DELETE FROM gitplatform.releases WHERE id = $1 AND org_id = $2`, rel.ID, orgID)
+	result, err := s.pool.Exec(ctx, `DELETE FROM gitplatform.releases WHERE id=$1 AND org_id=$2`, rel.ID, orgID)
 	if err != nil {
-		return fmt.Errorf("delete release: %w", err)
+		return err
 	}
-	if tag2.RowsAffected() == 0 {
-		return fmt.Errorf("%s: %w", tag, ErrReleaseNotFound)
+	if result.RowsAffected() == 0 {
+		return ErrReleaseNotFound
+	}
+	if s.blobs != nil {
+		for range rel.Assets {
+			_, _ = (&BlobCollector{Pool: s.pool, Blobs: s.blobs}).CollectOne(authz.WithScope(ctx, authz.Scope{OrgID: orgID, ActorKind: "service", ServiceName: "git-platform"}))
+		}
 	}
 	return nil
 }

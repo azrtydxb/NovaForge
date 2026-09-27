@@ -26,6 +26,7 @@ import (
 	"github.com/novaforge/novaforge/internal/blobstore"
 	"github.com/novaforge/novaforge/internal/ci"
 	"github.com/novaforge/novaforge/internal/database"
+	"github.com/novaforge/novaforge/internal/events"
 	"github.com/novaforge/novaforge/internal/retention"
 	"github.com/novaforge/novaforge/internal/service"
 )
@@ -89,6 +90,7 @@ func main() {
 	}
 	rdb := redis.NewClient(redisOpts)
 	defer rdb.Close()
+	go (events.Outbox{Pool: pool, Redis: rdb, Schema: "ci"}).Run(ctx)
 
 	blobs, err := blobstore.New(ctx, blobstore.Options{
 		Endpoint:  cfg.S3Endpoint,

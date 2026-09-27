@@ -14,8 +14,11 @@ import (
 // evaluate its gates: its org/repo, the ref it targets, its current head
 // SHA, and its Work Item's required gates.
 type RunHead struct {
-	OrgID         uuid.UUID
-	RepoID        uuid.UUID
+	OrgID  uuid.UUID
+	RepoID uuid.UUID
+	// SourceRepoID names the change's object store; RepoID owns policy.
+	// Runs created before forks default this to RepoID.
+	SourceRepoID  uuid.UUID
 	TargetRef     string
 	TargetSHA     string
 	HeadSHA       string
@@ -27,6 +30,13 @@ type RunHead struct {
 	// made a change can never be the one who approves it.
 	AuthorID   uuid.UUID
 	AuthorKind string
+}
+
+func (h RunHead) sourceRepo() uuid.UUID {
+	if h.SourceRepoID == uuid.Nil {
+		return h.RepoID
+	}
+	return h.SourceRepoID
 }
 
 // RunLookup resolves the current RunHead for runID. In production this is

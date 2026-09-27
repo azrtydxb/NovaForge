@@ -2768,9 +2768,11 @@ type ResolveFingerprintRequest struct {
 	Fingerprint string                 `protobuf:"bytes,1,opt,name=fingerprint,proto3" json:"fingerprint,omitempty"`
 	// Optional organization the caller is acting in, by name or id. See
 	// ResolveTokenRequest.org.
-	Org           string `protobuf:"bytes,2,opt,name=org,proto3" json:"org,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Org string `protobuf:"bytes,2,opt,name=org,proto3" json:"org,omitempty"`
+	// Git transports resolve repository grants for non-members.
+	AllowNonMember bool `protobuf:"varint,3,opt,name=allow_non_member,json=allowNonMember,proto3" json:"allow_non_member,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ResolveFingerprintRequest) Reset() {
@@ -2815,6 +2817,13 @@ func (x *ResolveFingerprintRequest) GetOrg() string {
 		return x.Org
 	}
 	return ""
+}
+
+func (x *ResolveFingerprintRequest) GetAllowNonMember() bool {
+	if x != nil {
+		return x.AllowNonMember
+	}
+	return false
 }
 
 type ResolveFingerprintResponse struct {
@@ -3977,10 +3986,11 @@ const file_novaforge_identity_v1_identity_proto_rawDesc = "" +
 	"\x03org\x18\x02 \x01(\tR\x03org\x12(\n" +
 	"\x10allow_non_member\x18\x03 \x01(\bR\x0eallowNonMember\"P\n" +
 	"\x14ResolveTokenResponse\x128\n" +
-	"\asubject\x18\x01 \x01(\v2\x1e.novaforge.identity.v1.SubjectR\asubject\"O\n" +
+	"\asubject\x18\x01 \x01(\v2\x1e.novaforge.identity.v1.SubjectR\asubject\"y\n" +
 	"\x19ResolveFingerprintRequest\x12 \n" +
 	"\vfingerprint\x18\x01 \x01(\tR\vfingerprint\x12\x10\n" +
-	"\x03org\x18\x02 \x01(\tR\x03org\"V\n" +
+	"\x03org\x18\x02 \x01(\tR\x03org\x12(\n" +
+	"\x10allow_non_member\x18\x03 \x01(\bR\x0eallowNonMember\"V\n" +
 	"\x1aResolveFingerprintResponse\x128\n" +
 	"\asubject\x18\x01 \x01(\v2\x1e.novaforge.identity.v1.SubjectR\asubject\"&\n" +
 	"\x10CreateOrgRequest\x12\x12\n" +

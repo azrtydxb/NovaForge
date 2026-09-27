@@ -31,5 +31,33 @@ spec:
     - toEntities:
         - cluster
         - kube-apiserver
+{{- if and (eq $name "git-platform") $.Values.outbound.destinations }}
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - {port: "53", protocol: ANY}
+          rules:
+            dns:
+              - matchPattern: "*"
+{{- range $rule := $.Values.outbound.destinations }}
+{{- if regexMatch "^[0-9.]+$" $rule.host }}
+    - toCIDR:
+        - {{ printf "%s/32" $rule.host | quote }}
+{{- else if contains ":" $rule.host }}
+    - toCIDR:
+        - {{ printf "%s/128" $rule.host | quote }}
+{{- else }}
+    - toFQDNs:
+        - matchName: {{ $rule.host | quote }}
+{{- end }}
+      toPorts:
+        - ports:
+            - port: {{ $rule.port | quote }}
+              protocol: TCP
+{{- end }}
+{{- end }}
 {{- end }}
 {{- end }}

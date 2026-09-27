@@ -53,6 +53,7 @@ const (
 	GitService_GetMirror_FullMethodName                         = "/novaforge.git.v1.GitService/GetMirror"
 	GitService_SetMirror_FullMethodName                         = "/novaforge.git.v1.GitService/SetMirror"
 	GitService_DeleteMirror_FullMethodName                      = "/novaforge.git.v1.GitService/DeleteMirror"
+	GitService_RefreshMirror_FullMethodName                     = "/novaforge.git.v1.GitService/RefreshMirror"
 )
 
 // GitServiceClient is the client API for GitService service.
@@ -106,6 +107,7 @@ type GitServiceClient interface {
 	GetMirror(ctx context.Context, in *GetMirrorRequest, opts ...grpc.CallOption) (*GetMirrorResponse, error)
 	SetMirror(ctx context.Context, in *SetMirrorRequest, opts ...grpc.CallOption) (*SetMirrorResponse, error)
 	DeleteMirror(ctx context.Context, in *DeleteMirrorRequest, opts ...grpc.CallOption) (*DeleteMirrorResponse, error)
+	RefreshMirror(ctx context.Context, in *RefreshMirrorRequest, opts ...grpc.CallOption) (*RefreshMirrorResponse, error)
 }
 
 type gitServiceClient struct {
@@ -468,6 +470,16 @@ func (c *gitServiceClient) DeleteMirror(ctx context.Context, in *DeleteMirrorReq
 	return out, nil
 }
 
+func (c *gitServiceClient) RefreshMirror(ctx context.Context, in *RefreshMirrorRequest, opts ...grpc.CallOption) (*RefreshMirrorResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RefreshMirrorResponse)
+	err := c.cc.Invoke(ctx, GitService_RefreshMirror_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // GitServiceServer is the server API for GitService service.
 // All implementations should embed UnimplementedGitServiceServer
 // for forward compatibility.
@@ -519,6 +531,7 @@ type GitServiceServer interface {
 	GetMirror(context.Context, *GetMirrorRequest) (*GetMirrorResponse, error)
 	SetMirror(context.Context, *SetMirrorRequest) (*SetMirrorResponse, error)
 	DeleteMirror(context.Context, *DeleteMirrorRequest) (*DeleteMirrorResponse, error)
+	RefreshMirror(context.Context, *RefreshMirrorRequest) (*RefreshMirrorResponse, error)
 }
 
 // UnimplementedGitServiceServer should be embedded to have
@@ -629,6 +642,9 @@ func (UnimplementedGitServiceServer) SetMirror(context.Context, *SetMirrorReques
 }
 func (UnimplementedGitServiceServer) DeleteMirror(context.Context, *DeleteMirrorRequest) (*DeleteMirrorResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteMirror not implemented")
+}
+func (UnimplementedGitServiceServer) RefreshMirror(context.Context, *RefreshMirrorRequest) (*RefreshMirrorResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RefreshMirror not implemented")
 }
 func (UnimplementedGitServiceServer) testEmbeddedByValue() {}
 
@@ -1244,6 +1260,24 @@ func _GitService_DeleteMirror_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GitService_RefreshMirror_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RefreshMirrorRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GitServiceServer).RefreshMirror(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GitService_RefreshMirror_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GitServiceServer).RefreshMirror(ctx, req.(*RefreshMirrorRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // GitService_ServiceDesc is the grpc.ServiceDesc for GitService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1378,6 +1412,10 @@ var GitService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteMirror",
 			Handler:    _GitService_DeleteMirror_Handler,
+		},
+		{
+			MethodName: "RefreshMirror",
+			Handler:    _GitService_RefreshMirror_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

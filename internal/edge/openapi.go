@@ -65,6 +65,15 @@ paths:
 				for _, name := range params {
 					fmt.Fprintf(&b, "        - name: %s\n          in: path\n          required: true\n          schema:\n            type: string\n", name)
 				}
+				if r.OpID == "getDiff" {
+					for _, name := range []string{"from", "to", "source_repo", "merge_base"} {
+						typ := "string"
+						if name == "merge_base" {
+							typ = "boolean"
+						}
+						fmt.Fprintf(&b, "        - name: %s\n          in: query\n          schema:\n            type: %s\n", name, typ)
+					}
+				}
 			}
 			b.WriteString("      responses:\n")
 			b.WriteString("        \"200\":\n          description: Success\n")

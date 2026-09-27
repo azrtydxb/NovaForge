@@ -208,6 +208,13 @@ export function Repos() {
         </Panel>
       ) : (
         <>
+          <Panel>
+            <h3>Clone this repository</h3>
+            <p>Use <code>nf repo clone {active}</code> with your configured Git server.
+              For SSH, register your public key in account settings and use the Git server’s SSH address.</p>
+            <p>Git LFS works with HTTPS and SSH clones. SSH authenticates your key;
+              large files travel over HTTPS. Trust this installation’s certificate authority before cloning.</p>
+          </Panel>
           <Forks
             repo={w.repos.find((r) => r.name === active)}
             repos={w.repos}
@@ -536,7 +543,7 @@ function ImportDialog({
   return (
     <Dialog
       title="Import a repository"
-      description="The whole history is cloned from the address below. Nothing is created here unless the clone finishes, so a failed import can simply be retried."
+      description="Imports Git refs and history from an operator-approved host. LFS payloads, release files, users, issues and CI records need separate migration. Nothing is created unless the clone finishes; failed imports can be retried."
       submitLabel="Import"
       busy={imported.isPending}
       error={imported.error}
@@ -631,6 +638,10 @@ function MirrorPanel({
       invalidate();
     },
   });
+  const refresh = useMutation({
+    mutationFn: () => api.post<Mirror>(`${base}/refresh`, {}),
+    onSettled: invalidate,
+  });
   const stop = useMutation({
     mutationFn: () => api.del(base),
     onSuccess: invalidate,
@@ -685,6 +696,10 @@ function MirrorPanel({
                   : "none; upstream is read anonymously"}
               </span>
             </div>
+            {canAdminister ? <button disabled={refresh.isPending} onClick={() => refresh.mutate()}>
+              {refresh.isPending ? "Refreshing…" : "Refresh now"}
+            </button> : null}
+            {refresh.error ? <Failed error={refresh.error} /> : null}
             {/* The recorded reason, not a red dot: a mirror that is quietly
                 failing is the complaint, and the platform knows exactly why. */}
             {m.last_error === "" ? null : (
@@ -839,7 +854,7 @@ function Hooks({ org, repo }: { org: string; repo: string }) {
           />
           <input
             value={events}
-            placeholder="push (blank = every event)"
+            placeholder="push, engineering_run, ci_result"
             onChange={(e) => setEvents(e.target.value)}
             style={adminInput}
           />
@@ -858,6 +873,7 @@ function Hooks({ org, repo }: { org: string; repo: string }) {
             Add
           </button>
         </div>
+        <div style={{ color: "var(--fg-faint)", fontSize: 12 }}>Events: push, engineering_run, ci_result. Leave blank for all events. Delivery IDs stay the same across retries.</div>
         {create.error ? <Failed error={create.error} /> : null}
         {update.error ? <Failed error={update.error} /> : null}
         {remove.error ? <Failed error={remove.error} /> : null}

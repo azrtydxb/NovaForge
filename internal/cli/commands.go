@@ -184,7 +184,7 @@ func cmdOrg(args []string, stdout, stderr io.Writer) error {
 
 func cmdRepo(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: nf repo <create|list|clone|branches|log> [name]")
+		return fmt.Errorf("usage: nf repo <create|list|clone|branches|log|fork|import|mirror> [name]")
 	}
 	c, cfg, err := session()
 	if err != nil {
@@ -197,6 +197,8 @@ func cmdRepo(args []string, stdout, stderr io.Writer) error {
 	base := "/api/v1/orgs/" + org + "/repos"
 
 	switch args[0] {
+	case "fork", "import", "mirror":
+		return repoMigration(c, base, args, stdout, stderr)
 	case "clone":
 		return repoClone(c, cfg, org, args[1:], stdout, stderr)
 	case "create":

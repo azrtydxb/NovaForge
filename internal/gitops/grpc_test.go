@@ -19,7 +19,10 @@ import (
 
 func gitopsDBURL(t *testing.T) string {
 	t.Helper()
-	u := os.Getenv("TEST_DATABASE_URL")
+	u := mirrorSuite.url
+	if u == "" {
+		u = os.Getenv("TEST_DATABASE_URL")
+	}
 	if u == "" {
 		t.Skip("TEST_DATABASE_URL not set")
 	}

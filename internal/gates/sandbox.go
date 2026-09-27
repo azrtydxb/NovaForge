@@ -151,6 +151,8 @@ func (s *AnalysisSandbox) execute(ctx context.Context, head RunHead, runID uuid.
 	ns := "nf-gate-" + uuid.NewString()
 	labels := map[string]string{"novaforge.io/gate-sandbox": "true", "novaforge.io/org-id": head.OrgID.String(), "novaforge.io/run-id": runID.String()}
 	annotations := map[string]string{"novaforge.io/source-sha": head.HeadSHA, "novaforge.io/source-sha256": digest, "novaforge.io/repo-id": head.RepoID.String()}
+	annotations["novaforge.io/source-repo-id"] = head.sourceRepo().String()
+	annotations["novaforge.io/policy-sha"] = head.TargetSHA
 	namespace, e := s.client.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns, Labels: labels}}, metav1.CreateOptions{})
 	if e != nil {
 		return nil, 0, e

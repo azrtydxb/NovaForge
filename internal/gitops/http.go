@@ -37,7 +37,8 @@ type httpHandler struct {
 	// the same paths, the same auth and the same caps as the git protocol (see
 	// lfs.go). Nil means this deployment has no object storage, and the LFS
 	// endpoints then say so rather than 404ing as if LFS were unheard of.
-	lfs *LFSStore
+	lfs     *LFSStore
+	lfsAuth *LFSAuth
 }
 
 // NewHTTPHandler returns an http.Handler serving the git smart-HTTP protocol
@@ -54,8 +55,12 @@ func NewHTTPHandler(root string, auth AuthFunc, caps CapFunc) http.Handler {
 // purpose: it must authenticate and authorize through exactly the credential
 // path the git transport uses, or it becomes a way around repository access. A
 // nil lfs leaves the LFS endpoints answering "not available in this deployment".
-func NewHTTPHandlerWithLFS(root string, auth AuthFunc, caps CapFunc, lfs *LFSStore) http.Handler {
-	return &httpHandler{root: root, auth: auth, caps: caps, lfs: lfs}
+func NewHTTPHandlerWithLFS(root string, auth AuthFunc, caps CapFunc, lfs *LFSStore, sshAuth ...*LFSAuth) http.Handler {
+	h := &httpHandler{root: root, auth: auth, caps: caps, lfs: lfs}
+	if len(sshAuth) > 0 {
+		h.lfsAuth = sshAuth[0]
+	}
+	return h
 }
 
 // parsedPath is the {org}/{repo}.git/{op} decomposition of a request path.
@@ -90,16 +95,21 @@ func (h *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, pass, ok := r.BasicAuth()
-	if !ok {
-		w.Header().Set("WWW-Authenticate", `Basic realm="novaforge"`)
-		http.Error(w, "authentication required", http.StatusUnauthorized)
-		return
+	var scope authz.Scope
+	if strings.HasPrefix(r.Header.Get("Authorization"), "Bearer nflfs_") && h.lfsAuth != nil {
+		var operation string
+		scope, operation, err = h.lfsAuth.authenticate(r, pp)
+		if err == nil {
+			r = r.WithContext(context.WithValue(r.Context(), lfsOperationKey{}, operation))
+		}
+	} else {
+		user, pass, ok := r.BasicAuth()
+		if ok {
+			scope, err = h.auth(r.Context(), user, pass, pp.orgRef)
+		} else {
+			err = fmt.Errorf("authentication required")
+		}
 	}
-	// The organization from the clone URL is resolved and membership-checked
-	// during authentication, so the scope that comes back is already the
-	// caller's scope in that organization.
-	scope, err := h.auth(r.Context(), user, pass, pp.orgRef)
 	if err != nil {
 		w.Header().Set("WWW-Authenticate", `Basic realm="novaforge"`)
 		http.Error(w, "authentication required", http.StatusUnauthorized)

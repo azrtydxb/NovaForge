@@ -1,7 +1,36 @@
+## September 27 gap-closure implementation checkpoint (not yet deployed)
+
+The user approved the full `.procoder/plans/gap-closure-20260927.md` execution.
+The live baseline remains Helm revision 9, application image `dc5f70f`; local
+`main` began at `f314f75`, 38 commits ahead of refreshed `origin/main`.
+Cross-fork policy evaluation/diffs, durable Run/CI webhook publication and retries,
+SSH-authenticated HTTPS LFS, blob cleanup/ownership, approved outbound destinations,
+and CLI/GUI migration controls are implemented locally. They are not yet claimed
+as deployed acceptance. The historical limitations below describe the previous
+release until the new cluster evidence supersedes them.
+
+Local evidence: cross-fork executable test fails broken code and passes fixed code
+under the parent's policy; ordinary git-lfs pushes/clones over verified TLS using
+SSH authentication; durable webhook outage/restart tests pass; PostgreSQL/MinIO
+ownership and cleanup tests pass. Latest Git/CLI/egress/config regression sweep,
+Go build/vet, and frontend production build pass. The first full baseline had three
+transient datastore connection failures; all three passed their targeted rerun.
+Logs are under `/tmp/novaforge-gap-20260927/` during execution.
+
+A further audit found that governed deployment's package was not wired into
+`cmd/gates` or REST/GUI. G09 includes that integration before operational proof.
+
 # NovaForge build status
 
 Autonomous build of the backend described in `.procoder/specs/backend-platform.md`,
 executed against the six plans in `.procoder/plans/`.
+
+Planning follow-up (2026-09-27):
+[gap-closure plan](.procoder/plans/gap-closure-20260927.md) maps the remaining
+functional gaps, missing deployment evidence and operator decisions to sequenced
+milestones and acceptance criteria. Planning only: no new implementation,
+deployment or verification result is claimed. The checkpoint below remains the
+latest recorded acceptance result.
 
 ## Git-parity checkpoint (2026-09-26) — deployed at dc5f70f, revision 9
 
@@ -1065,8 +1094,11 @@ These are real and are not worked around:
   backend registries rebuild independently (observed going 7 → 9 → 10). Short
   calls get through — `factory` decomposes and a CI agent job completes — while
   the `agent` suite, which needs several sequential planner-sized calls, fails on
-  a 120s header timeout. This is model infrastructure, outside this repository,
-  and it is why `agent` is the one suite that does not pass.
+  a 120s header timeout. This was model infrastructure, outside this repository.
+  The September 26 checkpoint supersedes that failing-suite verdict: all 13
+  suites passed, including `agent`. Long-term gateway reliability is not
+  established by one passing run; investigate a recurrence before treating the
+  old outage as current.
 - **Verification is a model's judgement.** A run is judged against its
   acceptance criteria by the model, shown only the run's tool calls and their
   results — not its reasoning or its claims — but it is still a model deciding.

@@ -49,6 +49,7 @@ service GitService {
   rpc GetMirror(GetMirrorRequest) returns (GetMirrorResponse);
   rpc SetMirror(SetMirrorRequest) returns (SetMirrorResponse);
   rpc DeleteMirror(DeleteMirrorRequest) returns (DeleteMirrorResponse);
+  rpc RefreshMirror(RefreshMirrorRequest) returns (RefreshMirrorResponse);
 }
 
 message ListOrganizationsWithRepositoriesRequest {}
@@ -188,6 +189,9 @@ message GetDiffRequest {
   // (git's three-dot form), so the result is only what `to` changed and not
   // what `from` gained since.
   bool merge_base = 4;
+  // Optional repository containing `to`, within the caller's organization.
+  // Both repositories are authorized and diffed in a disposable object store.
+  string source_repo = 5;
 }
 message GetDiffResponse {
   string unified = 1;
@@ -523,3 +527,6 @@ message ForkRepoRequest {
 message ForkRepoResponse {
   Repo repo = 1;
 }
+
+message RefreshMirrorRequest { string repo = 1; }
+message RefreshMirrorResponse { Mirror mirror = 1; }
