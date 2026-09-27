@@ -1,0 +1,101 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"github.com/google/uuid"
+	"github.com/novaforge/novaforge/internal/analysis"
+	"github.com/novaforge/novaforge/internal/workspace"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
+	"os"
+	"strings"
+	"time"
+)
+
+func main() {
+	image := os.Getenv("NF_GATE_SANDBOX_TEST_IMAGE")
+	if image == "" {
+		panic("missing pinned image")
+	}
+	cfg, e := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(clientcmd.NewDefaultClientConfigLoadingRules(), &clientcmd.ConfigOverrides{CurrentContext: "kw"}).ClientConfig()
+	must(e)
+	client, e := kubernetes.NewForConfig(cfg)
+	must(e)
+	p := workspace.NewProvisioner(client).WithRESTConfig(cfg)
+	ctx, stop := context.WithTimeout(context.Background(), 12*time.Minute)
+	defer stop()
+	id := uuid.New()
+	ws, e := p.Create(ctx, id, workspace.Spec{OrgID: uuid.New(), Image: image, CPULimit: "2", MemLimit: "4Gi"})
+	must(e)
+	defer p.Destroy(context.Background(), id)
+	must(p.WaitReady(ctx, id, 4*time.Minute))
+	run := func(ctx context.Context, dir, name string, args ...string) ([]byte, int, error) {
+		cmd := append([]string{"sh", "-c", `cd "$1" && shift && exec "$@"`, "analysis", dir, name}, args...)
+		r, e := p.Exec(ctx, id, cmd, nil)
+		return r.Stdout, r.ExitCode, e
+	}
+	for _, row := range []struct{ name, file, content string }{
+		{"Go", "go.mod", "module fixture.test/vulnerable\n\ngo 1.26\nrequire golang.org/x/text v0.3.0\n"},
+		{"npm", "package-lock.json", `{"name":"fixture","version":"1.0.0","lockfileVersion":2,"packages":{"":{"name":"fixture","version":"1.0.0","dependencies":{"lodash":"4.17.4"}},"node_modules/lodash":{"version":"4.17.4","resolved":"https://registry.npmjs.org/lodash/-/lodash-4.17.4.tgz"}},"dependencies":{"lodash":{"version":"4.17.4"}}}`},
+		{"PyPI", "requirements.txt", "requests==2.19.1\n"},
+		{"crates.io", "Cargo.lock", "version = 3\n\n[[package]]\nname = \"time\"\nversion = \"0.1.42\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\n"},
+	} {
+		dir := workspace.Root + "/" + row.name
+		r, e := p.Exec(ctx, id, []string{"mkdir", "-p", dir}, nil)
+		must(e)
+		if r.ExitCode != 0 {
+			panic("mkdir")
+		}
+		r, e = p.Exec(ctx, id, []string{"sh", "-c", `cat > "$1"`, "fixture", dir + "/" + row.file}, strings.NewReader(row.content))
+		must(e)
+		if r.ExitCode != 0 {
+			panic("write")
+		}
+		findings, e := analysis.Vulnerabilities(ctx, run, dir)
+		must(e)
+		if len(findings) == 0 {
+			panic("known vulnerable package not detected: " + row.name)
+		}
+		raw, e := json.Marshal(findings)
+		must(e)
+		fmt.Printf("%s %s: %s\n", row.name, row.file, raw)
+	}
+
+	manifest, e := p.Exec(ctx, id, []string{"cat", "/opt/analysis/osv/manifest.json"}, nil)
+	must(e)
+	must(os.WriteFile("../advisory-manifest.json", manifest.Stdout, 0600))
+	mutate := func(script string) {
+		r, e := p.Exec(ctx, id, []string{"sh", "-ec", script}, nil)
+		must(e)
+		if r.ExitCode != 0 {
+			panic(string(r.Stderr))
+		}
+	}
+	mutate("cp /opt/analysis/osv/manifest.json /tmp/manifest.original && mv /opt/analysis/osv/manifest.json /tmp/manifest.missing")
+	if _, e := analysis.Vulnerabilities(ctx, run, workspace.Root+"/Go"); e == nil {
+		panic("missing snapshot accepted")
+	} else {
+		fmt.Printf("missing snapshot refused: %v\n", e)
+	}
+	mutate("cp /tmp/manifest.original /opt/analysis/osv/manifest.json")
+	mutate(`python3 -c 'import json; p="/opt/analysis/osv/manifest.json"; d=json.load(open(p));d["valid_until"]="1970-01-01T00:00:00Z";json.dump(d,open(p,"w"))'`)
+	if _, e := analysis.Vulnerabilities(ctx, run, workspace.Root+"/Go"); e == nil {
+		panic("expired snapshot accepted")
+	} else {
+		fmt.Printf("expired snapshot refused: %v\n", e)
+	}
+	mutate("cp /tmp/manifest.original /opt/analysis/osv/manifest.json && echo changed >> /opt/analysis/osv/osv-scalibr/Go/all.zip")
+	if _, e := analysis.Vulnerabilities(ctx, run, workspace.Root+"/Go"); e == nil {
+		panic("corrupt snapshot accepted")
+	} else {
+		fmt.Printf("corrupt snapshot refused: %v\n", e)
+	}
+	fmt.Printf("PASS image=%s namespace=%s\n", image, ws.Namespace)
+}
+func must(e error) {
+	if e != nil {
+		panic(e)
+	}
+}

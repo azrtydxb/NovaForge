@@ -1,0 +1,14 @@
+{
+  "containerimage.config.digest": "sha256:b1a5281357ea81087801e0a0320baee1516145ab71913d132d349d0b9a29cf37",
+  "containerimage.descriptor": {
+    "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+    "digest": "sha256:c5fd41778d2a0e755e211a68af6a832086c946659d67b7b0bb084e71bc301ac5",
+    "size": 2875,
+    "platform": {
+      "architecture": "arm64",
+      "os": "linux"
+    }
+  },
+  "containerimage.digest": "sha256:c5fd41778d2a0e755e211a68af6a832086c946659d67b7b0bb084e71bc301ac5",
+  "image.name": "192.168.10.131:5000/novaforge/semantic-producer:1a53c49"
+}

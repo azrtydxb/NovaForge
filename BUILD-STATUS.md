@@ -1,3 +1,34 @@
+# September 27 follow-ups — application c8ade67, Helm revision 19
+
+Intelligence production qualification is complete: Go/TypeScript/Python semantic
+indexing (plus Go LSP), relevant knowledge with provenance in later agent runs,
+operator-bound HTTP and isolated stdio MCP, offline vendored builds, selected-model
+cost enforcement, and the four-ecosystem offline vulnerability matrix have live
+cluster evidence. Revoking MCP approval through the GUI blocks the next call on
+an already-open session; cancellation clears the observed workspace obligation.
+Coverage and limitations are recorded in
+[the qualification report](.procoder/evidence/intelligence-20260927.md).
+
+Six targeted cluster suites passed, including successful agent and agent-CI runs.
+All 46 tested Go packages have passing evidence; one shared-publisher replay test
+failed during the full concurrent run, then passed in isolation and with its full
+package. This is not an entirely green initial full-suite result.
+
+Revision 19 restores original model prices and removes temporary MCP bindings;
+the qualified immutable semantic producer remains active with dedicated RBAC.
+The disposable fixture organizations, MCP Secret and TLS namespace were removed.
+All 12 deployment pods are ready with zero restarts. Nexus weekly trim is active
+and reclaimed 4.88 GiB in its qualification.
+
+**Provider reconciliation remains open.** The historical private-key issuance has
+no provider audit record, request correlation ID or lease handle. Its unknown
+outcome and CI cleanup obligation remain intact. The required evidence contract
+is [documented](docs/provider-reconciliation-evidence.md); no unverified
+operator-resolution endpoint has been enabled. Independent provider/target
+evidence is needed to proceed with that follow-up.
+
+The following core-release checkpoint is historical.
+
 # September 27 gap-closure release — application 19b29cc
 
 The authorized core Git gaps are implemented and deployed on kw: cross-fork

@@ -1,0 +1,97 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"github.com/google/uuid"
+	"github.com/novaforge/novaforge/internal/authz"
+	"github.com/novaforge/novaforge/internal/semanticindex"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
+	"os"
+	"time"
+)
+
+func main() {
+	var fixture struct {
+		OrgID     string            `json:"org_id"`
+		Repos     map[string]string `json:"repos"`
+		Revisions map[string]string `json:"revisions"`
+	}
+	data, err := os.ReadFile("../fixture.json")
+	must(err)
+	must(json.Unmarshal(data, &fixture))
+	var metadata map[string]any
+	data, err = os.ReadFile("../semantic-image.json")
+	must(err)
+	must(json.Unmarshal(data, &metadata))
+	image := "192.168.10.131/novaforge/semantic-producer@" + metadata["containerimage.digest"].(string)
+	config := semanticindex.ProducerConfig{Image: image, Architecture: "arm64", CPUMilli: 1000, MemoryMiB: 2048, StorageMiB: 2048, DeadlineSeconds: 300}
+	rest, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(clientcmd.NewDefaultClientConfigLoadingRules(), &clientcmd.ConfigOverrides{CurrentContext: "kw"}).ClientConfig()
+	must(err)
+	client, err := kubernetes.NewForConfig(rest)
+	must(err)
+	c := semanticindex.Controller{Client: client, REST: rest, Config: config}
+	execution, err := c.ExecutionDigest()
+	must(err)
+	org := uuid.MustParse(fixture.OrgID)
+	for _, language := range []string{"go", "typescript", "python"} {
+		repo := language + "-semantic"
+		files := map[string][]byte{}
+		entries, err := os.ReadDir("../" + repo)
+		must(err)
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			raw, err := os.ReadFile("../" + repo + "/" + entry.Name())
+			must(err)
+			files[entry.Name()] = raw
+		}
+		snapshot := semanticindex.Snapshot{OrgID: org, RepoID: uuid.MustParse(fixture.Repos[repo]), Revision: fixture.Revisions[repo], RootURI: semanticindex.ProducerRoot, ExecutionDigest: execution, Files: files}
+		ctx, stop := context.WithTimeout(authz.WithScope(context.Background(), authz.Scope{OrgID: org, ActorKind: "service", ServiceName: "qualification"}), 6*time.Minute)
+		produced, err := c.Produce(ctx, snapshot)
+		stop()
+		if err != nil {
+			fmt.Printf("%s failed: %v\n", language, err)
+			os.Exit(1)
+		}
+		raw, err := json.MarshalIndent(produced, "", "  ")
+		must(err)
+		must(os.WriteFile("../semantic-"+language+".json", raw, 0600))
+		definitions := map[string]bool{}
+		found := false
+		for _, result := range produced.Results {
+			for _, doc := range result.Documents {
+				if len(doc.Path) >= 7 && doc.Path[:7] == "library" {
+					for _, occurrence := range doc.Occurrences {
+						if occurrence.Definition {
+							definitions[occurrence.SymbolID] = true
+						}
+					}
+				}
+			}
+		}
+		for _, result := range produced.Results {
+			for _, doc := range result.Documents {
+				if len(doc.Path) >= 6 && doc.Path[:6] == "caller" {
+					for _, occurrence := range doc.Occurrences {
+						if !occurrence.Definition && definitions[occurrence.SymbolID] {
+							found = true
+						}
+					}
+				}
+			}
+		}
+		if !found {
+			panic("cross-file reference absent for " + language)
+		}
+		fmt.Printf("%s SCIP cross-file definition/reference PASS; LSP present=%v; image=%s execution=%s\n", language, produced.Definitions != nil, image, execution)
+	}
+}
+func must(err error) {
+	if err != nil {
+		panic(err)
+	}
+}

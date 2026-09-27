@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-09-27T12:26:51Z",
+  "valid_until": "2026-12-26T12:26:51Z",
+  "ecosystems": {
+    "Go": "963f89a2b94be151de3eabefb3401672d2830cde4545c7b5838a2b71ae80a6a5",
+    "npm": "f28ab42d60c2cd13dc4196aebaa28bc4364a6a63e056c9994173b4b009426e1b",
+    "PyPI": "db1310616044cc1509c0ad7675fa83ef031b4a5a38ac25a97db98da224018690",
+    "crates.io": "ca39cc0b4e7cb156598ebbbbfc86486719b32c98325d371786c1489ab861d2e2"
+  }
+}

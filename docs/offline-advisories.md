@@ -6,7 +6,7 @@ The vulnerability gate uses the pinned OSV scanner's resolved package evidence
 and the immutable analysis image's advisory databases. A recognized approval
 manifest is not proof that the scanner extracted its dependencies.
 
-| Ecosystem        | Resolved inputs to qualify               | Image advisory database                |
+| Ecosystem        | Qualified resolved inputs                | Image advisory database                |
 | ---------------- | ---------------------------------------- | -------------------------------------- |
 | Go               | go.mod / go.sum with concrete versions   | Go                                     |
 | npm              | package-lock.json with concrete versions | npm                                    |
@@ -17,9 +17,12 @@ manifest is not proof that the scanner extracted its dependencies.
 Ranges, unpinned requirements and bare package.json/Cargo.toml files are not an
 assertion of complete coverage. An empty package result is unavailable, never a
 clean verdict. Transitive completeness depends on the actual resolved inputs.
-The table identifies the intended qualification inputs; retain live scanner
-results before claiming each row tested. Go has existing real OSV regression
-coverage; the broader matrix remains in the production qualification task.
+All four rows were exercised on September 27 against the immutable production
+analysis image in real isolated cluster workspaces. The fixtures used
+golang.org/x/text 0.3.0, lodash 4.17.4, requests 2.19.1 and time 0.1.42,
+respectively. Each produced actual vulnerability findings. Missing, expired and
+corrupted snapshots were refused. See
+[qualification evidence](../.procoder/evidence/intelligence-20260927.md).
 
 The image manifest requires exactly schema_version, generated_at, valid_until and
 ecosystems. Each represented ZIP has a SHA-256 digest. Before scanning, the gate

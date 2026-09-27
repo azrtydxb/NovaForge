@@ -1,0 +1,4 @@
+go-semantic production semantic symbol and caller edge PASS
+typescript-semantic production semantic symbol and caller edge PASS
+python-semantic production semantic symbol and caller edge PASS
+Feature branch did not overwrite default-branch semantic evidence

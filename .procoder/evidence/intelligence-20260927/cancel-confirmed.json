@@ -1,0 +1,30 @@
+{
+  "run": {
+    "id": "5dfe2746-ffba-4657-b132-aa56e727eb54",
+    "orgId": "ecccfb45-0688-4d1a-8b47-fc5da9be8165",
+    "agentId": "d4d22900-9b61-49cc-b70c-ada06d97af7c",
+    "workItemId": "6484f268-14df-4670-b93e-de54f1c8ad33",
+    "sponsorId": "68a05081-7311-4e76-9f9b-56027ca53fd4",
+    "grantId": "ce5a8bef-12bf-48a6-b8f1-5b77a166b231",
+    "branch": "agents/NF-8/work",
+    "state": "cancelled",
+    "startedAt": "2026-09-27T12:49:12.949221Z",
+    "endedAt": "2026-09-27T12:49:16.673788Z",
+    "wallclockLimitSeconds": "240",
+    "tokenLimit": "50000",
+    "costLimitMicros": "0",
+    "tokensUsed": "0",
+    "costUsedMicros": "0",
+    "endReason": "",
+    "tokensAvailable": false,
+    "costAvailable": false,
+    "grantCleanupPending": false,
+    "grantCleanupError": "",
+    "workReleasePending": false,
+    "workReleaseError": "",
+    "workspaceCleanupPending": false,
+    "workspaceCleanupError": "",
+    "executionFinished": true,
+    "repoId": "c98b3ce3-81b9-427a-8efa-81e1d8d04c7f"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "agent_id": "8eec3eae-fc4c-46ed-8ad6-b5f2f193f396",
+  "branch": "agents/NF-9/work",
+  "cost_limit_micros": 1,
+  "cost_used_micros": 0,
+  "end_reason": "the run could not start: no token price configured for effective model \"qualification-unpriced-model\" in AI_MODEL_PRICES; its cost limit cannot be enforced",
+  "ended_at": "2026-09-27T12:52:28.390159Z",
+  "id": "2fe7dedf-e198-4eea-b1e2-8f53d49a3e48",
+  "sponsor_id": "68a05081-7311-4e76-9f9b-56027ca53fd4",
+  "started_at": "2026-09-27T12:52:25.969516Z",
+  "state": "failed",
+  "token_limit": 50000,
+  "tokens_used": 0,
+  "wallclock_limit_seconds": 120,
+  "work_item_id": "0916415b-fb7d-4f02-9a39-aaff2d3666e9"
+}

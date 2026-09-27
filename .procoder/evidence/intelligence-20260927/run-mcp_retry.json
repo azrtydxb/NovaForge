@@ -1,0 +1,50 @@
+{
+  "run": {
+    "agent_id": "d4d22900-9b61-49cc-b70c-ada06d97af7c",
+    "branch": "agents/NF-7/work",
+    "cost_limit_micros": 0,
+    "cost_used_micros": 4991000000,
+    "end_reason": "",
+    "ended_at": "2026-09-27T12:43:23.397574Z",
+    "id": "18efb166-fd1a-40df-a2aa-9b7472cea0da",
+    "sponsor_id": "68a05081-7311-4e76-9f9b-56027ca53fd4",
+    "started_at": "2026-09-27T12:42:34.98959Z",
+    "state": "succeeded",
+    "token_limit": 50000,
+    "tokens_used": 4991,
+    "wallclock_limit_seconds": 240,
+    "work_item_id": "71f9d024-08a3-4d6b-9a93-8a56736978c9"
+  },
+  "tools": {
+    "calls": [
+      {
+        "args": "{\"key\":{\"bytes\":6,\"sha256\":\"fad135cf1bc71266b539d5da7e9e90d2737560e939201a314022ea1e6675c764\"},\"org\":{\"bytes\":16,\"sha256\":\"d18f1b9f08b0122c4d88202d0e5f49ec08e10559997b4abcd30b58bdf85ec1fd\"},\"repo\":{\"bytes\":11,\"sha256\":\"1cacae8bf92e48145bac0fb9fbd4a6219018593e43884ce458b74e938beb4bed\"}}",
+        "error": "",
+        "outcome": "ok",
+        "started_at": "2026-09-27T12:42:41Z",
+        "tool": "mcp.qualified-http.novaforge.get_work_item"
+      },
+      {
+        "args": "{}",
+        "error": "",
+        "outcome": "ok",
+        "started_at": "2026-09-27T12:42:41Z",
+        "tool": "mcp.qualified-stdio.read_note"
+      },
+      {
+        "args": "{\"note\":\"the work item declares no acceptance criteria; the run was not verified\",\"verdicts\":[]}",
+        "error": "",
+        "outcome": "ok",
+        "started_at": "2026-09-27T12:42:46Z",
+        "tool": "run.verification"
+      },
+      {
+        "args": "{\"cost_available\":true,\"state\":\"succeeded\",\"summary\":\"Here are the results:\\n\\n**NF-4 Goal:**\\n\\u003e Summarize the recorded VAT rounding per invoice line decision for credit notes. Quote its qualification marker, exact entry ID, creation timestamp and source provenance from your initial project knowledge. Do not use tools or modify files.\\n\\n**Workspace Note (mcp.qualified-stdio.read_note):**\\n- **Text:** `NF-STDIO-20260927: this note is read from the isolated workspace.`\\n- **SHA-256:** `87c5266e690b87d00d37eef606bb494e29f821aa98ee973b01c96d1ba6aca9a5`\",\"tokens_available\":true}",
+        "error": "",
+        "outcome": "ok",
+        "started_at": "2026-09-27T12:43:23Z",
+        "tool": "run.summary"
+      }
+    ]
+  }
+}

@@ -1,0 +1,26 @@
+namespace/novaforge unchanged
+secret/nexus-pull unchanged
+gate analysis sandbox: 192.168.10.131/novaforge/gate-analysis@sha256:18c5135159600a81a9aa66d2bdc19ceea08c7be762e46c271855f67d12dc3116
+Release "novaforge" has been upgraded. Happy Helming!
+NAME: novaforge
+LAST DEPLOYED: Sun Sep 27 16:55:27 2026
+NAMESPACE: novaforge
+STATUS: deployed
+REVISION: 19
+DESCRIPTION: Upgrade complete
+TEST SUITE: None
+NAME                                           READY   STATUS    RESTARTS   AGE
+novaforge-agent-runtime-6b664cbcbf-bldrj       1/1     Running   0          64s
+novaforge-ci-runner-7b87d4df86-lkl5r           1/1     Running   0          64s
+novaforge-edge-5df5fdb5ff-789xr                1/1     Running   0          64s
+novaforge-engineering-graph-648f44d956-z9x2x   1/1     Running   0          64s
+novaforge-gates-6bf66f87b8-8z2cp               1/1     Running   0          64s
+novaforge-git-platform-5cfd5bfd97-zkrkz        1/1     Running   0          64s
+novaforge-identity-5796b66cf4-sbsmh            1/1     Running   0          64s
+novaforge-mcp-server-55b5685c4f-wr5b9          1/1     Running   0          64s
+novaforge-minio-58cf886859-pg8zl               1/1     Running   0          2d4h
+novaforge-postgres-684b64f44f-55tbr            1/1     Running   0          2d4h
+novaforge-redis-8558547456-qhbz4               1/1     Running   0          2d4h
+novaforge-work-reviews-589488dd7-t5qhk         1/1     Running   0          63s
+lb-check: novaforge-edge:8080 answers (200)
+lb-check: novaforge-git-platform:8081 answers (404)

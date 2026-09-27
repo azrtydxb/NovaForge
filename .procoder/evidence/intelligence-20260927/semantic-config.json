@@ -1,0 +1,8 @@
+{
+  "image": "192.168.10.131/novaforge/semantic-producer@sha256:c5fd41778d2a0e755e211a68af6a832086c946659d67b7b0bb084e71bc301ac5",
+  "architecture": "arm64",
+  "cpu_milli": 1000,
+  "memory_mib": 2048,
+  "storage_mib": 2048,
+  "deadline_seconds": 300
+}

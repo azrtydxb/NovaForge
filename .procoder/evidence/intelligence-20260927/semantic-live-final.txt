@@ -1,0 +1,4 @@
+E0927 16:33:35.475292   26151 v2.go:151] "Copying stdout failed" err="io: read/write on closed pipe" logger="UnhandledError"
+go SCIP cross-file definition/reference PASS; LSP present=true; image=192.168.10.131/novaforge/semantic-producer@sha256:c5fd41778d2a0e755e211a68af6a832086c946659d67b7b0bb084e71bc301ac5 execution=64f9b4448784324d439fad8a9eb0233e091f5d67e05742e2f9b5cd0168151c50
+typescript SCIP cross-file definition/reference PASS; LSP present=false; image=192.168.10.131/novaforge/semantic-producer@sha256:c5fd41778d2a0e755e211a68af6a832086c946659d67b7b0bb084e71bc301ac5 execution=64f9b4448784324d439fad8a9eb0233e091f5d67e05742e2f9b5cd0168151c50
+python SCIP cross-file definition/reference PASS; LSP present=false; image=192.168.10.131/novaforge/semantic-producer@sha256:c5fd41778d2a0e755e211a68af6a832086c946659d67b7b0bb084e71bc301ac5 execution=64f9b4448784324d439fad8a9eb0233e091f5d67e05742e2f9b5cd0168151c50

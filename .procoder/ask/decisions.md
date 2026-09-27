@@ -830,3 +830,12 @@ That trim was one-off and is left that way deliberately. Keeping it honest means
 restart, or a scheduled `fstrim`, which means a standing privileged workload. Both are
 choices about a host shared with other projects, and neither is implied by "expand the
 disk", so both are the user's call.
+
+## September 27 follow-up: historical provider evidence (pending)
+
+Asked through the structured question tool whether historical provider audit
+records or independent target-system evidence exists for the failed NF_CI_CERT
+private-key issuance. OpenBao has no enabled audit devices and the reservation
+has no request ID or lease handle. No answer has been received. Independent
+qualification continued; no unknown outcome was cleared. See
+`docs/provider-reconciliation-evidence.md`.

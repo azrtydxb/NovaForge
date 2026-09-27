@@ -1,0 +1,80 @@
+N
+NovaForge
+K
+knowledge
+▾
+BUILD
+⌂
+Home
+W
+Work
+⇶
+Swarm
+◆
+Repositories
+CI
+CI
+GOVERN
+R
+Runs
+A
+Agents
+!
+Exceptions
+M
+Maintenance
+K
+Knowledge
+G
+Graph
+ADMIN
+O
+Org & repos
+⚿
+Secrets
+⌘
+MCP
+S
+Settings
+qualc8e7de1ac1 / knowledge
+Q
+qualc8e7de1ac1
+Sign out
+Agents
+Agents are organization members whose authority is a capability grant, not a token
+New agent
+AGENTS
+MC
+mcpreader
+reviewer
+enabled
+QU
+qualifier
+implementer
+enabled
+UN
+unpriced
+reviewer
+enabled
+QUALIFIER
+Role
+implementer
+Model
+the deployment's default
+Enabled
+yes
+Agent id
+6033f29f-622f-4574-81c5-408c60dd7388
+RUN HISTORY
+2
+Runs
+1
+Succeeded
+0
+Failed
+1
+Over budget
+0
+Running
+2.8k
+Tokens used

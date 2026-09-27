@@ -37,3 +37,9 @@ is recorded. This is an evidence blocker for clearing this particular reservatio
 not grounds to silently mark it revoked. Future operator reconciliation must bind
 provider evidence and authenticated operator identity; a signed human assertion
 without verifiable target/provider evidence is insufficient.
+
+The follow-up evidence contract is in `docs/provider-reconciliation-evidence.md`.
+It defines provider-specific proof, exact receipt binding, operator authority,
+late-issuance fencing and ownership boundaries. No resolution endpoint is enabled:
+the actual historical provider/target evidence needed to instantiate and verify
+that contract is unavailable. The task remains open, including API/GUI execution.

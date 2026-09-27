@@ -1,0 +1,138 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"github.com/google/uuid"
+	mcpv1 "github.com/novaforge/novaforge/gen/novaforge/mcp/v1"
+	"github.com/novaforge/novaforge/internal/agents"
+	"github.com/novaforge/novaforge/internal/authz"
+	"github.com/novaforge/novaforge/internal/database"
+	"github.com/novaforge/novaforge/internal/tools"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/proto"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+)
+
+func must(e error) {
+	if e != nil {
+		panic(e)
+	}
+}
+func main() {
+	var f struct {
+		Org     string            `json:"org"`
+		OrgID   string            `json:"org_id"`
+		Token   string            `json:"token"`
+		Repos   map[string]string `json:"repos"`
+		AgentID string            `json:"agent_id"`
+	}
+	raw, e := os.ReadFile("/tmp/mcpqual/fixture.json")
+	must(e)
+	must(json.Unmarshal(raw, &f))
+	org, repo := uuid.MustParse(f.OrgID), uuid.MustParse(f.Repos["knowledge"])
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	ctx = authz.WithScope(ctx, authz.Scope{OrgID: org, ActorID: uuid.MustParse(f.AgentID), ActorKind: "user"})
+	ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs("authorization", "Bearer "+f.Token, "x-novaforge-org", f.Org))
+	db, e := os.ReadFile("/tmp/mcpqual/database")
+	must(e)
+	pool, e := database.Connect(ctx, string(db))
+	must(e)
+	defer pool.Close()
+	store := agents.NewStore(pool)
+	a, e := store.CreateAgent(ctx, agents.Agent{OrgID: org, Name: "mcp-integration-" + uuid.NewString(), Role: "reviewer", Enabled: true})
+	must(e)
+	run, e := store.CreateRun(ctx, agents.Run{OrgID: org, AgentID: a.ID, SponsorID: uuid.MustParse(f.AgentID), Branch: "qualification/mcp", WallclockLimit: time.Minute})
+	must(e)
+	conn, e := grpc.NewClient("10.43.247.180:9098", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	must(e)
+	defer conn.Close()
+	servers := mcpv1.NewMcpServiceClient(conn)
+	policy, e := tools.LoadOperatorMCP("/tmp/mcpqual/config.json")
+	must(e)
+	opts := policy.Options(org, repo, nil)
+	opts.AllowedTools = []string{"mcp.qualified-http.novaforge.get_work_item"}
+	reg := tools.NewRegistry(tools.Runtime{}, agents.NewAuditLog(pool))
+	offered, e := tools.OfferApprovedMCPServersWithOptions(ctx, reg, servers, opts)
+	must(e)
+	defer offered.Close()
+	if len(offered.Tools) != 1 {
+		panic(fmt.Sprint(offered.Skipped))
+	}
+	args, _ := json.Marshal(map[string]string{"org": f.Org, "repo": "knowledge", "key": "NF-4"})
+	call := func() error { _, e := reg.Call(ctx, run.ID, opts.AllowedTools[0], args); return e }
+	must(call())
+	fmt.Println("actual authenticated HTTP tool call PASS")
+	var binding tools.MCPBinding
+	for _, b := range policy.Bindings {
+		if b.Transport == "streamable_http" {
+			binding = b
+		}
+	}
+	credential := filepath.Join("/tmp/mcpqual", binding.TokenFile)
+	original, e := os.ReadFile(credential)
+	must(e)
+	defer os.WriteFile(credential, original, 0600)
+	must(os.WriteFile(credential, []byte("invalid-qualification-credential"), 0600))
+	if call() == nil {
+		panic("stale credential retained")
+	}
+	fmt.Println("rotation to invalid credential refused on existing session")
+	must(os.WriteFile(credential, original, 0600))
+	must(call())
+	fmt.Println("restored credential read on existing session PASS")
+	must(os.Remove(credential))
+	if call() == nil {
+		panic("missing credential accepted")
+	}
+	must(os.WriteFile(credential, original, 0600))
+	fmt.Println("removed credential refused")
+	approved, e := servers.ListApprovedServers(ctx, &mcpv1.ListApprovedServersRequest{})
+	must(e)
+	for _, server := range approved.Servers {
+		if server.Transport != "streamable_http" {
+			continue
+		}
+		changed := proto.Clone(server).(*mcpv1.McpServer)
+		changed.Url = "https://example.com/mcp"
+		if _, e = opts.HTTPAuthorization(ctx, changed); e == nil {
+			panic("destination accepted")
+		}
+		changed = proto.Clone(server).(*mcpv1.McpServer)
+		changed.OrgId = uuid.NewString()
+		if _, e = opts.HTTPAuthorization(ctx, changed); e == nil {
+			panic("foreign server accepted")
+		}
+		foreign := authz.WithScope(ctx, authz.Scope{OrgID: uuid.New(), ActorKind: "user"})
+		if _, e = opts.HTTPAuthorization(foreign, server); e == nil {
+			panic("foreign caller accepted")
+		}
+	}
+	fmt.Println("live registry destination and organization substitutions refused")
+	must(os.WriteFile("/tmp/mcpqual/ready", []byte("ready"), 0600))
+	fmt.Println("READY for GUI revocation")
+	for {
+		if _, e = os.Stat("/tmp/mcpqual/revoked"); e == nil {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			panic(ctx.Err())
+		case <-time.After(time.Second):
+		}
+	}
+	e = call()
+	if e == nil || !strings.Contains(e.Error(), "no longer approved") {
+		panic(fmt.Sprintf("revocation not enforced: %v", e))
+	}
+	fmt.Println("PASS next call on already-open session refused after GUI revocation")
+	_, e = store.CompleteRun(ctx, run.ID, agents.Completion{State: "succeeded"})
+	must(e)
+}

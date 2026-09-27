@@ -1,0 +1,50 @@
+N
+NovaForge
+K
+knowledge
+▾
+BUILD
+⌂
+Home
+W
+Work
+⇶
+Swarm
+◆
+Repositories
+CI
+CI
+GOVERN
+R
+Runs
+A
+Agents
+!
+Exceptions
+M
+Maintenance
+K
+Knowledge
+G
+Graph
+ADMIN
+O
+Org & repos
+⚿
+Secrets
+⌘
+MCP
+S
+Settings
+qualc8e7de1ac1 / knowledge
+Q
+qualc8e7de1ac1
+Sign out
+Knowledge
+knowledge — what this project has learned, given to every later agent run it is relevant to
+Record knowledge
+decision/vat-rounding-per-invoice-line
+decision
+recorded by a person · 2026-09-27
+VAT rounding per invoice line
+Round VAT on every invoice line to whole cents before summing. Qualification marker NF-VAT-20260927.

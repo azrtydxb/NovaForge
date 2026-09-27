@@ -1,0 +1,29 @@
+{
+  "run": {
+    "agent_id": "6033f29f-622f-4574-81c5-408c60dd7388",
+    "branch": "agents/NF-3/work",
+    "cost_limit_micros": 1,
+    "cost_used_micros": 1005000000,
+    "end_reason": "budget exceeded during model call: over budget: cost limit exceeded (1005000000 > 1 micros)",
+    "ended_at": "2026-09-27T12:40:24.594885Z",
+    "id": "6e543adf-c7d3-42e1-8a4a-745cd378a8ff",
+    "sponsor_id": "68a05081-7311-4e76-9f9b-56027ca53fd4",
+    "started_at": "2026-09-27T12:40:20.827578Z",
+    "state": "over_budget",
+    "token_limit": 50000,
+    "tokens_used": 1005,
+    "wallclock_limit_seconds": 240,
+    "work_item_id": "6979c8c0-bf5a-42da-aa45-f4208eef1e6a"
+  },
+  "tools": {
+    "calls": [
+      {
+        "args": "{\"cost_available\":true,\"state\":\"over_budget\",\"summary\":\"budget exceeded during model call: over budget: cost limit exceeded (1005000000 \\u003e 1 micros)\",\"tokens_available\":true}",
+        "error": "",
+        "outcome": "ok",
+        "started_at": "2026-09-27T12:40:24Z",
+        "tool": "run.summary"
+      }
+    ]
+  }
+}

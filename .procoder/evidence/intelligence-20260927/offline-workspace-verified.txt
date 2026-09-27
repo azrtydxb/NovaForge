@@ -1,0 +1,5 @@
+=== RUN   TestVendoredDependencyBuildInIsolatedWorkspace
+    dependencies_test.go:119: namespace=nf-run-d497f6fa-c71d-4abe-a40f-3c40c4700afd image=golang:1.27: vendored dependency executed; external TCP denied
+--- PASS: TestVendoredDependencyBuildInIsolatedWorkspace (40.58s)
+PASS
+ok  	github.com/novaforge/novaforge/internal/workspace	42.268s

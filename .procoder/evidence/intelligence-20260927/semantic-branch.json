@@ -1,0 +1,13 @@
+{
+  "main": "153138996ecace3ddd90cc8d93f0a29b35cba8f8",
+  "feature": "e3651c30f41ead3f410a9486248142d4d1020ac9",
+  "main_symbol": {
+    "id": "42ae7a6f-8443-4e73-9562-881cc2f7f1bd",
+    "kind": "semantic",
+    "name": "Hello",
+    "path": "library.go",
+    "signature": "",
+    "start_line": 2
+  },
+  "feature_symbol": null
+}

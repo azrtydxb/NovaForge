@@ -1,0 +1,75 @@
+N
+NovaForge
+K
+knowledge
+▾
+BUILD
+⌂
+Home
+W
+Work
+⇶
+Swarm
+◆
+Repositories
+CI
+CI
+GOVERN
+R
+Runs
+A
+Agents
+!
+Exceptions
+M
+Maintenance
+K
+Knowledge
+G
+Graph
+ADMIN
+O
+Org & repos
+⚿
+Secrets
+⌘
+MCP
+S
+Settings
+qualc8e7de1ac1 / knowledge
+Q
+qualc8e7de1ac1
+Sign out
+MCP
+NovaForge exposes its own MCP server, and approves which external ones its agents may use
+Request a server
+EXTERNAL SERVERS
+2
+qualified-stdio · stdio
+/usr/bin/python3 /workspace/.novaforge/mcp/reader.py
+Read-only workspace note reader over isolated stdio
+approved 2026-09-27 · Authorized isolated stdio qualification
+approved
+Revoke
+qualified-http · streamable_http
+https://10.43.224.122:8443/mcp
+Disposable TLS proxy to the production NovaForge MCP server
+revoked 2026-09-27 · Qualification: revoke the already-open HTTP session
+revoked
+EXPOSED TOOLS
+7
+spec revision 2025-06-18
+novaforge.create_branch
+Create a branch
+novaforge.get_gate_status
+Read gate status for a run
+novaforge.get_review
+Read an Engineering Run
+novaforge.get_symbol
+Resolve a symbol and its relationships
+novaforge.get_work_item
+Fetch a Work Item by key
+novaforge.run_ci
+Trigger CI for a ref
+novaforge.search_repository
+Search a repository's code

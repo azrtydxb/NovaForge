@@ -1,0 +1,73 @@
+package main
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
+	"github.com/google/uuid"
+	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
+	graphv1 "github.com/novaforge/novaforge/gen/novaforge/graph/v1"
+	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
+	"github.com/novaforge/novaforge/internal/agentrun"
+	"github.com/novaforge/novaforge/internal/agents"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
+	"os"
+	"strings"
+	"time"
+)
+
+func main() {
+	var f struct {
+		Org     string            `json:"org"`
+		OrgID   string            `json:"org_id"`
+		Token   string            `json:"token"`
+		Repos   map[string]string `json:"repos"`
+		AgentID string            `json:"agent_id"`
+		Work    map[string]struct {
+			ID string `json:"id"`
+		} `json:"work"`
+		KnowledgeEntry struct {
+			ID string `json:"id"`
+		} `json:"knowledge_entry"`
+	}
+	raw, e := os.ReadFile("../fixture.json")
+	must(e)
+	must(json.Unmarshal(raw, &f))
+	dial := func(addr string) *grpc.ClientConn {
+		c, e := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		must(e)
+		return c
+	}
+	g, w, k := dial("127.0.0.1:19091"), dial("127.0.0.1:19092"), dial("127.0.0.1:19097")
+	defer g.Close()
+	defer w.Close()
+	defer k.Close()
+	svc := agentrun.Services{Git: gitv1.NewGitServiceClient(g), Work: workv1.NewWorkServiceClient(w), Graph: graphv1.NewGraphServiceClient(k)}
+	ctx, stop := context.WithTimeout(metadata.NewOutgoingContext(context.Background(), metadata.Pairs("authorization", "Bearer "+f.Token, "x-novaforge-org", f.Org)), 90*time.Second)
+	defer stop()
+	for _, which := range []string{"related", "unrelated"} {
+		run := agents.Run{ID: uuid.New(), OrgID: uuid.MustParse(f.OrgID), RepoID: uuid.MustParse(f.Repos["knowledge"]), AgentID: uuid.MustParse(f.AgentID), WorkItemID: uuid.MustParse(f.Work[which].ID), WallclockLimit: time.Minute, TokenLimit: 10000}
+		plan, e := agentrun.Prepare(ctx, svc, run, agents.Agent{Name: "qualifier", Role: "implementer"})
+		must(e)
+		if strings.Contains(plan.Brief, "FOREIGN-SECRET-20260927") {
+			panic("cross-organization knowledge leaked")
+		}
+		present := strings.Contains(plan.Brief, "NF-VAT-20260927")
+		if present != (which == "related") {
+			panic("knowledge relevance mismatch: " + which + "\n" + plan.Brief)
+		}
+		if present && !strings.Contains(plan.Brief, f.KnowledgeEntry.ID) {
+			panic("entry provenance absent")
+		}
+		must(os.WriteFile("../knowledge-"+which+"-brief.txt", []byte(plan.Brief), 0600))
+		fmt.Printf("%s: knowledge=%v provenance=%v source=%s brief_sha256=%x\n", which, present, strings.Contains(plan.Brief, f.KnowledgeEntry.ID), plan.Ref, sha256.Sum256([]byte(plan.Brief)))
+	}
+}
+func must(e error) {
+	if e != nil {
+		panic(e)
+	}
+}

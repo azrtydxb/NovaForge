@@ -1,0 +1,36 @@
+{
+  "run": {
+    "agent_id": "6033f29f-622f-4574-81c5-408c60dd7388",
+    "branch": "agents/NF-4/work",
+    "cost_limit_micros": 0,
+    "cost_used_micros": 1821000000,
+    "end_reason": "",
+    "ended_at": "2026-09-27T12:40:30.078584Z",
+    "id": "9c0fc93d-37fe-4473-a00b-ac341b5f8282",
+    "sponsor_id": "68a05081-7311-4e76-9f9b-56027ca53fd4",
+    "started_at": "2026-09-27T12:40:20.881726Z",
+    "state": "succeeded",
+    "token_limit": 50000,
+    "tokens_used": 1821,
+    "wallclock_limit_seconds": 240,
+    "work_item_id": "7a1d7594-fd3e-4763-8003-9a32935e4dee"
+  },
+  "tools": {
+    "calls": [
+      {
+        "args": "{\"note\":\"the work item declares no acceptance criteria; the run was not verified\",\"verdicts\":[]}",
+        "error": "",
+        "outcome": "ok",
+        "started_at": "2026-09-27T12:40:30Z",
+        "tool": "run.verification"
+      },
+      {
+        "args": "{\"cost_available\":true,\"state\":\"succeeded\",\"summary\":\"Based on the project knowledge provided in the initial context, here is the summary of the VAT rounding decision:\\n\\n**Work Item:** NF-4 (documentation)\\n\\n**Summary:**\\nThe recorded decision for VAT rounding per invoice line specifies that VAT must be rounded on every invoice line to whole cents before the total sum is calculated.\\n\\n**Required Attributes from Project Knowledge:**\\n*   **Qualification Marker:** NF-VAT-20260927\\n*   **Exact Entry ID:** ab8123e5-6972-4ca9-8b15-8a32b3014c03\\n*   **Creation Timestamp:** 2026-09-27T12:15:58Z\\n*   **Source Provenance:** person-recorded\",\"tokens_available\":true}",
+        "error": "",
+        "outcome": "ok",
+        "started_at": "2026-09-27T12:40:30Z",
+        "tool": "run.summary"
+      }
+    ]
+  }
+}

@@ -1,0 +1,7 @@
+actual authenticated HTTP tool call PASS
+rotation to invalid credential refused on existing session
+restored credential read on existing session PASS
+removed credential refused
+live registry destination and organization substitutions refused
+READY for GUI revocation
+PASS next call on already-open session refused after GUI revocation

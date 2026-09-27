@@ -1,0 +1,2 @@
+airgap: PASS — PASS: agent-runtime is confined to the cluster and its model gateway.
+gui: PASS — PASS: the NovaForge GUI is served by the cluster and every screen's data answers.
