@@ -1,0 +1,7 @@
+.git
+**/node_modules
+web/dist
+hack/env.local.sh
+**/__pycache__
+.DS_Store
+*.log
