@@ -1,12 +1,13 @@
-## September 27 gap-closure implementation checkpoint (not yet deployed)
+## September 27 gap-closure implementation checkpoint (acceptance in progress)
 
 The user approved the full `.procoder/plans/gap-closure-20260927.md` execution.
-The live baseline remains Helm revision 9, application image `dc5f70f`; local
+The initial live baseline was Helm revision 9, application image `dc5f70f`; local
 `main` began at `f314f75`, 38 commits ahead of refreshed `origin/main`.
 Cross-fork policy evaluation/diffs, durable Run/CI webhook publication and retries,
 SSH-authenticated HTTPS LFS, blob cleanup/ownership, approved outbound destinations,
-and CLI/GUI migration controls are implemented locally. They are not yet claimed
-as deployed acceptance. The historical limitations below describe the previous
+and CLI/GUI migration controls are deployed at `9733e2d` through Helm. Cluster
+acceptance is in progress; imports, mirror refresh and approved public egress have
+passed, while the new fixtures are being corrected and rerun. The historical limitations below describe the previous
 release until the new cluster evidence supersedes them.
 
 Local evidence: cross-fork executable test fails broken code and passes fixed code
@@ -18,7 +19,12 @@ transient datastore connection failures; all three passed their targeted rerun.
 Logs are under `/tmp/novaforge-gap-20260927/` during execution.
 
 A further audit found that governed deployment's package was not wired into
-`cmd/gates` or REST/GUI. G09 includes that integration before operational proof.
+`cmd/gates` or REST/GUI. Commit `2bb3a65` adds this integration and qualified
+OpenBao Kubernetes credentials. Deployment/secrets/edge package regressions pass;
+its immutable images and real operator fixture are being qualified.
+Broader intelligence dispositions are in
+`.procoder/plans/intelligence-audit-20260927.md`; remaining qualification has an
+explicit open follow-up rather than a blanket completeness claim.
 
 # NovaForge build status
 
@@ -28,9 +34,9 @@ executed against the six plans in `.procoder/plans/`.
 Planning follow-up (2026-09-27):
 [gap-closure plan](.procoder/plans/gap-closure-20260927.md) maps the remaining
 functional gaps, missing deployment evidence and operator decisions to sequenced
-milestones and acceptance criteria. Planning only: no new implementation,
-deployment or verification result is claimed. The checkpoint below remains the
-latest recorded acceptance result.
+milestones and acceptance criteria. The user authorized implementation; the
+September 27 checkpoint above records current work. The checkpoint below is
+historical acceptance for the previous release.
 
 ## Git-parity checkpoint (2026-09-26) — deployed at dc5f70f, revision 9
 

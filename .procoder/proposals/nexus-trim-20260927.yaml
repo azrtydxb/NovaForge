@@ -1,0 +1,47 @@
+# Proposal only: not applied. See nexus-trim-20260927.md.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nexus-volume-trim
+  namespace: nexus
+spec:
+  schedule: "0 0 * * 0"
+  timeZone: Etc/UTC
+  suspend: true
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 300
+      ttlSecondsAfterFinished: 604800
+      template:
+        spec:
+          automountServiceAccountToken: false
+          restartPolicy: Never
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels: {app: nexus}
+                  topologyKey: kubernetes.io/hostname
+          containers:
+            - name: trim
+              image: docker.io/library/alpine@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8
+              command: [fstrim, -v, /nexus-data]
+              securityContext:
+                runAsUser: 0
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: [ALL]
+                  add: [SYS_ADMIN]
+              resources:
+                requests: {cpu: 10m, memory: 16Mi}
+                limits: {cpu: 100m, memory: 64Mi}
+              volumeMounts:
+                - {name: data, mountPath: /nexus-data}
+          volumes:
+            - name: data
+              persistentVolumeClaim: {claimName: nexus-data-iscsi}

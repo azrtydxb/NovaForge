@@ -52,7 +52,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.reply(200, {"sha": git("rev-parse", "HEAD", cwd=path).decode().strip()})
         if self.path == "/hooks":
             body = self.rfile.read(int(self.headers.get("Content-Length", "0")))
-            expected = "sha256=" + hmac.new(b"fixture-signing-secret", body, hashlib.sha256).hexdigest()
+            expected = hmac.new(b"fixture-signing-secret", body, hashlib.sha256).hexdigest()
             valid = hmac.compare_digest(self.headers.get("X-NovaForge-Signature", ""), expected)
             if not valid:
                 return self.reply(401, {"error": "invalid signature"})

@@ -15,7 +15,11 @@ ns=os.environ.get("NF_NAMESPACE","novaforge")
 rel=os.environ.get("REL","novaforge")
 k=["kubectl","--context",os.environ["KUBE_CONTEXT"]]
 def command(args,**kw):
-    return subprocess.check_output(args,stderr=subprocess.PIPE,**kw).decode().strip()
+    try:
+        return subprocess.check_output(args,stderr=subprocess.PIPE,**kw).decode().strip()
+    except subprocess.CalledProcessError as error:
+        # This fixture keeps credentials out of argv and Git remote URLs.
+        raise RuntimeError(error.stderr.decode(errors="replace")[-6000:]) from None
 def obj(*args): return json.loads(command(k+list(args)+["-o","json"]))
 def api(method,path,body=None):
     headers={"Content-Type":"application/json"}
