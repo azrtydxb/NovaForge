@@ -409,7 +409,11 @@ func (h *HelmExecutor) terminalPod(ctx context.Context, job *batchv1.Job, op Ope
 		imageID = imageID[i+1:]
 	}
 	digest := strings.Split(h.config.Image, "@")[1]
-	if status.Name != "helm" || status.Image != h.config.Image || imageID != digest || status.State.Terminated == nil || status.RestartCount != 0 {
+	// CRI may report a configuration digest in status.Image (containerd does on
+	// kw). The validated PodSpec binds the requested image; ImageID binds the
+	// actual immutable manifest. Comparing the informational Image spelling to
+	// the requested reference would reject a correctly pinned completed executor.
+	if status.Name != "helm" || imageID != digest || status.State.Terminated == nil || status.RestartCount != 0 {
 		return nil, fmt.Errorf("%w: executor container identity unavailable", ErrUncertain)
 	}
 	return pod, nil

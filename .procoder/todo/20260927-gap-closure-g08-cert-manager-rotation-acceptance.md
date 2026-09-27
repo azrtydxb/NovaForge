@@ -1,6 +1,6 @@
 # Gap closure G08: cert-manager rotation acceptance
 
-Status: open
+Status: closed 2026-09-27
 Created: 2026-09-27
 
 ## Description
