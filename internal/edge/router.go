@@ -18,6 +18,7 @@ import (
 
 	agentsv1 "github.com/novaforge/novaforge/gen/novaforge/agents/v1"
 	civ1 "github.com/novaforge/novaforge/gen/novaforge/ci/v1"
+	deploymentv1 "github.com/novaforge/novaforge/gen/novaforge/deployment/v1"
 	gatesv1 "github.com/novaforge/novaforge/gen/novaforge/gates/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	graphv1 "github.com/novaforge/novaforge/gen/novaforge/graph/v1"
@@ -30,16 +31,17 @@ import (
 // Config carries the service clients the edge fans out to. Any may be nil in
 // tests that only exercise routing and authorization.
 type Config struct {
-	Identity identityv1.IdentityServiceClient
-	Git      gitv1.GitServiceClient
-	CI       civ1.CIServiceClient
-	Work     workv1.WorkServiceClient
-	Reviews  reviewsv1.ReviewsServiceClient
-	Agents   agentsv1.AgentServiceClient
-	Graph    graphv1.GraphServiceClient
-	Gates    gatesv1.GatesServiceClient
-	MCP      mcpv1.McpServiceClient
-	Handlers map[string]http.HandlerFunc
+	Identity    identityv1.IdentityServiceClient
+	Git         gitv1.GitServiceClient
+	CI          civ1.CIServiceClient
+	Work        workv1.WorkServiceClient
+	Reviews     reviewsv1.ReviewsServiceClient
+	Agents      agentsv1.AgentServiceClient
+	Graph       graphv1.GraphServiceClient
+	Gates       gatesv1.GatesServiceClient
+	Deployments deploymentv1.DeploymentServiceClient
+	MCP         mcpv1.McpServiceClient
+	Handlers    map[string]http.HandlerFunc
 }
 
 // NewRouter builds the edge. Routing comes from the same table that generates

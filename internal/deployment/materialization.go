@@ -152,7 +152,7 @@ func (m *SecretMaterializer) Prepare(ctx context.Context, op Operation, namespac
 	issued, err := m.owner.PrepareDeployment(ownerCtx, row.request)
 	if err != nil {
 		return Credential{}, err
-	} // Production currently returns ErrHardExpiryUnavailable.
+	}
 	if issued.Kubeconfig == "" || !issued.ExpiresAt.After(time.Now()) || issued.ExpiresAt.After(row.request.ExpiresAt) {
 		return Credential{}, ErrUncertain
 	}

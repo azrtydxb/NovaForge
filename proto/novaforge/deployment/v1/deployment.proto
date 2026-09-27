@@ -4,6 +4,8 @@ package novaforge.deployment.v1;
 // DeploymentService is hosted by gates. All organization authority comes from
 // verified caller scope; target configuration and approvals remain server-owned.
 service DeploymentService {
+  rpc ListDeployments(ListDeploymentsRequest) returns (ListDeploymentsResponse);
+  rpc ListTargets(ListTargetsRequest) returns (ListTargetsResponse);
   rpc RequestDeployment(RequestDeploymentRequest) returns (RequestDeploymentResponse);
   rpc GetDeployment(GetDeploymentRequest) returns (GetDeploymentResponse);
   rpc ExecuteDeployment(ExecuteDeploymentRequest) returns (ExecuteDeploymentResponse);
@@ -61,3 +63,9 @@ message CredentialObligation {
   string phase = 3;
   string resolved_at = 4;
 }
+
+message ListDeploymentsRequest { string repo_id = 1; }
+message ListDeploymentsResponse { repeated Operation operations = 1; }
+message ListTargetsRequest { string repo_id = 1; }
+message ListTargetsResponse { repeated Target targets = 1; }
+message Target { string name = 1; string environment = 2; string revision = 3; }

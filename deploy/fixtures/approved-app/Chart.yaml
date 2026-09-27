@@ -1,0 +1,5 @@
+apiVersion: v2
+name: novaforge-deployment-fixture
+version: 0.1.0
+appVersion: "1"
+description: Controlled workload for governed deployment acceptance

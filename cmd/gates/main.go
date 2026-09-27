@@ -9,8 +9,12 @@ import (
 	"log"
 	"os"
 
+	agentsv1 "github.com/novaforge/novaforge/gen/novaforge/agents/v1"
+	deploymentv1 "github.com/novaforge/novaforge/gen/novaforge/deployment/v1"
+	"github.com/novaforge/novaforge/internal/deployment"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
 	gatesv1 "github.com/novaforge/novaforge/gen/novaforge/gates/v1"
@@ -71,6 +75,9 @@ func main() {
 		log.Fatalf("gates: migrate secrets schema: %v", err)
 	}
 
+	if err := database.Migrate(cfg.DatabaseURL, "deployment", deployment.MigrationsFS); err != nil {
+		log.Fatalf("gates: migrate deployment: %v", err)
+	}
 	ctx := context.Background()
 
 	pool, err := database.Connect(ctx, cfg.DatabaseURL)
@@ -152,6 +159,37 @@ func main() {
 	srv := grpc.NewServer(grpc.UnaryInterceptor(
 		svcauth.UnaryServerInterceptor(identityClient, cfg.HMACSecret)))
 	gatesv1.RegisterGatesServiceServer(srv, grpcServer)
+	var deploymentService *deployment.Service
+	if cfg.DeploymentConfigFile != "" {
+		kubeConfig, e := rest.InClusterConfig()
+		if e != nil {
+			log.Fatalf("gates: deployment Kubernetes configuration: %v", e)
+		}
+		kubeClient, e := kubernetes.NewForConfig(kubeConfig)
+		if e != nil {
+			log.Fatalf("gates: deployment Kubernetes client: %v", e)
+		}
+		if cfg.AgentsAddr == "" {
+			log.Fatal("gates: deployment requires AGENTS_ADDR")
+		}
+		agentsConn, e := grpc.NewClient(cfg.AgentsAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithChainUnaryInterceptor(svcauth.ForwardIncomingCredential))
+		if e != nil {
+			log.Fatalf("gates: deployment agent owner: %v", e)
+		}
+		defer agentsConn.Close()
+		identityForwardConn, e := grpc.NewClient(cfg.IdentityAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithChainUnaryInterceptor(svcauth.ForwardIncomingCredential))
+		if e != nil {
+			log.Fatalf("gates: deployment identity owner: %v", e)
+		}
+		defer identityForwardConn.Close()
+		deploymentService, e = deployment.NewConfiguredService(pool, approvalsStore, cfg.DeploymentConfigFile, deployment.Dependencies{ResolveRun: deployment.NewRunResolver(agentsv1.NewAgentServiceClient(agentsConn), identityv1.NewIdentityServiceClient(identityForwardConn), reviewsClient), Kubernetes: kubeClient, CredentialOwner: secretsBroker, HMACSecret: cfg.HMACSecret})
+		if e != nil {
+			log.Fatalf("gates: deployment configuration: %v", e)
+		}
+		go deploymentService.RunCleanup(ctx, cfg.HMACSecret)
+		go deploymentService.RunSuccessPublisher(ctx, cfg.HMACSecret, eventBus)
+	}
+	deploymentv1.RegisterDeploymentServiceServer(srv, deployment.NewGRPCServer(deploymentService))
 
 	check := func(ctx context.Context) error {
 		if err := pool.Ping(ctx); err != nil {

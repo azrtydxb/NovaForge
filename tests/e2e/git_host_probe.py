@@ -94,8 +94,9 @@ with tempfile.TemporaryDirectory() as tmp:
         ca=tmp+"/ca.pem";pathlib.Path(ca).write_bytes(base64.b64decode(cert["data"]["ca.crt"]))
         os.environ["GIT_SSL_CAINFO"]=ca
         os.environ["GIT_CONFIG_NOSYSTEM"]="1"
-        os.environ["GIT_CONFIG_GLOBAL"]="/dev/null"
+        os.environ["GIT_CONFIG_GLOBAL"]=tmp+"/gitconfig"
         os.environ["GIT_TERMINAL_PROMPT"]="0"
+        git("lfs","install","--skip-repo")
         remote=f"ssh://git@{gitip}:2222/{org}/assets.git"
         work=tmp+"/work"
         git("clone",remote,work)

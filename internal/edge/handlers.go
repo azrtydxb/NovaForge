@@ -17,6 +17,7 @@ import (
 // handler cannot be wired to different names.
 func Handlers(cfg Config) map[string]http.HandlerFunc {
 	h := map[string]http.HandlerFunc{}
+	addDeploymentHandlers(h, cfg.Git, cfg.Deployments)
 	if cfg.Identity != nil {
 		addIdentityHandlers(h, cfg.Identity)
 	}

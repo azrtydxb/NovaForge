@@ -19,6 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
+	DeploymentService_ListDeployments_FullMethodName     = "/novaforge.deployment.v1.DeploymentService/ListDeployments"
+	DeploymentService_ListTargets_FullMethodName         = "/novaforge.deployment.v1.DeploymentService/ListTargets"
 	DeploymentService_RequestDeployment_FullMethodName   = "/novaforge.deployment.v1.DeploymentService/RequestDeployment"
 	DeploymentService_GetDeployment_FullMethodName       = "/novaforge.deployment.v1.DeploymentService/GetDeployment"
 	DeploymentService_ExecuteDeployment_FullMethodName   = "/novaforge.deployment.v1.DeploymentService/ExecuteDeployment"
@@ -33,6 +35,8 @@ const (
 // DeploymentService is hosted by gates. All organization authority comes from
 // verified caller scope; target configuration and approvals remain server-owned.
 type DeploymentServiceClient interface {
+	ListDeployments(ctx context.Context, in *ListDeploymentsRequest, opts ...grpc.CallOption) (*ListDeploymentsResponse, error)
+	ListTargets(ctx context.Context, in *ListTargetsRequest, opts ...grpc.CallOption) (*ListTargetsResponse, error)
 	RequestDeployment(ctx context.Context, in *RequestDeploymentRequest, opts ...grpc.CallOption) (*RequestDeploymentResponse, error)
 	GetDeployment(ctx context.Context, in *GetDeploymentRequest, opts ...grpc.CallOption) (*GetDeploymentResponse, error)
 	ExecuteDeployment(ctx context.Context, in *ExecuteDeploymentRequest, opts ...grpc.CallOption) (*ExecuteDeploymentResponse, error)
@@ -46,6 +50,26 @@ type deploymentServiceClient struct {
 
 func NewDeploymentServiceClient(cc grpc.ClientConnInterface) DeploymentServiceClient {
 	return &deploymentServiceClient{cc}
+}
+
+func (c *deploymentServiceClient) ListDeployments(ctx context.Context, in *ListDeploymentsRequest, opts ...grpc.CallOption) (*ListDeploymentsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListDeploymentsResponse)
+	err := c.cc.Invoke(ctx, DeploymentService_ListDeployments_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *deploymentServiceClient) ListTargets(ctx context.Context, in *ListTargetsRequest, opts ...grpc.CallOption) (*ListTargetsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListTargetsResponse)
+	err := c.cc.Invoke(ctx, DeploymentService_ListTargets_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *deploymentServiceClient) RequestDeployment(ctx context.Context, in *RequestDeploymentRequest, opts ...grpc.CallOption) (*RequestDeploymentResponse, error) {
@@ -105,6 +129,8 @@ func (c *deploymentServiceClient) ReconcileDeployment(ctx context.Context, in *R
 // DeploymentService is hosted by gates. All organization authority comes from
 // verified caller scope; target configuration and approvals remain server-owned.
 type DeploymentServiceServer interface {
+	ListDeployments(context.Context, *ListDeploymentsRequest) (*ListDeploymentsResponse, error)
+	ListTargets(context.Context, *ListTargetsRequest) (*ListTargetsResponse, error)
 	RequestDeployment(context.Context, *RequestDeploymentRequest) (*RequestDeploymentResponse, error)
 	GetDeployment(context.Context, *GetDeploymentRequest) (*GetDeploymentResponse, error)
 	ExecuteDeployment(context.Context, *ExecuteDeploymentRequest) (*ExecuteDeploymentResponse, error)
@@ -119,6 +145,12 @@ type DeploymentServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedDeploymentServiceServer struct{}
 
+func (UnimplementedDeploymentServiceServer) ListDeployments(context.Context, *ListDeploymentsRequest) (*ListDeploymentsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListDeployments not implemented")
+}
+func (UnimplementedDeploymentServiceServer) ListTargets(context.Context, *ListTargetsRequest) (*ListTargetsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListTargets not implemented")
+}
 func (UnimplementedDeploymentServiceServer) RequestDeployment(context.Context, *RequestDeploymentRequest) (*RequestDeploymentResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RequestDeployment not implemented")
 }
@@ -152,6 +184,42 @@ func RegisterDeploymentServiceServer(s grpc.ServiceRegistrar, srv DeploymentServ
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&DeploymentService_ServiceDesc, srv)
+}
+
+func _DeploymentService_ListDeployments_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListDeploymentsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DeploymentServiceServer).ListDeployments(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DeploymentService_ListDeployments_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DeploymentServiceServer).ListDeployments(ctx, req.(*ListDeploymentsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DeploymentService_ListTargets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListTargetsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DeploymentServiceServer).ListTargets(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DeploymentService_ListTargets_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DeploymentServiceServer).ListTargets(ctx, req.(*ListTargetsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _DeploymentService_RequestDeployment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -251,6 +319,14 @@ var DeploymentService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "novaforge.deployment.v1.DeploymentService",
 	HandlerType: (*DeploymentServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ListDeployments",
+			Handler:    _DeploymentService_ListDeployments_Handler,
+		},
+		{
+			MethodName: "ListTargets",
+			Handler:    _DeploymentService_ListTargets_Handler,
+		},
 		{
 			MethodName: "RequestDeployment",
 			Handler:    _DeploymentService_RequestDeployment_Handler,

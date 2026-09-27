@@ -35,7 +35,8 @@ type OpenBaoBinding struct {
 	Field       string            `json:"field,omitempty"`
 	JSON        bool              `json:"json,omitempty"`
 	// RequireHardExpiry refuses engines without independently verified target-expiry evidence.
-	RequireHardExpiry bool `json:"require_hard_expiry,omitempty"`
+	RequireHardExpiry    bool                         `json:"require_hard_expiry,omitempty"`
+	KubernetesDeployment *KubernetesDeploymentBinding `json:"kubernetes_deployment,omitempty"`
 }
 
 type OpenBaoConfig struct {
@@ -92,6 +93,11 @@ func NewOpenBaoBroker(pool *pgxpool.Pool, kek []byte, cfg OpenBaoConfig) (*Broke
 	for _, v := range cfg.Bindings {
 		if v.OrgID == uuid.Nil || !ValidName(v.Name) || (v.Environment != EnvironmentStaging && v.Environment != EnvironmentProduction) || !validBaoPath(v.Path) || (v.JSON == (v.Field != "")) || (v.Method != "GET" && v.Method != "POST") || (v.Method == "GET" && len(v.Parameters) > 0) {
 			return nil, errors.New("invalid OpenBao binding")
+		}
+		if v.KubernetesDeployment != nil {
+			if err := validateKubernetesDeployment(v); err != nil {
+				return nil, err
+			}
 		}
 		k := bindingKey{v.OrgID, v.Environment, v.Name}
 		if _, exists := p.bindings[k]; exists {

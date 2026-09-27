@@ -1,0 +1,33 @@
+{{- if not (regexMatch "^sha256:[a-f0-9]{64}$" .Values.image.digest) }}
+{{- fail "image.digest must be an immutable SHA256 digest" }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: {{ .Release.Name }}}
+  template:
+    metadata:
+      labels: {app: {{ .Release.Name }}}
+    spec:
+      automountServiceAccountToken: false
+      imagePullSecrets: [{name: nexus-pull}]
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: fixture
+          image: "{{ .Values.image.repository }}@{{ .Values.image.digest }}"
+          command: [sh, -c, "echo approved-deployment; while true; do sleep 30; done"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 100m, memory: 64Mi}

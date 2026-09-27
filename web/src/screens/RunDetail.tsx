@@ -13,6 +13,7 @@ import {
   PanelHead,
   StatePill,
 } from "../components/ui";
+import { Deployments } from "./Deployments";
 import { RunReviews } from "../components/RunReviews";
 import { AgentReviewRequests } from "../components/AgentReviewRequests";
 import type { ApprovalList, EngineeringRun, ProofRecord } from "../lib/types";
@@ -177,6 +178,7 @@ export function RunDetail() {
       ) : null}
 
       {run.error ? <Failed error={run.error} /> : null}
+      {w.org && run.data ? <Deployments org={w.org} repo={repo} runID={run.data.id} /> : null}
       {w.org && run.data ? (
         <RunReviews base={base} org={w.org} repo={repo} run={run.data} />
       ) : null}

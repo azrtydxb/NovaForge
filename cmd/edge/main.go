@@ -16,6 +16,7 @@ import (
 
 	agentsv1 "github.com/novaforge/novaforge/gen/novaforge/agents/v1"
 	civ1 "github.com/novaforge/novaforge/gen/novaforge/ci/v1"
+	deploymentv1 "github.com/novaforge/novaforge/gen/novaforge/deployment/v1"
 	gatesv1 "github.com/novaforge/novaforge/gen/novaforge/gates/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	graphv1 "github.com/novaforge/novaforge/gen/novaforge/graph/v1"
@@ -87,6 +88,7 @@ func main() {
 		log.Println("edge: GRAPH_ADDR is unset; the knowledge and graph routes are not mounted")
 	}
 
+	var deploymentClient deploymentv1.DeploymentServiceClient
 	var gatesClient gatesv1.GatesServiceClient
 	if cfg.GatesAddr != "" {
 		gatesConn, err := dial(cfg.GatesAddr)
@@ -95,6 +97,7 @@ func main() {
 		}
 		defer gatesConn.Close()
 		gatesClient = gatesv1.NewGatesServiceClient(gatesConn)
+		deploymentClient = deploymentv1.NewDeploymentServiceClient(gatesConn)
 	}
 
 	// The chart has always set MCP_ADDR, and nothing read it. The MCP server
@@ -113,15 +116,16 @@ func main() {
 	}
 
 	ecfg := edge.Config{
-		Identity: identityv1.NewIdentityServiceClient(identityConn),
-		Git:      gitv1.NewGitServiceClient(gitConn),
-		Work:     workv1.NewWorkServiceClient(workConn),
-		Reviews:  reviewsv1.NewReviewsServiceClient(workConn),
-		CI:       civ1.NewCIServiceClient(ciConn),
-		Agents:   agentsClient,
-		Graph:    graphClient,
-		Gates:    gatesClient,
-		MCP:      mcpClient,
+		Identity:    identityv1.NewIdentityServiceClient(identityConn),
+		Git:         gitv1.NewGitServiceClient(gitConn),
+		Work:        workv1.NewWorkServiceClient(workConn),
+		Reviews:     reviewsv1.NewReviewsServiceClient(workConn),
+		CI:          civ1.NewCIServiceClient(ciConn),
+		Agents:      agentsClient,
+		Graph:       graphClient,
+		Gates:       gatesClient,
+		Deployments: deploymentClient,
+		MCP:         mcpClient,
 	}
 	ecfg.Handlers = edge.Handlers(ecfg)
 

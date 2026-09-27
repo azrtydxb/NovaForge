@@ -61,6 +61,7 @@ type HelmConfig struct {
 	ChartPath          string
 	ArtifactValueKey   string
 	ServiceAccount     string
+	ImagePullSecrets   []string
 	// CredentialPolicyRevision identifies the immutable OpenBao cluster/role
 	// mapping. Change it whenever that mapping changes.
 	CredentialPolicyRevision string
@@ -78,6 +79,11 @@ var pinnedImage = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9./:_-]*@sha256:[a-f0
 func NewHelmExecutor(client kubernetes.Interface, config HelmConfig, credentials CredentialProvisioner) (*HelmExecutor, error) {
 	if client == nil || credentials == nil || strings.TrimSpace(config.TargetClusterID) == "" || config.CredentialPolicyRevision == "" || len(validation.IsDNS1123Label(config.ExecutionNamespace)) > 0 || len(validation.IsDNS1123Label(config.TargetNamespace)) > 0 || len(validation.IsDNS1123Subdomain(config.ServiceAccount)) > 0 || len(validation.IsDNS1123Label(config.Release)) > 0 || len(config.Release) > 53 || !pinnedImage.MatchString(config.Image) || !strings.HasPrefix(config.ChartPath, "/charts/") || path.Clean(config.ChartPath) != config.ChartPath || !strings.HasSuffix(config.ChartPath, ".tgz") || !valueKey.MatchString(config.ArtifactValueKey) {
 		return nil, errors.New("invalid fixed Helm executor configuration")
+	}
+	for _, name := range config.ImagePullSecrets {
+		if len(validation.IsDNS1123Subdomain(name)) > 0 {
+			return nil, errors.New("invalid deployment image pull secret")
+		}
 	}
 	return &HelmExecutor{client: client, config: config, credentials: credentials}, nil
 }
@@ -237,11 +243,18 @@ func (h *HelmExecutor) job(op Operation, mode, name, secret string) *batchv1.Job
 	modeBits := int32(0440)
 	zero := int32(0)
 	deadline := int64(300)
+	pullSecrets := make([]corev1.LocalObjectReference, 0, len(h.config.ImagePullSecrets))
+	for _, name := range h.config.ImagePullSecrets {
+		pullSecrets = append(pullSecrets, corev1.LocalObjectReference{Name: name})
+	}
+	if len(pullSecrets) == 0 {
+		pullSecrets = nil
+	}
 	args := []string{mode, h.config.Release, h.config.ChartPath, h.config.TargetNamespace, h.config.ArtifactValueKey, op.Artifact, helmBinding(op), previousDeliveryBinding(op)}
 	return &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: h.config.ExecutionNamespace, Labels: map[string]string{"novaforge.dev/deployment": op.ID.String()}, Annotations: map[string]string{"novaforge.dev/binding": helmBinding(op)}}, Spec: batchv1.JobSpec{
 		BackoffLimit: &zero, ActiveDeadlineSeconds: &deadline,
 		Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"novaforge.dev/deployment": op.ID.String()}}, Spec: corev1.PodSpec{
-			RestartPolicy: corev1.RestartPolicyNever, ServiceAccountName: h.config.ServiceAccount, AutomountServiceAccountToken: &no, EnableServiceLinks: &no,
+			ImagePullSecrets: pullSecrets, RestartPolicy: corev1.RestartPolicyNever, ServiceAccountName: h.config.ServiceAccount, AutomountServiceAccountToken: &no, EnableServiceLinks: &no,
 			SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: &yes, RunAsUser: &uid, RunAsGroup: &uid, FSGroup: &uid, SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
 			Containers: []corev1.Container{{Name: "helm", Image: h.config.Image, ImagePullPolicy: corev1.PullIfNotPresent, Command: []string{"/usr/local/bin/deployment-runner"}, Args: args,
 				SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: &no, ReadOnlyRootFilesystem: &yes, Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}}},

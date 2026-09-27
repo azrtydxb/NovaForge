@@ -833,6 +833,242 @@ func (x *CredentialObligation) GetResolvedAt() string {
 	return ""
 }
 
+type ListDeploymentsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RepoId        string                 `protobuf:"bytes,1,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListDeploymentsRequest) Reset() {
+	*x = ListDeploymentsRequest{}
+	mi := &file_novaforge_deployment_v1_deployment_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDeploymentsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDeploymentsRequest) ProtoMessage() {}
+
+func (x *ListDeploymentsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_deployment_v1_deployment_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDeploymentsRequest.ProtoReflect.Descriptor instead.
+func (*ListDeploymentsRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_deployment_v1_deployment_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ListDeploymentsRequest) GetRepoId() string {
+	if x != nil {
+		return x.RepoId
+	}
+	return ""
+}
+
+type ListDeploymentsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Operations    []*Operation           `protobuf:"bytes,1,rep,name=operations,proto3" json:"operations,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListDeploymentsResponse) Reset() {
+	*x = ListDeploymentsResponse{}
+	mi := &file_novaforge_deployment_v1_deployment_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDeploymentsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDeploymentsResponse) ProtoMessage() {}
+
+func (x *ListDeploymentsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_deployment_v1_deployment_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDeploymentsResponse.ProtoReflect.Descriptor instead.
+func (*ListDeploymentsResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_deployment_v1_deployment_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *ListDeploymentsResponse) GetOperations() []*Operation {
+	if x != nil {
+		return x.Operations
+	}
+	return nil
+}
+
+type ListTargetsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RepoId        string                 `protobuf:"bytes,1,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListTargetsRequest) Reset() {
+	*x = ListTargetsRequest{}
+	mi := &file_novaforge_deployment_v1_deployment_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListTargetsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListTargetsRequest) ProtoMessage() {}
+
+func (x *ListTargetsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_deployment_v1_deployment_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListTargetsRequest.ProtoReflect.Descriptor instead.
+func (*ListTargetsRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_deployment_v1_deployment_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *ListTargetsRequest) GetRepoId() string {
+	if x != nil {
+		return x.RepoId
+	}
+	return ""
+}
+
+type ListTargetsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Targets       []*Target              `protobuf:"bytes,1,rep,name=targets,proto3" json:"targets,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListTargetsResponse) Reset() {
+	*x = ListTargetsResponse{}
+	mi := &file_novaforge_deployment_v1_deployment_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListTargetsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListTargetsResponse) ProtoMessage() {}
+
+func (x *ListTargetsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_deployment_v1_deployment_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListTargetsResponse.ProtoReflect.Descriptor instead.
+func (*ListTargetsResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_deployment_v1_deployment_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *ListTargetsResponse) GetTargets() []*Target {
+	if x != nil {
+		return x.Targets
+	}
+	return nil
+}
+
+type Target struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Environment   string                 `protobuf:"bytes,2,opt,name=environment,proto3" json:"environment,omitempty"`
+	Revision      string                 `protobuf:"bytes,3,opt,name=revision,proto3" json:"revision,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Target) Reset() {
+	*x = Target{}
+	mi := &file_novaforge_deployment_v1_deployment_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Target) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Target) ProtoMessage() {}
+
+func (x *Target) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_deployment_v1_deployment_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Target.ProtoReflect.Descriptor instead.
+func (*Target) Descriptor() ([]byte, []int) {
+	return file_novaforge_deployment_v1_deployment_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *Target) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *Target) GetEnvironment() string {
+	if x != nil {
+		return x.Environment
+	}
+	return ""
+}
+
+func (x *Target) GetRevision() string {
+	if x != nil {
+		return x.Revision
+	}
+	return ""
+}
+
 var File_novaforge_deployment_v1_deployment_proto protoreflect.FileDescriptor
 
 const file_novaforge_deployment_v1_deployment_proto_rawDesc = "" +
@@ -902,8 +1138,24 @@ const file_novaforge_deployment_v1_deployment_proto_rawDesc = "" +
 	"\x10provider_binding\x18\x02 \x01(\tR\x0fproviderBinding\x12\x14\n" +
 	"\x05phase\x18\x03 \x01(\tR\x05phase\x12\x1f\n" +
 	"\vresolved_at\x18\x04 \x01(\tR\n" +
-	"resolvedAt2\xf4\x04\n" +
-	"\x11DeploymentService\x12z\n" +
+	"resolvedAt\"1\n" +
+	"\x16ListDeploymentsRequest\x12\x17\n" +
+	"\arepo_id\x18\x01 \x01(\tR\x06repoId\"]\n" +
+	"\x17ListDeploymentsResponse\x12B\n" +
+	"\n" +
+	"operations\x18\x01 \x03(\v2\".novaforge.deployment.v1.OperationR\n" +
+	"operations\"-\n" +
+	"\x12ListTargetsRequest\x12\x17\n" +
+	"\arepo_id\x18\x01 \x01(\tR\x06repoId\"P\n" +
+	"\x13ListTargetsResponse\x129\n" +
+	"\atargets\x18\x01 \x03(\v2\x1f.novaforge.deployment.v1.TargetR\atargets\"Z\n" +
+	"\x06Target\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
+	"\venvironment\x18\x02 \x01(\tR\venvironment\x12\x1a\n" +
+	"\brevision\x18\x03 \x01(\tR\brevision2\xd4\x06\n" +
+	"\x11DeploymentService\x12t\n" +
+	"\x0fListDeployments\x12/.novaforge.deployment.v1.ListDeploymentsRequest\x1a0.novaforge.deployment.v1.ListDeploymentsResponse\x12h\n" +
+	"\vListTargets\x12+.novaforge.deployment.v1.ListTargetsRequest\x1a,.novaforge.deployment.v1.ListTargetsResponse\x12z\n" +
 	"\x11RequestDeployment\x121.novaforge.deployment.v1.RequestDeploymentRequest\x1a2.novaforge.deployment.v1.RequestDeploymentResponse\x12n\n" +
 	"\rGetDeployment\x12-.novaforge.deployment.v1.GetDeploymentRequest\x1a..novaforge.deployment.v1.GetDeploymentResponse\x12z\n" +
 	"\x11ExecuteDeployment\x121.novaforge.deployment.v1.ExecuteDeploymentRequest\x1a2.novaforge.deployment.v1.ExecuteDeploymentResponse\x12t\n" +
@@ -923,7 +1175,7 @@ func file_novaforge_deployment_v1_deployment_proto_rawDescGZIP() []byte {
 	return file_novaforge_deployment_v1_deployment_proto_rawDescData
 }
 
-var file_novaforge_deployment_v1_deployment_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_novaforge_deployment_v1_deployment_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_novaforge_deployment_v1_deployment_proto_goTypes = []any{
 	(*RequestDeploymentRequest)(nil),    // 0: novaforge.deployment.v1.RequestDeploymentRequest
 	(*RequestDeploymentResponse)(nil),   // 1: novaforge.deployment.v1.RequestDeploymentResponse
@@ -938,6 +1190,11 @@ var file_novaforge_deployment_v1_deployment_proto_goTypes = []any{
 	(*Operation)(nil),                   // 10: novaforge.deployment.v1.Operation
 	(*Attempt)(nil),                     // 11: novaforge.deployment.v1.Attempt
 	(*CredentialObligation)(nil),        // 12: novaforge.deployment.v1.CredentialObligation
+	(*ListDeploymentsRequest)(nil),      // 13: novaforge.deployment.v1.ListDeploymentsRequest
+	(*ListDeploymentsResponse)(nil),     // 14: novaforge.deployment.v1.ListDeploymentsResponse
+	(*ListTargetsRequest)(nil),          // 15: novaforge.deployment.v1.ListTargetsRequest
+	(*ListTargetsResponse)(nil),         // 16: novaforge.deployment.v1.ListTargetsResponse
+	(*Target)(nil),                      // 17: novaforge.deployment.v1.Target
 }
 var file_novaforge_deployment_v1_deployment_proto_depIdxs = []int32{
 	10, // 0: novaforge.deployment.v1.RequestDeploymentResponse.operation:type_name -> novaforge.deployment.v1.Operation
@@ -947,21 +1204,27 @@ var file_novaforge_deployment_v1_deployment_proto_depIdxs = []int32{
 	10, // 4: novaforge.deployment.v1.ReconcileDeploymentResponse.operation:type_name -> novaforge.deployment.v1.Operation
 	11, // 5: novaforge.deployment.v1.Operation.attempts:type_name -> novaforge.deployment.v1.Attempt
 	12, // 6: novaforge.deployment.v1.Operation.credentials:type_name -> novaforge.deployment.v1.CredentialObligation
-	0,  // 7: novaforge.deployment.v1.DeploymentService.RequestDeployment:input_type -> novaforge.deployment.v1.RequestDeploymentRequest
-	2,  // 8: novaforge.deployment.v1.DeploymentService.GetDeployment:input_type -> novaforge.deployment.v1.GetDeploymentRequest
-	4,  // 9: novaforge.deployment.v1.DeploymentService.ExecuteDeployment:input_type -> novaforge.deployment.v1.ExecuteDeploymentRequest
-	6,  // 10: novaforge.deployment.v1.DeploymentService.RetryDeployment:input_type -> novaforge.deployment.v1.RetryDeploymentRequest
-	8,  // 11: novaforge.deployment.v1.DeploymentService.ReconcileDeployment:input_type -> novaforge.deployment.v1.ReconcileDeploymentRequest
-	1,  // 12: novaforge.deployment.v1.DeploymentService.RequestDeployment:output_type -> novaforge.deployment.v1.RequestDeploymentResponse
-	3,  // 13: novaforge.deployment.v1.DeploymentService.GetDeployment:output_type -> novaforge.deployment.v1.GetDeploymentResponse
-	5,  // 14: novaforge.deployment.v1.DeploymentService.ExecuteDeployment:output_type -> novaforge.deployment.v1.ExecuteDeploymentResponse
-	7,  // 15: novaforge.deployment.v1.DeploymentService.RetryDeployment:output_type -> novaforge.deployment.v1.RetryDeploymentResponse
-	9,  // 16: novaforge.deployment.v1.DeploymentService.ReconcileDeployment:output_type -> novaforge.deployment.v1.ReconcileDeploymentResponse
-	12, // [12:17] is the sub-list for method output_type
-	7,  // [7:12] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	10, // 7: novaforge.deployment.v1.ListDeploymentsResponse.operations:type_name -> novaforge.deployment.v1.Operation
+	17, // 8: novaforge.deployment.v1.ListTargetsResponse.targets:type_name -> novaforge.deployment.v1.Target
+	13, // 9: novaforge.deployment.v1.DeploymentService.ListDeployments:input_type -> novaforge.deployment.v1.ListDeploymentsRequest
+	15, // 10: novaforge.deployment.v1.DeploymentService.ListTargets:input_type -> novaforge.deployment.v1.ListTargetsRequest
+	0,  // 11: novaforge.deployment.v1.DeploymentService.RequestDeployment:input_type -> novaforge.deployment.v1.RequestDeploymentRequest
+	2,  // 12: novaforge.deployment.v1.DeploymentService.GetDeployment:input_type -> novaforge.deployment.v1.GetDeploymentRequest
+	4,  // 13: novaforge.deployment.v1.DeploymentService.ExecuteDeployment:input_type -> novaforge.deployment.v1.ExecuteDeploymentRequest
+	6,  // 14: novaforge.deployment.v1.DeploymentService.RetryDeployment:input_type -> novaforge.deployment.v1.RetryDeploymentRequest
+	8,  // 15: novaforge.deployment.v1.DeploymentService.ReconcileDeployment:input_type -> novaforge.deployment.v1.ReconcileDeploymentRequest
+	14, // 16: novaforge.deployment.v1.DeploymentService.ListDeployments:output_type -> novaforge.deployment.v1.ListDeploymentsResponse
+	16, // 17: novaforge.deployment.v1.DeploymentService.ListTargets:output_type -> novaforge.deployment.v1.ListTargetsResponse
+	1,  // 18: novaforge.deployment.v1.DeploymentService.RequestDeployment:output_type -> novaforge.deployment.v1.RequestDeploymentResponse
+	3,  // 19: novaforge.deployment.v1.DeploymentService.GetDeployment:output_type -> novaforge.deployment.v1.GetDeploymentResponse
+	5,  // 20: novaforge.deployment.v1.DeploymentService.ExecuteDeployment:output_type -> novaforge.deployment.v1.ExecuteDeploymentResponse
+	7,  // 21: novaforge.deployment.v1.DeploymentService.RetryDeployment:output_type -> novaforge.deployment.v1.RetryDeploymentResponse
+	9,  // 22: novaforge.deployment.v1.DeploymentService.ReconcileDeployment:output_type -> novaforge.deployment.v1.ReconcileDeploymentResponse
+	16, // [16:23] is the sub-list for method output_type
+	9,  // [9:16] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_novaforge_deployment_v1_deployment_proto_init() }
@@ -975,7 +1238,7 @@ func file_novaforge_deployment_v1_deployment_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_novaforge_deployment_v1_deployment_proto_rawDesc), len(file_novaforge_deployment_v1_deployment_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   13,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

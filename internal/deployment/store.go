@@ -155,7 +155,9 @@ func (s *Service) start(ctx context.Context, conn *pgx.Conn, op Operation, kind 
 		return 0, err
 	}
 	started := time.Now().UTC().Truncate(time.Microsecond)
-	expires := earlierExpiry(ceiling, started.Add(10*time.Minute))
+	// TokenRequest has a ten-minute minimum; reserve two minutes for issuance
+	// and verification without extending any narrower actor/grant ceiling.
+	expires := earlierExpiry(ceiling, started.Add(12*time.Minute))
 	var number int
 	err = tx.QueryRow(ctx, `INSERT INTO deployment.attempts (org_id,operation_id,number,state,kind,actor_id,actor_kind,started_at,authorized_until,credential_expires_at)
  SELECT $1,$2,COALESCE(MAX(number),0)+1,'running',$3,$4,$5,$6,$7,$8 FROM deployment.attempts WHERE org_id=$1 AND operation_id=$2 RETURNING number`, scope.OrgID, op.ID, kind, scope.ActorID, scope.ActorKind, started, ceiling, expires).Scan(&number)

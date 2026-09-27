@@ -24,10 +24,9 @@ type DeploymentCredential struct {
 	ExpiresAt  time.Time
 }
 
-// PrepareDeployment deliberately refuses all currently supported engines:
-// an OpenBao lease timestamp is not proof of target-enforced hard expiry.
-// Recording intent still makes cancellation/retry identity durable and exact.
-// Qualification of a real target/engine must precede returning any kubeconfig.
+// PrepareDeployment admits only an operator-bound Kubernetes engine whose
+// signed credential is verified by the target and expires within the action
+// ceiling. A provider lease timestamp alone never qualifies a credential.
 func (b *Broker) PrepareDeployment(ctx context.Context, req DeploymentCredentialRequest) (DeploymentCredential, error) {
 	if err := b.deploymentIntent(ctx, req, false); err != nil {
 		return DeploymentCredential{}, err
@@ -39,10 +38,14 @@ func (b *Broker) PrepareDeployment(ctx context.Context, req DeploymentCredential
 		return DeploymentCredential{}, ErrProviderNotConfigured
 	}
 	scope, _ := authz.FromContext(ctx)
-	if _, ok := b.provider.bindings[bindingKey{scope.OrgID, req.Environment, req.Name}]; !ok {
+	binding, ok := b.provider.bindings[bindingKey{scope.OrgID, req.Environment, req.Name}]
+	if !ok {
 		return DeploymentCredential{}, ErrProviderNotConfigured
 	}
-	return DeploymentCredential{}, ErrHardExpiryUnavailable
+	if binding.KubernetesDeployment == nil {
+		return DeploymentCredential{}, ErrHardExpiryUnavailable
+	}
+	return b.prepareKubernetesDeployment(ctx, req, binding)
 }
 
 // RevokeDeployment establishes the exact attempt fence even before Prepare.

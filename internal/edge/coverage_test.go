@@ -11,6 +11,7 @@ import (
 
 	agentsv1 "github.com/novaforge/novaforge/gen/novaforge/agents/v1"
 	civ1 "github.com/novaforge/novaforge/gen/novaforge/ci/v1"
+	deploymentv1 "github.com/novaforge/novaforge/gen/novaforge/deployment/v1"
 	gatesv1 "github.com/novaforge/novaforge/gen/novaforge/gates/v1"
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	graphv1 "github.com/novaforge/novaforge/gen/novaforge/graph/v1"
@@ -101,15 +102,16 @@ func openAPIPath(p string) string {
 // must have a handler.
 func TestEveryRouteHasAHandlerWhenWired(t *testing.T) {
 	cfg := edge.Config{
-		Identity: identityv1.NewIdentityServiceClient(nil),
-		Git:      gitv1.NewGitServiceClient(nil),
-		Work:     workv1.NewWorkServiceClient(nil),
-		Reviews:  reviewsv1.NewReviewsServiceClient(nil),
-		CI:       civ1.NewCIServiceClient(nil),
-		Agents:   agentsv1.NewAgentServiceClient(nil),
-		Graph:    graphv1.NewGraphServiceClient(nil),
-		Gates:    gatesv1.NewGatesServiceClient(nil),
-		MCP:      mcpv1.NewMcpServiceClient(nil),
+		Identity:    identityv1.NewIdentityServiceClient(nil),
+		Git:         gitv1.NewGitServiceClient(nil),
+		Work:        workv1.NewWorkServiceClient(nil),
+		Reviews:     reviewsv1.NewReviewsServiceClient(nil),
+		CI:          civ1.NewCIServiceClient(nil),
+		Agents:      agentsv1.NewAgentServiceClient(nil),
+		Graph:       graphv1.NewGraphServiceClient(nil),
+		Gates:       gatesv1.NewGatesServiceClient(nil),
+		Deployments: deploymentv1.NewDeploymentServiceClient(nil),
+		MCP:         mcpv1.NewMcpServiceClient(nil),
 	}
 	handlers := edge.Handlers(cfg)
 

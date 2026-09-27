@@ -257,7 +257,7 @@ func TestAuthorizedExpiryOperatorWindowAndCanceledTransportAreSeparate(t *testin
 		t.Fatal(err)
 	}
 	a := op.Attempts[0]
-	if a.AuthorizedUntil != nil || a.CredentialExpiresAt == nil || !a.CredentialExpiresAt.Equal(a.StartedAt.Add(10*time.Minute)) {
+	if a.AuthorizedUntil != nil || a.CredentialExpiresAt == nil || !a.CredentialExpiresAt.Equal(a.StartedAt.Add(12*time.Minute)) {
 		t.Fatal("operator horizon not pinned to attempt")
 	}
 	stored, err := s.Get(ctx, op.ID)
@@ -270,7 +270,7 @@ func TestAuthorizedExpiryOperatorWindowAndCanceledTransportAreSeparate(t *testin
 }
 
 func TestAuthorizedExpiryOwnerLifetimeCheckedBeforeHelm(t *testing.T) {
-	for _, remaining := range []time.Duration{time.Minute, 7 * time.Minute, 11 * time.Minute} {
+	for _, remaining := range []time.Duration{time.Minute, 7 * time.Minute, 13 * time.Minute} {
 		t.Run(remaining.String(), func(t *testing.T) {
 			s, ctx, admin, req, _ := fixture(t)
 			resolveExpiryOwners(s, ctx, req, time.Now().Add(time.Hour), time.Now().Add(time.Hour))
@@ -358,6 +358,13 @@ func TestAuthorizedExpiryLegacyMaterializationCleanup(t *testing.T) {
 	for _, phase := range []string{"creating", "materialized", "absent"} {
 		t.Run(phase, func(t *testing.T) {
 			m, s, ctx, op, client, _ := materializerFixture(t)
+			// Simulate the historical ten-minute ceiling reconstructed by the
+			// old migration, independently of the current issuance window.
+			oldCeiling := op.Attempts[0].StartedAt.Add(10 * time.Minute)
+			op.Attempts[0].CredentialExpiresAt = &oldCeiling
+			if _, err := s.pool.Exec(ctx, `UPDATE deployment.attempts SET credential_expires_at=$1 WHERE operation_id=$2`, oldCeiling, op.ID); err != nil {
+				t.Fatal(err)
+			}
 			owner := &expiryCredentialOwner{}
 			m.owner = owner
 			client.PrependReactor("create", "secrets", func(a ktesting.Action) (bool, runtime.Object, error) {
