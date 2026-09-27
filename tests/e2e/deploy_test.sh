@@ -24,7 +24,14 @@ echo "== 1. every deployment reports ready =="
 # when enabled, and the runner when it has an organization. Checking only that
 # the deployments present are ready passed a chart that omitted a service.
 VALUES="$(mktemp)"
-helm --kube-context "$KUBE_CONTEXT" -n "$NS" get values "$REL" -o yaml >"$VALUES" || fail "cannot read the release's values"
+# Sync retires Helm's release records. Its desired values are the reviewed Git
+# file, not a secret-bearing historical Helm revision.
+if $KC get applications.sync.kuvryn.io "$REL" -o name >/dev/null 2>&1; then
+	[ "$($KC get applications.sync.kuvryn.io "$REL" -o jsonpath='{.status.state}')" = Healthy ] || fail "Kuvryn Sync Application is not healthy"
+	cp deploy/helm/novaforge/values-kw.yaml "$VALUES"
+else
+	helm --kube-context "$KUBE_CONTEXT" -n "$NS" get values "$REL" -o yaml >"$VALUES" || fail "cannot read the release's values"
+fi
 EXPECTED="$(helm template "$REL" deploy/helm/novaforge -f "$VALUES" | python3 -c '
 import sys
 kind=None
