@@ -80,7 +80,7 @@ spec:
           imagePullPolicy: {{ $.Values.image.pullPolicy }}
           envFrom:
             - secretRef:
-                name: {{ $.Release.Name }}-secrets
+                name: {{ include "novaforge.secretName" $ }}
           env:
             - name: SERVICE_NAME
               value: {{ $name }}
@@ -155,7 +155,7 @@ spec:
             - name: AI_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ $.Release.Name }}-secrets
+                  name: {{ include "novaforge.secretName" $ }}
                   key: AI_API_KEY
             - name: EMBED_ENDPOINT
               value: {{ $.Values.ai.embedEndpoint | quote }}

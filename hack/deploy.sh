@@ -8,6 +8,16 @@ NS="${NF_NAMESPACE:-novaforge}"
 REL="${REL:-novaforge}"
 TAG="${TAG:-$(git rev-parse --short HEAD)}"
 
+# Fail closed even if the API is unavailable: never compete with GitOps.
+if ! sync_apps=$(kubectl --context "$KUBE_CONTEXT" -n "$NS" get applications.sync.kuvryn.io -o name); then
+	echo "cannot check Kuvryn Sync ownership; refusing Helm deployment" >&2
+	exit 1
+fi
+if [ -n "$sync_apps" ]; then
+	echo "Kuvryn Sync manages this namespace; promote images/configuration in Git (deploy/kuvryn-sync/README.md)" >&2
+	exit 1
+fi
+
 kubectl --context "$KUBE_CONTEXT" create namespace "$NS" --dry-run=client -o yaml | kubectl --context "$KUBE_CONTEXT" apply -f -
 
 # The nodes pull from the 443 address, so the pull secret is keyed on it.

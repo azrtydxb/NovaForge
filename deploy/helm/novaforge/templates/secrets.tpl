@@ -1,3 +1,4 @@
+{{- if not .Values.secrets.existingSecret }}
 apiVersion: v1
 kind: Secret
 metadata:
@@ -14,3 +15,4 @@ stringData:
   S3_ACCESS_KEY: {{ .Values.secrets.minioAccessKey | quote }}
   S3_SECRET_KEY: {{ .Values.secrets.minioSecretKey | quote }}
   AI_API_KEY: {{ .Values.ai.apiKey | quote }}
+{{- end }}

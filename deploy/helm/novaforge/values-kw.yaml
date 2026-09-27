@@ -1,0 +1,33 @@
+# Desired kw release. Promote only images verified at the Nexus pull endpoint.
+ai: {}
+gitTLS:
+  ipAddresses:
+    - 192.168.10.130
+image:
+  tag: c8ade67
+lfs:
+  publicURL: https://192.168.10.130:8443
+operatorConfigs:
+  deployments:
+    secretName: ""
+  openbao:
+    secretName: novaforge-openbao
+  semanticProducer:
+    secretName: novaforge-semantic-producer
+outbound:
+  destinations:
+    - cidrs:
+        - 0.0.0.0/0
+        - ::/0
+      host: github.com
+      port: 443
+      scheme: https
+services:
+  gates:
+    analysisImage: 192.168.10.131/novaforge/gate-analysis@sha256:18c5135159600a81a9aa66d2bdc19ceea08c7be762e46c271855f67d12dc3116
+secrets:
+  existingSecret: novaforge-secrets
+rbac:
+  create: false
+storage:
+  pruneProtection: true

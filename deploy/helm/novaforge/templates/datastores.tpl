@@ -8,6 +8,9 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: {{ .Release.Name }}-pg-data
+  {{- if .Values.storage.pruneProtection }}
+  annotations: {sync.kuvryn.io/prune: disabled}
+  {{- end }}
 spec:
   accessModes: [ReadWriteOnce]
   storageClassName: {{ .Values.datastores.postgres.storageClass | quote }}
@@ -17,6 +20,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata: {name: {{ .Release.Name }}-postgres}
 spec:
+  strategy: {type: RollingUpdate, rollingUpdate: {maxSurge: 0, maxUnavailable: 1}}
   replicas: 1
   selector: {matchLabels: {app: {{ .Release.Name }}-postgres}}
   template:
@@ -27,7 +31,16 @@ spec:
           image: {{ .Values.datastores.postgres.image }}
           env:
             - {name: POSTGRES_USER, value: novaforge}
+            {{- if .Values.secrets.existingSecret }}
+            - name: POSTGRES_PASSWORD
+              value: null
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "novaforge.secretName" . }}
+                  key: POSTGRES_PASSWORD
+            {{- else }}
             - {name: POSTGRES_PASSWORD, value: {{ .Values.secrets.postgresPassword | quote }}}
+            {{- end }}
             - {name: POSTGRES_DB, value: novaforge}
             - {name: PGDATA, value: /var/lib/postgresql/data/pgdata}
           ports: [{containerPort: 5432}]
@@ -73,7 +86,11 @@ spec:
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
-metadata: {name: {{ .Release.Name }}-minio-data}
+metadata:
+  name: {{ .Release.Name }}-minio-data
+  {{- if .Values.storage.pruneProtection }}
+  annotations: {sync.kuvryn.io/prune: disabled}
+  {{- end }}
 spec:
   accessModes: [ReadWriteOnce]
   storageClassName: {{ .Values.datastores.minio.storageClass | quote }}
@@ -83,6 +100,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata: {name: {{ .Release.Name }}-minio}
 spec:
+  strategy: {type: RollingUpdate, rollingUpdate: {maxSurge: 0, maxUnavailable: 1}}
   replicas: 1
   selector: {matchLabels: {app: {{ .Release.Name }}-minio}}
   template:
@@ -93,8 +111,26 @@ spec:
           image: {{ .Values.datastores.minio.image }}
           args: ["server", "/data", "--console-address", ":9001"]
           env:
+            {{- if .Values.secrets.existingSecret }}
+            - name: MINIO_ROOT_USER
+              value: null
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "novaforge.secretName" . }}
+                  key: MINIO_ROOT_USER
+            {{- else }}
             - {name: MINIO_ROOT_USER, value: {{ .Values.secrets.minioAccessKey | quote }}}
+            {{- end }}
+            {{- if .Values.secrets.existingSecret }}
+            - name: MINIO_ROOT_PASSWORD
+              value: null
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "novaforge.secretName" . }}
+                  key: MINIO_ROOT_PASSWORD
+            {{- else }}
             - {name: MINIO_ROOT_PASSWORD, value: {{ .Values.secrets.minioSecretKey | quote }}}
+            {{- end }}
           ports: [{containerPort: 9000}, {containerPort: 9001}]
           volumeMounts: [{name: data, mountPath: /data}]
           readinessProbe:

@@ -1,0 +1,219 @@
+# Operator bootstrap only; excluded from the Sync Application render.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: novaforge-agent-runtime
+  namespace: novaforge
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: novaforge-gates
+  namespace: novaforge
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: novaforge-engineering-graph
+  namespace: novaforge
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: novaforge-runner
+  namespace: novaforge
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: novaforge-agent-runtime
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+    verbs:
+      - create
+      - get
+      - list
+      - watch
+      - delete
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+      - pods/log
+      - resourcequotas
+      - secrets
+      - configmaps
+    verbs:
+      - create
+      - get
+      - list
+      - watch
+      - delete
+  - apiGroups:
+      - ""
+    resources:
+      - pods/exec
+    verbs:
+      - create
+      - get
+  - apiGroups:
+      - networking.k8s.io
+    resources:
+      - networkpolicies
+    verbs:
+      - create
+      - get
+      - list
+      - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: novaforge-gates
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+    verbs:
+      - create
+      - get
+      - delete
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - create
+      - get
+      - delete
+  - apiGroups:
+      - ""
+    resources:
+      - pods/exec
+    verbs:
+      - create
+      - get
+  - apiGroups:
+      - networking.k8s.io
+    resources:
+      - networkpolicies
+    verbs:
+      - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: novaforge-engineering-graph
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+    verbs:
+      - create
+      - get
+      - list
+      - delete
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - create
+      - get
+      - delete
+  - apiGroups:
+      - ""
+    resources:
+      - pods/exec
+    verbs:
+      - create
+      - get
+  - apiGroups:
+      - networking.k8s.io
+    resources:
+      - networkpolicies
+    verbs:
+      - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: novaforge-agent-runtime
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: novaforge-agent-runtime
+subjects:
+  - kind: ServiceAccount
+    name: novaforge-agent-runtime
+    namespace: novaforge
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: novaforge-gates
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: novaforge-gates
+subjects:
+  - kind: ServiceAccount
+    name: novaforge-gates
+    namespace: novaforge
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: novaforge-engineering-graph
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: novaforge-engineering-graph
+subjects:
+  - kind: ServiceAccount
+    name: novaforge-engineering-graph
+    namespace: novaforge
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: novaforge-runner
+  namespace: novaforge
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+      - pods/log
+    verbs:
+      - create
+      - get
+      - list
+      - watch
+      - delete
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - create
+      - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: novaforge-runner
+  namespace: novaforge
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: novaforge-runner
+subjects:
+  - kind: ServiceAccount
+    name: novaforge-runner
+    namespace: novaforge

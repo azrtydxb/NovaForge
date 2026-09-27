@@ -27,7 +27,17 @@ datastores:
     storageClass: longhorn
     size: 20Gi
 
+# Operator-owned RBAC is provisioned separately for GitOps installations.
+rbac:
+  create: true
+storage:
+  pruneProtection: false
+
 secrets:
+  # With an existing Secret, no credential bytes are rendered by this chart.
+  # Also requires POSTGRES_PASSWORD, MINIO_ROOT_USER and MINIO_ROOT_PASSWORD
+  # when the bundled datastores are enabled.
+  existingSecret: ""
   jwtSecret: "change-me-in-production"
   hmacSecret: "change-me-in-production"
   secretsKek: "change-me-in-production-32byteslong"

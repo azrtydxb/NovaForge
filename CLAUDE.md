@@ -42,6 +42,14 @@ Tests run against **real** PostgreSQL, Redis and MinIO — no datastore is mocke
 pointing at the cluster's dev datastores. Without them the suites `t.Skip`, which looks
 like a pass; always source it before believing a green run.
 
+### kw deployment ownership
+
+kw is managed by Kuvryn Sync from `deploy/helm/novaforge/values-kw.yaml`.
+Use `hack/build-images.sh`, then `hack/promote-kw.sh <built-commit-tag>`, review and
+push the values commit. `hack/deploy.sh` refuses while Sync owns the namespace.
+Read `deploy/kuvryn-sync/README.md` for bootstrap, external Secrets, operator RBAC
+and rollback. Do not compete with Sync using Helm or direct image edits.
+
 ### Cluster build and deploy
 
 There is no local Docker daemon — Docker Desktop's containerd store is broken and unusable.
@@ -50,7 +58,8 @@ Everything builds in-cluster.
 ```bash
 source hack/env.sh          # BuildKit, registry, kube context, test datastores
 ./hack/build-images.sh      # arm64 images via in-cluster BuildKit, tagged with the commit sha
-./hack/deploy.sh            # helm upgrade --install, with an image preflight
+./hack/promote-kw.sh <built-commit-tag>  # verify images; record GitOps values
+# Commit/push values-kw.yaml; Kuvryn Sync applies it.
 bash tests/e2e/deploy_test.sh     # git round trip over HTTPS and SSH
 bash tests/e2e/work_ci_test.sh    # Work Item, push, CI run in a pod, log and artifact
 bash tests/e2e/secrets_test.sh    # a CI job gets a credential minted by the provider, never a stored one

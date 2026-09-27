@@ -1,3 +1,4 @@
+{{- if .Values.rbac.create }}
 {{- /*
 The agent runtime creates one namespace per Agent Run. Its Role is limited to
 exactly the objects it must manage for isolation and nothing else, so a
@@ -145,4 +146,6 @@ subjects:
   - kind: ServiceAccount
     name: {{ .Release.Name }}-engineering-graph
     namespace: {{ .Release.Namespace }}
+{{- end }}
+
 {{- end }}

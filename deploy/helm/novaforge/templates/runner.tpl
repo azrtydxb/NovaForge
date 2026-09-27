@@ -9,6 +9,7 @@ so a runner can be added for an organization without upgrading the release —
 gating them too meant the ServiceAccount was missing exactly when something
 tried to use it.
 */ -}}
+{{- if .Values.rbac.create }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -42,6 +43,7 @@ subjects:
   - kind: ServiceAccount
     name: {{ .Release.Name }}-runner
     namespace: {{ .Release.Namespace }}
+{{- end }}
 {{- if .Values.runner.orgId }}
 ---
 apiVersion: apps/v1
@@ -74,7 +76,7 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           envFrom:
             - secretRef:
-                name: {{ .Release.Name }}-secrets
+                name: {{ include "novaforge.secretName" . }}
           env:
             - name: CI_ADDR
               value: "{{ .Release.Name }}-ci-runner:{{ (index .Values.services "ci-runner").grpcPort }}"

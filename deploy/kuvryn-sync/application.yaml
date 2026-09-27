@@ -1,0 +1,35 @@
+apiVersion: sync.kuvryn.io/v1alpha1
+kind: Application
+metadata:
+  name: novaforge
+  namespace: novaforge
+spec:
+  serviceAccountName: kuvryn-sync-deployer
+  source:
+    repositoryRef:
+      name: novaforge
+    revision: main
+    path: deploy/helm/novaforge
+    render:
+      type: helm
+      helm:
+        releaseName: novaforge
+        valuesFiles: [values-kw.yaml]
+  destination:
+    namespace: novaforge
+  sync:
+    automatic: true
+    conflictPolicy: fail
+    prune: true
+    selfHeal: true
+  strategy:
+    type: rolling
+    failurePolicy:
+      action: rollback
+      maxAttempts: 2
+      timeout: 10m
+  health:
+    timeout: 10m
+  history:
+    limit: 10
+  deletionPolicy: Orphan

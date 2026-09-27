@@ -1,0 +1,11 @@
+apiVersion: sync.kuvryn.io/v1alpha1
+kind: Repository
+metadata:
+  name: novaforge
+  namespace: novaforge
+spec:
+  type: git
+  git:
+    url: https://github.com/azrtydxb/NovaForge.git
+    revision: main
+  pollInterval: 60s

@@ -7,6 +7,9 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: {{ .Release.Name }}-repos
+  {{- if .Values.storage.pruneProtection }}
+  annotations: {sync.kuvryn.io/prune: disabled}
+  {{- end }}
   labels: {{- include "novaforge.labels" . | nindent 4 }}
 spec:
   accessModes: [ReadWriteMany]
