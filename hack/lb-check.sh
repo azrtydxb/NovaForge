@@ -2,7 +2,7 @@
 # lb-check.sh — verify every NovaForge LoadBalancer address answers, and repair
 # the one failure this cluster is known to produce.
 #
-# On the shared kw cluster, kube-vip holds each service's VIP and Cilium maps
+# On the shared kw cluster, Cilium announces each service's VIP (L2) and maps
 # VIP:port to the service. Twice a Cilium datapath lost the frontend for the
 # edge's VIP while the Service, the VIP and the pods were all healthy — traced
 # to another project's LoadBalancer Services being created and deleted from the

@@ -153,6 +153,16 @@ lfs:
   # internal/service's chart test, which is what keeps the variable in the pod.
   maxObjectBytes: 5368709120
 
+# How LoadBalancer services (extraServiceType: LoadBalancer) are announced.
+# The defaults suit kube-vip. For Cilium L2 announcements set className to
+# io.cilium/l2-announcer and ipAnnotation to lbipam.cilium.io/ips, plus any
+# labels the cluster's CiliumLoadBalancerIPPool selects on. className is
+# immutable on a live Service: changing it means recreating the Service.
+loadBalancer:
+  className: ""
+  ipAnnotation: kube-vip.io/loadbalancerIPs
+  labels: {}
+
 # Only services whose binary exists are listed. Entries are added as each
 # service's cmd/ package lands, so a deploy never references a missing image.
 services:
@@ -170,7 +180,7 @@ services:
     schema: gitplatform
     needsRepos: true
     extraServiceType: LoadBalancer
-    # A fixed LoadBalancer address (kube-vip), or empty to let the provider
+    # A fixed LoadBalancer address (see loadBalancer), or empty to let the provider
     # choose. Clients outside the cluster dial it, so list it in
     # gitTLS.ipAddresses and lfs.publicURL too.
     loadBalancerIP: ""
@@ -207,6 +217,7 @@ services:
     httpPort: 8080
     schema: edge
     extraServiceType: LoadBalancer
+    loadBalancerIP: ""
 
 # Runners are not in `services`: they expose no port and are never dialled, they
 # dial out. A Service in front of one would be an object nothing could use.

@@ -251,15 +251,23 @@ metadata:
   labels:
     {{- include "novaforge.labels" $ | nindent 4 }}
     app.kubernetes.io/component: {{ $name }}
+    {{- if eq ($svc.extraServiceType | default "") "LoadBalancer" }}
+    {{- with $.Values.loadBalancer.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- end }}
   {{- if and (eq ($svc.extraServiceType | default "") "LoadBalancer") $svc.loadBalancerIP }}
   annotations:
-    # kube-vip's request for a fixed address. Without it the cloud provider
+    # The announcer's request for a fixed address. Without it the provider
     # picks one, and on kw it once handed git-platform an address another
     # service already held (192.168.10.130, BuildKit's).
-    kube-vip.io/loadbalancerIPs: {{ $svc.loadBalancerIP | quote }}
+    {{ $.Values.loadBalancer.ipAnnotation }}: {{ $svc.loadBalancerIP | quote }}
   {{- end }}
 spec:
   type: {{ $svc.extraServiceType | default "ClusterIP" }}
+  {{- if and (eq ($svc.extraServiceType | default "") "LoadBalancer") $.Values.loadBalancer.className }}
+  loadBalancerClass: {{ $.Values.loadBalancer.className | quote }}
+  {{- end }}
   selector:
     app.kubernetes.io/component: {{ $name }}
     app.kubernetes.io/instance: {{ $.Release.Name }}

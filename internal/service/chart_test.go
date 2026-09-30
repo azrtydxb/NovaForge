@@ -168,7 +168,9 @@ type manifest struct {
 	StringData map[string]string `yaml:"stringData"`
 	Data       map[string]string `yaml:"data"`
 	Spec       struct {
-		Template struct {
+		Type              string `yaml:"type"`
+		LoadBalancerClass string `yaml:"loadBalancerClass"`
+		Template          struct {
 			Spec struct {
 				Containers []struct {
 					Image string `yaml:"image"`

@@ -48,22 +48,32 @@ func TestLoadBalancerServicesCanPinTheirAddress(t *testing.T) {
 	}
 }
 
-// The kw release pins git-platform to its own address, and no two services
-// the chart renders ask for the same one.
+// The kw release announces through Cilium L2: every LoadBalancer service
+// carries the class and the label its address pool selects on, pins its
+// address with the LB-IPAM annotation, and no two ask for the same one.
+//
+// proved by: dropping loadBalancer from values-kw.yaml fails the class and
+// label checks; dropping edge's loadBalancerIP fails the address check.
 func TestKwPinsDistinctLoadBalancerAddresses(t *testing.T) {
 	values := filepath.Join(repoRoot(t), "deploy", "helm", "novaforge", "values-kw.yaml")
 	seen := map[string]string{}
 	for _, o := range renderChart(t, "-f", values) {
-		ip := o.Metadata.Annotations[lbAnnotation]
-		if o.Kind != "Service" || ip == "" {
+		if o.Kind != "Service" || o.Spec.Type != "LoadBalancer" {
 			continue
 		}
+		if o.Spec.LoadBalancerClass != "io.cilium/l2-announcer" {
+			t.Errorf("%s: loadBalancerClass = %q", o.Metadata.Name, o.Spec.LoadBalancerClass)
+		}
+		if o.Metadata.Labels["lb.kw.watteel.lab/announcer"] != "cilium" {
+			t.Errorf("%s: pool label missing, labels %v", o.Metadata.Name, o.Metadata.Labels)
+		}
+		ip := o.Metadata.Annotations["lbipam.cilium.io/ips"]
 		if other, dup := seen[ip]; dup {
-			t.Errorf("services %s and %s both request %s", other, o.Metadata.Name, ip)
+			t.Errorf("services %s and %s both request %q", other, o.Metadata.Name, ip)
 		}
 		seen[ip] = o.Metadata.Name
 	}
-	if seen["192.168.10.141"] != "nftest-git-platform" {
-		t.Errorf("kw git-platform address = %v, want 192.168.10.141", seen)
+	if seen["192.168.10.141"] != "nftest-git-platform" || seen["192.168.10.128"] != "nftest-edge" {
+		t.Errorf("kw addresses = %v, want git-platform .141 and edge .128", seen)
 	}
 }
