@@ -170,6 +170,10 @@ services:
     schema: gitplatform
     needsRepos: true
     extraServiceType: LoadBalancer
+    # A fixed LoadBalancer address (kube-vip), or empty to let the provider
+    # choose. Clients outside the cluster dial it, so list it in
+    # gitTLS.ipAddresses and lfs.publicURL too.
+    loadBalancerIP: ""
   work-reviews:
     grpcPort: 9093
     schema: work

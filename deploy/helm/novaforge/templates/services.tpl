@@ -251,6 +251,13 @@ metadata:
   labels:
     {{- include "novaforge.labels" $ | nindent 4 }}
     app.kubernetes.io/component: {{ $name }}
+  {{- if and (eq ($svc.extraServiceType | default "") "LoadBalancer") $svc.loadBalancerIP }}
+  annotations:
+    # kube-vip's request for a fixed address. Without it the cloud provider
+    # picks one, and on kw it once handed git-platform an address another
+    # service already held (192.168.10.130, BuildKit's).
+    kube-vip.io/loadbalancerIPs: {{ $svc.loadBalancerIP | quote }}
+  {{- end }}
 spec:
   type: {{ $svc.extraServiceType | default "ClusterIP" }}
   selector:

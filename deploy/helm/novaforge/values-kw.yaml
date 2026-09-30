@@ -2,11 +2,11 @@
 ai: {}
 gitTLS:
   ipAddresses:
-    - 192.168.10.130
+    - 192.168.10.141
 image:
   tag: c8ade67
 lfs:
-  publicURL: https://192.168.10.130:8443
+  publicURL: https://192.168.10.141:8443
 operatorConfigs:
   deployments:
     secretName: ""
@@ -23,6 +23,10 @@ outbound:
       port: 443
       scheme: https
 services:
+  git-platform:
+    # Its own address. The provider once gave it 192.168.10.130, which
+    # BuildKit already held: two kube-vip leaders then each bound the address.
+    loadBalancerIP: 192.168.10.141
   gates:
     analysisImage: 192.168.10.131/novaforge/gate-analysis@sha256:18c5135159600a81a9aa66d2bdc19ceea08c7be762e46c271855f67d12dc3116
 secrets:

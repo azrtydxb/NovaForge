@@ -161,8 +161,9 @@ func TestHelmChartDeploysEveryServiceWithTheEnvironmentItsBinaryReads(t *testing
 type manifest struct {
 	Kind     string `yaml:"kind"`
 	Metadata struct {
-		Name   string            `yaml:"name"`
-		Labels map[string]string `yaml:"labels"`
+		Name        string            `yaml:"name"`
+		Labels      map[string]string `yaml:"labels"`
+		Annotations map[string]string `yaml:"annotations"`
 	} `yaml:"metadata"`
 	StringData map[string]string `yaml:"stringData"`
 	Data       map[string]string `yaml:"data"`
