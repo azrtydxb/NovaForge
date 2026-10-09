@@ -1,0 +1,38 @@
+name: CI
+
+# The minimum a change must pass before it lands: it builds, vets and tests.
+# It exists so the go-ai-sdk bump PRs (go-ai-sdk-bump.yml) have a required
+# check to pass before auto-merge — without one, auto-merge would land a
+# breaking SDK release on main untested.
+#
+# The datastore suites need TEST_DATABASE_URL, TEST_REDIS_URL and the S3
+# variables (hack/env.sh) and t.Skip without them, so here they skip: this
+# proves the module still compiles and its unit tests pass against a new SDK,
+# not the datastore paths — those stay on the kw cluster. The web app is not
+# built; internal/edge/dist ships a .gitkeep so the embed still compiles.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test ./...
