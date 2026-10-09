@@ -44,8 +44,9 @@ jobs:
       #   only deploy/docker/Dockerfile.analysis provides.
       # - TestExecuteRespectsContextCancel fails here, a pre-existing bug and
       #   not an environment gap: on this runner Execute does not return within
-      #   5s of cancelling `sh -c 'sleep 60'` (the context kills sh, but its
-      #   child still holds the output pipe and nothing sets cmd.WaitDelay).
+      #   5s of cancelling `sh -c 'sleep 60'`: the context kills sh, its child
+      #   keeps the output pipe open, and cancelWaitDelay is also 5s, so
+      #   Execute returns just after the test has already given up.
       # gitops tests commit with `git commit-tree`, which needs an identity
       # the runner does not have; the env gives it one.
       - name: go test
