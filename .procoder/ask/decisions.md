@@ -839,3 +839,29 @@ private-key issuance. OpenBao has no enabled audit devices and the reservation
 has no request ID or lease handle. No answer has been received. Independent
 qualification continued; no unknown outcome was cleared. See
 `docs/provider-reconciliation-evidence.md`.
+
+## A DNS name for NovaForge on kw (2026-10-10)
+
+The app is served at bare LoadBalancer addresses: the GUI/API at
+`http://192.168.10.128:8080`, Git at `192.168.10.141`. The cert-manager
+certificate carries the in-cluster service DNS name, not the IP, so an external
+git client hitting `https://192.168.10.141:8443` fails hostname verification
+unless it overrides resolution the way the e2e suite does. Interactive use is
+therefore the browser app, and external HTTPS clones do not verify cleanly.
+
+A proper hostname (for example `novaforge.kw.watteel.lab`, resolvable on the
+LAN) would let cert-manager issue a certificate for that name, making external
+HTTPS clones verify with no client overrides. It is a chart/values change plus a
+DNS entry, so it is the user's call rather than something to do unprompted.
+
+- Add a hostname: DNS entry plus chart values (`publicURL`, the Certificate's
+  DNS name, the edge/git ingress addresses), cert-manager issues for the name,
+  external HTTPS clones verify cleanly. Browser URL becomes the hostname too.
+- Keep bare IPs. Nothing changes; external clients keep needing resolve
+  overrides or the SSH transport.
+- Hostname for Git only, keep the browser on the IP: the smallest change that
+  makes `git clone` verify, without touching how the GUI is reached.
+
+**Decided (2026-10-10): hostname for everything — `novaforge.kw.watteel.lab`.**
+The user chose a proper hostname for both the GUI/API and Git, with cert-manager
+issuing for that name so external HTTPS clones verify cleanly.

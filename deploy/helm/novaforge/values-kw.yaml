@@ -3,10 +3,19 @@ ai: {}
 gitTLS:
   ipAddresses:
     - 192.168.10.141
+  # The LAN names Nexora's watteel.lab zone serves. novaforge.kw.watteel.lab is
+  # the edge (GUI/API) address and git.novaforge.kw.watteel.lab the git
+  # LoadBalancer; both go on the certificate so an external client verifies
+  # whichever it dials, and the IP SAN covers a client that skips DNS.
+  extraDNSNames:
+    - novaforge.kw.watteel.lab
+    - git.novaforge.kw.watteel.lab
 image:
   tag: c8ade67
 lfs:
-  publicURL: https://192.168.10.141:8443
+  # The name, not the IP: a bare address is never in the certificate's DNS SANs,
+  # so advertising it tells every LFS client to fail verification.
+  publicURL: https://git.novaforge.kw.watteel.lab:8443
 operatorConfigs:
   deployments:
     secretName: ""
