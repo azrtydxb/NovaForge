@@ -23,7 +23,14 @@ Zero Trust dashboard, not in any config file here:
 | Public hostname                          | Service                                                          |
 | ---------------------------------------- | ---------------------------------------------------------------- |
 | `novaforge.<zone>` (GUI + REST API)      | `http://novaforge-edge.novaforge.svc.cluster.local:8080`         |
-| `git.novaforge.<zone>` (Git HTTPS + LFS) | `http://novaforge-git-platform.novaforge.svc.cluster.local:8081` |
+| `novaforge-git.<zone>` (Git HTTPS + LFS) | `http://novaforge-git-platform.novaforge.svc.cluster.local:8081` |
+
+The git hostname is a **first-level** subdomain on purpose. Cloudflare's
+Universal SSL certificate covers `<zone>` and `*.<zone>` only, so a two-level
+name such as `git.novaforge.<zone>` resolves at the edge and then fails the TLS
+handshake there — the mapping exists but no edge certificate serves it. Total
+TLS or Advanced Certificate Manager would lift that limit; until then the
+public git name is `novaforge-git.<zone>`.
 
 The origin scheme is deliberately **http**: the tunnel encrypts connector to
 edge, so pointing it at the plaintext in-cluster port is not a exposure, while
