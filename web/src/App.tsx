@@ -11,6 +11,11 @@ import { TopBar } from "./components/TopBar";
 import type { Dashboard, User } from "./lib/types";
 
 import { Home } from "./screens/Home";
+import { Inbox } from "./screens/Inbox";
+import { Runners } from "./screens/Runners";
+import { Rules } from "./screens/Rules";
+import { Insights } from "./screens/Insights";
+import { OrgPeople } from "./screens/OrgPeople";
 import { Work } from "./screens/Work";
 import { WorkItemDetail } from "./screens/WorkItem";
 import { Swarm } from "./screens/Swarm";
@@ -25,6 +30,7 @@ import { Maintenance } from "./screens/Maintenance";
 import { Knowledge } from "./screens/Knowledge";
 import { Graph } from "./screens/Graph";
 import { Orgs } from "./screens/Orgs";
+import { Profile } from "./screens/Profile";
 import { Secrets } from "./screens/Secrets";
 import { Mcp } from "./screens/Mcp";
 import { Settings } from "./screens/Settings";
@@ -42,6 +48,13 @@ export function App() {
   });
 
   useEffect(() => {
+    // The desk greeting and the account menu read the same name this query
+    // reports, stored once rather than fetched twice.
+    if (me.data) {
+      try {
+        localStorage.setItem("nf-user", JSON.stringify(me.data.username));
+      } catch {}
+    }
     if (me.error instanceof ApiError && me.error.status === 401) {
       setStoredToken(null);
       qc.clear();
@@ -119,7 +132,15 @@ function Shell({
         overflow: "hidden",
       }}
     >
-      <Rail exceptionCount={exceptionTotal(dash.data)} />
+      <Rail
+        inboxCount={inboxCount(dash.data)}
+        workCount={workCount(dash.data)}
+        runCount={runCount(dash.data)}
+        deploymentCount={deploymentCount(dash.data)}
+        agentCount={agentCount(dash.data)}
+        maintenanceCount={maintenanceCount(dash.data)}
+        pinned={pinnedRepos(dash.data)}
+      />
       <div
         style={{
           flex: 1,
@@ -145,6 +166,12 @@ function Shell({
           ) : (
             <Routes>
               <Route path="/" element={<Home />} />
+              <Route path="/inbox" element={<Inbox />} />
+              <Route path="/runners" element={<Runners />} />
+              <Route path="/rules" element={<Rules />} />
+              <Route path="/insights" element={<Insights />} />
+              <Route path="/orgs/people" element={<OrgPeople />} />
+              <Route path="/profile" element={<Profile />} />
               <Route path="/work" element={<Work />} />
               <Route path="/work/:repo/:key" element={<WorkItemDetail />} />
               <Route path="/swarm" element={<Swarm />} />
@@ -187,4 +214,33 @@ function Shell({
 export function exceptionTotal(d: Dashboard | undefined): number | null {
   if (!d) return null;
   return d.exceptions?.length ?? 0;
+}
+
+/** The rail's badges read the dashboard the same way the screens behind them
+ * do, so a badge never shows a number its screen would contradict. A missing
+ * count is absent rather than a guessed zero. */
+export function inboxCount(d: Dashboard | undefined): number | null {
+  return exceptionTotal(d);
+}
+export function workCount(_d: Dashboard | undefined): number | null {
+  // The dashboard carries no open-work tally, so the rail shows none rather
+  // than a number the Work screen would contradict.
+  return null;
+}
+export function runCount(_d: Dashboard | undefined): number | null {
+  return null;
+}
+export function deploymentCount(_d: Dashboard | undefined): number | null {
+  return null;
+}
+export function agentCount(d: Dashboard | undefined): number | null {
+  return d ? d.agents_running : null;
+}
+export function maintenanceCount(_d: Dashboard | undefined): number | null {
+  return null;
+}
+export function pinnedRepos(_d: Dashboard | undefined): { name: string }[] {
+  // Pinning is a per-user preference with no endpoint yet; an empty pin list
+  // is the honest rendering.
+  return [];
 }

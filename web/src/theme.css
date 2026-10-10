@@ -102,3 +102,37 @@ dialog::backdrop {
     transition: none !important;
   }
 }
+
+/* The redesign's light theme. Same token names, different values, selected by
+   [data-theme="light"] on <html> — so a screen written against the tokens
+   needs no second set of styles, and the toggle is one attribute write. */
+html[data-theme="light"] {
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --panel-2: #f1f3f6;
+  --fg: #17191f;
+  --fg-dim: #454b58;
+  --fg-muted: #5d6472;
+  --fg-faint: #9aa1af;
+
+  --line: rgba(0, 0, 0, 0.08);
+  --line-2: rgba(0, 0, 0, 0.12);
+  --line-3: rgba(0, 0, 0, 0.16);
+
+  --accent: #3565e0;
+  --accent-soft: rgba(53, 101, 224, 0.12);
+  --accent-softer: rgba(53, 101, 224, 0.08);
+  --link: #2a55c4;
+  --link-hover: #1d3f96;
+
+  --ok: #1a7f4e;
+  --warn: #9a6700;
+  --bad: #c93c34;
+  --info: #2a55c4;
+  --violet: #8a3fc6;
+
+  --ok-bg: #1a7f4e1a;
+  --warn-bg: #9a67001a;
+  --bad-bg: #c93c341a;
+  --info-bg: #3565e01a;
+}

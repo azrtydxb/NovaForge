@@ -64,7 +64,15 @@ export function Panel({
   );
 }
 
-export function PanelHead({ children }: { children: ReactNode }) {
+export function PanelHead({
+  title,
+  count,
+  children,
+}: {
+  title?: string;
+  count?: number;
+  children?: ReactNode;
+}) {
   return (
     <div
       style={{
@@ -78,6 +86,20 @@ export function PanelHead({ children }: { children: ReactNode }) {
         gap: 10,
       }}
     >
+      {title}
+      {typeof count === "number" ? (
+        <span
+          style={{
+            background: "var(--line-2)",
+            color: "#fff",
+            borderRadius: 99,
+            padding: "1px 7px",
+            font: "600 10px var(--mono)",
+          }}
+        >
+          {count}
+        </span>
+      ) : null}
       {children}
     </div>
   );

@@ -1,25 +1,27 @@
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { api, enc } from "../lib/api";
 import { scopedRepos, useWorkspace } from "../lib/workspace";
 import {
   Async,
   Empty,
-  Failed,
   Loading,
   Page,
   Panel,
   PanelHead,
-  StatePill,
 } from "../components/ui";
-import type { Agent, Dashboard, EngineeringRun, WorkItem } from "../lib/types";
+import type { Agent, Dashboard } from "../lib/types";
 
-/** Home is the design's overview: the counts that need a person, what is
- * open, and what the platform has been doing. Every number is the platform's
- * own — nothing here is computed twice in two places. */
+/** Home is the redesign's desk: what needs this person, what the agents are
+ * doing, what happened, and the repositories they touch. Every number is the
+ * platform's own — where the platform has no number, the section says so
+ * rather than rendering a plausible zero. */
+
+const hour = (d: Date) => d.getHours();
+
 export function Home() {
   const w = useWorkspace();
-  const repos = scopedRepos(w);
 
   const dash = useQuery({
     queryKey: ["dashboard", w.org],
@@ -27,9 +29,6 @@ export function Home() {
     enabled: w.org !== null,
   });
 
-  // Section 24's roster: who is working on what, and who is idle. The activity
-  // comes with each agent, so this is one request and the client does not derive
-  // it by cross-referencing runs.
   const agents = useQuery({
     queryKey: ["agents", w.org],
     queryFn: () =>
@@ -38,298 +37,385 @@ export function Home() {
     refetchInterval: 5000,
   });
 
-  const work = useQueries({
-    queries: repos.map((r) => ({
-      queryKey: ["work", w.org, r.name],
-      queryFn: () =>
-        api.get<{ items: WorkItem[] }>(
-          `/api/v1/orgs/${enc(w.org!)}/repos/${enc(r.name)}/work`,
-        ),
-      enabled: w.org !== null,
-    })),
-  });
+  const busy = (agents.data?.agents ?? []).filter(
+    (a) => a.current_run_id !== "",
+  );
 
-  const runs = useQueries({
-    queries: repos.map((r) => ({
-      queryKey: ["runs", w.org, r.name],
-      queryFn: () =>
-        api.get<{ runs: EngineeringRun[] }>(
-          `/api/v1/orgs/${enc(w.org!)}/repos/${enc(r.name)}/runs`,
-        ),
-      enabled: w.org !== null,
-    })),
-  });
+  // The greeting follows the clock of the person looking at it, which is the
+  // only clock that is correct for a greeting.
+  const greeting =
+    hour(new Date()) < 12
+      ? "Good morning"
+      : hour(new Date()) < 18
+        ? "Good afternoon"
+        : "Good evening";
 
-  const openWork = work
-    .flatMap((q, i) =>
-      (q.data?.items ?? []).map((it) => ({ item: it, repo: repos[i]!.name })),
-    )
-    .filter((x) => x.item.state !== "done")
-    .slice(0, 8);
-
-  const openRuns = runs
-    .flatMap((q, i) =>
-      (q.data?.runs ?? []).map((r) => ({ run: r, repo: repos[i]!.name })),
-    )
-    .filter((x) => x.run.state === "open")
-    .slice(0, 6);
+  const needsYou = useMemo(() => {
+    const d = dash.data;
+    if (!d) return [];
+    return d.exceptions;
+  }, [dash.data]);
 
   return (
-    <Page
-      title="Home"
-      subtitle={`${w.org ?? ""}${w.repo ? ` / ${w.repo}` : " — all projects"}`}
-    >
-      <div
-        style={{
-          font: "12px var(--sans)",
-          color: "var(--fg-muted)",
-          marginBottom: 8,
-        }}
-      >
-        Organization-wide totals · {w.org}
-      </div>
+    <Page title="Home">
       <Async query={dash}>
-        {(d) => (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))",
-              gap: 10,
-              marginBottom: 18,
-            }}
-          >
-            <Stat label="Agents running" value={d.agents_running} tone="ok" />
-            <Stat label="Agents blocked" value={d.agents_blocked} tone="bad" />
-            <Stat
-              label="Need human review"
-              value={d.need_human_review}
-              tone="warn"
-            />
-            <Stat
-              label="Architecture decisions"
-              value={d.architecture_decisions}
-              tone="warn"
-            />
-            <Stat label="Gate failures" value={d.gate_failures} tone="bad" />
-            <Stat
-              label="Ready to auto-merge"
-              value={d.ready_to_auto_merge}
-              tone="info"
-            />
-            <Stat
-              label="Completed today"
-              value={d.completed_today}
-              tone="ok"
-              available={d.completed_today_available}
-            />
-          </div>
-        )}
+        {(d) => {
+          const running = d.agents_running;
+          const summary = [
+            needsYou.length > 0
+              ? `${needsYou.length} ${
+                  needsYou.length === 1 ? "thing needs" : "things need"
+                } you`
+              : null,
+            running > 0 ? `${running} agents working` : null,
+          ].filter(Boolean);
+          return (
+            <div style={{ marginBottom: 18 }}>
+              <h1
+                style={{
+                  font: "600 24px var(--sans)",
+                  margin: "0 0 4px",
+                  color: "var(--fg)",
+                }}
+              >
+                {greeting}, {me()}
+              </h1>
+              <p
+                style={{
+                  margin: 0,
+                  font: "13px var(--sans)",
+                  color: "var(--fg-muted)",
+                }}
+              >
+                {summary.length > 0
+                  ? summary.join(" · ")
+                  : "Nothing needs you right now."}
+              </p>
+            </div>
+          );
+        }}
       </Async>
 
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(0,1.2fr) minmax(0,1fr)",
+          gridTemplateColumns: "1.1fr 1fr",
           gap: 14,
+          alignItems: "start",
         }}
       >
-        <Panel>
-          <PanelHead>
-            OPEN WORK
-            <div style={{ flex: 1 }} />
-            <Link to="/work" style={{ font: "11px var(--sans)" }}>
-              all work →
-            </Link>
-          </PanelHead>
-          {work.some((q) => q.isLoading) ? (
-            <Loading />
-          ) : work.some((q) => q.error) ? (
-            <Failed error={work.find((q) => q.error)!.error} />
-          ) : openWork.length === 0 ? (
-            <Empty>
-              No open Work Items in this scope.
-              <br />
-              Create one from the Work screen, or let a maintenance scan propose
-              some.
-            </Empty>
-          ) : (
-            openWork.map(({ item, repo }) => (
-              <Row key={item.id}>
-                <Link
-                  to={`/work/${enc(repo)}/${enc(item.key)}`}
-                  style={{ font: "600 12px var(--mono)" }}
-                >
-                  {item.key}
-                </Link>
-                <span style={{ flex: 1, font: "13px var(--sans)" }}>
-                  {item.goal}
-                </span>
-                <span
-                  style={{ font: "11px var(--mono)", color: "var(--fg-faint)" }}
-                >
-                  {repo}
-                </span>
-                <StatePill state={item.state} />
-              </Row>
-            ))
-          )}
-        </Panel>
-
-        <Panel>
-          <PanelHead>
-            OPEN ENGINEERING RUNS
-            <div style={{ flex: 1 }} />
-            <Link to="/runs" style={{ font: "11px var(--sans)" }}>
-              all runs →
-            </Link>
-          </PanelHead>
-          {runs.some((q) => q.isLoading) ? (
-            <Loading />
-          ) : runs.some((q) => q.error) ? (
-            <Failed error={runs.find((q) => q.error)!.error} />
-          ) : openRuns.length === 0 ? (
-            <Empty>No open Engineering Runs in this scope.</Empty>
-          ) : (
-            openRuns.map(({ run, repo }) => (
-              <Row key={run.id}>
-                <Link
-                  to={`/runs/${enc(repo)}/${run.number}`}
-                  style={{ font: "600 12px var(--mono)" }}
-                >
-                  #{run.number}
-                </Link>
-                <span style={{ flex: 1, font: "13px var(--sans)" }}>
-                  {run.title}
-                </span>
-                <span
-                  style={{ font: "11px var(--mono)", color: "var(--fg-faint)" }}
-                >
-                  {run.author_kind === "agent"
-                    ? run.agent_name || "agent"
-                    : "human"}
-                </span>
-              </Row>
-            ))
-          )}
-        </Panel>
-      </div>
-
-      <Panel style={{ marginTop: 14 }}>
-        <PanelHead>
-          AGENTS
-          <div style={{ flex: 1 }} />
-          <Link to="/agents" style={{ font: "11px var(--sans)" }}>
-            all agents →
-          </Link>
-        </PanelHead>
-        <Async query={agents}>
-          {(list) =>
-            list.agents.length === 0 ? (
-              <Empty>
-                No agents in this organization yet. Create one from the Agents
-                screen to have it pick up Work Items.
-              </Empty>
+        <div style={{ display: "grid", gap: 14 }}>
+          <Panel>
+            <PanelHead title="Needs you" count={needsYou.length}>
+              <Link to="/inbox">Open inbox</Link>
+            </PanelHead>
+            {needsYou.length === 0 ? (
+              <Empty>Nothing needs you.</Empty>
             ) : (
-              <>
-                {list.agents.map((a) => (
-                  <Row key={a.id}>
-                    <Link
-                      to="/agents"
-                      style={{ font: "600 12px var(--sans)", minWidth: 160 }}
-                    >
-                      {a.name}
-                    </Link>
-                    <span
-                      style={{
-                        font: "11px var(--mono)",
-                        color: "var(--fg-faint)",
-                        minWidth: 90,
-                      }}
-                    >
-                      {a.role}
-                    </span>
-                    <span style={{ flex: 1, font: "13px var(--sans)" }}>
-                      {a.current_run_id ? (
-                        <>
-                          working{" "}
-                          <Link
-                            to={`/agent-runs/${enc(a.current_run_id)}`}
-                            style={{ font: "600 12px var(--mono)" }}
-                          >
-                            {a.current_work_item_key || "on an unnamed item"}
-                          </Link>
-                        </>
-                      ) : (
-                        <span style={{ color: "var(--fg-muted)" }}>
-                          {a.enabled ? "idle" : "disabled"}
-                        </span>
-                      )}
-                    </span>
-                    {a.busy_since ? (
-                      <span
-                        style={{
-                          font: "11px var(--mono)",
-                          color: "var(--fg-faint)",
-                        }}
-                        title={a.busy_since}
-                      >
-                        since {new Date(a.busy_since).toLocaleTimeString()}
-                      </span>
-                    ) : null}
-                  </Row>
-                ))}
-              </>
-            )
-          }
-        </Async>
-      </Panel>
+              needsYou.map((e, i) => <ExceptionRow key={i} e={e} />)
+            )}
+          </Panel>
+
+          <Panel>
+            <PanelHead title="Activity">
+              <span
+                title="This deployment records agent activity; the human and
+                release feeds are not published on any stream yet."
+                style={{ font: "11px var(--sans)", color: "var(--fg-faint)" }}
+              >
+                agent activity
+              </span>
+            </PanelHead>
+            <AgentActivity />
+          </Panel>
+        </div>
+
+        <div style={{ display: "grid", gap: 14 }}>
+          <Panel>
+            <PanelHead title="Agents at work" count={busy.length}>
+              <Link to="/agents">All agents</Link>
+            </PanelHead>
+            {busy.length === 0 ? (
+              <Empty>No agents are running.</Empty>
+            ) : (
+              busy.map((a) => <AgentRow key={a.id} a={a} />)
+            )}
+          </Panel>
+
+          <Panel>
+            <PanelHead title="Repositories">
+              <Link to="/repos">View all</Link>
+            </PanelHead>
+            <RepoQuickList />
+          </Panel>
+        </div>
+      </div>
     </Page>
   );
 }
 
-const TONE: Record<string, string> = {
-  ok: "var(--ok)",
-  bad: "var(--bad)",
-  warn: "var(--warn)",
-  info: "var(--link)",
+/** me reads the signed-in username from the session the app already holds, so
+ * the greeting greets the person the header shows. */
+function me(): string {
+  try {
+    const raw = localStorage.getItem("nf-user");
+    return raw ? JSON.parse(raw) : "there";
+  } catch {
+    return "there";
+  }
+}
+
+const REASON_TONE: Record<string, { label: string; color: string }> = {
+  approval: { label: "APPROVE", color: "var(--warn)" },
+  review: { label: "REVIEW", color: "var(--info)" },
+  question: { label: "QUESTION", color: "var(--violet)" },
+  gate: { label: "GATE FAILED", color: "var(--bad)" },
+  maintenance: { label: "PROPOSAL", color: "var(--fg-muted)" },
 };
 
-function Stat({
-  label,
-  value,
-  tone,
-  available = true,
+function ExceptionRow({
+  e,
 }: {
-  label: string;
-  value: number;
-  tone: keyof typeof TONE;
-  /** False when the platform could not say. A zero would claim it knew. */
-  available?: boolean;
+  e: { key: string; title: string; reason: string };
 }) {
+  const tone = REASON_TONE[e.reason] ?? {
+    label: e.reason.toUpperCase(),
+    color: "var(--fg-muted)",
+  };
+  const to = e.reason.startsWith("gate")
+    ? "/ci"
+    : e.key.includes("-")
+      ? `/work/${e.key.split("/")[0] ?? ""}/${e.key}`
+      : "/runs";
   return (
-    <Panel style={{ padding: "13px 14px" }}>
-      <div
+    <div
+      style={{
+        display: "flex",
+        alignItems: "baseline",
+        gap: 10,
+        padding: "8px 0",
+        borderBottom: "1px solid var(--line)",
+      }}
+    >
+      <span
         style={{
-          font: "600 22px var(--sans)",
-          color: available && value > 0 ? TONE[tone] : "var(--fg-muted)",
-        }}
-        title={available ? undefined : "This deployment could not report it"}
-      >
-        {available ? value : "—"}
-      </div>
-      <div
-        style={{
-          font: "11px var(--sans)",
-          color: "var(--fg-muted)",
-          marginTop: 3,
+          flex: "none",
+          font: "600 9px var(--mono)",
+          letterSpacing: ".08em",
+          color: tone.color,
+          width: 92,
         }}
       >
-        {label}
-      </div>
-    </Panel>
+        {tone.label}
+      </span>
+      <span style={{ flex: 1, font: "13px var(--sans)" }}>
+        <Link to={to} style={{ color: "var(--fg)" }}>
+          {e.title}
+        </Link>
+      </span>
+      <Link to={to} style={{ font: "12px var(--sans)", flex: "none" }}>
+        Open
+      </Link>
+    </div>
   );
 }
 
+function AgentRow({ a }: { a: Agent }) {
+  const since = a.busy_since ? timeAgo(a.busy_since) : "";
+  return (
+    <Link
+      to={`/agent-runs/${a.current_run_id}`}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        padding: "8px 0",
+        borderBottom: "1px solid var(--line)",
+        color: "var(--fg)",
+      }}
+    >
+      <span
+        style={{
+          width: 26,
+          height: 26,
+          borderRadius: 99,
+          background: "#2f3542",
+          display: "grid",
+          placeItems: "center",
+          font: "600 11px var(--sans)",
+          color: "#fff",
+          flex: "none",
+        }}
+      >
+        {a.name.slice(0, 1).toUpperCase()}
+      </span>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+          <b style={{ font: "600 13px var(--sans)" }}>{a.name}</b>
+          {a.current_work_item_key ? (
+            <span
+              style={{ font: "11px var(--mono)", color: "var(--fg-muted)" }}
+            >
+              {a.current_work_item_key}
+            </span>
+          ) : null}
+          <span
+            style={{
+              marginLeft: "auto",
+              font: "11px var(--sans)",
+              color: "var(--fg-faint)",
+            }}
+          >
+            {since}
+          </span>
+        </span>
+        <span
+          style={{
+            display: "block",
+            font: "12px var(--sans)",
+            color: "var(--fg-muted)",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {a.role}
+        </span>
+      </span>
+    </Link>
+  );
+}
+
+/** AgentActivity is the platform's own record of what its agents did — the
+ * same list the Agents screen reads. The design also draws human and release
+ * events here; those are not published on any stream in this deployment, so
+ * the panel says which feed it is showing instead of inventing rows. */
+function AgentActivity() {
+  const w = useWorkspace();
+  const repos = scopedRepos(w);
+  const q = useQuery({
+    queryKey: ["agent-activity", w.org],
+    queryFn: () =>
+      api.get<{ agents: Agent[] }>(`/api/v1/orgs/${enc(w.org!)}/agents`),
+    enabled: w.org !== null,
+    refetchInterval: 10_000,
+  });
+  const items = (q.data?.agents ?? []).filter((a) => a.busy_since);
+  if (items.length === 0) return <Empty>No agent activity recorded yet.</Empty>;
+  return (
+    <div>
+      {items.slice(0, 6).map((a) => (
+        <div
+          key={a.id}
+          style={{
+            display: "flex",
+            gap: 8,
+            alignItems: "baseline",
+            padding: "7px 0",
+            borderBottom: "1px solid var(--line)",
+            font: "13px var(--sans)",
+          }}
+        >
+          <b>{a.name}</b>
+          <span style={{ color: "var(--fg-muted)" }}>
+            {a.current_work_item_key
+              ? `working ${a.current_work_item_key}`
+              : "working"}
+          </span>
+          <span
+            style={{
+              marginLeft: "auto",
+              font: "11px var(--sans)",
+              color: "var(--fg-faint)",
+            }}
+          >
+            {timeAgo(a.busy_since)}
+          </span>
+        </div>
+      ))}
+      <div
+        style={{
+          font: "11px var(--sans)",
+          color: "var(--fg-faint)",
+          padding: "8px 0 0",
+        }}
+      >
+        across {repos.length}{" "}
+        {repos.length === 1 ? "repository" : "repositories"} · human and release
+        events are not published in this deployment
+      </div>
+    </div>
+  );
+}
+
+function RepoQuickList() {
+  const w = useWorkspace();
+  const repos = scopedRepos(w);
+  const all = useQuery({
+    queryKey: ["repos", w.org],
+    queryFn: () =>
+      api.get<{ repos: { name: string }[] }>(
+        `/api/v1/orgs/${enc(w.org!)}/repos`,
+      ),
+    enabled: w.org !== null,
+  });
+  const list = all.data?.repos ?? repos;
+  const [find, setFind] = useState("");
+  return (
+    <div>
+      <input
+        value={find}
+        onChange={(e) => setFind(e.target.value)}
+        placeholder="Find a repository"
+        style={{
+          width: "100%",
+          background: "var(--panel-2)",
+          border: "1px solid var(--line)",
+          borderRadius: 7,
+          padding: "6px 10px",
+          font: "12px var(--sans)",
+          color: "var(--fg)",
+          marginBottom: 6,
+        }}
+      />
+      {list
+        .filter((r) => r.name.toLowerCase().includes(find.toLowerCase()))
+        .slice(0, 8)
+        .map((r) => (
+          <Link
+            key={r.name}
+            to={`/repos/${r.name}`}
+            style={{
+              display: "flex",
+              gap: 8,
+              alignItems: "center",
+              padding: "6px 2px",
+              font: "13px var(--sans)",
+              color: "var(--fg)",
+              borderBottom: "1px solid var(--line)",
+            }}
+          >
+            ◆ {r.name}
+          </Link>
+        ))}
+      {all.isLoading ? <Loading /> : null}
+    </div>
+  );
+}
+
+export function timeAgo(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  if (Number.isNaN(ms)) return "";
+  const m = Math.floor(ms / 60_000);
+  if (m < 1) return "now";
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
+}
+
+/** Row is the list row Runs and Work build their tables on. It lives here
+ * because the old Home and the redesign's desk share it. */
 export function Row({ children }: { children: React.ReactNode }) {
   return (
     <div
