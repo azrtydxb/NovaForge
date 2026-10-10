@@ -865,3 +865,15 @@ DNS entry, so it is the user's call rather than something to do unprompted.
 **Decided (2026-10-10): hostname for everything — `novaforge.kw.watteel.lab`.**
 The user chose a proper hostname for both the GUI/API and Git, with cert-manager
 issuing for that name so external HTTPS clones verify cleanly.
+
+**Applied (2026-10-10): Cloudflare tunnel connector deployed.** The user
+provided a tunnel token; the connector runs as `novaforge-cloudflared` in a
+dedicated `novaforge-tunnel` namespace, operator-managed and outside Sync's
+ownership, with the token in a cluster Secret and never in git. The first
+rollout CrashLooped because the token file mounts `0440` and the container ran
+as a uid outside its group; copying the security context the working tunnels on
+this cluster use (non-root 65532 + `fsGroup 65532`) fixed it. Both replicas
+registered four QUIC connections each. The internal side was verified the same
+hour: Sync applied the values change, cert-manager reissued with
+`novaforge.kw.watteel.lab`, `git.novaforge.kw.watteel.lab` and the LoadBalancer
+IP on the certificate, and both names verify against the served chain.
