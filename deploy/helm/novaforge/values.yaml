@@ -21,7 +21,7 @@ datastores:
     storageClass: longhorn
     size: 20Gi
   redis:
-    image: redis:7-alpine
+    image: redis:8
   minio:
     image: minio/minio:latest
     storageClass: longhorn
