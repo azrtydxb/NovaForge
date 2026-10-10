@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
   useMutation,
@@ -17,14 +17,17 @@ import {
   Panel,
   PanelHead,
   StatePill,
+  STATE_COLORS,
 } from "../components/ui";
 import { Dialog, NewButton } from "../components/Dialog";
 import { CancelAgentRun } from "../components/CancelAgentRun";
 import type { Artifact, CIJob, CIRun } from "../lib/types";
+import { timeAgo } from "./Home";
 
-/** CI is the design's run list plus a live log. The log polls rather than
- * streams: the edge exposes a job's log as a read, and a poll that is honest
- * about being a poll is better than a stream that silently stops. */
+/** CI is the design's run list plus the run's pipeline graph and a live log.
+ * The log polls rather than streams: the edge exposes a job's log as a read,
+ * and a poll that is honest about being a poll is better than a stream that
+ * silently stops. */
 export function CI() {
   const w = useWorkspace();
   const repos = scopedRepos(w);
@@ -69,7 +72,7 @@ export function CI() {
 
   return (
     <Page
-      title="CI"
+      title="CI runs"
       subtitle="Every job runs in its own Kubernetes pod"
       actions={
         repos.length > 0 ? (
@@ -112,10 +115,11 @@ export function CI() {
           display: "grid",
           gridTemplateColumns: "minmax(0,360px) minmax(0,1fr)",
           gap: 14,
+          alignItems: "start",
         }}
       >
         <Panel>
-          <PanelHead>RUNS</PanelHead>
+          <PanelHead title="RUNS" count={rows.length} />
           {loading ? (
             <Loading />
           ) : listError ? (
@@ -130,61 +134,100 @@ export function CI() {
               schedules one.
             </Empty>
           ) : (
-            rows.map(({ run, repo }) => {
-              const active = current?.id === run.id;
-              return (
-                <button
-                  key={run.id}
-                  onClick={() => setSelected({ repo, id: run.id })}
+            // Runs are grouped by the day they were created, the way the
+            // design's lists are: a dense row under a labelled section.
+            groupByDay(rows).map(([label, group]) => (
+              <div key={label}>
+                <div
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    width: "100%",
-                    padding: "10px 14px",
-                    border: "none",
-                    borderBottom: "1px solid var(--line)",
-                    background: active ? "rgba(77,127,255,.1)" : "transparent",
-                    cursor: "pointer",
-                    textAlign: "left",
+                    padding: "9px 14px 3px",
+                    font: "600 9px var(--mono)",
+                    letterSpacing: ".1em",
+                    color: "var(--fg-faint)",
                   }}
                 >
-                  <span
-                    style={{
-                      width: 7,
-                      height: 7,
-                      borderRadius: 99,
-                      flex: "none",
-                      background:
-                        run.status === "success"
-                          ? "var(--ok)"
-                          : run.status === "failure"
-                            ? "var(--bad)"
-                            : "var(--fg-muted)",
-                      animation:
-                        run.status === "running"
-                          ? "nfpulse 1.6s infinite"
-                          : "none",
-                    }}
-                  />
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ font: "13px var(--sans)" }}>
-                      {run.ref.replace("refs/heads/", "")}
-                    </div>
-                    <div
+                  {label}
+                </div>
+                {group.map(({ run, repo }) => {
+                  const active = current?.id === run.id;
+                  return (
+                    <button
+                      key={run.id}
+                      onClick={() => setSelected({ repo, id: run.id })}
                       style={{
-                        font: "11px var(--mono)",
-                        color: "var(--fg-faint)",
-                        marginTop: 2,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        width: "100%",
+                        padding: "9px 14px",
+                        border: "none",
+                        borderLeft: `2px solid ${active ? "var(--accent)" : "transparent"}`,
+                        borderBottom: "1px solid var(--line)",
+                        background: active ? "var(--accent-softer)" : "none",
+                        cursor: "pointer",
+                        textAlign: "left",
                       }}
                     >
-                      {run.commit_sha.slice(0, 8)} · {repo}
-                    </div>
-                  </span>
-                  <StatePill state={run.status} />
-                </button>
-              );
-            })
+                      <span
+                        aria-hidden
+                        style={{
+                          width: 7,
+                          height: 7,
+                          borderRadius: 99,
+                          flex: "none",
+                          background: runDot(run.status),
+                          animation:
+                            run.status === "running"
+                              ? "nfpulse 1.6s infinite"
+                              : "none",
+                        }}
+                      />
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <span
+                          style={{
+                            display: "flex",
+                            gap: 8,
+                            alignItems: "baseline",
+                          }}
+                        >
+                          <span
+                            style={{
+                              font: "600 13px var(--sans)",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {run.ref.replace("refs/heads/", "")}
+                          </span>
+                          <span
+                            style={{
+                              marginLeft: "auto",
+                              font: "11px var(--sans)",
+                              color: "var(--fg-faint)",
+                              flex: "none",
+                            }}
+                          >
+                            {timeAgo(run.created_at)}
+                          </span>
+                        </span>
+                        <span
+                          style={{
+                            display: "block",
+                            font: "11px var(--mono)",
+                            color: "var(--fg-faint)",
+                            marginTop: 2,
+                          }}
+                        >
+                          {run.commit_sha.slice(0, 8)} · {repo}
+                        </span>
+                      </span>
+                      <StatePill state={run.status} />
+                    </button>
+                  );
+                })}
+              </div>
+            ))
           )}
         </Panel>
 
@@ -203,6 +246,43 @@ export function CI() {
       </div>
     </Page>
   );
+}
+
+/** groupByDay buckets sorted (newest first) rows into day-labelled groups,
+ * preserving the order of both. */
+function groupByDay<T extends { run: CIRun }>(rows: T[]): [string, T[]][] {
+  const groups: [string, T[]][] = [];
+  let currentLabel: string | null = null;
+  for (const row of rows) {
+    const label = dayLabel(row.run.created_at);
+    if (label !== currentLabel) {
+      groups.push([label, [row]]);
+      currentLabel = label;
+    } else {
+      groups[groups.length - 1]![1].push(row);
+    }
+  }
+  return groups;
+}
+
+function dayLabel(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "EARLIER";
+  const startOf = (x: Date) =>
+    new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((startOf(new Date()) - startOf(d)) / 86_400_000);
+  if (days === 0) return "TODAY";
+  if (days === 1) return "YESTERDAY";
+  return d
+    .toLocaleDateString(undefined, { month: "short", day: "numeric" })
+    .toUpperCase();
+}
+
+/** runDot maps a run status onto its dot colour, the one place this screen
+ * decides it, so a list of dots reads as one scale. */
+function runDot(status: string): string {
+  const [, fg] = STATE_COLORS[status] ?? ["", "var(--fg-muted)"];
+  return fg;
 }
 
 function RunDetail({
@@ -277,101 +357,111 @@ function RunDetail({
       .catch((e: unknown) => setDownloadError(e));
   };
 
+  // Job counts come from the run's own jobs — they are derived from data the
+  // platform sent, never summarised from what a status alone implies.
+  const tally = jobs.reduce<Record<string, number>>((m, j) => {
+    m[j.status] = (m[j.status] ?? 0) + 1;
+    return m;
+  }, {});
+  const summary = Object.entries(tally)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([status, n]) => `${n} ${status}`)
+    .join(" · ");
+
   return (
     <div
       style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}
     >
       <Panel>
-        <PanelHead>JOBS</PanelHead>
+        {run.isLoading ? (
+          <Loading />
+        ) : run.error ? (
+          <Failed error={run.error} />
+        ) : run.data ? (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "baseline",
+              gap: 10,
+              flexWrap: "wrap",
+              padding: "13px 14px",
+            }}
+          >
+            <span style={{ font: "600 15px var(--sans)" }}>
+              {run.data.run.ref.replace("refs/heads/", "")}
+            </span>
+            <span style={{ font: "12px var(--mono)", color: "var(--fg-dim)" }}>
+              {run.data.run.commit_sha.slice(0, 8)}
+            </span>
+            <span
+              style={{ font: "11px var(--mono)", color: "var(--fg-faint)" }}
+            >
+              {repo}
+            </span>
+            <span
+              style={{ font: "11px var(--sans)", color: "var(--fg-faint)" }}
+            >
+              {timeAgo(run.data.run.created_at)}
+            </span>
+            <span style={{ flex: 1 }} />
+            {summary ? (
+              <span
+                style={{ font: "11px var(--mono)", color: "var(--fg-muted)" }}
+              >
+                {jobs.length} {jobs.length === 1 ? "job" : "jobs"} · {summary}
+              </span>
+            ) : null}
+            <StatePill state={run.data.run.status} />
+          </div>
+        ) : null}
+      </Panel>
+
+      <Panel>
+        <PanelHead title="PIPELINE" count={jobs.length}>
+          <span
+            title="Jobs are drawn as the workflow declared them. The run's
+            response does not carry the needs edges between jobs, so no
+            dependency arrows are drawn: nodes without invented edges."
+            style={{ font: "11px var(--sans)", color: "var(--fg-faint)" }}
+          >
+            jobs of this run
+          </span>
+        </PanelHead>
         <Async query={run}>
           {(d) =>
             d.jobs.length === 0 ? (
-              <Empty>This run declared no jobs.</Empty>
+              <Empty>
+                {d.run.status === "queued"
+                  ? "This run has no jobs yet."
+                  : "This run declared no jobs."}
+              </Empty>
             ) : (
-              <>
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 10,
+                  padding: 14,
+                }}
+              >
                 {d.jobs.map((j) => (
-                  <div
+                  <PipelineNode
                     key={j.id}
-                    role="button"
-                    tabIndex={0}
-                    aria-pressed={selectedJob?.id === j.id}
-                    title="Show this job's log and artifacts"
-                    onClick={() => setPickedJob(j.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        setPickedJob(j.id);
-                      }
-                    }}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 11,
-                      padding: "9px 14px",
-                      borderBottom: "1px solid var(--line)",
-                      cursor: "pointer",
-                      background:
-                        selectedJob?.id === j.id
-                          ? "rgba(77,127,255,.1)"
-                          : "transparent",
-                    }}
-                  >
-                    <span style={{ flex: 1, font: "13px var(--sans)" }}>
-                      {j.name}
-                      {j.agent_role ? (
-                        <span
-                          style={{
-                            marginLeft: 8,
-                            font: "10px var(--mono)",
-                            color: "var(--accent)",
-                          }}
-                        >
-                          agent · {j.agent_role}
-                        </span>
-                      ) : null}
-                      {j.work_item_key ? (
-                        <Link
-                          to={`/work/${enc(repo)}/${enc(j.work_item_key)}`}
-                          style={{
-                            marginLeft: 8,
-                            font: "11px var(--mono)",
-                          }}
-                        >
-                          {j.work_item_key}
-                        </Link>
-                      ) : null}
-                    </span>
-                    <span
-                      style={{
-                        font: "11px var(--mono)",
-                        color: "var(--fg-faint)",
-                        maxWidth: 260,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {j.detail}
-                    </span>
-                    {/* An agent job executes as an Agent Run; while the job
-                        is running, that run is the thing to stop. The CI
-                        worker settles the job as cancelled once it sees the
-                        run's state. */}
-                    {j.agent_run_id && j.status === "running" ? (
-                      <CancelAgentRun org={org} runId={j.agent_run_id} />
-                    ) : null}
-                    <StatePill state={j.status} />
-                  </div>
+                    job={j}
+                    repo={repo}
+                    org={org}
+                    selected={selectedJob?.id === j.id}
+                    onPick={() => setPickedJob(j.id)}
+                  />
                 ))}
-              </>
+              </div>
             )
           }
         </Async>
       </Panel>
 
       <Panel style={{ minWidth: 0 }}>
-        <PanelHead>
-          LOG
+        <PanelHead title="LOG">
           {selectedJob ? (
             <span style={{ font: "11px var(--mono)", color: "var(--fg-dim)" }}>
               {selectedJob.name}
@@ -426,7 +516,7 @@ function RunDetail({
       </Panel>
 
       <Panel>
-        <PanelHead>ARTIFACTS</PanelHead>
+        <PanelHead title="ARTIFACTS" />
         {downloadError ? (
           <div style={{ padding: "9px 14px" }}>
             <Failed error={downloadError} />
@@ -490,6 +580,142 @@ function RunDetail({
           </Async>
         )}
       </Panel>
+    </div>
+  );
+}
+
+/** PipelineNode is one job drawn as a node of the run's pipeline. The node is
+ * a div with the button role rather than a button: an agent job executing as
+ * a running Agent Run carries a Cancel control, and a button inside a button
+ * is HTML the browser will not forgive. */
+function PipelineNode({
+  job,
+  org,
+  repo,
+  selected,
+  onPick,
+}: {
+  job: CIJob;
+  org: string;
+  repo: string;
+  selected: boolean;
+  onPick: () => void;
+}) {
+  const [, fg] = STATE_COLORS[job.status] ?? ["", "var(--fg-muted)"];
+  const live = job.status === "running" || job.status === "pending";
+  const badges: ReactNode[] = [];
+  if (job.agent_role)
+    badges.push(
+      <span
+        key="agent"
+        style={{
+          font: "600 9px var(--mono)",
+          letterSpacing: ".06em",
+          color: "var(--accent)",
+        }}
+      >
+        AGENT · {job.agent_role.toUpperCase()}
+      </span>,
+    );
+  if (job.work_item_key)
+    badges.push(
+      <Link
+        key="wi"
+        to={`/work/${enc(repo)}/${enc(job.work_item_key)}`}
+        style={{ font: "11px var(--mono)" }}
+      >
+        {job.work_item_key}
+      </Link>,
+    );
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-pressed={selected}
+      title="Show this job's log and artifacts"
+      onClick={onPick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onPick();
+        }
+      }}
+      style={{
+        minWidth: 172,
+        background: "var(--panel-2)",
+        border: `1px solid ${selected ? "var(--accent)" : "var(--line-2)"}`,
+        borderRadius: 8,
+        cursor: "pointer",
+        overflow: "hidden",
+      }}
+    >
+      <div style={{ height: 2, background: fg, opacity: live ? 1 : 0.55 }} />
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "9px 11px 3px",
+        }}
+      >
+        <span
+          aria-hidden
+          style={{
+            width: 7,
+            height: 7,
+            borderRadius: 99,
+            flex: "none",
+            background: fg,
+            animation: live ? "nfpulse 1.6s infinite" : "none",
+          }}
+        />
+        <span
+          style={{
+            font: "600 12px var(--sans)",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {job.name}
+        </span>
+        <span style={{ flex: 1 }} />
+        <StatePill state={job.status} />
+      </div>
+      {job.detail ? (
+        <div
+          style={{
+            padding: "0 11px",
+            font: "11px var(--mono)",
+            color: "var(--fg-faint)",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {job.detail}
+        </div>
+      ) : null}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "6px 11px 10px",
+          flexWrap: "wrap",
+        }}
+      >
+        {badges}
+        {/* An agent job executes as an Agent Run; while the job is running,
+            that run is the thing to stop. The CI worker settles the job as
+            cancelled once it sees the run's state. */}
+        {job.agent_run_id && job.status === "running" ? (
+          <span style={{ marginLeft: "auto" }}>
+            <CancelAgentRun org={org} runId={job.agent_run_id} />
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 }

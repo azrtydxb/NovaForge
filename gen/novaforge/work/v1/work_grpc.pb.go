@@ -36,6 +36,12 @@ const (
 	WorkService_ApproveMaintenanceProposal_FullMethodName = "/novaforge.work.v1.WorkService/ApproveMaintenanceProposal"
 	WorkService_DismissMaintenanceProposal_FullMethodName = "/novaforge.work.v1.WorkService/DismissMaintenanceProposal"
 	WorkService_ScanRepository_FullMethodName             = "/novaforge.work.v1.WorkService/ScanRepository"
+	WorkService_ListInbox_FullMethodName                  = "/novaforge.work.v1.WorkService/ListInbox"
+	WorkService_InboxUnread_FullMethodName                = "/novaforge.work.v1.WorkService/InboxUnread"
+	WorkService_InboxDone_FullMethodName                  = "/novaforge.work.v1.WorkService/InboxDone"
+	WorkService_InboxSnooze_FullMethodName                = "/novaforge.work.v1.WorkService/InboxSnooze"
+	WorkService_InboxSave_FullMethodName                  = "/novaforge.work.v1.WorkService/InboxSave"
+	WorkService_PublishInboxItem_FullMethodName           = "/novaforge.work.v1.WorkService/PublishInboxItem"
 )
 
 // WorkServiceClient is the client API for WorkService service.
@@ -63,6 +69,12 @@ type WorkServiceClient interface {
 	ApproveMaintenanceProposal(ctx context.Context, in *ApproveMaintenanceProposalRequest, opts ...grpc.CallOption) (*ApproveMaintenanceProposalResponse, error)
 	DismissMaintenanceProposal(ctx context.Context, in *DismissMaintenanceProposalRequest, opts ...grpc.CallOption) (*DismissMaintenanceProposalResponse, error)
 	ScanRepository(ctx context.Context, in *ScanRepositoryRequest, opts ...grpc.CallOption) (*ScanRepositoryResponse, error)
+	ListInbox(ctx context.Context, in *ListInboxRequest, opts ...grpc.CallOption) (*ListInboxResponse, error)
+	InboxUnread(ctx context.Context, in *InboxUnreadRequest, opts ...grpc.CallOption) (*InboxUnreadResponse, error)
+	InboxDone(ctx context.Context, in *InboxDoneRequest, opts ...grpc.CallOption) (*InboxDoneResponse, error)
+	InboxSnooze(ctx context.Context, in *InboxSnoozeRequest, opts ...grpc.CallOption) (*InboxSnoozeResponse, error)
+	InboxSave(ctx context.Context, in *InboxSaveRequest, opts ...grpc.CallOption) (*InboxSaveResponse, error)
+	PublishInboxItem(ctx context.Context, in *PublishInboxItemRequest, opts ...grpc.CallOption) (*PublishInboxItemResponse, error)
 }
 
 type workServiceClient struct {
@@ -243,6 +255,66 @@ func (c *workServiceClient) ScanRepository(ctx context.Context, in *ScanReposito
 	return out, nil
 }
 
+func (c *workServiceClient) ListInbox(ctx context.Context, in *ListInboxRequest, opts ...grpc.CallOption) (*ListInboxResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListInboxResponse)
+	err := c.cc.Invoke(ctx, WorkService_ListInbox_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *workServiceClient) InboxUnread(ctx context.Context, in *InboxUnreadRequest, opts ...grpc.CallOption) (*InboxUnreadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(InboxUnreadResponse)
+	err := c.cc.Invoke(ctx, WorkService_InboxUnread_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *workServiceClient) InboxDone(ctx context.Context, in *InboxDoneRequest, opts ...grpc.CallOption) (*InboxDoneResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(InboxDoneResponse)
+	err := c.cc.Invoke(ctx, WorkService_InboxDone_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *workServiceClient) InboxSnooze(ctx context.Context, in *InboxSnoozeRequest, opts ...grpc.CallOption) (*InboxSnoozeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(InboxSnoozeResponse)
+	err := c.cc.Invoke(ctx, WorkService_InboxSnooze_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *workServiceClient) InboxSave(ctx context.Context, in *InboxSaveRequest, opts ...grpc.CallOption) (*InboxSaveResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(InboxSaveResponse)
+	err := c.cc.Invoke(ctx, WorkService_InboxSave_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *workServiceClient) PublishInboxItem(ctx context.Context, in *PublishInboxItemRequest, opts ...grpc.CallOption) (*PublishInboxItemResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PublishInboxItemResponse)
+	err := c.cc.Invoke(ctx, WorkService_PublishInboxItem_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // WorkServiceServer is the server API for WorkService service.
 // All implementations should embed UnimplementedWorkServiceServer
 // for forward compatibility.
@@ -268,6 +340,12 @@ type WorkServiceServer interface {
 	ApproveMaintenanceProposal(context.Context, *ApproveMaintenanceProposalRequest) (*ApproveMaintenanceProposalResponse, error)
 	DismissMaintenanceProposal(context.Context, *DismissMaintenanceProposalRequest) (*DismissMaintenanceProposalResponse, error)
 	ScanRepository(context.Context, *ScanRepositoryRequest) (*ScanRepositoryResponse, error)
+	ListInbox(context.Context, *ListInboxRequest) (*ListInboxResponse, error)
+	InboxUnread(context.Context, *InboxUnreadRequest) (*InboxUnreadResponse, error)
+	InboxDone(context.Context, *InboxDoneRequest) (*InboxDoneResponse, error)
+	InboxSnooze(context.Context, *InboxSnoozeRequest) (*InboxSnoozeResponse, error)
+	InboxSave(context.Context, *InboxSaveRequest) (*InboxSaveResponse, error)
+	PublishInboxItem(context.Context, *PublishInboxItemRequest) (*PublishInboxItemResponse, error)
 }
 
 // UnimplementedWorkServiceServer should be embedded to have
@@ -327,6 +405,24 @@ func (UnimplementedWorkServiceServer) DismissMaintenanceProposal(context.Context
 }
 func (UnimplementedWorkServiceServer) ScanRepository(context.Context, *ScanRepositoryRequest) (*ScanRepositoryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ScanRepository not implemented")
+}
+func (UnimplementedWorkServiceServer) ListInbox(context.Context, *ListInboxRequest) (*ListInboxResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListInbox not implemented")
+}
+func (UnimplementedWorkServiceServer) InboxUnread(context.Context, *InboxUnreadRequest) (*InboxUnreadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method InboxUnread not implemented")
+}
+func (UnimplementedWorkServiceServer) InboxDone(context.Context, *InboxDoneRequest) (*InboxDoneResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method InboxDone not implemented")
+}
+func (UnimplementedWorkServiceServer) InboxSnooze(context.Context, *InboxSnoozeRequest) (*InboxSnoozeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method InboxSnooze not implemented")
+}
+func (UnimplementedWorkServiceServer) InboxSave(context.Context, *InboxSaveRequest) (*InboxSaveResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method InboxSave not implemented")
+}
+func (UnimplementedWorkServiceServer) PublishInboxItem(context.Context, *PublishInboxItemRequest) (*PublishInboxItemResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PublishInboxItem not implemented")
 }
 func (UnimplementedWorkServiceServer) testEmbeddedByValue() {}
 
@@ -654,6 +750,114 @@ func _WorkService_ScanRepository_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _WorkService_ListInbox_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListInboxRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkServiceServer).ListInbox(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WorkService_ListInbox_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkServiceServer).ListInbox(ctx, req.(*ListInboxRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WorkService_InboxUnread_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InboxUnreadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkServiceServer).InboxUnread(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WorkService_InboxUnread_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkServiceServer).InboxUnread(ctx, req.(*InboxUnreadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WorkService_InboxDone_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InboxDoneRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkServiceServer).InboxDone(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WorkService_InboxDone_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkServiceServer).InboxDone(ctx, req.(*InboxDoneRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WorkService_InboxSnooze_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InboxSnoozeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkServiceServer).InboxSnooze(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WorkService_InboxSnooze_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkServiceServer).InboxSnooze(ctx, req.(*InboxSnoozeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WorkService_InboxSave_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InboxSaveRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkServiceServer).InboxSave(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WorkService_InboxSave_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkServiceServer).InboxSave(ctx, req.(*InboxSaveRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WorkService_PublishInboxItem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PublishInboxItemRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkServiceServer).PublishInboxItem(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WorkService_PublishInboxItem_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkServiceServer).PublishInboxItem(ctx, req.(*PublishInboxItemRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // WorkService_ServiceDesc is the grpc.ServiceDesc for WorkService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -728,6 +932,30 @@ var WorkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ScanRepository",
 			Handler:    _WorkService_ScanRepository_Handler,
+		},
+		{
+			MethodName: "ListInbox",
+			Handler:    _WorkService_ListInbox_Handler,
+		},
+		{
+			MethodName: "InboxUnread",
+			Handler:    _WorkService_InboxUnread_Handler,
+		},
+		{
+			MethodName: "InboxDone",
+			Handler:    _WorkService_InboxDone_Handler,
+		},
+		{
+			MethodName: "InboxSnooze",
+			Handler:    _WorkService_InboxSnooze_Handler,
+		},
+		{
+			MethodName: "InboxSave",
+			Handler:    _WorkService_InboxSave_Handler,
+		},
+		{
+			MethodName: "PublishInboxItem",
+			Handler:    _WorkService_PublishInboxItem_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

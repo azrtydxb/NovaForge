@@ -74,7 +74,7 @@ export function Secrets() {
 
   return (
     <Page
-      title="Secrets"
+      title="Secrets & leases"
       subtitle="Credentials are brokered to a run for a bounded time, never handed to an agent"
       actions={
         w.org !== null ? (

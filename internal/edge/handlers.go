@@ -24,6 +24,7 @@ func Handlers(cfg Config) map[string]http.HandlerFunc {
 	if cfg.Git != nil {
 		addGitHandlers(h, cfg.Git)
 		addWorkHandlers(h, cfg.Git, cfg.Work, cfg.Reviews)
+		addInboxHandlers(h, cfg.Work, cfg.Git)
 		addCIHandlers(h, cfg.Git, cfg.CI)
 		addReleaseHandlers(h, cfg.Git)
 		addCollaboratorHandlers(h, cfg.Git)

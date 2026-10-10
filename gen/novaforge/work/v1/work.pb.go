@@ -2252,6 +2252,794 @@ func (*ReleaseExecutionResponse) Descriptor() ([]byte, []int) {
 	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{37}
 }
 
+// InboxNotification is one thing the platform observed that a person should
+// see. It mirrors a row in work.inbox_notifications: rows are per-recipient,
+// so done, saved and snoozed are each reader's own state.
+type InboxNotification struct {
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Id          string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	OrgId       string                 `protobuf:"bytes,2,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	RecipientId string                 `protobuf:"bytes,3,opt,name=recipient_id,json=recipientId,proto3" json:"recipient_id,omitempty"`
+	RepoId      string                 `protobuf:"bytes,4,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	// reason is one of: review_requested, approval, gate_failure, maintenance,
+	// mention, agent_question. A reason with no publisher never appears.
+	Reason string `protobuf:"bytes,5,opt,name=reason,proto3" json:"reason,omitempty"`
+	// ref is display text for the subject: "run #212", "NF-318".
+	Ref       string `protobuf:"bytes,6,opt,name=ref,proto3" json:"ref,omitempty"`
+	Title     string `protobuf:"bytes,7,opt,name=title,proto3" json:"title,omitempty"`
+	Body      string `protobuf:"bytes,8,opt,name=body,proto3" json:"body,omitempty"`
+	ActorId   string `protobuf:"bytes,9,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"`
+	ActorKind string `protobuf:"bytes,10,opt,name=actor_kind,json=actorKind,proto3" json:"actor_kind,omitempty"`
+	ActorName string `protobuf:"bytes,11,opt,name=actor_name,json=actorName,proto3" json:"actor_name,omitempty"`
+	State     string `protobuf:"bytes,12,opt,name=state,proto3" json:"state,omitempty"`
+	// RFC3339; empty when the row is not snoozed.
+	SnoozedUntil  string `protobuf:"bytes,13,opt,name=snoozed_until,json=snoozedUntil,proto3" json:"snoozed_until,omitempty"`
+	CreatedAt     string `protobuf:"bytes,14,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InboxNotification) Reset() {
+	*x = InboxNotification{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InboxNotification) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InboxNotification) ProtoMessage() {}
+
+func (x *InboxNotification) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InboxNotification.ProtoReflect.Descriptor instead.
+func (*InboxNotification) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *InboxNotification) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *InboxNotification) GetOrgId() string {
+	if x != nil {
+		return x.OrgId
+	}
+	return ""
+}
+
+func (x *InboxNotification) GetRecipientId() string {
+	if x != nil {
+		return x.RecipientId
+	}
+	return ""
+}
+
+func (x *InboxNotification) GetRepoId() string {
+	if x != nil {
+		return x.RepoId
+	}
+	return ""
+}
+
+func (x *InboxNotification) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *InboxNotification) GetRef() string {
+	if x != nil {
+		return x.Ref
+	}
+	return ""
+}
+
+func (x *InboxNotification) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *InboxNotification) GetBody() string {
+	if x != nil {
+		return x.Body
+	}
+	return ""
+}
+
+func (x *InboxNotification) GetActorId() string {
+	if x != nil {
+		return x.ActorId
+	}
+	return ""
+}
+
+func (x *InboxNotification) GetActorKind() string {
+	if x != nil {
+		return x.ActorKind
+	}
+	return ""
+}
+
+func (x *InboxNotification) GetActorName() string {
+	if x != nil {
+		return x.ActorName
+	}
+	return ""
+}
+
+func (x *InboxNotification) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *InboxNotification) GetSnoozedUntil() string {
+	if x != nil {
+		return x.SnoozedUntil
+	}
+	return ""
+}
+
+func (x *InboxNotification) GetCreatedAt() string {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return ""
+}
+
+type ListInboxRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Empty means the live inbox ("inbox" state). "saved" and "done" select the
+	// design's other two tabs.
+	State         string `protobuf:"bytes,1,opt,name=state,proto3" json:"state,omitempty"`
+	Reason        string `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
+	RepoId        string `protobuf:"bytes,3,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	Limit         int32  `protobuf:"varint,4,opt,name=limit,proto3" json:"limit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListInboxRequest) Reset() {
+	*x = ListInboxRequest{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListInboxRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListInboxRequest) ProtoMessage() {}
+
+func (x *ListInboxRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListInboxRequest.ProtoReflect.Descriptor instead.
+func (*ListInboxRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *ListInboxRequest) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *ListInboxRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *ListInboxRequest) GetRepoId() string {
+	if x != nil {
+		return x.RepoId
+	}
+	return ""
+}
+
+func (x *ListInboxRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+type ListInboxResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Notifications []*InboxNotification   `protobuf:"bytes,1,rep,name=notifications,proto3" json:"notifications,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListInboxResponse) Reset() {
+	*x = ListInboxResponse{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListInboxResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListInboxResponse) ProtoMessage() {}
+
+func (x *ListInboxResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListInboxResponse.ProtoReflect.Descriptor instead.
+func (*ListInboxResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{40}
+}
+
+func (x *ListInboxResponse) GetNotifications() []*InboxNotification {
+	if x != nil {
+		return x.Notifications
+	}
+	return nil
+}
+
+// InboxUnread counts the caller's live notifications across the caller's
+// organizations. The header badge is one number and cannot know which org a
+// row came from; the count's recipient predicate is the caller's own id, so
+// it returns nobody else's mail.
+type InboxUnreadRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InboxUnreadRequest) Reset() {
+	*x = InboxUnreadRequest{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InboxUnreadRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InboxUnreadRequest) ProtoMessage() {}
+
+func (x *InboxUnreadRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InboxUnreadRequest.ProtoReflect.Descriptor instead.
+func (*InboxUnreadRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{41}
+}
+
+type InboxUnreadResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Unread        int32                  `protobuf:"varint,1,opt,name=unread,proto3" json:"unread,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InboxUnreadResponse) Reset() {
+	*x = InboxUnreadResponse{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InboxUnreadResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InboxUnreadResponse) ProtoMessage() {}
+
+func (x *InboxUnreadResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InboxUnreadResponse.ProtoReflect.Descriptor instead.
+func (*InboxUnreadResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *InboxUnreadResponse) GetUnread() int32 {
+	if x != nil {
+		return x.Unread
+	}
+	return 0
+}
+
+type InboxDoneRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InboxDoneRequest) Reset() {
+	*x = InboxDoneRequest{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InboxDoneRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InboxDoneRequest) ProtoMessage() {}
+
+func (x *InboxDoneRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InboxDoneRequest.ProtoReflect.Descriptor instead.
+func (*InboxDoneRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *InboxDoneRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+type InboxDoneResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InboxDoneResponse) Reset() {
+	*x = InboxDoneResponse{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InboxDoneResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InboxDoneResponse) ProtoMessage() {}
+
+func (x *InboxDoneResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InboxDoneResponse.ProtoReflect.Descriptor instead.
+func (*InboxDoneResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{44}
+}
+
+type InboxSnoozeRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// RFC3339. A snoozed row returns to the inbox by itself after this.
+	Until         string `protobuf:"bytes,2,opt,name=until,proto3" json:"until,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InboxSnoozeRequest) Reset() {
+	*x = InboxSnoozeRequest{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InboxSnoozeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InboxSnoozeRequest) ProtoMessage() {}
+
+func (x *InboxSnoozeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InboxSnoozeRequest.ProtoReflect.Descriptor instead.
+func (*InboxSnoozeRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *InboxSnoozeRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *InboxSnoozeRequest) GetUntil() string {
+	if x != nil {
+		return x.Until
+	}
+	return ""
+}
+
+type InboxSnoozeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InboxSnoozeResponse) Reset() {
+	*x = InboxSnoozeResponse{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InboxSnoozeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InboxSnoozeResponse) ProtoMessage() {}
+
+func (x *InboxSnoozeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InboxSnoozeResponse.ProtoReflect.Descriptor instead.
+func (*InboxSnoozeResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{46}
+}
+
+type InboxSaveRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Saved         bool                   `protobuf:"varint,2,opt,name=saved,proto3" json:"saved,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InboxSaveRequest) Reset() {
+	*x = InboxSaveRequest{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InboxSaveRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InboxSaveRequest) ProtoMessage() {}
+
+func (x *InboxSaveRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InboxSaveRequest.ProtoReflect.Descriptor instead.
+func (*InboxSaveRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *InboxSaveRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *InboxSaveRequest) GetSaved() bool {
+	if x != nil {
+		return x.Saved
+	}
+	return false
+}
+
+type InboxSaveResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InboxSaveResponse) Reset() {
+	*x = InboxSaveResponse{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InboxSaveResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InboxSaveResponse) ProtoMessage() {}
+
+func (x *InboxSaveResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InboxSaveResponse.ProtoReflect.Descriptor instead.
+func (*InboxSaveResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{48}
+}
+
+// PublishInboxItem is the one ingest path for notifications, used by the
+// platform's other services (the gates service raising an approval request).
+// The org is a request field here — a publisher names the run's organization
+// — but the RPC admits only a platform worker or a caller acting inside that
+// same organization, and the recipient list is the publisher's own record of
+// who it observed, so no caller can address another organization's users.
+type PublishInboxItemRequest struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	OrgId     string                 `protobuf:"bytes,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	RepoId    string                 `protobuf:"bytes,2,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	Reason    string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	Ref       string                 `protobuf:"bytes,4,opt,name=ref,proto3" json:"ref,omitempty"`
+	Title     string                 `protobuf:"bytes,5,opt,name=title,proto3" json:"title,omitempty"`
+	Body      string                 `protobuf:"bytes,6,opt,name=body,proto3" json:"body,omitempty"`
+	ActorId   string                 `protobuf:"bytes,7,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"`
+	ActorKind string                 `protobuf:"bytes,8,opt,name=actor_kind,json=actorKind,proto3" json:"actor_kind,omitempty"`
+	ActorName string                 `protobuf:"bytes,9,opt,name=actor_name,json=actorName,proto3" json:"actor_name,omitempty"`
+	DedupeKey string                 `protobuf:"bytes,10,opt,name=dedupe_key,json=dedupeKey,proto3" json:"dedupe_key,omitempty"`
+	// Empty means publish to nobody; a caller that derives recipients from its
+	// own observation sends them explicitly.
+	Recipients    []string `protobuf:"bytes,11,rep,name=recipients,proto3" json:"recipients,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PublishInboxItemRequest) Reset() {
+	*x = PublishInboxItemRequest{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PublishInboxItemRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PublishInboxItemRequest) ProtoMessage() {}
+
+func (x *PublishInboxItemRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PublishInboxItemRequest.ProtoReflect.Descriptor instead.
+func (*PublishInboxItemRequest) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{49}
+}
+
+func (x *PublishInboxItemRequest) GetOrgId() string {
+	if x != nil {
+		return x.OrgId
+	}
+	return ""
+}
+
+func (x *PublishInboxItemRequest) GetRepoId() string {
+	if x != nil {
+		return x.RepoId
+	}
+	return ""
+}
+
+func (x *PublishInboxItemRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *PublishInboxItemRequest) GetRef() string {
+	if x != nil {
+		return x.Ref
+	}
+	return ""
+}
+
+func (x *PublishInboxItemRequest) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *PublishInboxItemRequest) GetBody() string {
+	if x != nil {
+		return x.Body
+	}
+	return ""
+}
+
+func (x *PublishInboxItemRequest) GetActorId() string {
+	if x != nil {
+		return x.ActorId
+	}
+	return ""
+}
+
+func (x *PublishInboxItemRequest) GetActorKind() string {
+	if x != nil {
+		return x.ActorKind
+	}
+	return ""
+}
+
+func (x *PublishInboxItemRequest) GetActorName() string {
+	if x != nil {
+		return x.ActorName
+	}
+	return ""
+}
+
+func (x *PublishInboxItemRequest) GetDedupeKey() string {
+	if x != nil {
+		return x.DedupeKey
+	}
+	return ""
+}
+
+func (x *PublishInboxItemRequest) GetRecipients() []string {
+	if x != nil {
+		return x.Recipients
+	}
+	return nil
+}
+
+type PublishInboxItemResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// inserted says whether any row was newly created, so a publisher can log
+	// "first notification" against "already notified" without listing.
+	Inserted      bool `protobuf:"varint,1,opt,name=inserted,proto3" json:"inserted,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PublishInboxItemResponse) Reset() {
+	*x = PublishInboxItemResponse{}
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[50]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PublishInboxItemResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PublishInboxItemResponse) ProtoMessage() {}
+
+func (x *PublishInboxItemResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_novaforge_work_v1_work_proto_msgTypes[50]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PublishInboxItemResponse.ProtoReflect.Descriptor instead.
+func (*PublishInboxItemResponse) Descriptor() ([]byte, []int) {
+	return file_novaforge_work_v1_work_proto_rawDescGZIP(), []int{50}
+}
+
+func (x *PublishInboxItemResponse) GetInserted() bool {
+	if x != nil {
+		return x.Inserted
+	}
+	return false
+}
+
 var File_novaforge_work_v1_work_proto protoreflect.FileDescriptor
 
 const file_novaforge_work_v1_work_proto_rawDesc = "" +
@@ -2418,7 +3206,67 @@ const file_novaforge_work_v1_work_proto_rawDesc = "" +
 	"\aoutcome\x18\x04 \x01(\tR\aoutcome\x120\n" +
 	"\x14no_execution_started\x18\x05 \x01(\bR\x12noExecutionStarted\x12\x19\n" +
 	"\bagent_id\x18\x06 \x01(\tR\aagentId\"\x1a\n" +
-	"\x18ReleaseExecutionResponse2\xed\r\n" +
+	"\x18ReleaseExecutionResponse\"\xfd\x02\n" +
+	"\x11InboxNotification\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x15\n" +
+	"\x06org_id\x18\x02 \x01(\tR\x05orgId\x12!\n" +
+	"\frecipient_id\x18\x03 \x01(\tR\vrecipientId\x12\x17\n" +
+	"\arepo_id\x18\x04 \x01(\tR\x06repoId\x12\x16\n" +
+	"\x06reason\x18\x05 \x01(\tR\x06reason\x12\x10\n" +
+	"\x03ref\x18\x06 \x01(\tR\x03ref\x12\x14\n" +
+	"\x05title\x18\a \x01(\tR\x05title\x12\x12\n" +
+	"\x04body\x18\b \x01(\tR\x04body\x12\x19\n" +
+	"\bactor_id\x18\t \x01(\tR\aactorId\x12\x1d\n" +
+	"\n" +
+	"actor_kind\x18\n" +
+	" \x01(\tR\tactorKind\x12\x1d\n" +
+	"\n" +
+	"actor_name\x18\v \x01(\tR\tactorName\x12\x14\n" +
+	"\x05state\x18\f \x01(\tR\x05state\x12#\n" +
+	"\rsnoozed_until\x18\r \x01(\tR\fsnoozedUntil\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x0e \x01(\tR\tcreatedAt\"o\n" +
+	"\x10ListInboxRequest\x12\x14\n" +
+	"\x05state\x18\x01 \x01(\tR\x05state\x12\x16\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\x12\x17\n" +
+	"\arepo_id\x18\x03 \x01(\tR\x06repoId\x12\x14\n" +
+	"\x05limit\x18\x04 \x01(\x05R\x05limit\"_\n" +
+	"\x11ListInboxResponse\x12J\n" +
+	"\rnotifications\x18\x01 \x03(\v2$.novaforge.work.v1.InboxNotificationR\rnotifications\"\x14\n" +
+	"\x12InboxUnreadRequest\"-\n" +
+	"\x13InboxUnreadResponse\x12\x16\n" +
+	"\x06unread\x18\x01 \x01(\x05R\x06unread\"\"\n" +
+	"\x10InboxDoneRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\x13\n" +
+	"\x11InboxDoneResponse\":\n" +
+	"\x12InboxSnoozeRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
+	"\x05until\x18\x02 \x01(\tR\x05until\"\x15\n" +
+	"\x13InboxSnoozeResponse\"8\n" +
+	"\x10InboxSaveRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
+	"\x05saved\x18\x02 \x01(\bR\x05saved\"\x13\n" +
+	"\x11InboxSaveResponse\"\xb5\x02\n" +
+	"\x17PublishInboxItemRequest\x12\x15\n" +
+	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12\x17\n" +
+	"\arepo_id\x18\x02 \x01(\tR\x06repoId\x12\x16\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\x12\x10\n" +
+	"\x03ref\x18\x04 \x01(\tR\x03ref\x12\x14\n" +
+	"\x05title\x18\x05 \x01(\tR\x05title\x12\x12\n" +
+	"\x04body\x18\x06 \x01(\tR\x04body\x12\x19\n" +
+	"\bactor_id\x18\a \x01(\tR\aactorId\x12\x1d\n" +
+	"\n" +
+	"actor_kind\x18\b \x01(\tR\tactorKind\x12\x1d\n" +
+	"\n" +
+	"actor_name\x18\t \x01(\tR\tactorName\x12\x1d\n" +
+	"\n" +
+	"dedupe_key\x18\n" +
+	" \x01(\tR\tdedupeKey\x12\x1e\n" +
+	"\n" +
+	"recipients\x18\v \x03(\tR\n" +
+	"recipients\"6\n" +
+	"\x18PublishInboxItemResponse\x12\x1a\n" +
+	"\binserted\x18\x01 \x01(\bR\binserted2\x9e\x12\n" +
 	"\vWorkService\x12Y\n" +
 	"\n" +
 	"CreateItem\x12$.novaforge.work.v1.CreateItemRequest\x1a%.novaforge.work.v1.CreateItemResponse\x12P\n" +
@@ -2439,7 +3287,13 @@ const file_novaforge_work_v1_work_proto_rawDesc = "" +
 	"\x18ListMaintenanceProposals\x122.novaforge.work.v1.ListMaintenanceProposalsRequest\x1a3.novaforge.work.v1.ListMaintenanceProposalsResponse\x12\x89\x01\n" +
 	"\x1aApproveMaintenanceProposal\x124.novaforge.work.v1.ApproveMaintenanceProposalRequest\x1a5.novaforge.work.v1.ApproveMaintenanceProposalResponse\x12\x89\x01\n" +
 	"\x1aDismissMaintenanceProposal\x124.novaforge.work.v1.DismissMaintenanceProposalRequest\x1a5.novaforge.work.v1.DismissMaintenanceProposalResponse\x12e\n" +
-	"\x0eScanRepository\x12(.novaforge.work.v1.ScanRepositoryRequest\x1a).novaforge.work.v1.ScanRepositoryResponseB\xc5\x01\n" +
+	"\x0eScanRepository\x12(.novaforge.work.v1.ScanRepositoryRequest\x1a).novaforge.work.v1.ScanRepositoryResponse\x12V\n" +
+	"\tListInbox\x12#.novaforge.work.v1.ListInboxRequest\x1a$.novaforge.work.v1.ListInboxResponse\x12\\\n" +
+	"\vInboxUnread\x12%.novaforge.work.v1.InboxUnreadRequest\x1a&.novaforge.work.v1.InboxUnreadResponse\x12V\n" +
+	"\tInboxDone\x12#.novaforge.work.v1.InboxDoneRequest\x1a$.novaforge.work.v1.InboxDoneResponse\x12\\\n" +
+	"\vInboxSnooze\x12%.novaforge.work.v1.InboxSnoozeRequest\x1a&.novaforge.work.v1.InboxSnoozeResponse\x12V\n" +
+	"\tInboxSave\x12#.novaforge.work.v1.InboxSaveRequest\x1a$.novaforge.work.v1.InboxSaveResponse\x12k\n" +
+	"\x10PublishInboxItem\x12*.novaforge.work.v1.PublishInboxItemRequest\x1a+.novaforge.work.v1.PublishInboxItemResponseB\xc5\x01\n" +
 	"\x15com.novaforge.work.v1B\tWorkProtoP\x01Z;github.com/novaforge/novaforge/gen/novaforge/work/v1;workv1\xa2\x02\x03NWX\xaa\x02\x11Novaforge.Work.V1\xca\x02\x11Novaforge\\Work\\V1\xe2\x02\x1dNovaforge\\Work\\V1\\GPBMetadata\xea\x02\x13Novaforge::Work::V1b\x06proto3"
 
 var (
@@ -2454,7 +3308,7 @@ func file_novaforge_work_v1_work_proto_rawDescGZIP() []byte {
 	return file_novaforge_work_v1_work_proto_rawDescData
 }
 
-var file_novaforge_work_v1_work_proto_msgTypes = make([]protoimpl.MessageInfo, 38)
+var file_novaforge_work_v1_work_proto_msgTypes = make([]protoimpl.MessageInfo, 51)
 var file_novaforge_work_v1_work_proto_goTypes = []any{
 	(*WorkItem)(nil),                           // 0: novaforge.work.v1.WorkItem
 	(*CreateItemRequest)(nil),                  // 1: novaforge.work.v1.CreateItemRequest
@@ -2494,7 +3348,20 @@ var file_novaforge_work_v1_work_proto_goTypes = []any{
 	(*ClaimExecutionResponse)(nil),             // 35: novaforge.work.v1.ClaimExecutionResponse
 	(*ReleaseExecutionRequest)(nil),            // 36: novaforge.work.v1.ReleaseExecutionRequest
 	(*ReleaseExecutionResponse)(nil),           // 37: novaforge.work.v1.ReleaseExecutionResponse
-	(*fieldmaskpb.FieldMask)(nil),              // 38: google.protobuf.FieldMask
+	(*InboxNotification)(nil),                  // 38: novaforge.work.v1.InboxNotification
+	(*ListInboxRequest)(nil),                   // 39: novaforge.work.v1.ListInboxRequest
+	(*ListInboxResponse)(nil),                  // 40: novaforge.work.v1.ListInboxResponse
+	(*InboxUnreadRequest)(nil),                 // 41: novaforge.work.v1.InboxUnreadRequest
+	(*InboxUnreadResponse)(nil),                // 42: novaforge.work.v1.InboxUnreadResponse
+	(*InboxDoneRequest)(nil),                   // 43: novaforge.work.v1.InboxDoneRequest
+	(*InboxDoneResponse)(nil),                  // 44: novaforge.work.v1.InboxDoneResponse
+	(*InboxSnoozeRequest)(nil),                 // 45: novaforge.work.v1.InboxSnoozeRequest
+	(*InboxSnoozeResponse)(nil),                // 46: novaforge.work.v1.InboxSnoozeResponse
+	(*InboxSaveRequest)(nil),                   // 47: novaforge.work.v1.InboxSaveRequest
+	(*InboxSaveResponse)(nil),                  // 48: novaforge.work.v1.InboxSaveResponse
+	(*PublishInboxItemRequest)(nil),            // 49: novaforge.work.v1.PublishInboxItemRequest
+	(*PublishInboxItemResponse)(nil),           // 50: novaforge.work.v1.PublishInboxItemResponse
+	(*fieldmaskpb.FieldMask)(nil),              // 51: google.protobuf.FieldMask
 }
 var file_novaforge_work_v1_work_proto_depIdxs = []int32{
 	0,  // 0: novaforge.work.v1.CreateItemResponse.item:type_name -> novaforge.work.v1.WorkItem
@@ -2511,49 +3378,62 @@ var file_novaforge_work_v1_work_proto_depIdxs = []int32{
 	19, // 11: novaforge.work.v1.ListMaintenanceProposalsResponse.proposals:type_name -> novaforge.work.v1.MaintenanceProposal
 	0,  // 12: novaforge.work.v1.PatchItemRequest.values:type_name -> novaforge.work.v1.WorkItem
 	0,  // 13: novaforge.work.v1.PatchItemRequest.expected:type_name -> novaforge.work.v1.WorkItem
-	38, // 14: novaforge.work.v1.PatchItemRequest.update_mask:type_name -> google.protobuf.FieldMask
+	51, // 14: novaforge.work.v1.PatchItemRequest.update_mask:type_name -> google.protobuf.FieldMask
 	0,  // 15: novaforge.work.v1.PatchItemResponse.item:type_name -> novaforge.work.v1.WorkItem
 	0,  // 16: novaforge.work.v1.TransitionItemResponse.item:type_name -> novaforge.work.v1.WorkItem
 	0,  // 17: novaforge.work.v1.ClaimExecutionResponse.item:type_name -> novaforge.work.v1.WorkItem
-	1,  // 18: novaforge.work.v1.WorkService.CreateItem:input_type -> novaforge.work.v1.CreateItemRequest
-	3,  // 19: novaforge.work.v1.WorkService.GetItem:input_type -> novaforge.work.v1.GetItemRequest
-	5,  // 20: novaforge.work.v1.WorkService.ListItems:input_type -> novaforge.work.v1.ListItemsRequest
-	32, // 21: novaforge.work.v1.WorkService.CountCompleted:input_type -> novaforge.work.v1.CountCompletedRequest
-	7,  // 22: novaforge.work.v1.WorkService.AssignItem:input_type -> novaforge.work.v1.AssignItemRequest
-	28, // 23: novaforge.work.v1.WorkService.PatchItem:input_type -> novaforge.work.v1.PatchItemRequest
-	30, // 24: novaforge.work.v1.WorkService.TransitionItem:input_type -> novaforge.work.v1.TransitionItemRequest
-	34, // 25: novaforge.work.v1.WorkService.ClaimExecution:input_type -> novaforge.work.v1.ClaimExecutionRequest
-	36, // 26: novaforge.work.v1.WorkService.ReleaseExecution:input_type -> novaforge.work.v1.ReleaseExecutionRequest
-	10, // 27: novaforge.work.v1.WorkService.ListSubtasks:input_type -> novaforge.work.v1.ListSubtasksRequest
-	12, // 28: novaforge.work.v1.WorkService.DecomposeEpic:input_type -> novaforge.work.v1.DecomposeEpicRequest
-	15, // 29: novaforge.work.v1.WorkService.AddComment:input_type -> novaforge.work.v1.AddCommentRequest
-	17, // 30: novaforge.work.v1.WorkService.ListComments:input_type -> novaforge.work.v1.ListCommentsRequest
-	26, // 31: novaforge.work.v1.WorkService.ListMaintenanceProposals:input_type -> novaforge.work.v1.ListMaintenanceProposalsRequest
-	20, // 32: novaforge.work.v1.WorkService.ApproveMaintenanceProposal:input_type -> novaforge.work.v1.ApproveMaintenanceProposalRequest
-	22, // 33: novaforge.work.v1.WorkService.DismissMaintenanceProposal:input_type -> novaforge.work.v1.DismissMaintenanceProposalRequest
-	24, // 34: novaforge.work.v1.WorkService.ScanRepository:input_type -> novaforge.work.v1.ScanRepositoryRequest
-	2,  // 35: novaforge.work.v1.WorkService.CreateItem:output_type -> novaforge.work.v1.CreateItemResponse
-	4,  // 36: novaforge.work.v1.WorkService.GetItem:output_type -> novaforge.work.v1.GetItemResponse
-	6,  // 37: novaforge.work.v1.WorkService.ListItems:output_type -> novaforge.work.v1.ListItemsResponse
-	33, // 38: novaforge.work.v1.WorkService.CountCompleted:output_type -> novaforge.work.v1.CountCompletedResponse
-	8,  // 39: novaforge.work.v1.WorkService.AssignItem:output_type -> novaforge.work.v1.AssignItemResponse
-	29, // 40: novaforge.work.v1.WorkService.PatchItem:output_type -> novaforge.work.v1.PatchItemResponse
-	31, // 41: novaforge.work.v1.WorkService.TransitionItem:output_type -> novaforge.work.v1.TransitionItemResponse
-	35, // 42: novaforge.work.v1.WorkService.ClaimExecution:output_type -> novaforge.work.v1.ClaimExecutionResponse
-	37, // 43: novaforge.work.v1.WorkService.ReleaseExecution:output_type -> novaforge.work.v1.ReleaseExecutionResponse
-	11, // 44: novaforge.work.v1.WorkService.ListSubtasks:output_type -> novaforge.work.v1.ListSubtasksResponse
-	13, // 45: novaforge.work.v1.WorkService.DecomposeEpic:output_type -> novaforge.work.v1.DecomposeEpicResponse
-	16, // 46: novaforge.work.v1.WorkService.AddComment:output_type -> novaforge.work.v1.AddCommentResponse
-	18, // 47: novaforge.work.v1.WorkService.ListComments:output_type -> novaforge.work.v1.ListCommentsResponse
-	27, // 48: novaforge.work.v1.WorkService.ListMaintenanceProposals:output_type -> novaforge.work.v1.ListMaintenanceProposalsResponse
-	21, // 49: novaforge.work.v1.WorkService.ApproveMaintenanceProposal:output_type -> novaforge.work.v1.ApproveMaintenanceProposalResponse
-	23, // 50: novaforge.work.v1.WorkService.DismissMaintenanceProposal:output_type -> novaforge.work.v1.DismissMaintenanceProposalResponse
-	25, // 51: novaforge.work.v1.WorkService.ScanRepository:output_type -> novaforge.work.v1.ScanRepositoryResponse
-	35, // [35:52] is the sub-list for method output_type
-	18, // [18:35] is the sub-list for method input_type
-	18, // [18:18] is the sub-list for extension type_name
-	18, // [18:18] is the sub-list for extension extendee
-	0,  // [0:18] is the sub-list for field type_name
+	38, // 18: novaforge.work.v1.ListInboxResponse.notifications:type_name -> novaforge.work.v1.InboxNotification
+	1,  // 19: novaforge.work.v1.WorkService.CreateItem:input_type -> novaforge.work.v1.CreateItemRequest
+	3,  // 20: novaforge.work.v1.WorkService.GetItem:input_type -> novaforge.work.v1.GetItemRequest
+	5,  // 21: novaforge.work.v1.WorkService.ListItems:input_type -> novaforge.work.v1.ListItemsRequest
+	32, // 22: novaforge.work.v1.WorkService.CountCompleted:input_type -> novaforge.work.v1.CountCompletedRequest
+	7,  // 23: novaforge.work.v1.WorkService.AssignItem:input_type -> novaforge.work.v1.AssignItemRequest
+	28, // 24: novaforge.work.v1.WorkService.PatchItem:input_type -> novaforge.work.v1.PatchItemRequest
+	30, // 25: novaforge.work.v1.WorkService.TransitionItem:input_type -> novaforge.work.v1.TransitionItemRequest
+	34, // 26: novaforge.work.v1.WorkService.ClaimExecution:input_type -> novaforge.work.v1.ClaimExecutionRequest
+	36, // 27: novaforge.work.v1.WorkService.ReleaseExecution:input_type -> novaforge.work.v1.ReleaseExecutionRequest
+	10, // 28: novaforge.work.v1.WorkService.ListSubtasks:input_type -> novaforge.work.v1.ListSubtasksRequest
+	12, // 29: novaforge.work.v1.WorkService.DecomposeEpic:input_type -> novaforge.work.v1.DecomposeEpicRequest
+	15, // 30: novaforge.work.v1.WorkService.AddComment:input_type -> novaforge.work.v1.AddCommentRequest
+	17, // 31: novaforge.work.v1.WorkService.ListComments:input_type -> novaforge.work.v1.ListCommentsRequest
+	26, // 32: novaforge.work.v1.WorkService.ListMaintenanceProposals:input_type -> novaforge.work.v1.ListMaintenanceProposalsRequest
+	20, // 33: novaforge.work.v1.WorkService.ApproveMaintenanceProposal:input_type -> novaforge.work.v1.ApproveMaintenanceProposalRequest
+	22, // 34: novaforge.work.v1.WorkService.DismissMaintenanceProposal:input_type -> novaforge.work.v1.DismissMaintenanceProposalRequest
+	24, // 35: novaforge.work.v1.WorkService.ScanRepository:input_type -> novaforge.work.v1.ScanRepositoryRequest
+	39, // 36: novaforge.work.v1.WorkService.ListInbox:input_type -> novaforge.work.v1.ListInboxRequest
+	41, // 37: novaforge.work.v1.WorkService.InboxUnread:input_type -> novaforge.work.v1.InboxUnreadRequest
+	43, // 38: novaforge.work.v1.WorkService.InboxDone:input_type -> novaforge.work.v1.InboxDoneRequest
+	45, // 39: novaforge.work.v1.WorkService.InboxSnooze:input_type -> novaforge.work.v1.InboxSnoozeRequest
+	47, // 40: novaforge.work.v1.WorkService.InboxSave:input_type -> novaforge.work.v1.InboxSaveRequest
+	49, // 41: novaforge.work.v1.WorkService.PublishInboxItem:input_type -> novaforge.work.v1.PublishInboxItemRequest
+	2,  // 42: novaforge.work.v1.WorkService.CreateItem:output_type -> novaforge.work.v1.CreateItemResponse
+	4,  // 43: novaforge.work.v1.WorkService.GetItem:output_type -> novaforge.work.v1.GetItemResponse
+	6,  // 44: novaforge.work.v1.WorkService.ListItems:output_type -> novaforge.work.v1.ListItemsResponse
+	33, // 45: novaforge.work.v1.WorkService.CountCompleted:output_type -> novaforge.work.v1.CountCompletedResponse
+	8,  // 46: novaforge.work.v1.WorkService.AssignItem:output_type -> novaforge.work.v1.AssignItemResponse
+	29, // 47: novaforge.work.v1.WorkService.PatchItem:output_type -> novaforge.work.v1.PatchItemResponse
+	31, // 48: novaforge.work.v1.WorkService.TransitionItem:output_type -> novaforge.work.v1.TransitionItemResponse
+	35, // 49: novaforge.work.v1.WorkService.ClaimExecution:output_type -> novaforge.work.v1.ClaimExecutionResponse
+	37, // 50: novaforge.work.v1.WorkService.ReleaseExecution:output_type -> novaforge.work.v1.ReleaseExecutionResponse
+	11, // 51: novaforge.work.v1.WorkService.ListSubtasks:output_type -> novaforge.work.v1.ListSubtasksResponse
+	13, // 52: novaforge.work.v1.WorkService.DecomposeEpic:output_type -> novaforge.work.v1.DecomposeEpicResponse
+	16, // 53: novaforge.work.v1.WorkService.AddComment:output_type -> novaforge.work.v1.AddCommentResponse
+	18, // 54: novaforge.work.v1.WorkService.ListComments:output_type -> novaforge.work.v1.ListCommentsResponse
+	27, // 55: novaforge.work.v1.WorkService.ListMaintenanceProposals:output_type -> novaforge.work.v1.ListMaintenanceProposalsResponse
+	21, // 56: novaforge.work.v1.WorkService.ApproveMaintenanceProposal:output_type -> novaforge.work.v1.ApproveMaintenanceProposalResponse
+	23, // 57: novaforge.work.v1.WorkService.DismissMaintenanceProposal:output_type -> novaforge.work.v1.DismissMaintenanceProposalResponse
+	25, // 58: novaforge.work.v1.WorkService.ScanRepository:output_type -> novaforge.work.v1.ScanRepositoryResponse
+	40, // 59: novaforge.work.v1.WorkService.ListInbox:output_type -> novaforge.work.v1.ListInboxResponse
+	42, // 60: novaforge.work.v1.WorkService.InboxUnread:output_type -> novaforge.work.v1.InboxUnreadResponse
+	44, // 61: novaforge.work.v1.WorkService.InboxDone:output_type -> novaforge.work.v1.InboxDoneResponse
+	46, // 62: novaforge.work.v1.WorkService.InboxSnooze:output_type -> novaforge.work.v1.InboxSnoozeResponse
+	48, // 63: novaforge.work.v1.WorkService.InboxSave:output_type -> novaforge.work.v1.InboxSaveResponse
+	50, // 64: novaforge.work.v1.WorkService.PublishInboxItem:output_type -> novaforge.work.v1.PublishInboxItemResponse
+	42, // [42:65] is the sub-list for method output_type
+	19, // [19:42] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_novaforge_work_v1_work_proto_init() }
@@ -2567,7 +3447,7 @@ func file_novaforge_work_v1_work_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_novaforge_work_v1_work_proto_rawDesc), len(file_novaforge_work_v1_work_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   38,
+			NumMessages:   51,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

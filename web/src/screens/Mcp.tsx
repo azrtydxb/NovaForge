@@ -93,7 +93,7 @@ export function Mcp() {
 
   return (
     <Page
-      title="MCP"
+      title="MCP servers"
       subtitle="NovaForge exposes its own MCP server, and approves which external ones its agents may use"
       actions={
         w.org !== null ? (

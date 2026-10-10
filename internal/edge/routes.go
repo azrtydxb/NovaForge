@@ -165,6 +165,17 @@ func Routes() []Route {
 		{http.MethodPost, "/api/v1/orgs/{org}/mcp/servers/{id}/decision", "decideMcpServer", "Approve or reject a pending MCP server (owner or admin)"},
 		{http.MethodDelete, "/api/v1/orgs/{org}/mcp/servers/{id}", "revokeMcpServer", "Revoke an approved MCP server (owner or admin)"},
 
+		// The inbox. /unread is org-less on purpose: the header badge is one
+		// number for the signed-in person wherever they are, and it is
+		// answered from the caller's own recipient id (see
+		// work.Store.InboxUnread). Everything that touches a row is
+		// org-scoped like the rest of the API.
+		{http.MethodGet, "/api/v1/inbox/unread", "inboxUnread", "The signed-in person's unread notification count"},
+		{http.MethodGet, "/api/v1/orgs/{org}/inbox", "listInbox", "The caller's notifications, filtered by state (inbox/saved/done), reason and repository"},
+		{http.MethodPost, "/api/v1/orgs/{org}/inbox/{id}/done", "inboxDone", "Mark one of the caller's notifications done"},
+		{http.MethodPost, "/api/v1/orgs/{org}/inbox/{id}/snooze", "inboxSnooze", "Snooze one of the caller's notifications until the RFC3339 time in the body, default tomorrow"},
+		{http.MethodPost, "/api/v1/orgs/{org}/inbox/{id}/save", "inboxSave", "Move one of the caller's notifications between Saved and the inbox"},
+
 		{http.MethodGet, "/healthz", "healthz", "Readiness"},
 	}
 }

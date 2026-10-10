@@ -12,7 +12,7 @@ import {
   PanelHead,
   StatePill,
 } from "../components/ui";
-import { TYPES } from "./Work";
+import { TYPES, relTime } from "./Work";
 import { Dialog } from "../components/Dialog";
 import {
   ACTIVE_RUN_STATES,
@@ -178,6 +178,24 @@ export function WorkItemDetail() {
   });
   const agentName = (id: string) =>
     agents.data?.agents.find((a) => a.id === id)?.name ?? id.slice(0, 8);
+
+  /** authorLabel names a comment's author from the platform's own lists:
+   * agents by name, members by username, anything else by id prefix. */
+  const authorLabel = (id: string, kind: string) =>
+    kind === "agent"
+      ? agentName(id)
+      : (members.data?.members.find((m) => m.user_id === id)?.username ??
+        id.slice(0, 8));
+
+  /** initials renders the design's avatar chip. Two letters, from the name
+   * the platform gave us — a uuid prefix is honest, a guess is not. */
+  const initials = (name: string) => {
+    const parts = name
+      .split(/[\s._@-]+/)
+      .map((p) => p[0])
+      .filter((c): c is string => Boolean(c));
+    return (parts.length > 0 ? parts.slice(0, 2).join("") : "?").toUpperCase();
+  };
 
   const comment = useMutation({
     mutationFn: () => api.post(`${base}/comments`, { body }),
@@ -464,11 +482,28 @@ export function WorkItemDetail() {
                       marginTop: 8,
                       font: "11px var(--mono)",
                       color: "var(--fg-muted)",
+                      display: "flex",
+                      gap: 8,
+                      flexWrap: "wrap",
                     }}
                   >
-                    {d.assignee_id
-                      ? `assigned to ${assigneeName(d.assignee_id, d.assignee_kind)}`
-                      : "unassigned"}
+                    <span
+                      style={{
+                        background: "var(--line)",
+                        borderRadius: 5,
+                        padding: "1px 7px",
+                      }}
+                    >
+                      {d.type}
+                    </span>
+                    <span>
+                      {d.assignee_id
+                        ? `assigned to ${assigneeName(d.assignee_id, d.assignee_kind)}`
+                        : "unassigned"}
+                    </span>
+                    <span style={{ color: "var(--fg-faint)" }}>
+                      · opened {relTime(d.created_at)}
+                    </span>
                   </div>
                   <List title="Acceptance criteria" items={d.acceptance} />
                   <List title="Constraints" items={d.constraints} />
@@ -619,6 +654,25 @@ export function WorkItemDetail() {
                           marginBottom: 5,
                         }}
                       >
+                        {/* The design's initials chip. Names come from the
+                            platform's own lists — members and agents — so a
+                            comment whose author is neither resolves to the id
+                            prefix, never to an invented name. */}
+                        <span
+                          style={{
+                            width: 22,
+                            height: 22,
+                            borderRadius: 99,
+                            background: "var(--line)",
+                            color: "var(--fg-muted)",
+                            font: "600 9px var(--mono)",
+                            display: "grid",
+                            placeItems: "center",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {initials(authorLabel(c.author_id, c.author_kind))}
+                        </span>
                         <span
                           style={{
                             font: "600 10px var(--mono)",
@@ -628,7 +682,7 @@ export function WorkItemDetail() {
                                 : "var(--link)",
                           }}
                         >
-                          {c.author_kind}
+                          {authorLabel(c.author_id, c.author_kind)}
                         </span>
                         <span
                           style={{

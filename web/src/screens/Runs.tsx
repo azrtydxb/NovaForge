@@ -19,7 +19,13 @@ import {
 } from "../components/ui";
 import { Row } from "./Home";
 import { Dialog, NewButton } from "../components/Dialog";
+import { relTime } from "./Work";
 import type { EngineeringRun, Ref, Repo } from "../lib/types";
+
+/** The states a run takes, per the reviews service: open, merged, failed,
+ * closed. The list returns whatever the platform assigned; a filter for a
+ * state nothing has answers with an honest empty panel, not a missing tab. */
+const STATES = ["open", "merged", "failed", "closed"] as const;
 
 /** Runs lists Engineering Runs — the platform's pull request, which carries
  * plan and proof rather than only a diff. */
@@ -30,6 +36,7 @@ export function Runs() {
   // repository first, because the branches offered depend on it.
   const [choosingRepo, setChoosingRepo] = useState(false);
   const [openingIn, setOpeningIn] = useState<Repo | null>(null);
+  const [state, setState] = useState<string | null>(null);
 
   const queries = useQueries({
     queries: repos.map((r) => ({
@@ -44,11 +51,15 @@ export function Runs() {
 
   const loading = queries.some((q) => q.isLoading);
   const listError = queries.find((q) => q.error)?.error;
-  const rows = queries
+  const all = queries
     .flatMap((q, i) =>
       (q.data?.runs ?? []).map((run) => ({ run, repo: repos[i]!.name })),
     )
     .sort((a, b) => b.run.created_at.localeCompare(a.run.created_at));
+  // The board rule applies here too: one list fetched, client-filtered. No
+  // per-state endpoint exists, so a filter must never look like a query the
+  // platform ran on our behalf.
+  const rows = all.filter((x) => state === null || x.run.state === state);
 
   return (
     <Page
@@ -97,14 +108,46 @@ export function Runs() {
         />
       ) : null}
 
+      <div
+        style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}
+      >
+        {STATES.map((s) => {
+          const active = state === s;
+          const n = all.filter((x) => x.run.state === s).length;
+          return (
+            <button
+              key={s}
+              onClick={() => setState(active ? null : s)}
+              style={{
+                padding: "5px 11px",
+                borderRadius: 7,
+                border: "1px solid var(--line)",
+                background: active ? "var(--accent-soft)" : "transparent",
+                color: active ? "var(--fg)" : "var(--fg-muted)",
+                font: "500 12px var(--sans)",
+                cursor: "pointer",
+              }}
+            >
+              {s}
+              <span
+                style={{
+                  font: "600 10px var(--mono)",
+                  color: active ? "var(--link)" : "var(--fg-faint)",
+                  marginLeft: 6,
+                }}
+              >
+                {n}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       <Panel>
         <PanelHead>
           <span style={{ width: 60 }}>RUN</span>
           <span style={{ flex: 1 }}>TITLE</span>
-          <span style={{ width: 170 }}>BRANCH</span>
-          <span style={{ width: 130 }}>AUTHOR</span>
-          <span style={{ width: 110 }}>REPOSITORY</span>
-          <span style={{ width: 80 }}>STATE</span>
+          <span style={{ width: 90 }}>STATE</span>
         </PanelHead>
         {loading ? (
           <Loading />
@@ -126,41 +169,40 @@ export function Runs() {
               >
                 #{run.number}
               </Link>
-              <span style={{ flex: 1, font: "13px var(--sans)" }}>
-                {run.title}
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span
+                  style={{
+                    display: "block",
+                    font: "13px var(--sans)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {run.title}
+                </span>
+                {/* The design's quiet metadata line: branch, author, repository
+                    and age, one mono whisper instead of four columns. */}
+                <span
+                  style={{
+                    display: "block",
+                    marginTop: 2,
+                    font: "11px var(--mono)",
+                    color: "var(--fg-faint)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {run.source_ref} → {run.target_ref} ·{" "}
+                  {run.author_kind === "agent"
+                    ? run.agent_name || "agent"
+                    : "human"}
+                  {" · "}
+                  {repo} · {relTime(run.created_at)}
+                </span>
               </span>
-              <span
-                style={{
-                  width: 170,
-                  font: "11px var(--mono)",
-                  color: "var(--fg-dim)",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-              >
-                {run.source_ref} → {run.target_ref}
-              </span>
-              <span
-                style={{
-                  width: 130,
-                  font: "11px var(--mono)",
-                  color: "var(--fg-muted)",
-                }}
-              >
-                {run.author_kind === "agent"
-                  ? run.agent_name || "agent"
-                  : "human"}
-              </span>
-              <span
-                style={{
-                  width: 110,
-                  font: "11px var(--mono)",
-                  color: "var(--fg-faint)",
-                }}
-              >
-                {repo}
-              </span>
-              <span style={{ width: 80 }}>
+              <span style={{ width: 90 }}>
                 <StatePill state={run.state} />
               </span>
             </Row>

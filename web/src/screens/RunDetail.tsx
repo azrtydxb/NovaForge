@@ -16,6 +16,7 @@ import {
 import { Deployments } from "./Deployments";
 import { RunReviews } from "../components/RunReviews";
 import { AgentReviewRequests } from "../components/AgentReviewRequests";
+import { relTime } from "./Work";
 import type { ApprovalList, EngineeringRun, ProofRecord } from "../lib/types";
 import { ApprovalRows } from "../components/Approvals";
 
@@ -44,13 +45,16 @@ interface ToolCall {
   started_at: string;
 }
 
-const TABS = ["Evidence", "Plan", "Changes", "Tool calls"] as const;
+/** Proof is the design's word for what the Evidence tab shows: the gates'
+ * recorded results. Renamed, not re-modelled — the records come from the same
+ * proof endpoint either way. */
+const TABS = ["Proof", "Plan", "Changes", "Tool calls"] as const;
 type Tab = (typeof TABS)[number];
 
 export function RunDetail() {
   const { repo = "", number = "" } = useParams();
   const w = useWorkspace();
-  const [tab, setTab] = useState<Tab>("Evidence");
+  const [tab, setTab] = useState<Tab>("Proof");
   const qc = useQueryClient();
 
   const base = `/api/v1/orgs/${enc(w.org ?? "")}/repos/${enc(repo)}/runs/${enc(number)}`;
@@ -106,7 +110,7 @@ export function RunDetail() {
               run.data.author_kind === "agent"
                 ? `${run.data.agent_name || "agent"} on ${run.data.model_name || "an unnamed model"}`
                 : "authored by a person"
-            }`
+            } · opened ${relTime(run.data.created_at)}`
           : repo
       }
       actions={
@@ -178,10 +182,10 @@ export function RunDetail() {
       ) : null}
 
       {run.error ? <Failed error={run.error} /> : null}
-      {w.org && run.data ? <Deployments org={w.org} repo={repo} runID={run.data.id} /> : null}
       {w.org && run.data ? (
         <RunReviews base={base} org={w.org} repo={repo} run={run.data} />
       ) : null}
+      {w.org !== null ? <RunApprovals org={w.org} base={base} /> : null}
       {w.org && run.data ? (
         <AgentReviewRequests
           org={w.org}
@@ -190,7 +194,15 @@ export function RunDetail() {
           open={run.data.state === "open"}
         />
       ) : null}
-      {w.org !== null ? <RunApprovals org={w.org} base={base} /> : null}
+      {w.org && run.data ? (
+        <Deployments org={w.org} repo={repo} runID={run.data.id} />
+      ) : null}
+
+      {/* The design shows plan, proof and impact in one view, so the summary
+          strip and the impact panel stand outside the tabs; the tabs carry
+          only what one reads on demand — gate detail, diff, tool calls. */}
+      {w.org !== null ? <RunSummary base={base} /> : null}
+      {w.org !== null ? <ChangeImpact base={base} /> : null}
 
       <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
         {TABS.map((t) => (
@@ -212,18 +224,10 @@ export function RunDetail() {
         ))}
       </div>
 
-      {tab === "Evidence" ? <Evidence base={base} /> : null}
-      {tab === "Plan" ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <ChangeImpact base={base} />
-          <Plan base={base} />
-        </div>
-      ) : null}
+      {tab === "Proof" ? <Evidence base={base} /> : null}
+      {tab === "Plan" ? <Plan base={base} /> : null}
       {tab === "Changes" ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <ChangeImpact base={base} />
-          <Changes org={w.org} repo={repo} run={run.data} />
-        </div>
+        <Changes org={w.org} repo={repo} run={run.data} />
       ) : null}
       {tab === "Tool calls" ? <Tools base={base} /> : null}
     </Page>
@@ -342,6 +346,140 @@ function Evidence({ base }: { base: string }) {
       }
     </Async>
   );
+}
+
+/** RunSummary is the stat strip the design puts at the top of a run: what the
+ * change touches and whether the gates have answered, at a glance. It reads
+ * the same queries the Proof tab and ChangeImpact render, under the same keys,
+ * so nothing is fetched twice — the strip is the headline of those panels, not
+ * a second opinion of them. */
+function RunSummary({ base }: { base: string }) {
+  const impact = useQuery({
+    queryKey: ["impact", base],
+    queryFn: () => api.get<Impact>(`${base}/impact`),
+  });
+  const proof = useQuery({
+    queryKey: ["proof", base],
+    queryFn: () => api.get<{ proof: ProofRecord[] }>(`${base}/proof`),
+  });
+  // A gate that has not answered is not a pass: only the statuses the gate
+  // controller records as success count, everything else is "of N".
+  const gates = proof.data?.proof ?? [];
+  const passed = gates.filter(
+    (p) => p.status === "pass" || p.status === "success",
+  ).length;
+
+  const stat: React.CSSProperties = {
+    display: "flex",
+    flexDirection: "column",
+    gap: 3,
+  };
+  const label: React.CSSProperties = {
+    font: "600 10px var(--sans)",
+    letterSpacing: ".08em",
+    color: "var(--fg-muted)",
+  };
+  const value: React.CSSProperties = {
+    font: "600 15px var(--mono)",
+    color: "var(--fg)",
+  };
+  const quiet: React.CSSProperties = {
+    font: "10px var(--mono)",
+    color: "var(--fg-faint)",
+    whiteSpace: "nowrap",
+  };
+
+  return (
+    <Panel style={{ marginBottom: 14 }}>
+      <div
+        style={{
+          display: "flex",
+          gap: 26,
+          flexWrap: "wrap",
+          padding: "13px 16px",
+          alignItems: "flex-start",
+        }}
+      >
+        <div style={stat}>
+          <span style={label}>FILES CHANGED</span>
+          <span style={value}>
+            {impact.isLoading ? "…" : (impact.data?.files_changed ?? "—")}
+          </span>
+        </div>
+        <div style={stat}>
+          <span style={label}>LINES</span>
+          <span style={value}>
+            {impact.data ? (
+              <>
+                <span style={{ color: "var(--ok)" }}>
+                  +{impact.data.insertions}
+                </span>{" "}
+                <span style={{ color: "var(--bad)" }}>
+                  −{impact.data.deletions}
+                </span>
+              </>
+            ) : (
+              "—"
+            )}
+            <span
+              style={{
+                font: "10px var(--mono)",
+                color: "var(--fg-faint)",
+                marginLeft: 6,
+              }}
+            >
+              {impact.data
+                ? `net ${
+                    impact.data.insertions - impact.data.deletions >= 0
+                      ? "+"
+                      : ""
+                  }${impact.data.insertions - impact.data.deletions}`
+                : ""}
+            </span>
+          </span>
+        </div>
+        <div style={stat}>
+          <span style={label}>RISK</span>
+          <span
+            style={{
+              ...value,
+              color: riskColor(impact.data?.risk ?? ""),
+            }}
+          >
+            {impact.isLoading ? "…" : (impact.data?.risk ?? "—").toUpperCase()}
+          </span>
+        </div>
+        <div style={stat}>
+          <span style={label}>GATES</span>
+          <span style={value}>
+            {proof.isLoading
+              ? "…"
+              : gates.length === 0
+                ? "none run"
+                : `${passed}/${gates.length}`}
+          </span>
+          <span style={quiet}>
+            {proof.error
+              ? "unavailable in this deployment"
+              : gates.length === 0
+                ? "merging runs them; so does Run gates"
+                : `of ${gates.length} required`}
+          </span>
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+/** riskColor is RunSummary's copy of the risk palette. ChangeImpact has its
+ * own; hoisting a shared one would touch ui.tsx, which this screen does not
+ * own, so the two stay in step by comment instead. */
+function riskColor(risk: string): string {
+  return risk === "high"
+    ? "var(--bad)"
+    : risk === "medium"
+      ? "var(--warn, #d9a441)"
+      : "var(--ok)";
 }
 
 /** ChangeImpact is the CHANGE IMPACT block: what the run changes, measured by
@@ -489,7 +627,14 @@ function Changes({
   // against in this repository, and asking would answer "unknown ref" — which
   // reads as a broken run rather than as a diff this deployment cannot draw.
   const diff = useQuery({
-    queryKey: ["diff", org, repo, run?.source_repo_id, run?.source_ref, run?.target_ref],
+    queryKey: [
+      "diff",
+      org,
+      repo,
+      run?.source_repo_id,
+      run?.source_ref,
+      run?.target_ref,
+    ],
     queryFn: () =>
       api.get<{ unified: string }>(
         `/api/v1/orgs/${enc(org!)}/repos/${enc(repo)}/diff?from=${enc(

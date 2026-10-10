@@ -27,7 +27,7 @@ func NewController(store *Store, gitClient gitv1.GitServiceClient, reviewsClient
 	for _, option := range options {
 		option(&config)
 	}
-	return &Controller{
+	c := &Controller{
 		Store:      store,
 		Git:        gitClient,
 		Runs:       NewServiceRunLookup(reviewsClient, workClient, gitClient),
@@ -46,6 +46,17 @@ func NewController(store *Store, gitClient gitv1.GitServiceClient, reviewsClient
 			return err
 		},
 	}
+	// Approvals surface in the recipients' inboxes through the same RPC
+	// boundary proof does, so the gates service never writes the work schema.
+	c.Inbox = workClient
+	c.RunNumber = func(ctx context.Context, runID uuid.UUID) (int32, error) {
+		resp, err := reviewsClient.GetRun(ctx, &reviewsv1.GetRunRequest{Id: runID.String()})
+		if err != nil {
+			return 0, err
+		}
+		return resp.GetRun().GetNumber(), nil
+	}
+	return c
 }
 
 // NewServiceRunLookup resolves a RunHead by asking the reviews and work

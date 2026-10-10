@@ -25,6 +25,12 @@ service WorkService {
   rpc ApproveMaintenanceProposal(ApproveMaintenanceProposalRequest) returns (ApproveMaintenanceProposalResponse);
   rpc DismissMaintenanceProposal(DismissMaintenanceProposalRequest) returns (DismissMaintenanceProposalResponse);
   rpc ScanRepository(ScanRepositoryRequest) returns (ScanRepositoryResponse);
+  rpc ListInbox(ListInboxRequest) returns (ListInboxResponse);
+  rpc InboxUnread(InboxUnreadRequest) returns (InboxUnreadResponse);
+  rpc InboxDone(InboxDoneRequest) returns (InboxDoneResponse);
+  rpc InboxSnooze(InboxSnoozeRequest) returns (InboxSnoozeResponse);
+  rpc InboxSave(InboxSaveRequest) returns (InboxSaveResponse);
+  rpc PublishInboxItem(PublishInboxItemRequest) returns (PublishInboxItemResponse);
 }
 
 // WorkItem mirrors a row in the work.work_items table.
@@ -272,3 +278,91 @@ message ReleaseExecutionRequest {
   string agent_id = 6;
 }
 message ReleaseExecutionResponse {}
+
+// InboxNotification is one thing the platform observed that a person should
+// see. It mirrors a row in work.inbox_notifications: rows are per-recipient,
+// so done, saved and snoozed are each reader's own state.
+message InboxNotification {
+  string id = 1;
+  string org_id = 2;
+  string recipient_id = 3;
+  string repo_id = 4;
+  // reason is one of: review_requested, approval, gate_failure, maintenance,
+  // mention, agent_question. A reason with no publisher never appears.
+  string reason = 5;
+  // ref is display text for the subject: "run #212", "NF-318".
+  string ref = 6;
+  string title = 7;
+  string body = 8;
+  string actor_id = 9;
+  string actor_kind = 10;
+  string actor_name = 11;
+  string state = 12;
+  // RFC3339; empty when the row is not snoozed.
+  string snoozed_until = 13;
+  string created_at = 14;
+}
+
+message ListInboxRequest {
+  // Empty means the live inbox ("inbox" state). "saved" and "done" select the
+  // design's other two tabs.
+  string state = 1;
+  string reason = 2;
+  string repo_id = 3;
+  int32 limit = 4;
+}
+message ListInboxResponse {
+  repeated InboxNotification notifications = 1;
+}
+
+// InboxUnread counts the caller's live notifications across the caller's
+// organizations. The header badge is one number and cannot know which org a
+// row came from; the count's recipient predicate is the caller's own id, so
+// it returns nobody else's mail.
+message InboxUnreadRequest {}
+message InboxUnreadResponse {
+  int32 unread = 1;
+}
+
+message InboxDoneRequest {
+  string id = 1;
+}
+message InboxDoneResponse {}
+message InboxSnoozeRequest {
+  string id = 1;
+  // RFC3339. A snoozed row returns to the inbox by itself after this.
+  string until = 2;
+}
+message InboxSnoozeResponse {}
+message InboxSaveRequest {
+  string id = 1;
+  bool saved = 2;
+}
+message InboxSaveResponse {}
+
+// PublishInboxItem is the one ingest path for notifications, used by the
+// platform's other services (the gates service raising an approval request).
+// The org is a request field here — a publisher names the run's organization
+// — but the RPC admits only a platform worker or a caller acting inside that
+// same organization, and the recipient list is the publisher's own record of
+// who it observed, so no caller can address another organization's users.
+message PublishInboxItemRequest {
+  string org_id = 1;
+  string repo_id = 2;
+  string reason = 3;
+  string ref = 4;
+  string title = 5;
+  string body = 6;
+  string actor_id = 7;
+  string actor_kind = 8;
+  string actor_name = 9;
+  string dedupe_key = 10;
+  // Empty means publish to nobody; a caller that derives recipients from its
+  // own observation sends them explicitly.
+  repeated string recipients = 11;
+}
+message PublishInboxItemResponse {
+  // inserted says whether any row was newly created, so a publisher can log
+  // "first notification" against "already notified" without listing.
+  bool inserted = 1;
+}

@@ -112,6 +112,10 @@ func main() {
 		log.Println("work-reviews: no AI endpoint configured, decomposition is unavailable")
 	}
 	reviewsServer := reviews.NewGRPCServer(reviewsStore)
+	// Reviews and gates publish inbox notifications through the work store:
+	// a review requested on a run and a gate whose proof failed are both
+	// observed here, and the run's author is who they are about.
+	reviewsServer.Inbox = workStore
 
 	// Auto-merge is considered after every review submission, and only ever
 	// merges through the same gate check a person's merge passes.

@@ -5,8 +5,11 @@ import { Async, Empty, Failed, Page, Panel, PanelHead } from "../components/ui";
 import { Dialog, NewButton } from "../components/Dialog";
 import type { PersonalToken, SSHKey, User } from "../lib/types";
 
-/** Account is the design's account screen: the credentials this user holds.
- * Everything here is revocable, which is the point of showing it. */
+/** Account settings is the design's account artboard: the credentials this
+ * user holds and the second factor that guards them. Everything here is
+ * revocable, which is the point of showing it. The mutations are the
+ * platform's own — a token's secret is returned once, 2FA enrolment is
+ * set-up-then-verify — and none of that contract is changed here. */
 export function Account() {
   const qc = useQueryClient();
   const [creating, setCreating] = useState<"token" | "key" | "totp" | null>(
@@ -75,7 +78,10 @@ export function Account() {
     onSuccess: () => {
       setCreating(null);
       setTotp(null);
-      qc.invalidateQueries({ queryKey: ["me"] });
+      // Broadly, not just ["me"]: the signed-in user is read under several
+      // keys in this app ("me", "user"), and every one of them must learn
+      // that 2FA is now on, or a panel somewhere keeps offering enrolment.
+      qc.invalidateQueries();
     },
   });
 
@@ -90,7 +96,7 @@ export function Account() {
 
   return (
     <Page
-      title="Account"
+      title="Account settings"
       subtitle={me.data?.email ?? ""}
       actions={
         <div style={{ display: "flex", gap: 8 }}>
@@ -236,9 +242,47 @@ export function Account() {
       ) : null}
       {revokeToken.error ? <Failed error={revokeToken.error} /> : null}
       {removeKey.error ? <Failed error={removeKey.error} /> : null}
+
       <div style={{ display: "grid", gap: 14, maxWidth: 760 }}>
+        {/* Two-factor is shown as a state first: the reader needs to know
+            whether the account is protected before anything else. */}
         <Panel>
-          <PanelHead>PERSONAL ACCESS TOKENS</PanelHead>
+          <PanelHead title="Two-factor authentication" />
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 11,
+              padding: "12px 14px",
+            }}
+          >
+            <span style={{ flex: 1, font: "13px var(--sans)" }}>
+              {me.data?.totp_enabled
+                ? "Enabled. Sign-in asks for an authenticator code."
+                : "Not enabled. Sign-in needs only the password."}
+            </span>
+            <span
+              style={{
+                font: "600 10px var(--mono)",
+                letterSpacing: ".08em",
+                color: me.data?.totp_enabled ? "var(--ok)" : "var(--warn)",
+              }}
+            >
+              {me.data?.totp_enabled ? "ON" : "OFF"}
+            </span>
+          </div>
+        </Panel>
+
+        <Panel>
+          <PanelHead
+            title="Personal access tokens"
+            count={tokens.data?.tokens.length ?? 0}
+          >
+            <NewButtonSubtle
+              onClick={() => setCreating("token")}
+              label="New token"
+            />
+          </PanelHead>
           <Async query={tokens}>
             {(d) =>
               d.tokens.length === 0 ? (
@@ -274,7 +318,12 @@ export function Account() {
         </Panel>
 
         <Panel>
-          <PanelHead>SSH KEYS</PanelHead>
+          <PanelHead title="SSH keys" count={keys.data?.keys.length ?? 0}>
+            <NewButtonSubtle
+              onClick={() => setCreating("key")}
+              label="New SSH key"
+            />
+          </PanelHead>
           <Async query={keys}>
             {(d) =>
               d.keys.length === 0 ? (
@@ -310,6 +359,33 @@ export function Account() {
         </Panel>
       </div>
     </Page>
+  );
+}
+
+/** NewButtonSubtle is a panel-head action: the same verb the page action
+ * offers, at the smaller scale a panel header carries. */
+function NewButtonSubtle({
+  label,
+  onClick,
+}: {
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: "3px 10px",
+        borderRadius: 6,
+        border: "1px solid var(--line)",
+        background: "transparent",
+        color: "var(--fg-muted)",
+        font: "500 11px var(--sans)",
+        cursor: "pointer",
+      }}
+    >
+      {label}
+    </button>
   );
 }
 

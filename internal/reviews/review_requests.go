@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
 	"github.com/novaforge/novaforge/internal/authz"
+	"github.com/novaforge/novaforge/internal/work"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -75,6 +76,14 @@ func (g *GRPCServer) RequestAgentReview(ctx context.Context, req *reviewsv1.Requ
 	if err != nil {
 		return nil, status.Error(codes.Internal, "persist agent review request failed")
 	}
+	// A review request is news to the run's author: someone is putting their
+	// work in front of independent reviewers. The requester notifying
+	// themselves would be noise, so they are excluded; an agent author has no
+	// mailbox on this platform, and notifyRunAuthor skips them.
+	notifyRunAuthor(g, ctx, run, work.ReasonReviewRequested,
+		fmt.Sprintf("run #%d", run.Number), run.Title,
+		fmt.Sprintf("Independent review requested at %s.", head),
+		"agent-review:"+r.ID.String(), scope.ActorID, "user")
 	return &reviewsv1.RequestAgentReviewResponse{Request: r.proto()}, nil
 }
 func (g *GRPCServer) ListAgentReviewRequests(ctx context.Context, req *reviewsv1.ListAgentReviewRequestsRequest) (*reviewsv1.ListAgentReviewRequestsResponse, error) {

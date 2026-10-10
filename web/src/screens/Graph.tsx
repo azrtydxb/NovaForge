@@ -84,10 +84,10 @@ function isPath(s: string) {
   return s.includes("/") || s.includes(".");
 }
 
-/** Graph answers the questions a file tree cannot: where the code that does
- * something lives, what depends on a symbol or file, what tests cover it, and
- * which commits and Work Items changed it. Every relation shown is an edge
- * the indexer wrote from the default branch; nothing is inferred here. */
+/** Code graph answers the questions a file tree cannot: where the code that
+ * does something lives, what depends on a symbol or file, what tests cover
+ * it, and which commits and Work Items changed it. Every relation shown is an
+ * edge the indexer wrote from the default branch; nothing is inferred here. */
 export function Graph() {
   const w = useWorkspace();
   const repo = w.repo;
@@ -125,7 +125,7 @@ export function Graph() {
 
   return (
     <Page
-      title="Engineering graph"
+      title="Code graph"
       subtitle={
         repo
           ? `${repo} — symbols, dependencies, tests and the work that changed them, on the default branch`

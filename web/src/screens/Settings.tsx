@@ -74,7 +74,7 @@ export function Settings() {
         }}
       >
         <Panel>
-          <PanelHead>APPROVAL POLICY</PanelHead>
+          <PanelHead title="Approval policy" />
           <Async query={approvals}>
             {(d) => (
               <>
@@ -108,10 +108,11 @@ export function Settings() {
         </Panel>
 
         <Panel>
-          <PanelHead>
-            GATES
+          <PanelHead title="Gates">
             {repo ? (
-              <span style={{ color: "var(--fg-faint)" }}>
+              <span
+                style={{ font: "11px var(--sans)", color: "var(--fg-faint)" }}
+              >
                 {repo}
                 {gates.data ? ` @ ${gates.data.ref}` : ""}
               </span>

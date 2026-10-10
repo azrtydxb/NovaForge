@@ -75,6 +75,19 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/inbox/unread:
+    get:
+      operationId: inboxUnread
+      summary: The signed-in person's unread notification count
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/mcp/tools:
     get:
       operationId: mcpTools
@@ -421,6 +434,97 @@ paths:
           schema:
             type: string
         - name: run_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/orgs/{org}/inbox:
+    get:
+      operationId: listInbox
+      summary: The caller's notifications, filtered by state (inbox/saved/done), reason and repository
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/orgs/{org}/inbox/{id}/done:
+    post:
+      operationId: inboxDone
+      summary: Mark one of the caller's notifications done
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/orgs/{org}/inbox/{id}/save:
+    post:
+      operationId: inboxSave
+      summary: Move one of the caller's notifications between Saved and the inbox
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/orgs/{org}/inbox/{id}/snooze:
+    post:
+      operationId: inboxSnooze
+      summary: Snooze one of the caller's notifications until the RFC3339 time in the body, default tomorrow
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
           in: path
           required: true
           schema:

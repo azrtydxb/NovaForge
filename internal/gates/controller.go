@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
+	workv1 "github.com/novaforge/novaforge/gen/novaforge/work/v1"
 	"github.com/novaforge/novaforge/internal/approvals"
 )
 
@@ -68,6 +69,16 @@ type Controller struct {
 	// approval policy; NewGRPCServer sets it from the store the service is
 	// given, so it cannot be left out of a deployed controller.
 	Approvals *approvals.Store
+	// Inbox publishes an approval request into its recipients' inboxes through
+	// the work-reviews service's ingest RPC — the approvals schema is this
+	// service's own and is never written across, so the notification goes over
+	// the RPC boundary every other cross-service fact uses. Nil means this
+	// deployment has not wired it and nothing is published.
+	Inbox workv1.WorkServiceClient
+	// RunNumber resolves a run's display number for a notification ref. It
+	// is set by NewController from the reviews client the controller already
+	// receives, and is nil only in a unit-constructed controller.
+	RunNumber func(ctx context.Context, runID uuid.UUID) (int32, error)
 }
 
 // ProofRecorder records one gate's outcome against a run.

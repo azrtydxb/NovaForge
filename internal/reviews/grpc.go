@@ -3,6 +3,7 @@ package reviews
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"strings"
 
@@ -13,6 +14,7 @@ import (
 	gitv1 "github.com/novaforge/novaforge/gen/novaforge/git/v1"
 	reviewsv1 "github.com/novaforge/novaforge/gen/novaforge/reviews/v1"
 	"github.com/novaforge/novaforge/internal/authz"
+	"github.com/novaforge/novaforge/internal/work"
 )
 
 const rfc3339 = "2006-01-02T15:04:05.999999999Z07:00"
@@ -41,6 +43,11 @@ type GRPCServer struct {
 	// Git measures a run's change impact. Nil means the deployment has no git
 	// service wired, and GetRunImpact says so.
 	Git gitv1.GitServiceClient
+
+	// Inbox receives the notifications the reviews flow publishes — a review
+	// requested on a run, a gate whose proof failed. Nil means this
+	// deployment has not wired the inbox and nothing is published.
+	Inbox *work.Store
 }
 
 // NewGRPCServer wraps store as a reviewsv1.ReviewsServiceServer.
@@ -293,7 +300,27 @@ func (g *GRPCServer) RecordProof(ctx context.Context, req *reviewsv1.RecordProof
 		}
 		return nil, status.Errorf(codes.InvalidArgument, "record proof: %v", err)
 	}
+	// A gate that failed its proof is news to the run's author — the person
+	// whose change cannot merge until it passes. Approval decisions record
+	// proof under the "approval/" prefix and carry their own inbox reasons,
+	// so they are excluded here rather than double-notified.
+	if req.GetStatus() == "fail" && !strings.HasPrefix(req.GetGate(), "approval/") {
+		if run, err := g.Store.GetRun(ctx, runID); err == nil {
+			notifyRunAuthor(g, ctx, run, work.ReasonGateFailure,
+				fmt.Sprintf("run #%d", run.Number), fmt.Sprintf("%s: %s", req.GetGate(), firstLine(req.GetDetail())),
+				req.GetDetail(), gateFailureDedupe(runID, req.GetGate(), req.GetDetail()),
+				uuid.Nil, "service")
+		}
+	}
 	return &reviewsv1.RecordProofResponse{Ok: true}, nil
+}
+
+// firstLine trims a proof detail to the one line a notification list shows.
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[:i]
+	}
+	return s
 }
 
 // SubmitReview records a reviewer's verdict on a run, within the caller's
