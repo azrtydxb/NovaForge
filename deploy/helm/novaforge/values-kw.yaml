@@ -25,6 +25,13 @@ outbound:
       host: github.com
       port: 443
       scheme: https
+    # The connected-host fixture from prepare-git-host-fixture.sh. Remove this
+    # entry when the novaforge-gap-fixture namespace is deleted.
+    - cidrs:
+        - 192.168.10.132/32
+      host: 192.168.10.132
+      port: 8088
+      scheme: http
 loadBalancer:
   className: io.cilium/l2-announcer
   ipAnnotation: lbipam.cilium.io/ips
