@@ -3,18 +3,12 @@ ai: {}
 gitTLS:
   ipAddresses:
     - 192.168.10.141
-  # The LAN names Nexora's watteel.lab zone serves. novaforge.kw.watteel.lab is
-  # the edge (GUI/API) address and git.novaforge.kw.watteel.lab the git
-  # LoadBalancer; both go on the certificate so an external client verifies
-  # whichever it dials, and the IP SAN covers a client that skips DNS.
   extraDNSNames:
     - novaforge.kw.watteel.lab
     - git.novaforge.kw.watteel.lab
 image:
-  tag: c8ade67
+  tag: 38e855a
 lfs:
-  # The name, not the IP: a bare address is never in the certificate's DNS SANs,
-  # so advertising it tells every LFS client to fail verification.
   publicURL: https://git.novaforge.kw.watteel.lab:8443
 operatorConfigs:
   deployments:
@@ -31,8 +25,6 @@ outbound:
       host: github.com
       port: 443
       scheme: https
-# kw announces LoadBalancer addresses with Cilium L2 (internal-lab
-# kubernetes/cilium/l2-announcements.yaml); its pool selects on the label.
 loadBalancer:
   className: io.cilium/l2-announcer
   ipAnnotation: lbipam.cilium.io/ips
@@ -40,14 +32,11 @@ loadBalancer:
     lb.kw.watteel.lab/announcer: cilium
 services:
   git-platform:
-    # Its own address. The provider once gave it 192.168.10.130, which
-    # BuildKit already held: two kube-vip leaders then each bound the address.
     loadBalancerIP: 192.168.10.141
   edge:
-    # Pinned since the move to Cilium; novaflow-v2 dials this address.
     loadBalancerIP: 192.168.10.128
   gates:
-    analysisImage: 192.168.10.131/novaforge/gate-analysis@sha256:18c5135159600a81a9aa66d2bdc19ceea08c7be762e46c271855f67d12dc3116
+    analysisImage: 192.168.10.131/novaforge/gate-analysis@sha256:43eec871bc161f5ad91305461454172a0ae84f5abd522da9b7dd469b0a83f650
 secrets:
   existingSecret: novaforge-secrets
 rbac:
