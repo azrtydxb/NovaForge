@@ -11,10 +11,13 @@ image:
 lfs:
   publicURL: https://git.novaforge.kw.watteel.lab:8443
 operatorConfigs:
+  # The governed-deployment fixture's operator bindings
+  # (hack/prepare-deployment-fixture.py). Remove together with the fixture's
+  # namespaces and the cleanup-gap-fixtures.py step.
   deployments:
-    secretName: ""
+    secretName: novaforge-deployment-config
   openbao:
-    secretName: novaforge-openbao
+    secretName: novaforge-openbao-deployment
   semanticProducer:
     secretName: novaforge-semantic-producer
 outbound:
