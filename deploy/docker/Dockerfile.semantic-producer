@@ -17,7 +17,7 @@ RUN go install github.com/scip-code/scip-go/cmd/scip-go@v0.2.7 \
  && (cd /tmp/scip && go install ./cmd/scip) \
  && go install golang.org/x/tools/gopls@v0.21.1
 
-FROM node:22.22.0-bookworm-slim AS node
+FROM node:26.10.0-bookworm-slim AS node
 RUN npm install --global --ignore-scripts @sourcegraph/scip-typescript@0.4.0 @sourcegraph/scip-python@0.6.6
 
 FROM golang:${GO_VERSION}-bookworm
