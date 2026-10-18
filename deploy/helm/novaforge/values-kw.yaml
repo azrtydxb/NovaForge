@@ -11,10 +11,13 @@ image:
 lfs:
   publicURL: https://git.novaforge.kw.watteel.lab:8443
 operatorConfigs:
+  # The governed-deployment fixture's operator bindings
+  # (hack/prepare-deployment-fixture.py). Remove together with the fixture's
+  # namespaces and the cleanup-gap-fixtures.py step.
   deployments:
-    secretName: ""
+    secretName: novaforge-deployment-config
   openbao:
-    secretName: novaforge-openbao
+    secretName: novaforge-openbao-deployment
   semanticProducer:
     secretName: novaforge-semantic-producer
 outbound:
@@ -25,6 +28,13 @@ outbound:
       host: github.com
       port: 443
       scheme: https
+    # The connected-host fixture from prepare-git-host-fixture.sh. Remove this
+    # entry when the novaforge-gap-fixture namespace is deleted.
+    - cidrs:
+        - 192.168.10.132/32
+      host: 192.168.10.132
+      port: 8088
+      scheme: http
 loadBalancer:
   className: io.cilium/l2-announcer
   ipAnnotation: lbipam.cilium.io/ips
