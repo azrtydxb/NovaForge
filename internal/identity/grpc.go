@@ -40,6 +40,11 @@ type Server struct {
 	orgDeleted OrgDeletedPublisher
 	HMACSecret string
 	Agents     agentsv1.AgentServiceClient
+	// PasswordLoginEnabled switches the platform's own username/password
+	// sign-in, Register included. A deployment that signs everyone in through
+	// its identity provider turns it off, and then a password account cannot
+	// be created or used here even by a caller that bypasses the edge.
+	PasswordLoginEnabled bool
 }
 
 // NewGRPCServer wires store, sessions, tokens, sshKeys, and grants into an
@@ -52,11 +57,17 @@ func NewGRPCServer(store *Store, sessions *SessionStore, tokens *TokenStore, ssh
 		sshKeys:    sshKeys,
 		grants:     grants,
 		sessionTTL: defaultSessionTTL,
+		// On unless a deployment says otherwise: switching it off is an
+		// operator's decision, never the default of a constructor.
+		PasswordLoginEnabled: true,
 	}
 }
 
 // Register creates a new user account.
 func (s *Server) Register(ctx context.Context, req *identityv1.RegisterRequest) (*identityv1.RegisterResponse, error) {
+	if !s.PasswordLoginEnabled {
+		return nil, errPasswordLoginDisabled
+	}
 	if req.GetEmail() == "" || req.GetUsername() == "" || req.GetPassword() == "" {
 		return nil, status.Error(codes.InvalidArgument, "email, username, and password are required")
 	}
@@ -74,6 +85,8 @@ func (s *Server) Register(ctx context.Context, req *identityv1.RegisterRequest) 
 	return &identityv1.RegisterResponse{UserId: u.ID.String()}, nil
 }
 
+var errPasswordLoginDisabled = status.Error(codes.FailedPrecondition, "password sign-in is disabled in this deployment; sign in with single sign-on")
+
 // Login verifies username and password and, when TOTP is enabled on the
 // account, a valid totp_code. It always returns codes.Unauthenticated on
 // any failure, including a missing or invalid TOTP code, so a client cannot
@@ -81,6 +94,9 @@ func (s *Server) Register(ctx context.Context, req *identityv1.RegisterRequest) 
 // shape — except that when TOTP is required and not satisfied, the response
 // also carries requires_totp=true so the client knows to prompt for one.
 func (s *Server) Login(ctx context.Context, req *identityv1.LoginRequest) (*identityv1.LoginResponse, error) {
+	if !s.PasswordLoginEnabled {
+		return nil, errPasswordLoginDisabled
+	}
 	if req.GetUsername() == "" || req.GetPassword() == "" {
 		return nil, status.Error(codes.InvalidArgument, "username and password are required")
 	}
@@ -423,8 +439,18 @@ func (s *Server) resolveCallerScope(ctx context.Context) (authz.Scope, bool, err
 		return authz.Scope{}, false, nil
 	}
 	if strings.HasPrefix(token, svcauth.Prefix) {
-		scope, err := svcauth.ScopeFromToken(s.HMACSecret, token)
-		return scope, err == nil, nil
+		if scope, err := svcauth.ScopeFromToken(s.HMACSecret, token); err == nil {
+			return scope, true, nil
+		}
+		// A platform token names no organization, so its scope has none and
+		// every org-scoped RPC here refuses it as it refuses no scope. Only an
+		// RPC that asks for one platform worker by name — SignInExternal, for
+		// the edge — lets it in. Refusing it here instead left that RPC with
+		// no way to recognise the one caller it exists for.
+		if worker, err := svcauth.VerifyPlatform(s.HMACSecret, token); err == nil {
+			return authz.Scope{ActorKind: "service", PlatformWorker: worker}, true, nil
+		}
+		return authz.Scope{}, false, nil
 	}
 	var user uuid.UUID
 	if strings.HasPrefix(token, "nf_") {

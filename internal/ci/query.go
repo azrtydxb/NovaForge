@@ -89,12 +89,31 @@ func (q *QueryServer) GetRun(ctx context.Context, req *civ1.GetRunRequest) (*civ
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "list jobs: %v", err)
 	}
+	// A pending command job with no runner connected for its organization can
+	// never start, and looks exactly like a queue that is merely busy. Say so,
+	// computed now rather than stored when it was queued, so a runner that
+	// connects later makes the note disappear without rewriting the job.
+	// Agent-role jobs run as Agent Runs, not on runners, so they never need one.
+	waiting := false
+	for _, j := range jobs {
+		if j.Status == "pending" && j.AgentRole == "" && j.Detail == "" {
+			connected, err := q.store.RunnerConnected(ctx, sc.OrgID)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "runner presence: %v", err)
+			}
+			waiting = !connected
+			break
+		}
+	}
 	outJobs := make([]*civ1.WorkflowJobSummary, 0, len(jobs))
 	for _, j := range jobs {
 		summary := &civ1.WorkflowJobSummary{
 			Id: j.ID.String(), RunId: j.RunID.String(),
 			Name: j.Name, Status: j.Status, Detail: j.Detail,
 			AgentRole: j.AgentRole, WorkItemKey: j.WorkItemKey,
+		}
+		if waiting && j.Status == "pending" && j.AgentRole == "" && j.Detail == "" {
+			summary.Detail = noRunnerDetail
 		}
 		if j.AgentRunID != nil {
 			summary.AgentRunId = j.AgentRunID.String()
@@ -276,6 +295,9 @@ func (q *QueryServer) resolveJob(ctx context.Context, sc authz.Scope, jobID, run
 	}
 	return jobs[0].ID, nil
 }
+
+// noRunnerDetail is what a pending command job reports when nothing can run it.
+const noRunnerDetail = "Waiting: no CI runner is connected for this organization, so this job cannot start until one connects."
 
 func runSummary(r Run) *civ1.WorkflowRunSummary {
 	return &civ1.WorkflowRunSummary{

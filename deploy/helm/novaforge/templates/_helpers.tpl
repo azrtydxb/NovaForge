@@ -5,7 +5,7 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end -}}
 
 {{- define "novaforge.image" -}}
-{{ .Values.image.registry }}/{{ .Values.image.repository }}/{{ .svc }}:{{ .Values.image.tag }}
+{{ .Values.image.registry }}/{{ .Values.image.repository }}/{{ .Values.image.namePrefix | default "" }}{{ .svc }}:{{ .Values.image.tag }}
 {{- end -}}
 
 {{- define "novaforge.secretName" -}}

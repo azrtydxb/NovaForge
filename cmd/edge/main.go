@@ -126,6 +126,24 @@ func main() {
 		Gates:       gatesClient,
 		Deployments: deploymentClient,
 		MCP:         mcpClient,
+		OIDC: edge.OIDCConfig{
+			Issuer:                cfg.OIDCIssuer,
+			ClientID:              cfg.OIDCClientID,
+			RedirectURI:           cfg.OIDCRedirectURI,
+			ButtonLabel:           cfg.OIDCButtonLabel,
+			PasswordLoginDisabled: !cfg.PasswordLoginEnabled,
+			HMACSecret:            cfg.HMACSecret,
+		},
+	}
+	// A partial SSO configuration — an issuer without a client id, or SSO
+	// with no secret to sign its state — would draw a sign-in button that can
+	// never work. Refusing to start makes the misconfiguration the operator's
+	// first sight of the pod, not a user's.
+	if err := ecfg.OIDC.Validate(); err != nil {
+		log.Fatalf("edge: single sign-on: %v", err)
+	}
+	if ecfg.OIDC.Enabled() {
+		log.Printf("edge: single sign-on through %s (password sign-in enabled: %v)", cfg.OIDCIssuer, cfg.PasswordLoginEnabled)
 	}
 	ecfg.Handlers = edge.Handlers(ecfg)
 

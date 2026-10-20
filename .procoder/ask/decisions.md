@@ -877,3 +877,43 @@ registered four QUIC connections each. The internal side was verified the same
 hour: Sync applied the values change, cert-manager reissued with
 `novaforge.kw.watteel.lab`, `git.novaforge.kw.watteel.lab` and the LoadBalancer
 IP on the certificate, and both names verify against the served chain.
+
+## Deploying NovaForge to OKE at novaforge.azrty.com (2026-10-21)
+
+Asked for: deploy on OKE under novaforge.azrty.com, signed in through the
+cluster's Zitadel (login.azrty.com). Built and verified locally: OIDC SSO
+(public client, PKCE, linking by issuer+subject only), an OKE chart profile
+(values-oke.yaml: shared gateway HTTPRoute with Git on the same host, shared-pg
+with pgvector, OCIR images, no cluster-scoped objects), a publish workflow on
+the ARC arm64 runners, and the azrty-infra onboarding on branch tenant/novaforge
+mirroring how atlas was onboarded.
+
+Every in-cluster change server-side dry-runs against live OKE, including the
+shared 18-listener `edge` Gateway. `tofu plan`: oci 13 add / 0 change / 0
+destroy (OCIR repos); route53-access 0 add / 2 in-place / 0 destroy (three
+NovaForge hostnames added to two scoped IAM policies). Re-encrypting
+shared-pg/databases.sops.yaml rotates every ciphertext; decrypted, the other 20
+documents are proven identical.
+
+What remains is outward-facing and touches shared infrastructure, so it is put
+to the user rather than done:
+
+1. Apply the onboarding.
+   - Apply all: run both tofu applies, set NovaForge's OCIR push secrets from
+     the oci tofu output, open the azrty-infra PR and merge it once `manifests`
+     and `guard` pass, push NovaForge main so CI publishes and pins images.
+   - Prepare only: open the PR and hand over the plans; the user applies/merges.
+   - Hold.
+
+2. Code execution on OKE. OKE runs flannel, which does not enforce
+   NetworkPolicy, so the isolation that makes untrusted repository code safe
+   (agent workspaces, executable gates, CI runners — proven on kw by
+   airgap_test with Cilium) does not hold there: such code could reach
+   shared-pg, which holds every azrty app's data, and the internet.
+   - Off on OKE for now (the shipped values-oke.yaml): Git hosting, Work, Runs,
+     reviews, static gates, search work; agents, executable gates and CI runs
+     do not run — pending CI jobs now say why instead of queueing silently.
+   - Install a policy engine cluster-wide (Calico policy-only or Cilium
+     chaining): a platform change affecting every tenant, separate effort.
+   - Run code-executing workloads on a separate node pool or cluster that
+     enforces policy.

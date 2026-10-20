@@ -1,0 +1,157 @@
+name: Publish to OKE
+
+# Builds NovaForge's images for arm64 on the azrty ARC runners (which run on the
+# OKE cluster itself), pushes them to OCIR, and pins the commit tag in
+# deploy/helm/novaforge/values-oke.yaml. Kuvryn Sync deploys main, so a green
+# main is the deployed state on novaforge.azrty.com.
+#
+# The kw cluster is unaffected: it is promoted by hand (hack/build-images.sh +
+# hack/promote-kw.sh) from images on its own registry.
+#
+# Why the pin commit cannot loop: it is pushed with this workflow's GITHUB_TOKEN,
+# and GitHub never starts a workflow run from a commit pushed with that token.
+# A pin is therefore never re-published as if it were new code.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+# Two publishes racing would pin out of order; the later commit must win.
+concurrency:
+  group: publish-oke
+  cancel-in-progress: false
+
+env:
+  OCIR: dxb.ocir.io/axmcgpqk0w0z/azrty/novaforge-
+
+jobs:
+  # The same minimum CI holds main to: a commit that does not build and vet is
+  # not published.
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - run: go build ./...
+      - run: go vet ./...
+
+  image:
+    needs: verify
+    runs-on: arc-azrtydxb
+    timeout-minutes: 90
+    strategy:
+      fail-fast: true
+      matrix:
+        # Every image values-oke.yaml deploys, plus the gate sandbox so it is
+        # ready when executable gates are enabled. deployment-runner is not
+        # here: the operator builds it from an approved chart archive.
+        svc:
+          - identity
+          - git-platform
+          - work-reviews
+          - ci-runner
+          - gates
+          - agent-runtime
+          - engineering-graph
+          - mcp-server
+          - edge
+          - runner
+          - nf
+          - gate-analysis
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: Log in to OCIR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: dxb.ocir.io
+          username: ${{ secrets.OCIR_USERNAME }}
+          password: ${{ secrets.OCIR_TOKEN }}
+      # hack/dockerfile-for.sh is the one mapping from service to Dockerfile,
+      # shared with the in-cluster build, so the two paths cannot diverge.
+      - id: df
+        run: |
+          read -r file target < <(./hack/dockerfile-for.sh "${{ matrix.svc }}")
+          echo "file=$file" >>"$GITHUB_OUTPUT"
+          echo "target=${target:-}" >>"$GITHUB_OUTPUT"
+      - id: short
+        run: echo "sha=${GITHUB_SHA::7}" >>"$GITHUB_OUTPUT"
+      # OKE nodes are arm64 and so is this runner: build natively.
+      - name: Build and push ${{ matrix.svc }}
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: ${{ steps.df.outputs.file }}
+          target: ${{ steps.df.outputs.target }}
+          build-args: SERVICE=${{ matrix.svc }}
+          platforms: linux/arm64
+          push: true
+          provenance: false
+          # The commit sha only — never a mutable tag. A mutable tag with
+          # IfNotPresent served stale code on kw for a whole session.
+          tags: ${{ env.OCIR }}${{ matrix.svc }}:${{ steps.short.outputs.sha }}
+
+  pin:
+    needs: image
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Pin the published tag in values-oke.yaml
+        run: |
+          set -euo pipefail
+          short="${GITHUB_SHA::7}"
+          values=deploy/helm/novaforge/values-oke.yaml
+          git config user.name "novaforge ci"
+          git config user.email "ci@novaforge.invalid"
+          # Rebuilt from origin on every attempt rather than rebased: a newer
+          # publish may have pinned in between, and a newer commit must win.
+          for attempt in 1 2 3 4 5; do
+            git fetch --quiet origin main
+            if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+              echo "$GITHUB_SHA is no longer on main; not pinning"
+              exit 0
+            fi
+            git checkout --quiet --force -B pin origin/main
+            current=$(awk '/^image:/{f=1;next} f&&/^  tag:/{print $2;exit} f&&/^[^ ]/{exit}' "$values")
+            # Never move the pin backwards: a slow publish of an older commit
+            # finishing after a newer one must not roll OKE back.
+            if [ -n "$current" ] && git cat-file -e "$current^{commit}" 2>/dev/null \
+              && git merge-base --is-ancestor "$GITHUB_SHA" "$current" && [ "$current" != "$short" ]; then
+              echo "values-oke already pins $current, which contains $short; not pinning"
+              exit 0
+            fi
+            sed -i -E "/^image:/,/^[^ ]/ s|^(  tag: ).*|\1${short}|" "$values"
+            got=$(awk '/^image:/{f=1;next} f&&/^  tag:/{print $2;exit} f&&/^[^ ]/{exit}' "$values")
+            if [ "$got" != "$short" ]; then
+              echo "failed to write tag $short into $values" >&2
+              exit 1
+            fi
+            if git diff --quiet; then
+              echo "$values already pins $short"
+              exit 0
+            fi
+            git add "$values"
+            git commit --quiet -m "deploy: pin ${short} on oke" \
+              -m "Written by CI after the images were pushed to ${OCIR}* (built from ${GITHUB_SHA})."
+            if git push --quiet origin HEAD:main; then
+              echo "pinned ${short}"
+              exit 0
+            fi
+            echo "push raced a newer commit (attempt $attempt); retrying"
+            sleep $((attempt * 5))
+          done
+          echo "could not pin after 5 attempts" >&2
+          exit 1

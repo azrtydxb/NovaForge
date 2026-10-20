@@ -21,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	IdentityService_Register_FullMethodName           = "/novaforge.identity.v1.IdentityService/Register"
 	IdentityService_Login_FullMethodName              = "/novaforge.identity.v1.IdentityService/Login"
+	IdentityService_SignInExternal_FullMethodName     = "/novaforge.identity.v1.IdentityService/SignInExternal"
 	IdentityService_LogoutSession_FullMethodName      = "/novaforge.identity.v1.IdentityService/LogoutSession"
 	IdentityService_IssueIntent_FullMethodName        = "/novaforge.identity.v1.IdentityService/IssueIntent"
 	IdentityService_CancelIssuance_FullMethodName     = "/novaforge.identity.v1.IdentityService/CancelIssuance"
@@ -64,6 +65,17 @@ const (
 type IdentityServiceClient interface {
 	Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterResponse, error)
 	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginResponse, error)
+	// SignInExternal returns a session for the NovaForge user linked to an
+	// external identity the caller has already verified (an OIDC ID token whose
+	// signature, issuer, audience, expiry and nonce the edge checked), creating
+	// the user on its first sign-in. The link is (issuer, subject) and nothing
+	// else: an email or username that matches an existing account never links to
+	// it, because whoever controls a claim would then own that account.
+	//
+	// Only the edge may call it, with a platform token naming the edge's OIDC
+	// worker (svcauth.EdgeOIDCService). Anyone else who could call it could mint
+	// a session for any subject they cared to name.
+	SignInExternal(ctx context.Context, in *SignInExternalRequest, opts ...grpc.CallOption) (*SignInExternalResponse, error)
 	LogoutSession(ctx context.Context, in *LogoutSessionRequest, opts ...grpc.CallOption) (*LogoutSessionResponse, error)
 	IssueIntent(ctx context.Context, in *IssueIntentRequest, opts ...grpc.CallOption) (*IssueIntentResponse, error)
 	CancelIssuance(ctx context.Context, in *CancelIssuanceRequest, opts ...grpc.CallOption) (*CancelIssuanceResponse, error)
@@ -122,6 +134,16 @@ func (c *identityServiceClient) Login(ctx context.Context, in *LoginRequest, opt
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(LoginResponse)
 	err := c.cc.Invoke(ctx, IdentityService_Login_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) SignInExternal(ctx context.Context, in *SignInExternalRequest, opts ...grpc.CallOption) (*SignInExternalResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SignInExternalResponse)
+	err := c.cc.Invoke(ctx, IdentityService_SignInExternal_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -448,6 +470,17 @@ func (c *identityServiceClient) Verify2FA(ctx context.Context, in *Verify2FARequ
 type IdentityServiceServer interface {
 	Register(context.Context, *RegisterRequest) (*RegisterResponse, error)
 	Login(context.Context, *LoginRequest) (*LoginResponse, error)
+	// SignInExternal returns a session for the NovaForge user linked to an
+	// external identity the caller has already verified (an OIDC ID token whose
+	// signature, issuer, audience, expiry and nonce the edge checked), creating
+	// the user on its first sign-in. The link is (issuer, subject) and nothing
+	// else: an email or username that matches an existing account never links to
+	// it, because whoever controls a claim would then own that account.
+	//
+	// Only the edge may call it, with a platform token naming the edge's OIDC
+	// worker (svcauth.EdgeOIDCService). Anyone else who could call it could mint
+	// a session for any subject they cared to name.
+	SignInExternal(context.Context, *SignInExternalRequest) (*SignInExternalResponse, error)
 	LogoutSession(context.Context, *LogoutSessionRequest) (*LogoutSessionResponse, error)
 	IssueIntent(context.Context, *IssueIntentRequest) (*IssueIntentResponse, error)
 	CancelIssuance(context.Context, *CancelIssuanceRequest) (*CancelIssuanceResponse, error)
@@ -496,6 +529,9 @@ func (UnimplementedIdentityServiceServer) Register(context.Context, *RegisterReq
 }
 func (UnimplementedIdentityServiceServer) Login(context.Context, *LoginRequest) (*LoginResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Login not implemented")
+}
+func (UnimplementedIdentityServiceServer) SignInExternal(context.Context, *SignInExternalRequest) (*SignInExternalResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SignInExternal not implemented")
 }
 func (UnimplementedIdentityServiceServer) LogoutSession(context.Context, *LogoutSessionRequest) (*LogoutSessionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method LogoutSession not implemented")
@@ -642,6 +678,24 @@ func _IdentityService_Login_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(IdentityServiceServer).Login(ctx, req.(*LoginRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_SignInExternal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SignInExternalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).SignInExternal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_SignInExternal_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).SignInExternal(ctx, req.(*SignInExternalRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1218,6 +1272,10 @@ var IdentityService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Login",
 			Handler:    _IdentityService_Login_Handler,
+		},
+		{
+			MethodName: "SignInExternal",
+			Handler:    _IdentityService_SignInExternal_Handler,
 		},
 		{
 			MethodName: "LogoutSession",

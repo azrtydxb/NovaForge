@@ -8,6 +8,17 @@ package novaforge.identity.v1;
 service IdentityService {
   rpc Register(RegisterRequest) returns (RegisterResponse);
   rpc Login(LoginRequest) returns (LoginResponse);
+  // SignInExternal returns a session for the NovaForge user linked to an
+  // external identity the caller has already verified (an OIDC ID token whose
+  // signature, issuer, audience, expiry and nonce the edge checked), creating
+  // the user on its first sign-in. The link is (issuer, subject) and nothing
+  // else: an email or username that matches an existing account never links to
+  // it, because whoever controls a claim would then own that account.
+  //
+  // Only the edge may call it, with a platform token naming the edge's OIDC
+  // worker (svcauth.EdgeOIDCService). Anyone else who could call it could mint
+  // a session for any subject they cared to name.
+  rpc SignInExternal(SignInExternalRequest) returns (SignInExternalResponse);
   rpc LogoutSession(LogoutSessionRequest) returns (LogoutSessionResponse);
   rpc IssueIntent(IssueIntentRequest) returns (IssueIntentResponse);
   rpc CancelIssuance(CancelIssuanceRequest) returns (CancelIssuanceResponse);
@@ -42,6 +53,23 @@ service IdentityService {
   rpc DeleteToken(DeleteTokenRequest) returns (DeleteTokenResponse);
   rpc Setup2FA(Setup2FARequest) returns (Setup2FAResponse);
   rpc Verify2FA(Verify2FARequest) returns (Verify2FAResponse);
+}
+
+message SignInExternalRequest {
+  string issuer = 1;
+  string subject = 2;
+  string email = 3;
+  bool email_verified = 4;
+  string preferred_username = 5;
+  string name = 6;
+}
+
+message SignInExternalResponse {
+  string session_token = 1;
+  string user_id = 2;
+  string username = 3;
+  // Whether this sign-in created the user (just-in-time provisioning).
+  bool created = 4;
 }
 
 message User {

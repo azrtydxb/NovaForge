@@ -121,3 +121,12 @@ func interruptRunnerJobs(ctx context.Context, tx pgx.Tx, org, runner uuid.UUID, 
 	_, err = tx.Exec(ctx, `UPDATE ci.workflow_runs r SET status=CASE WHEN EXISTS(SELECT 1 FROM ci.workflow_jobs j WHERE j.run_id=r.id AND j.status IN ('failure','cancelled')) THEN 'failure' ELSE 'success' END WHERE r.org_id=$1 AND r.id=ANY($2) AND r.status NOT IN ('success','failure','cancelled') AND NOT EXISTS(SELECT 1 FROM ci.workflow_jobs j WHERE j.run_id=r.id AND j.status IN ('pending','running'))`, org, runs)
 	return err
 }
+
+// RunnerConnected reports whether any runner of orgID holds a live connection,
+// which is the only thing that lets a pending command job start. Scoped to the
+// organization: another organization's runner never claims this one's jobs.
+func (s *Store) RunnerConnected(ctx context.Context, orgID uuid.UUID) (bool, error) {
+	var ok bool
+	err := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM ci.runners WHERE org_id=$1 AND connection_id IS NOT NULL)`, orgID).Scan(&ok)
+	return ok, err
+}

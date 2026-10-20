@@ -70,77 +70,7 @@ func TestHelmChartDeploysEveryServiceWithTheEnvironmentItsBinaryReads(t *testing
 	}
 	objects := decodeManifests(t, out)
 
-	secretKeys := map[string]map[string]bool{}
-	for _, o := range objects {
-		if o.Kind == "Secret" {
-			keys := map[string]bool{}
-			for k := range o.StringData {
-				keys[k] = true
-			}
-			for k := range o.Data {
-				keys[k] = true
-			}
-			secretKeys[o.Metadata.Name] = keys
-		}
-	}
-
-	fields := configEnv(t, filepath.Join(root, "internal", "service", "service.go"))
-
-	names := make([]string, 0, len(values.Services))
-	for name := range values.Services {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	for _, name := range names {
-		t.Run(name, func(t *testing.T) {
-			full := release + "-" + name
-			dep := find(objects, "Deployment", full)
-			if dep == nil {
-				t.Fatalf("values.yaml lists %s but the chart renders no Deployment %s", name, full)
-			}
-			if find(objects, "Service", full) == nil {
-				t.Errorf("values.yaml lists %s but the chart renders no Service %s", name, full)
-			}
-			containers := dep.Spec.Template.Spec.Containers
-			if len(containers) == 0 {
-				t.Fatalf("Deployment %s has no container", full)
-			}
-			c := containers[0]
-			if !strings.HasSuffix(strings.Split(c.Image, ":")[0], "/"+name) {
-				t.Errorf("Deployment %s runs image %s, not the %s binary", full, c.Image, name)
-			}
-			env := map[string]bool{}
-			for _, e := range c.Env {
-				env[e.Name] = true
-			}
-			for _, ef := range c.EnvFrom {
-				if ef.SecretRef != nil {
-					keys, ok := secretKeys[ef.SecretRef.Name]
-					if !ok {
-						t.Errorf("Deployment %s takes its environment from Secret %s, which the chart does not render", full, ef.SecretRef.Name)
-					}
-					for k := range keys {
-						env[k] = true
-					}
-				}
-			}
-
-			cmdDir := filepath.Join(root, "cmd", name)
-			if _, err := os.Stat(cmdDir); err != nil {
-				t.Fatalf("values.yaml lists %s but there is no cmd/%s binary to deploy", name, name)
-			}
-			for _, field := range readFields(t, root, "./cmd/"+name) {
-				f, ok := fields[field]
-				if !ok || f.hasDefault {
-					continue
-				}
-				if !env[f.env] {
-					t.Errorf("cmd/%s reads Config.%s, but its Deployment sets no %s", name, field, f.env)
-				}
-			}
-		})
-	}
+	checkServiceEnvironment(t, root, objects, release, "", values.Services, renderedSecretKeys(objects))
 
 	// The reverse: nothing the chart deploys as a service is missing from
 	// values.yaml, or it would be deployed without being checked above.
@@ -175,8 +105,14 @@ type manifest struct {
 				Containers []struct {
 					Image string `yaml:"image"`
 					Env   []struct {
-						Name  string `yaml:"name"`
-						Value string `yaml:"value"`
+						Name      string `yaml:"name"`
+						Value     string `yaml:"value"`
+						ValueFrom *struct {
+							SecretKeyRef *struct {
+								Name string `yaml:"name"`
+								Key  string `yaml:"key"`
+							} `yaml:"secretKeyRef"`
+						} `yaml:"valueFrom"`
 					} `yaml:"env"`
 					EnvFrom []struct {
 						SecretRef *struct {
@@ -351,4 +287,98 @@ func repoRoot(t *testing.T) string {
 		t.Fatal("cannot locate the test file")
 	}
 	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
+}
+
+// renderedSecretKeys maps each Secret the chart rendered to the keys it holds.
+func renderedSecretKeys(objects []manifest) map[string]map[string]bool {
+	secretKeys := map[string]map[string]bool{}
+	for _, o := range objects {
+		if o.Kind == "Secret" {
+			keys := map[string]bool{}
+			for k := range o.StringData {
+				keys[k] = true
+			}
+			for k := range o.Data {
+				keys[k] = true
+			}
+			secretKeys[o.Metadata.Name] = keys
+		}
+	}
+	return secretKeys
+}
+
+// checkServiceEnvironment holds every service values.yaml lists against its
+// rendered Deployment: the Deployment and Service exist, the container runs
+// that service's image (named <repository>/<namePrefix><service>), and every
+// Config field the binary reads without a default of its own arrives in the
+// pod, either as an env entry or as a key of a Secret it takes envFrom.
+// secretKeys names the keys each envFrom Secret holds; a Secret the chart does
+// not render (an existing one) must be described there or the check fails.
+func checkServiceEnvironment(t *testing.T, root string, objects []manifest, release, namePrefix string, services map[string]map[string]any, secretKeys map[string]map[string]bool) {
+	t.Helper()
+	fields := configEnv(t, filepath.Join(root, "internal", "service", "service.go"))
+
+	names := make([]string, 0, len(services))
+	for name := range services {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	for _, name := range names {
+		t.Run(name, func(t *testing.T) {
+			full := release + "-" + name
+			dep := find(objects, "Deployment", full)
+			if dep == nil {
+				t.Fatalf("values.yaml lists %s but the chart renders no Deployment %s", name, full)
+			}
+			if find(objects, "Service", full) == nil {
+				t.Errorf("values.yaml lists %s but the chart renders no Service %s", name, full)
+			}
+			containers := dep.Spec.Template.Spec.Containers
+			if len(containers) == 0 {
+				t.Fatalf("Deployment %s has no container", full)
+			}
+			c := containers[0]
+			if !strings.HasSuffix(strings.Split(c.Image, ":")[0], "/"+namePrefix+name) {
+				t.Errorf("Deployment %s runs image %s, not the %s binary", full, c.Image, name)
+			}
+			env := map[string]bool{}
+			for _, e := range c.Env {
+				env[e.Name] = true
+				// A variable taken from a Secret key is only set if the key
+				// exists: a missing key keeps the pod in CreateContainerConfigError.
+				if e.ValueFrom != nil && e.ValueFrom.SecretKeyRef != nil {
+					ref := e.ValueFrom.SecretKeyRef
+					if keys, ok := secretKeys[ref.Name]; !ok || !keys[ref.Key] {
+						t.Errorf("Deployment %s takes %s from Secret %s key %s, which is neither rendered nor in the Secret contract", full, e.Name, ref.Name, ref.Key)
+					}
+				}
+			}
+			for _, ef := range c.EnvFrom {
+				if ef.SecretRef != nil {
+					keys, ok := secretKeys[ef.SecretRef.Name]
+					if !ok {
+						t.Errorf("Deployment %s takes its environment from Secret %s, which is neither rendered nor in the Secret contract", full, ef.SecretRef.Name)
+					}
+					for k := range keys {
+						env[k] = true
+					}
+				}
+			}
+
+			cmdDir := filepath.Join(root, "cmd", name)
+			if _, err := os.Stat(cmdDir); err != nil {
+				t.Fatalf("values.yaml lists %s but there is no cmd/%s binary to deploy", name, name)
+			}
+			for _, field := range readFields(t, root, "./cmd/"+name) {
+				f, ok := fields[field]
+				if !ok || f.hasDefault {
+					continue
+				}
+				if !env[f.env] {
+					t.Errorf("cmd/%s reads Config.%s, but its Deployment sets no %s", name, field, f.env)
+				}
+			}
+		})
+	}
 }

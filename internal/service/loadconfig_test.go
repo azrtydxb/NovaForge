@@ -41,6 +41,11 @@ func TestLoadConfigPopulatesEveryField(t *testing.T) {
 		"NF_DEPLOYMENT_CONFIG_FILE":        "/etc/novaforge/deployment.json",
 		"NF_SEMANTIC_PRODUCER_CONFIG_FILE": "/etc/novaforge/semantic.json",
 		"JWT_SECRET":                       "j", "HMAC_SECRET": "h", "SECRETS_KEK": "kek",
+		"OIDC_ISSUER":               "https://login.example.test",
+		"OIDC_CLIENT_ID":            "client",
+		"OIDC_REDIRECT_URI":         "https://nf.example.test/api/v1/auth/oidc/callback",
+		"NF_OIDC_BUTTON_LABEL":      "Sign in with example",
+		"NF_PASSWORD_LOGIN_ENABLED": "true",
 	}
 	for k, v := range env {
 		t.Setenv(k, v)

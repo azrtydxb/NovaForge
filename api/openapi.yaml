@@ -62,6 +62,46 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/auth/oidc/callback:
+    get:
+      operationId: oidcCallback
+      summary: The provider's redirect back; verifies the ID token, signs in and redirects to the application
+      responses:
+        "302":
+          description: Redirect
+  /api/v1/auth/oidc/config:
+    get:
+      operationId: getOIDCConfig
+      summary: Whether single sign-on is enabled, its issuer, and whether password sign-in remains
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/auth/oidc/session:
+    post:
+      operationId: completeOIDC
+      summary: Exchange the one-shot hand-off cookie the callback set for the session token
+      responses:
+        "200":
+          description: Success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/auth/oidc/start:
+    get:
+      operationId: startOIDC
+      summary: Redirect to the identity provider (authorization code + PKCE S256)
+      responses:
+        "302":
+          description: Redirect
   /api/v1/auth/register:
     post:
       operationId: register

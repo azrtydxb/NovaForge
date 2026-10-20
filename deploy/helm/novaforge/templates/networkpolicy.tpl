@@ -59,5 +59,31 @@ spec:
               protocol: TCP
 {{- end }}
 {{- end }}
+{{- if and (eq $name "edge") $.Values.oidc.existingSecret }}
+{{- /*
+Single sign-on: the edge fetches the issuer's discovery document and signing
+keys and redeems the authorization code at its token endpoint, so it may reach
+that one host and port. The DNS rule matches every name, as git-platform's
+does: once a DNS rule applies to an endpoint, Cilium refuses the lookups it
+does not match, and the edge resolves its peers by name.
+*/ -}}
+{{- if not $.Values.oidc.issuerHost }}{{ fail "oidc.issuerHost is required with oidc.existingSecret while edge is air-gapped: the edge could not reach the issuer" }}{{ end }}
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - {port: "53", protocol: ANY}
+          rules:
+            dns:
+              - matchPattern: "*"
+    - toFQDNs:
+        - matchName: {{ $.Values.oidc.issuerHost | quote }}
+      toPorts:
+        - ports:
+            - port: {{ $.Values.oidc.issuerPort | quote }}
+              protocol: TCP
+{{- end }}
 {{- end }}
 {{- end }}

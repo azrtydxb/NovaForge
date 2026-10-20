@@ -20,6 +20,10 @@ copied: a fix to the probe or the env wiring lands in one place.
 {{- $file := $cfg.configKey | default "config.json" }}
 {{- if or (eq $file ".") (eq $file "..") (gt (len $file) 253) (not (regexMatch "^[a-zA-Z0-9._-]+$" $file)) }}{{ fail "invalid operator configKey" }}{{ end }}
 {{- end }}
+{{- if and (not .Values.oidc.passwordLoginEnabled) (not .Values.oidc.existingSecret) }}{{ fail "oidc.passwordLoginEnabled is false but oidc.existingSecret is empty: nobody could sign in" }}{{ end }}
+{{- with .Values.oidc.existingSecret }}
+{{- if or (gt (len .) 253) (not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$" .)) }}{{ fail "invalid oidc.existingSecret" }}{{ end }}
+{{- end }}
 {{- range $name, $svc := .Values.services }}
 {{- if and (eq $name "gates") $svc.analysisImage }}
 {{- if not (regexMatch "^[^[:space:]@]+@sha256:[a-f0-9]{64}$" $svc.analysisImage) }}{{ fail "gates analysisImage must be digest-pinned" }}{{ end }}
@@ -50,6 +54,11 @@ metadata:
     app.kubernetes.io/component: {{ $name }}
 spec:
   replicas: {{ $svc.replicas | default 1 }}
+  {{- with $svc.strategy }}
+  # Set where a ReadWriteOnce volume must be released by the old pod before
+  # the new one can mount it; a surge pod on another node would wait forever.
+  strategy: {{- toYaml . | nindent 4 }}
+  {{- end }}
   selector:
     matchLabels:
       app.kubernetes.io/component: {{ $name }}
@@ -67,6 +76,12 @@ spec:
       securityContext:
         fsGroup: 65532
       {{- end }}
+      {{- if hasKey $svc "automountServiceAccountToken" }}
+      # Without a token the binary finds no in-cluster Kubernetes config, and
+      # the features that create pods (agent-runtime's run workspaces) report
+      # themselves unavailable instead of trying and being refused.
+      automountServiceAccountToken: {{ $svc.automountServiceAccountToken }}
+      {{- end }}
       {{- if $.Values.image.pullSecret }}
       imagePullSecrets:
         - name: {{ $.Values.image.pullSecret }}
@@ -76,7 +91,7 @@ spec:
       {{- end }}
       containers:
         - name: {{ $name }}
-          image: "{{ $.Values.image.registry }}/{{ $.Values.image.repository }}/{{ $name }}:{{ $.Values.image.tag }}"
+          image: "{{ $.Values.image.registry }}/{{ $.Values.image.repository }}/{{ $.Values.image.namePrefix | default "" }}{{ $name }}:{{ $.Values.image.tag }}"
           imagePullPolicy: {{ $.Values.image.pullPolicy }}
           envFrom:
             - secretRef:
@@ -86,6 +101,15 @@ spec:
               value: {{ $name }}
             - name: DB_SCHEMA
               value: {{ $svc.schema | quote }}
+            {{- with $.Values.externalDatabase.existingSecret }}
+            # An explicit env entry wins over envFrom, so the external DSN
+            # replaces whatever DATABASE_URL the shared secret carries.
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ . }}
+                  key: {{ $.Values.externalDatabase.key | default "uri" }}
+            {{- end }}
             - name: HEALTH_PORT
               value: "8090"
             {{- if eq $name "gates" }}
@@ -113,13 +137,21 @@ spec:
               value: /etc/novaforge/git-tls/tls.crt
             - name: NF_GIT_TLS_KEY_FILE
               value: /etc/novaforge/git-tls/tls.key
+            {{- else if eq $name "git-platform" }}
+            # Present and empty: no TLS listener is bound, because TLS ends in
+            # front of git-platform (a Gateway). Absent, it would look like a
+            # deployment that forgot the certificate.
+            - name: NF_GIT_TLS_CERT_FILE
+              value: ""
+            - name: NF_GIT_TLS_KEY_FILE
+              value: ""
             {{- end }}
             {{- if eq $name "git-platform" }}
             # Only git-platform serves LFS, so only it is given the limit. The
             # variable is not conditional on anything: a missing limit is a
             # deployment whose object storage one push can fill.
             - name: NF_LFS_MAX_OBJECT_BYTES
-              value: {{ $.Values.lfs.maxObjectBytes | quote }}
+              value: {{ int64 $.Values.lfs.maxObjectBytes | quote }}
             - name: NF_OUTBOUND_DESTINATIONS
               value: {{ $.Values.outbound.destinations | toJson | quote }}
             - name: NF_GIT_PUBLIC_URL
@@ -171,6 +203,32 @@ spec:
               value: {{ $.Values.factory.autoMerge.maxFilesChanged | quote }}
             - name: MAINTENANCE_INTERVAL_HOURS
               value: {{ $.Values.factory.maintenance.intervalHours | quote }}
+            {{- /*
+            Single sign-on (docs/oidc-sso.md). Identity enforces the password
+            switch and the edge reports it to the login page; one value feeds
+            both so they cannot disagree. The provider settings come from the
+            operator's Secret and only the edge reads them. Without the Secret
+            they are present and empty, which the edge reads as SSO off.
+            */ -}}
+            {{- if has $name (list "edge" "identity") }}
+            - name: NF_PASSWORD_LOGIN_ENABLED
+              value: {{ $.Values.oidc.passwordLoginEnabled | quote }}
+            {{- end }}
+            {{- if eq $name "edge" }}
+            {{- range $key := list "OIDC_ISSUER" "OIDC_CLIENT_ID" "OIDC_REDIRECT_URI" }}
+            - name: {{ $key }}
+              {{- if $.Values.oidc.existingSecret }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.oidc.existingSecret | quote }}
+                  key: {{ $key }}
+              {{- else }}
+              value: ""
+              {{- end }}
+            {{- end }}
+            - name: NF_OIDC_BUTTON_LABEL
+              value: {{ $.Values.oidc.buttonLabel | quote }}
+            {{- end }}
             {{- range $key, $cfg := $configs }}
             - name: {{ $cfg.env }}
               value: {{ if $cfg.secret }}{{ printf "/etc/novaforge/operator/%s/%s" $key $cfg.file | quote }}{{ else }}""{{ end }}

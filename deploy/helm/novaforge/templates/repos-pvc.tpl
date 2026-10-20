@@ -12,7 +12,7 @@ metadata:
   {{- end }}
   labels: {{- include "novaforge.labels" . | nindent 4 }}
 spec:
-  accessModes: [ReadWriteMany]
+  accessModes: [{{ .Values.repos.accessMode | default "ReadWriteMany" }}]
   storageClassName: {{ .Values.repos.storageClass | quote }}
   resources:
     requests:

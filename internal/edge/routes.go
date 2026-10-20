@@ -20,6 +20,12 @@ func Routes() []Route {
 		{http.MethodPost, "/api/v1/auth/register", "register", "Register a user"},
 		{http.MethodPost, "/api/v1/auth/login", "login", "Log in, optionally with a TOTP code"},
 		{http.MethodPost, "/api/v1/auth/logout", "logout", "Invalidate the current session"},
+		// Single sign-on (internal/edge/oidc.go). All four are public: they
+		// are how a person without a session gets one.
+		{http.MethodGet, "/api/v1/auth/oidc/config", "getOIDCConfig", "Whether single sign-on is enabled, its issuer, and whether password sign-in remains"},
+		{http.MethodGet, "/api/v1/auth/oidc/start", "startOIDC", "Redirect to the identity provider (authorization code + PKCE S256)"},
+		{http.MethodGet, "/api/v1/auth/oidc/callback", "oidcCallback", "The provider's redirect back; verifies the ID token, signs in and redirects to the application"},
+		{http.MethodPost, "/api/v1/auth/oidc/session", "completeOIDC", "Exchange the one-shot hand-off cookie the callback set for the session token"},
 
 		{http.MethodGet, "/api/v1/user", "getCurrentUser", "The authenticated user"},
 		{http.MethodGet, "/api/v1/user/tokens", "listTokens", "List personal access tokens"},

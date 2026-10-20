@@ -7,12 +7,21 @@ image:
   tag: dev # overridden per deploy with the commit sha; see hack/deploy.sh
   pullPolicy: IfNotPresent # safe because tags are immutable commit shas
   pullSecret: nexus-pull
+  # Prepended to each service's name to form the image name, so a registry
+  # whose repositories are flat (OCIR: <namespace>/azrty/novaforge-<svc>) can be
+  # addressed without renaming the services. Empty keeps <repository>/<svc>.
+  namePrefix: ""
 
 # Bare repositories must be ReadWriteMany so any git-platform replica can serve
 # any repository.
 repos:
   storageClass: nfs-v3
   size: 50Gi
+  # ReadWriteMany is what lets git-platform scale. A cluster with no RWX class
+  # (OKE's oci-bv is block storage) must use ReadWriteOnce and run exactly one
+  # git-platform replica with services.git-platform.strategy set so the old pod
+  # releases the volume before the new one needs it.
+  accessMode: ReadWriteMany
 
 datastores:
   enabled: true
@@ -22,10 +31,27 @@ datastores:
     size: 20Gi
   redis:
     image: redis:8
+    # Off keeps Redis on the pod's ephemeral filesystem, as before: the
+    # append-only file then survives a container restart but not a reschedule.
+    # On, the event streams survive both.
+    persistence:
+      enabled: false
+      storageClass: ""
+      size: 8Gi
   minio:
     image: minio/minio:latest
     storageClass: longhorn
     size: 20Gi
+
+# A database outside the chart, e.g. a shared CloudNativePG cluster. When
+# existingSecret is set the bundled PostgreSQL is not rendered at all and every
+# service reads DATABASE_URL from that Secret's key instead of from the shared
+# secret. The DSN must reach PostgreSQL directly (a session-mode pooler at most):
+# each service connects with search_path as a startup parameter and runs its own
+# migrations, which a transaction-mode PgBouncer refuses or breaks.
+externalDatabase:
+  existingSecret: ""
+  key: uri
 
 # Operator-owned RBAC is provisioned separately for GitOps installations.
 rbac:
@@ -44,6 +70,24 @@ secrets:
   postgresPassword: novaforge
   minioAccessKey: minioadmin
   minioSecretKey: minioadmin
+
+# Single sign-on through an OpenID Connect provider (docs/oidc-sso.md).
+# existingSecret names a Secret the platform provisions in this namespace with
+# the keys OIDC_ISSUER, OIDC_CLIENT_ID and OIDC_REDIRECT_URI. The client is a
+# public one (authorization code + PKCE S256), so there is no client secret.
+# Empty leaves SSO off and nothing else changes.
+oidc:
+  existingSecret: ""
+  # The issuer's host, e.g. login.azrty.com. Required with existingSecret while
+  # edge is in networkPolicy.airGapped: the edge must reach the issuer for
+  # discovery, its signing keys and the code exchange, and nothing else.
+  issuerHost: ""
+  issuerPort: 443
+  buttonLabel: "Sign in with azrty"
+  # false leaves SSO as the only way in: identity then refuses password Login
+  # and Register, and the login page draws no password form. Refused at render
+  # time without existingSecret, since nobody could sign in.
+  passwordLoginEnabled: true
 
 # Model access goes through go-ai-sdk pointed at the cluster's FastLLM proxy,
 # so no hosted provider is reachable and air-gapped operation holds.
@@ -85,6 +129,26 @@ networkPolicy:
     - engineering-graph
     - mcp-server
     - edge
+
+# A Gateway API HTTPRoute for a cluster whose ingress is a shared Gateway
+# (templates/httproute.tpl). Off by default: kw exposes edge and git-platform
+# through LoadBalancer services instead. When on, Git smart-HTTP and LFS are
+# served on the same host as the application: the git rule sends exactly the
+# paths git-platform's handler answers to its plaintext port (TLS is terminated
+# at the Gateway) and everything else goes to edge.
+gateway:
+  enabled: false
+  # e.g. [{name: edge, namespace: envoy-gateway-system, sectionName: novaforge-https}]
+  parentRefs: []
+  hostnames: []
+  # RE2, matched against the whole path. It mirrors internal/gitops' router:
+  # /{org}/{repo}.git/ followed by one of the operations it serves.
+  gitPathRegex: '^/[^/]+/[^/]+\.git/(info/refs|git-upload-pack|git-receive-pack|info/lfs/objects/batch|info/lfs/objects/[0-9a-f]{64})$'
+  # A clone or push of a large repository outlasts Envoy's 15s default route
+  # timeout. A Gateway API duration; empty leaves the implementation default.
+  gitRequestTimeout: 1h
+  # Empty leaves the implementation default for the application rule.
+  edgeRequestTimeout: ""
 
 # The software-factory layer: what the platform does on its own.
 factory:
@@ -165,6 +229,13 @@ loadBalancer:
 
 # Only services whose binary exists are listed. Entries are added as each
 # service's cmd/ package lands, so a deploy never references a missing image.
+#
+# Optional per-service keys, unset everywhere by default:
+#   strategy: a Deployment strategy, e.g. {type: Recreate}, for a service whose
+#     ReadWriteOnce volume the old pod must release first.
+#   automountServiceAccountToken: false leaves the pod without Kubernetes API
+#     credentials, so agent-runtime reports run workspaces unavailable and
+#     StartRun refuses with FailedPrecondition rather than trying.
 services:
   identity:
     grpcPort: 9091

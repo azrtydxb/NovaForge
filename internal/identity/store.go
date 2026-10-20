@@ -75,7 +75,7 @@ func (s *Store) CreateUser(ctx context.Context, email, username, passwordHash st
 func (s *Store) UserByUsername(ctx context.Context, username string) (User, error) {
 	var u User
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, email, username, password_hash, totp_secret, created_at
+		`SELECT id, COALESCE(email::text, ''), username, password_hash, totp_secret, created_at
 		 FROM identity.users WHERE username = $1`,
 		username,
 	).Scan(&u.ID, &u.Email, &u.Username, &u.PasswordHash, &u.TOTPSecret, &u.CreatedAt)

@@ -1,0 +1,1639 @@
+---
+# Source: novaforge/templates/datastores.tpl
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: novaforge-pg-data
+  annotations: {sync.kuvryn.io/prune: disabled}
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: "longhorn"
+  resources: {requests: {storage: 20Gi}}
+---
+# Source: novaforge/templates/datastores.tpl
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: novaforge-minio-data
+  annotations: {sync.kuvryn.io/prune: disabled}
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: "longhorn"
+  resources: {requests: {storage: 20Gi}}
+---
+# Source: novaforge/templates/repos-pvc.tpl
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: novaforge-repos
+  annotations: {sync.kuvryn.io/prune: disabled}
+  labels:
+    app.kubernetes.io/name: novaforge
+    app.kubernetes.io/instance: novaforge
+    app.kubernetes.io/managed-by: Helm
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: "nfs-v3"
+  resources:
+    requests:
+      storage: 50Gi
+---
+# Source: novaforge/templates/datastores.tpl
+apiVersion: v1
+kind: Service
+metadata: {name: novaforge-postgres}
+spec:
+  selector: {app: novaforge-postgres}
+  ports: [{port: 5432, targetPort: 5432}]
+---
+# Source: novaforge/templates/datastores.tpl
+apiVersion: v1
+kind: Service
+metadata: {name: novaforge-redis}
+spec:
+  selector: {app: novaforge-redis}
+  ports: [{port: 6379, targetPort: 6379}]
+---
+# Source: novaforge/templates/datastores.tpl
+apiVersion: v1
+kind: Service
+metadata: {name: novaforge-minio}
+spec:
+  selector: {app: novaforge-minio}
+  ports: [{name: api, port: 9000, targetPort: 9000}, {name: console, port: 9001, targetPort: 9001}]
+---
+# Source: novaforge/templates/services.tpl
+apiVersion: v1
+kind: Service
+metadata:
+  name: novaforge-agent-runtime
+  labels:
+    app.kubernetes.io/name: novaforge
+    app.kubernetes.io/instance: novaforge
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: agent-runtime
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/component: agent-runtime
+    app.kubernetes.io/instance: novaforge
+  ports:
+    - name: health
+      port: 8090
+      targetPort: health
+    - name: grpc
+      port: 9095
+      targetPort: grpc
+---
+# Source: novaforge/templates/services.tpl
+apiVersion: v1
+kind: Service
+metadata:
+  name: novaforge-ci-runner
+  labels:
+    app.kubernetes.io/name: novaforge
+    app.kubernetes.io/instance: novaforge
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: ci-runner
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/component: ci-runner
+    app.kubernetes.io/instance: novaforge
+  ports:
+    - name: health
+      port: 8090
+      targetPort: health
+    - name: grpc
+      port: 9094
+      targetPort: grpc
+---
+# Source: novaforge/templates/services.tpl
+apiVersion: v1
+kind: Service
+metadata:
+  name: novaforge-edge
+  labels:
+    app.kubernetes.io/name: novaforge
+    app.kubernetes.io/instance: novaforge
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: edge
+    lb.kw.watteel.lab/announcer: cilium
+  annotations:
+    # The announcer's request for a fixed address. Without it the provider
+    # picks one, and on kw it once handed git-platform an address another
+    # service already held (192.168.10.130, BuildKit's).
+    lbipam.cilium.io/ips: "192.168.10.128"
+spec:
+  type: LoadBalancer
+  loadBalancerClass: "io.cilium/l2-announcer"
+  selector:
+    app.kubernetes.io/component: edge
+    app.kubernetes.io/instance: novaforge
+  ports:
+    - name: health
+      port: 8090
+      targetPort: health
+    - name: http
+      port: 8080
+      targetPort: http
+---
+# Source: novaforge/templates/services.tpl
+apiVersion: v1
+kind: Service
+metadata:
+  name: novaforge-engineering-graph
+  labels:
+    app.kubernetes.io/name: novaforge
+    app.kubernetes.io/instance: novaforge
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: engineering-graph
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/component: engineering-graph
+    app.kubernetes.io/instance: novaforge
+  ports:
+    - name: health
+      port: 8090
+      targetPort: health
+    - name: grpc
+      port: 9097
+      targetPort: grpc
+---
+# Source: novaforge/templates/services.tpl
+apiVersion: v1
+kind: Service
+metadata:
+  name: novaforge-gates
+  labels:
+    app.kubernetes.io/name: novaforge
+    app.kubernetes.io/instance: novaforge
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: gates
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/component: gates
+    app.kubernetes.io/instance: novaforge
+  ports:
+    - name: health
+      port: 8090
+      targetPort: health
+    - name: grpc
+      port: 9096
+      targetPort: grpc
+---
+# Source: novaforge/templates/services.tpl
+apiVersion: v1
+kind: Service
+metadata:
+  name: novaforge-git-platform
+  labels:
+    app.kubernetes.io/name: novaforge
+    app.kubernetes.io/instance: novaforge
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: git-platform
+    lb.kw.watteel.lab/announcer: cilium
+  annotations:
+    # The announcer's request for a fixed address. Without it the provider
+    # picks one, and on kw it once handed git-platform an address another
+    # service already held (192.168.10.130, BuildKit's).
+    lbipam.cilium.io/ips: "192.168.10.141"
+spec:
+  type: LoadBalancer
+  loadBalancerClass: "io.cilium/l2-announcer"
+  selector:
+    app.kubernetes.io/component: git-platform
+    app.kubernetes.io/instance: novaforge
+  ports:
+    - name: health
+      port: 8090
+      targetPort: health
+    - name: grpc
+      port: 9092
+      targetPort: grpc
+    - name: http
+      port: 8081
+      targetPort: http
+    - name: https
+      port: 8443
+      targetPort: https
+    - name: ssh
+      port: 2222
+      targetPort: ssh
+---
+# Source: novaforge/templates/services.tpl
+apiVersion: v1
+kind: Service
+metadata:
+  name: novaforge-identity
+  labels:
+    app.kubernetes.io/name: novaforge
+    app.kubernetes.io/instance: novaforge
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: identity
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/component: identity
+    app.kubernetes.io/instance: novaforge
+  ports:
+    - name: health
+      port: 8090
+      targetPort: health
+    - name: grpc
+      port: 9091
+      targetPort: grpc
+---
+# Source: novaforge/templates/services.tpl
+apiVersion: v1
+kind: Service
+metadata:
+  name: novaforge-mcp-server
+  labels:
+    app.kubernetes.io/name: novaforge
+    app.kubernetes.io/instance: novaforge
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: mcp-server
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/component: mcp-server
+    app.kubernetes.io/instance: novaforge
+  ports:
+    - name: health
+      port: 8090
+      targetPort: health
+    - name: grpc
+      port: 9098
+      targetPort: grpc
+    - name: http
+      port: 8084
+      targetPort: http
+---
+# Source: novaforge/templates/services.tpl
+apiVersion: v1
+kind: Service
+metadata:
+  name: novaforge-work-reviews
+  labels:
+    app.kubernetes.io/name: novaforge
+    app.kubernetes.io/instance: novaforge
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: work-reviews
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/component: work-reviews
+    app.kubernetes.io/instance: novaforge
+  ports:
+    - name: health
+      port: 8090
+      targetPort: health
+    - name: grpc
+      port: 9093
+      targetPort: grpc
+---
+# Source: novaforge/templates/datastores.tpl
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: novaforge-postgres}
+spec:
+  strategy: {type: RollingUpdate, rollingUpdate: {maxSurge: 0, maxUnavailable: 1}}
+  replicas: 1
+  selector: {matchLabels: {app: novaforge-postgres}}
+  template:
+    metadata: {labels: {app: novaforge-postgres}}
+    spec:
+      containers:
+        - name: postgres
+          image: pgvector/pgvector:pg16
+          env:
+            - {name: POSTGRES_USER, value: novaforge}
+            - name: POSTGRES_PASSWORD
+              value: null
+              valueFrom:
+                secretKeyRef:
+                  name: novaforge-secrets
+                  key: POSTGRES_PASSWORD
+            - {name: POSTGRES_DB, value: novaforge}
+            - {name: PGDATA, value: /var/lib/postgresql/data/pgdata}
+          ports: [{containerPort: 5432}]
+          volumeMounts: [{name: data, mountPath: /var/lib/postgresql/data}]
+          readinessProbe:
+            exec: {command: [pg_isready, -U, novaforge]}
+            initialDelaySeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: novaforge-pg-data}
+---
+# Source: novaforge/templates/datastores.tpl
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: novaforge-redis}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: novaforge-redis}}
+  template:
+    metadata: {labels: {app: novaforge-redis}}
+    spec:
+      containers:
+        - name: redis
+          image: redis:8
+          args: ["redis-server", "--appendonly", "yes"]
+          ports: [{containerPort: 6379}]
+          readinessProbe:
+            exec: {command: [redis-cli, ping]}
+            initialDelaySeconds: 5
+---
+# Source: novaforge/templates/datastores.tpl
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: novaforge-minio}
+spec:
+  strategy: {type: RollingUpdate, rollingUpdate: {maxSurge: 0, maxUnavailable: 1}}
+  replicas: 1
+  selector: {matchLabels: {app: novaforge-minio}}
+  template:
+    metadata: {labels: {app: novaforge-minio}}
+    spec:
+      containers:
+        - name: minio
+          image: minio/minio:latest
+          args: ["server", "/data", "--console-address", ":9001"]
+          env:
+            - name: MINIO_ROOT_USER
+              value: null
+              valueFrom:
+                secretKeyRef:
+                  name: novaforge-secrets
+                  key: MINIO_ROOT_USER
+            - name: MINIO_ROOT_PASSWORD
+              value: null
+              valueFrom:
+                secretKeyRef:
+                  name: novaforge-secrets
+                  key: MINIO_ROOT_PASSWORD
+          ports: [{containerPort: 9000}, {containerPort: 9001}]
+          volumeMounts: [{name: data, mountPath: /data}]
+          readinessProbe:
+            httpGet: {path: /minio/health/live, port: 9000}
+            initialDelaySeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: novaforge-minio-data}
+---
+# Source: novaforge/templates/services.tpl
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: novaforge-agent-runtime
+  labels:
+    app.kubernetes.io/name: novaforge
+    app.kubernetes.io/instance: novaforge
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: agent-runtime
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: agent-runtime
+      app.kubernetes.io/instance: novaforge
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: novaforge
+        app.kubernetes.io/instance: novaforge
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/component: agent-runtime
+    spec:
+      imagePullSecrets:
+        - name: nexus-pull
+      serviceAccountName: novaforge-agent-runtime
+      containers:
+        - name: agent-runtime
+          image: "192.168.10.131/novaforge/agent-runtime:golden"
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: novaforge-secrets
+          env:
+            - name: SERVICE_NAME
+              value: agent-runtime
+            - name: DB_SCHEMA
+              value: "agents"
+            - name: HEALTH_PORT
+              value: "8090"
+            - name: GRPC_PORT
+              value: "9095"
+            - name: GIT_DATA_DIR
+              value: /data/repos
+            - name: AGENTS_ADDR
+              value: "novaforge-agent-runtime:9095"
+            - name: CI_ADDR
+              value: "novaforge-ci-runner:9094"
+            - name: GATES_ADDR
+              value: "novaforge-gates:9096"
+            - name: GIT_ADDR
+              value: "novaforge-git-platform:9092"
+            - name: GRAPH_ADDR
+              value: "novaforge-engineering-graph:9097"
+            - name: IDENTITY_ADDR
+              value: "novaforge-identity:9091"
+            - name: MCP_ADDR
+              value: "novaforge-mcp-server:9098"
+            - name: REVIEWS_ADDR
+              value: "novaforge-work-reviews:9093"
+            - name: WORK_ADDR
+              value: "novaforge-work-reviews:9093"
+            - name: AI_ENDPOINT
+              value: "http://fastllm-proxy.fastllm.svc.cluster.local:4000/v1"
+            - name: AI_MODEL
+              value: "qwen3-6-35b-a3b"
+            - name: AI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: novaforge-secrets
+                  key: AI_API_KEY
+            - name: EMBED_ENDPOINT
+              value: "http://fastllm-proxy.fastllm.svc.cluster.local:4000/v1"
+            - name: EMBED_MODEL
+              value: "embed"
+            - name: AI_PROVIDER_OPTIONS
+              value: "{\"chat_template_kwargs\":{\"enable_thinking\":false}}"
+            - name: AI_MODEL_PRICES
+              value: "{}"
+            - name: AUTO_MERGE_ENABLED
+              value: "false"
+            - name: AUTO_MERGE_MAX_FILES_CHANGED
+              value: "20"
+            - name: MAINTENANCE_INTERVAL_HOURS
+              value: "24"
+            - name: NF_MCP_HTTP_CONFIG_FILE
+              value: ""
+          ports:
+            - name: health
+              containerPort: 8090
+            - name: grpc
+              containerPort: 9095
+          readinessProbe:
+            httpGet: {path: /healthz, port: health}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: health}
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            limits:
+              cpu: "2"
+              memory: 1Gi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+---
+# Source: novaforge/templates/services.tpl
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: novaforge-ci-runner
+  labels:
+    app.kubernetes.io/name: novaforge
+    app.kubernetes.io/instance: novaforge
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: ci-runner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: ci-runner
+      app.kubernetes.io/instance: novaforge
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: novaforge
+        app.kubernetes.io/instance: novaforge
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/component: ci-runner
+    spec:
+      imagePullSecrets:
+        - name: nexus-pull
+      containers:
+        - name: ci-runner
+          image: "192.168.10.131/novaforge/ci-runner:golden"
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: novaforge-secrets
+          env:
+            - name: SERVICE_NAME
+              value: ci-runner
+            - name: DB_SCHEMA
+              value: "ci"
+            - name: HEALTH_PORT
+              value: "8090"
+            - name: GRPC_PORT
+              value: "9094"
+            - name: GIT_DATA_DIR
+              value: /data/repos
+            - name: AGENTS_ADDR
+              value: "novaforge-agent-runtime:9095"
+            - name: CI_ADDR
+              value: "novaforge-ci-runner:9094"
+            - name: GATES_ADDR
+              value: "novaforge-gates:9096"
+            - name: GIT_ADDR
+              value: "novaforge-git-platform:9092"
+            - name: GRAPH_ADDR
+              value: "novaforge-engineering-graph:9097"
+            - name: IDENTITY_ADDR
+              value: "novaforge-identity:9091"
+            - name: MCP_ADDR
+              value: "novaforge-mcp-server:9098"
+            - name: REVIEWS_ADDR
+              value: "novaforge-work-reviews:9093"
+            - name: WORK_ADDR
+              value: "novaforge-work-reviews:9093"
+            - name: AI_ENDPOINT
+              value: "http://fastllm-proxy.fastllm.svc.cluster.local:4000/v1"
+            - name: AI_MODEL
+              value: "qwen3-6-35b-a3b"
+            - name: AI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: novaforge-secrets
+                  key: AI_API_KEY
+            - name: EMBED_ENDPOINT
+              value: "http://fastllm-proxy.fastllm.svc.cluster.local:4000/v1"
+            - name: EMBED_MODEL
+              value: "embed"
+            - name: AI_PROVIDER_OPTIONS
+              value: "{\"chat_template_kwargs\":{\"enable_thinking\":false}}"
+            - name: AI_MODEL_PRICES
+              value: "{}"
+            - name: AUTO_MERGE_ENABLED
+              value: "false"
+            - name: AUTO_MERGE_MAX_FILES_CHANGED
+              value: "20"
+            - name: MAINTENANCE_INTERVAL_HOURS
+              value: "24"
+          ports:
+            - name: health
+              containerPort: 8090
+            - name: grpc
+              containerPort: 9094
+          readinessProbe:
+            httpGet: {path: /healthz, port: health}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: health}
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            limits:
+              cpu: "2"
+              memory: 1Gi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+---
+# Source: novaforge/templates/services.tpl
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: novaforge-edge
+  labels:
+    app.kubernetes.io/name: novaforge
+    app.kubernetes.io/instance: novaforge
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: edge
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: edge
+      app.kubernetes.io/instance: novaforge
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: novaforge
+        app.kubernetes.io/instance: novaforge
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/component: edge
+    spec:
+      imagePullSecrets:
+        - name: nexus-pull
+      containers:
+        - name: edge
+          image: "192.168.10.131/novaforge/edge:golden"
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: novaforge-secrets
+          env:
+            - name: SERVICE_NAME
+              value: edge
+            - name: DB_SCHEMA
+              value: "edge"
+            - name: HEALTH_PORT
+              value: "8090"
+            - name: HTTP_PORT
+              value: "8080"
+            - name: GIT_DATA_DIR
+              value: /data/repos
+            - name: AGENTS_ADDR
+              value: "novaforge-agent-runtime:9095"
+            - name: CI_ADDR
+              value: "novaforge-ci-runner:9094"
+            - name: GATES_ADDR
+              value: "novaforge-gates:9096"
+            - name: GIT_ADDR
+              value: "novaforge-git-platform:9092"
+            - name: GRAPH_ADDR
+              value: "novaforge-engineering-graph:9097"
+            - name: IDENTITY_ADDR
+              value: "novaforge-identity:9091"
+            - name: MCP_ADDR
+              value: "novaforge-mcp-server:9098"
+            - name: REVIEWS_ADDR
+              value: "novaforge-work-reviews:9093"
+            - name: WORK_ADDR
+              value: "novaforge-work-reviews:9093"
+            - name: AI_ENDPOINT
+              value: "http://fastllm-proxy.fastllm.svc.cluster.local:4000/v1"
+            - name: AI_MODEL
+              value: "qwen3-6-35b-a3b"
+            - name: AI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: novaforge-secrets
+                  key: AI_API_KEY
+            - name: EMBED_ENDPOINT
+              value: "http://fastllm-proxy.fastllm.svc.cluster.local:4000/v1"
+            - name: EMBED_MODEL
+              value: "embed"
+            - name: AI_PROVIDER_OPTIONS
+              value: "{\"chat_template_kwargs\":{\"enable_thinking\":false}}"
+            - name: AI_MODEL_PRICES
+              value: "{}"
+            - name: AUTO_MERGE_ENABLED
+              value: "false"
+            - name: AUTO_MERGE_MAX_FILES_CHANGED
+              value: "20"
+            - name: MAINTENANCE_INTERVAL_HOURS
+              value: "24"
+            - name: NF_PASSWORD_LOGIN_ENABLED
+              value: "true"
+            - name: OIDC_ISSUER
+              value: ""
+            - name: OIDC_CLIENT_ID
+              value: ""
+            - name: OIDC_REDIRECT_URI
+              value: ""
+            - name: NF_OIDC_BUTTON_LABEL
+              value: "Sign in with azrty"
+          ports:
+            - name: health
+              containerPort: 8090
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet: {path: /healthz, port: health}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: health}
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            limits:
+              cpu: "2"
+              memory: 1Gi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+---
+# Source: novaforge/templates/services.tpl
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: novaforge-engineering-graph
+  labels:
+    app.kubernetes.io/name: novaforge
+    app.kubernetes.io/instance: novaforge
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: engineering-graph
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: engineering-graph
+      app.kubernetes.io/instance: novaforge
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: novaforge
+        app.kubernetes.io/instance: novaforge
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/component: engineering-graph
+    spec:
+      # Distroless consumers run as 65532; group-readable Secrets must not
+      # become root-only just because a feature was enabled. The TLS keypair is
+      # one of them: unreadable, and git-platform refuses to start.
+      securityContext:
+        fsGroup: 65532
+      imagePullSecrets:
+        - name: nexus-pull
+      serviceAccountName: novaforge-engineering-graph
+      containers:
+        - name: engineering-graph
+          image: "192.168.10.131/novaforge/engineering-graph:golden"
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: novaforge-secrets
+          env:
+            - name: SERVICE_NAME
+              value: engineering-graph
+            - name: DB_SCHEMA
+              value: "graph"
+            - name: HEALTH_PORT
+              value: "8090"
+            - name: GRPC_PORT
+              value: "9097"
+            - name: GIT_DATA_DIR
+              value: /data/repos
+            - name: AGENTS_ADDR
+              value: "novaforge-agent-runtime:9095"
+            - name: CI_ADDR
+              value: "novaforge-ci-runner:9094"
+            - name: GATES_ADDR
+              value: "novaforge-gates:9096"
+            - name: GIT_ADDR
+              value: "novaforge-git-platform:9092"
+            - name: GRAPH_ADDR
+              value: "novaforge-engineering-graph:9097"
+            - name: IDENTITY_ADDR
+              value: "novaforge-identity:9091"
+            - name: MCP_ADDR
+              value: "novaforge-mcp-server:9098"
+            - name: REVIEWS_ADDR
+              value: "novaforge-work-reviews:9093"
+            - name: WORK_ADDR
+              value: "novaforge-work-reviews:9093"
+            - name: AI_ENDPOINT
+              value: "http://fastllm-proxy.fastllm.svc.cluster.local:4000/v1"
+            - name: AI_MODEL
+              value: "qwen3-6-35b-a3b"
+            - name: AI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: novaforge-secrets
+                  key: AI_API_KEY
+            - name: EMBED_ENDPOINT
+              value: "http://fastllm-proxy.fastllm.svc.cluster.local:4000/v1"
+            - name: EMBED_MODEL
+              value: "embed"
+            - name: AI_PROVIDER_OPTIONS
+              value: "{\"chat_template_kwargs\":{\"enable_thinking\":false}}"
+            - name: AI_MODEL_PRICES
+              value: "{}"
+            - name: AUTO_MERGE_ENABLED
+              value: "false"
+            - name: AUTO_MERGE_MAX_FILES_CHANGED
+              value: "20"
+            - name: MAINTENANCE_INTERVAL_HOURS
+              value: "24"
+            - name: NF_SEMANTIC_PRODUCER_CONFIG_FILE
+              value: "/etc/novaforge/operator/semanticProducer/config.json"
+          ports:
+            - name: health
+              containerPort: 8090
+            - name: grpc
+              containerPort: 9097
+          readinessProbe:
+            httpGet: {path: /healthz, port: health}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: health}
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            limits:
+              cpu: "2"
+              memory: 2Gi
+            requests:
+              cpu: 200m
+              memory: 1Gi
+          volumeMounts:
+            - name: operator-semanticproducer
+              mountPath: /etc/novaforge/operator/semanticProducer
+              readOnly: true
+      volumes:
+        - name: operator-semanticproducer
+          secret:
+            secretName: "novaforge-semantic-producer"
+            defaultMode: 0440
+---
+# Source: novaforge/templates/services.tpl
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: novaforge-gates
+  labels:
+    app.kubernetes.io/name: novaforge
+    app.kubernetes.io/instance: novaforge
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: gates
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: gates
+      app.kubernetes.io/instance: novaforge
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: novaforge
+        app.kubernetes.io/instance: novaforge
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/component: gates
+    spec:
+      # Distroless consumers run as 65532; group-readable Secrets must not
+      # become root-only just because a feature was enabled. The TLS keypair is
+      # one of them: unreadable, and git-platform refuses to start.
+      securityContext:
+        fsGroup: 65532
+      imagePullSecrets:
+        - name: nexus-pull
+      serviceAccountName: novaforge-gates
+      containers:
+        - name: gates
+          image: "192.168.10.131/novaforge/gates:golden"
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: novaforge-secrets
+          env:
+            - name: SERVICE_NAME
+              value: gates
+            - name: DB_SCHEMA
+              value: "gates"
+            - name: HEALTH_PORT
+              value: "8090"
+            - name: NF_GATE_ANALYSIS_IMAGE
+              value: "192.168.10.131/novaforge/gate-analysis@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            - name: GRPC_PORT
+              value: "9096"
+            - name: GIT_DATA_DIR
+              value: /data/repos
+            - name: AGENTS_ADDR
+              value: "novaforge-agent-runtime:9095"
+            - name: CI_ADDR
+              value: "novaforge-ci-runner:9094"
+            - name: GATES_ADDR
+              value: "novaforge-gates:9096"
+            - name: GIT_ADDR
+              value: "novaforge-git-platform:9092"
+            - name: GRAPH_ADDR
+              value: "novaforge-engineering-graph:9097"
+            - name: IDENTITY_ADDR
+              value: "novaforge-identity:9091"
+            - name: MCP_ADDR
+              value: "novaforge-mcp-server:9098"
+            - name: REVIEWS_ADDR
+              value: "novaforge-work-reviews:9093"
+            - name: WORK_ADDR
+              value: "novaforge-work-reviews:9093"
+            - name: AI_ENDPOINT
+              value: "http://fastllm-proxy.fastllm.svc.cluster.local:4000/v1"
+            - name: AI_MODEL
+              value: "qwen3-6-35b-a3b"
+            - name: AI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: novaforge-secrets
+                  key: AI_API_KEY
+            - name: EMBED_ENDPOINT
+              value: "http://fastllm-proxy.fastllm.svc.cluster.local:4000/v1"
+            - name: EMBED_MODEL
+              value: "embed"
+            - name: AI_PROVIDER_OPTIONS
+              value: "{\"chat_template_kwargs\":{\"enable_thinking\":false}}"
+            - name: AI_MODEL_PRICES
+              value: "{}"
+            - name: AUTO_MERGE_ENABLED
+              value: "false"
+            - name: AUTO_MERGE_MAX_FILES_CHANGED
+              value: "20"
+            - name: MAINTENANCE_INTERVAL_HOURS
+              value: "24"
+            - name: NF_DEPLOYMENT_CONFIG_FILE
+              value: "/etc/novaforge/operator/deployments/config.json"
+            - name: NF_OPENBAO_CONFIG_FILE
+              value: "/etc/novaforge/operator/openbao/config.json"
+          ports:
+            - name: health
+              containerPort: 8090
+            - name: grpc
+              containerPort: 9096
+          readinessProbe:
+            httpGet: {path: /healthz, port: health}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: health}
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            limits:
+              cpu: "2"
+              memory: 1Gi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - name: operator-deployments
+              mountPath: /etc/novaforge/operator/deployments
+              readOnly: true
+            - name: operator-openbao
+              mountPath: /etc/novaforge/operator/openbao
+              readOnly: true
+      volumes:
+        - name: operator-deployments
+          secret:
+            secretName: "novaforge-deployment-config"
+            defaultMode: 0440
+        - name: operator-openbao
+          secret:
+            secretName: "novaforge-openbao-deployment"
+            defaultMode: 0440
+---
+# Source: novaforge/templates/services.tpl
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: novaforge-git-platform
+  labels:
+    app.kubernetes.io/name: novaforge
+    app.kubernetes.io/instance: novaforge
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: git-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: git-platform
+      app.kubernetes.io/instance: novaforge
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: novaforge
+        app.kubernetes.io/instance: novaforge
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/component: git-platform
+    spec:
+      # Distroless consumers run as 65532; group-readable Secrets must not
+      # become root-only just because a feature was enabled. The TLS keypair is
+      # one of them: unreadable, and git-platform refuses to start.
+      securityContext:
+        fsGroup: 65532
+      imagePullSecrets:
+        - name: nexus-pull
+      containers:
+        - name: git-platform
+          image: "192.168.10.131/novaforge/git-platform:golden"
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: novaforge-secrets
+          env:
+            - name: SERVICE_NAME
+              value: git-platform
+            - name: DB_SCHEMA
+              value: "gitplatform"
+            - name: HEALTH_PORT
+              value: "8090"
+            - name: GRPC_PORT
+              value: "9092"
+            - name: HTTP_PORT
+              value: "8081"
+            - name: SSH_PORT
+              value: "2222"
+            - name: GIT_DATA_DIR
+              value: /data/repos
+            # Paths, not bytes: cert-manager renews in place and the kubelet
+            # swaps the files, which git-platform re-reads per handshake.
+            - name: NF_GIT_TLS_CERT_FILE
+              value: /etc/novaforge/git-tls/tls.crt
+            - name: NF_GIT_TLS_KEY_FILE
+              value: /etc/novaforge/git-tls/tls.key
+            # Only git-platform serves LFS, so only it is given the limit. The
+            # variable is not conditional on anything: a missing limit is a
+            # deployment whose object storage one push can fill.
+            - name: NF_LFS_MAX_OBJECT_BYTES
+              value: "5368709120"
+            - name: NF_OUTBOUND_DESTINATIONS
+              value: "[{\"cidrs\":[\"0.0.0.0/0\",\"::/0\"],\"host\":\"github.com\",\"port\":443,\"scheme\":\"https\"},{\"cidrs\":[\"192.168.10.132/32\"],\"host\":\"192.168.10.132\",\"port\":8088,\"scheme\":\"http\"}]"
+            - name: NF_GIT_PUBLIC_URL
+              value: "https://git.novaforge.kw.watteel.lab:8443"
+            - name: AGENTS_ADDR
+              value: "novaforge-agent-runtime:9095"
+            - name: CI_ADDR
+              value: "novaforge-ci-runner:9094"
+            - name: GATES_ADDR
+              value: "novaforge-gates:9096"
+            - name: GIT_ADDR
+              value: "novaforge-git-platform:9092"
+            - name: GRAPH_ADDR
+              value: "novaforge-engineering-graph:9097"
+            - name: IDENTITY_ADDR
+              value: "novaforge-identity:9091"
+            - name: MCP_ADDR
+              value: "novaforge-mcp-server:9098"
+            - name: REVIEWS_ADDR
+              value: "novaforge-work-reviews:9093"
+            - name: WORK_ADDR
+              value: "novaforge-work-reviews:9093"
+            - name: AI_ENDPOINT
+              value: "http://fastllm-proxy.fastllm.svc.cluster.local:4000/v1"
+            - name: AI_MODEL
+              value: "qwen3-6-35b-a3b"
+            - name: AI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: novaforge-secrets
+                  key: AI_API_KEY
+            - name: EMBED_ENDPOINT
+              value: "http://fastllm-proxy.fastllm.svc.cluster.local:4000/v1"
+            - name: EMBED_MODEL
+              value: "embed"
+            - name: AI_PROVIDER_OPTIONS
+              value: "{\"chat_template_kwargs\":{\"enable_thinking\":false}}"
+            - name: AI_MODEL_PRICES
+              value: "{}"
+            - name: AUTO_MERGE_ENABLED
+              value: "false"
+            - name: AUTO_MERGE_MAX_FILES_CHANGED
+              value: "20"
+            - name: MAINTENANCE_INTERVAL_HOURS
+              value: "24"
+          ports:
+            - name: health
+              containerPort: 8090
+            - name: grpc
+              containerPort: 9092
+            - name: http
+              containerPort: 8081
+            - name: https
+              containerPort: 8443
+            - name: ssh
+              containerPort: 2222
+          readinessProbe:
+            httpGet: {path: /healthz, port: health}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: health}
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            limits:
+              cpu: "2"
+              memory: 1Gi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - name: repos
+              mountPath: /data/repos
+            - name: git-tls
+              mountPath: /etc/novaforge/git-tls
+              readOnly: true
+      volumes:
+        - name: repos
+          persistentVolumeClaim:
+            claimName: novaforge-repos
+        # The Secret certificate.tpl's Certificate writes. A directory mount,
+        # not subPath items: a subPath does not see the kubelet's update when
+        # cert-manager renews, and the pod would serve the old keypair.
+        - name: git-tls
+          secret:
+            secretName: novaforge-git-platform-tls
+            defaultMode: 0440
+---
+# Source: novaforge/templates/services.tpl
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: novaforge-identity
+  labels:
+    app.kubernetes.io/name: novaforge
+    app.kubernetes.io/instance: novaforge
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: identity
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: identity
+      app.kubernetes.io/instance: novaforge
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: novaforge
+        app.kubernetes.io/instance: novaforge
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/component: identity
+    spec:
+      imagePullSecrets:
+        - name: nexus-pull
+      containers:
+        - name: identity
+          image: "192.168.10.131/novaforge/identity:golden"
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: novaforge-secrets
+          env:
+            - name: SERVICE_NAME
+              value: identity
+            - name: DB_SCHEMA
+              value: "identity"
+            - name: HEALTH_PORT
+              value: "8090"
+            - name: GRPC_PORT
+              value: "9091"
+            - name: GIT_DATA_DIR
+              value: /data/repos
+            - name: AGENTS_ADDR
+              value: "novaforge-agent-runtime:9095"
+            - name: CI_ADDR
+              value: "novaforge-ci-runner:9094"
+            - name: GATES_ADDR
+              value: "novaforge-gates:9096"
+            - name: GIT_ADDR
+              value: "novaforge-git-platform:9092"
+            - name: GRAPH_ADDR
+              value: "novaforge-engineering-graph:9097"
+            - name: IDENTITY_ADDR
+              value: "novaforge-identity:9091"
+            - name: MCP_ADDR
+              value: "novaforge-mcp-server:9098"
+            - name: REVIEWS_ADDR
+              value: "novaforge-work-reviews:9093"
+            - name: WORK_ADDR
+              value: "novaforge-work-reviews:9093"
+            - name: AI_ENDPOINT
+              value: "http://fastllm-proxy.fastllm.svc.cluster.local:4000/v1"
+            - name: AI_MODEL
+              value: "qwen3-6-35b-a3b"
+            - name: AI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: novaforge-secrets
+                  key: AI_API_KEY
+            - name: EMBED_ENDPOINT
+              value: "http://fastllm-proxy.fastllm.svc.cluster.local:4000/v1"
+            - name: EMBED_MODEL
+              value: "embed"
+            - name: AI_PROVIDER_OPTIONS
+              value: "{\"chat_template_kwargs\":{\"enable_thinking\":false}}"
+            - name: AI_MODEL_PRICES
+              value: "{}"
+            - name: AUTO_MERGE_ENABLED
+              value: "false"
+            - name: AUTO_MERGE_MAX_FILES_CHANGED
+              value: "20"
+            - name: MAINTENANCE_INTERVAL_HOURS
+              value: "24"
+            - name: NF_PASSWORD_LOGIN_ENABLED
+              value: "true"
+          ports:
+            - name: health
+              containerPort: 8090
+            - name: grpc
+              containerPort: 9091
+          readinessProbe:
+            httpGet: {path: /healthz, port: health}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: health}
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            limits:
+              cpu: "2"
+              memory: 1Gi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+---
+# Source: novaforge/templates/services.tpl
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: novaforge-mcp-server
+  labels:
+    app.kubernetes.io/name: novaforge
+    app.kubernetes.io/instance: novaforge
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: mcp-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: mcp-server
+      app.kubernetes.io/instance: novaforge
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: novaforge
+        app.kubernetes.io/instance: novaforge
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/component: mcp-server
+    spec:
+      imagePullSecrets:
+        - name: nexus-pull
+      containers:
+        - name: mcp-server
+          image: "192.168.10.131/novaforge/mcp-server:golden"
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: novaforge-secrets
+          env:
+            - name: SERVICE_NAME
+              value: mcp-server
+            - name: DB_SCHEMA
+              value: "mcp"
+            - name: HEALTH_PORT
+              value: "8090"
+            - name: GRPC_PORT
+              value: "9098"
+            - name: HTTP_PORT
+              value: "8084"
+            - name: GIT_DATA_DIR
+              value: /data/repos
+            - name: AGENTS_ADDR
+              value: "novaforge-agent-runtime:9095"
+            - name: CI_ADDR
+              value: "novaforge-ci-runner:9094"
+            - name: GATES_ADDR
+              value: "novaforge-gates:9096"
+            - name: GIT_ADDR
+              value: "novaforge-git-platform:9092"
+            - name: GRAPH_ADDR
+              value: "novaforge-engineering-graph:9097"
+            - name: IDENTITY_ADDR
+              value: "novaforge-identity:9091"
+            - name: MCP_ADDR
+              value: "novaforge-mcp-server:9098"
+            - name: REVIEWS_ADDR
+              value: "novaforge-work-reviews:9093"
+            - name: WORK_ADDR
+              value: "novaforge-work-reviews:9093"
+            - name: AI_ENDPOINT
+              value: "http://fastllm-proxy.fastllm.svc.cluster.local:4000/v1"
+            - name: AI_MODEL
+              value: "qwen3-6-35b-a3b"
+            - name: AI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: novaforge-secrets
+                  key: AI_API_KEY
+            - name: EMBED_ENDPOINT
+              value: "http://fastllm-proxy.fastllm.svc.cluster.local:4000/v1"
+            - name: EMBED_MODEL
+              value: "embed"
+            - name: AI_PROVIDER_OPTIONS
+              value: "{\"chat_template_kwargs\":{\"enable_thinking\":false}}"
+            - name: AI_MODEL_PRICES
+              value: "{}"
+            - name: AUTO_MERGE_ENABLED
+              value: "false"
+            - name: AUTO_MERGE_MAX_FILES_CHANGED
+              value: "20"
+            - name: MAINTENANCE_INTERVAL_HOURS
+              value: "24"
+          ports:
+            - name: health
+              containerPort: 8090
+            - name: grpc
+              containerPort: 9098
+            - name: http
+              containerPort: 8084
+          readinessProbe:
+            httpGet: {path: /healthz, port: health}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: health}
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            limits:
+              cpu: "2"
+              memory: 1Gi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+---
+# Source: novaforge/templates/services.tpl
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: novaforge-work-reviews
+  labels:
+    app.kubernetes.io/name: novaforge
+    app.kubernetes.io/instance: novaforge
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: work-reviews
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: work-reviews
+      app.kubernetes.io/instance: novaforge
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: novaforge
+        app.kubernetes.io/instance: novaforge
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/component: work-reviews
+    spec:
+      imagePullSecrets:
+        - name: nexus-pull
+      containers:
+        - name: work-reviews
+          image: "192.168.10.131/novaforge/work-reviews:golden"
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: novaforge-secrets
+          env:
+            - name: SERVICE_NAME
+              value: work-reviews
+            - name: DB_SCHEMA
+              value: "work"
+            - name: HEALTH_PORT
+              value: "8090"
+            - name: GRPC_PORT
+              value: "9093"
+            - name: GIT_DATA_DIR
+              value: /data/repos
+            - name: AGENTS_ADDR
+              value: "novaforge-agent-runtime:9095"
+            - name: CI_ADDR
+              value: "novaforge-ci-runner:9094"
+            - name: GATES_ADDR
+              value: "novaforge-gates:9096"
+            - name: GIT_ADDR
+              value: "novaforge-git-platform:9092"
+            - name: GRAPH_ADDR
+              value: "novaforge-engineering-graph:9097"
+            - name: IDENTITY_ADDR
+              value: "novaforge-identity:9091"
+            - name: MCP_ADDR
+              value: "novaforge-mcp-server:9098"
+            - name: REVIEWS_ADDR
+              value: "novaforge-work-reviews:9093"
+            - name: WORK_ADDR
+              value: "novaforge-work-reviews:9093"
+            - name: AI_ENDPOINT
+              value: "http://fastllm-proxy.fastllm.svc.cluster.local:4000/v1"
+            - name: AI_MODEL
+              value: "qwen3-6-35b-a3b"
+            - name: AI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: novaforge-secrets
+                  key: AI_API_KEY
+            - name: EMBED_ENDPOINT
+              value: "http://fastllm-proxy.fastllm.svc.cluster.local:4000/v1"
+            - name: EMBED_MODEL
+              value: "embed"
+            - name: AI_PROVIDER_OPTIONS
+              value: "{\"chat_template_kwargs\":{\"enable_thinking\":false}}"
+            - name: AI_MODEL_PRICES
+              value: "{}"
+            - name: AUTO_MERGE_ENABLED
+              value: "false"
+            - name: AUTO_MERGE_MAX_FILES_CHANGED
+              value: "20"
+            - name: MAINTENANCE_INTERVAL_HOURS
+              value: "24"
+            - name: NF_REVIEW_CONFIG_FILE
+              value: ""
+          ports:
+            - name: health
+              containerPort: 8090
+            - name: grpc
+              containerPort: 9093
+          readinessProbe:
+            httpGet: {path: /healthz, port: health}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: health}
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            limits:
+              cpu: "2"
+              memory: 1Gi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+---
+# Source: novaforge/templates/certificate.tpl
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: novaforge-git-platform-tls
+  labels:
+    app.kubernetes.io/name: novaforge
+    app.kubernetes.io/instance: novaforge
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: git-platform
+spec:
+  secretName: novaforge-git-platform-tls
+  issuerRef:
+    name: "cluster-ca"
+    kind: ClusterIssuer
+  commonName: "novaforge-git-platform.novaforge.svc"
+  dnsNames:
+    - "novaforge-git-platform"
+    - "novaforge-git-platform.novaforge.svc"
+    - "novaforge-git-platform.novaforge.svc.cluster.local"
+    - "novaforge.kw.watteel.lab"
+    - "git.novaforge.kw.watteel.lab"
+  ipAddresses:
+    - "192.168.10.141"
+---
+# Source: novaforge/templates/networkpolicy.tpl
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: novaforge-identity-egress
+  labels:
+    app.kubernetes.io/name: novaforge
+    app.kubernetes.io/instance: novaforge
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: identity
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/component: identity
+      app.kubernetes.io/instance: novaforge
+  egress:
+    - toEntities:
+        - cluster
+        - kube-apiserver
+---
+# Source: novaforge/templates/networkpolicy.tpl
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: novaforge-git-platform-egress
+  labels:
+    app.kubernetes.io/name: novaforge
+    app.kubernetes.io/instance: novaforge
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: git-platform
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/component: git-platform
+      app.kubernetes.io/instance: novaforge
+  egress:
+    - toEntities:
+        - cluster
+        - kube-apiserver
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - {port: "53", protocol: ANY}
+          rules:
+            dns:
+              - matchPattern: "*"
+    - toFQDNs:
+        - matchName: "github.com"
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    - toCIDR:
+        - "192.168.10.132/32"
+      toPorts:
+        - ports:
+            - port: "8088"
+              protocol: TCP
+---
+# Source: novaforge/templates/networkpolicy.tpl
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: novaforge-ci-runner-egress
+  labels:
+    app.kubernetes.io/name: novaforge
+    app.kubernetes.io/instance: novaforge
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: ci-runner
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/component: ci-runner
+      app.kubernetes.io/instance: novaforge
+  egress:
+    - toEntities:
+        - cluster
+        - kube-apiserver
+---
+# Source: novaforge/templates/networkpolicy.tpl
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: novaforge-agent-runtime-egress
+  labels:
+    app.kubernetes.io/name: novaforge
+    app.kubernetes.io/instance: novaforge
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: agent-runtime
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/component: agent-runtime
+      app.kubernetes.io/instance: novaforge
+  egress:
+    - toEntities:
+        - cluster
+        - kube-apiserver
+---
+# Source: novaforge/templates/networkpolicy.tpl
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: novaforge-engineering-graph-egress
+  labels:
+    app.kubernetes.io/name: novaforge
+    app.kubernetes.io/instance: novaforge
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: engineering-graph
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/component: engineering-graph
+      app.kubernetes.io/instance: novaforge
+  egress:
+    - toEntities:
+        - cluster
+        - kube-apiserver
+---
+# Source: novaforge/templates/networkpolicy.tpl
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: novaforge-mcp-server-egress
+  labels:
+    app.kubernetes.io/name: novaforge
+    app.kubernetes.io/instance: novaforge
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: mcp-server
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/component: mcp-server
+      app.kubernetes.io/instance: novaforge
+  egress:
+    - toEntities:
+        - cluster
+        - kube-apiserver
+---
+# Source: novaforge/templates/networkpolicy.tpl
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: novaforge-edge-egress
+  labels:
+    app.kubernetes.io/name: novaforge
+    app.kubernetes.io/instance: novaforge
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: edge
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/component: edge
+      app.kubernetes.io/instance: novaforge
+  egress:
+    - toEntities:
+        - cluster
+        - kube-apiserver

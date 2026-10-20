@@ -1,0 +1,167 @@
+# Desired azrty OKE release: namespace novaforge, release novaforge, served at
+# https://novaforge.azrty.com through the shared Envoy Gateway.
+# docs/oke-deployment.md lists every Secret this file names and who provides it.
+# No secret bytes are in this file, only the names of Secrets the platform repo
+# creates (SOPS).
+
+# CRI-O on OKE runs in short-name enforcing mode, so every image here is fully
+# qualified. The services come from OCIR as
+# dxb.ocir.io/axmcgpqk0w0z/azrty/novaforge-<svc>:<tag>.
+image:
+  registry: dxb.ocir.io
+  repository: axmcgpqk0w0z/azrty
+  namePrefix: novaforge-
+  # Build with hack/build-images.sh and the NF_REGISTRY_* overrides it
+  # documents, then put the published commit tag here. Nothing has been pushed
+  # to OCIR from this commit yet.
+  tag: f7f542a
+  pullSecret: ocir-pull
+
+# oci-bv is block storage: ReadWriteOnce only, and OCI's smallest block volume
+# is 50Gi (a smaller request is rounded up and billed as 50Gi anyway).
+repos:
+  storageClass: oci-bv
+  size: 50Gi
+  accessMode: ReadWriteOnce
+
+# PostgreSQL is the shared CNPG cluster (externalDatabase below); Redis and
+# MinIO stay bundled.
+datastores:
+  enabled: true
+  redis:
+    image: docker.io/library/redis:8
+    persistence:
+      enabled: true
+      storageClass: oci-bv
+      size: 50Gi
+  minio:
+    image: docker.io/minio/minio:latest
+    storageClass: oci-bv
+    size: 50Gi
+
+externalDatabase:
+  # DSN for database novaforge on shared-pg-rw.shared-pg.svc:5432 — directly,
+  # not through shared-pg-pooler-rw, which is transaction-mode PgBouncer.
+  existingSecret: novaforge-database
+  key: uri
+
+# The namespace-scoped deployer cannot create cluster-scoped objects; the
+# platform repo owns any ServiceAccount/ClusterRole NovaForge is given.
+rbac:
+  create: false
+storage:
+  pruneProtection: true
+
+secrets:
+  existingSecret: novaforge-secrets
+
+# The public FastLLM proxy. The key is AI_API_KEY in novaforge-secrets.
+ai:
+  endpoint: https://api-ai.watteel.com/v1
+  embedEndpoint: https://api-ai.watteel.com/v1
+
+# OKE's CNI is flannel: there is no Cilium, so a CiliumNetworkPolicy cannot even
+# be applied (unknown kind), and flannel enforces no NetworkPolicy of any kind.
+# Nothing at the network layer confines any pod here; see "Isolation on OKE" in
+# docs/oke-deployment.md.
+networkPolicy:
+  enabled: false
+
+# TLS is terminated at the Gateway's novaforge-https listener, and there is no
+# cluster-ca ClusterIssuer on OKE. git-platform then serves its plaintext port
+# only, which the HTTPRoute reaches.
+gitTLS:
+  enabled: false
+
+lfs:
+  # The origin git-lfs is sent back to. Git over SSH is not exposed on OKE.
+  publicURL: https://novaforge.azrty.com
+
+gateway:
+  enabled: true
+  parentRefs:
+    - name: edge
+      namespace: envoy-gateway-system
+      sectionName: novaforge-https
+  hostnames:
+    - novaforge.azrty.com
+
+# git-platform's application-layer egress allowlist (imports, mirrors,
+# webhooks). It is enforced in the process — exact host/scheme/port, pinned
+# resolution, private ranges refused — and does not depend on the CNI. The
+# CIDR is the whole internet because github.com's addresses move; the exact
+# host match is what constrains it.
+outbound:
+  destinations:
+    - scheme: https
+      host: github.com
+      port: 443
+      cidrs:
+        - 0.0.0.0/0
+        - ::/0
+
+# Every feature that runs repository code relies on a NetworkPolicy to keep that
+# code away from shared-pg, the other tenants and the internet. flannel does
+# not enforce NetworkPolicy, so each of them is off here, in the state where
+# the platform refuses rather than runs unconfined.
+operatorConfigs:
+  # No OpenBao is wired for NovaForge on OKE, and its consumer — brokered CI
+  # job credentials — has no runner to serve.
+  openbao:
+    secretName: ""
+  # Governed deployments run operator-approved Helm jobs in pods. Off.
+  deployments:
+    secretName: ""
+  # The semantic producer runs language tooling over repository contents in
+  # sandbox pods guarded by a deny-all NetworkPolicy. flannel does not enforce
+  # NetworkPolicy; enabling this would let untrusted repository code reach
+  # shared-pg and the internet.
+  semanticProducer:
+    secretName: ""
+
+runner:
+  # No CI runner. A runner executes repository-supplied commands in job pods
+  # whose only confinement is NetworkPolicy; flannel does not enforce
+  # NetworkPolicy, so enabling this would let untrusted repository code reach
+  # shared-pg and the internet. CI runs are accepted and stay queued.
+  orgId: ""
+
+services:
+  git-platform:
+    # The Gateway is the only way in; a LoadBalancer here would be a second,
+    # public OCI load balancer serving plaintext git.
+    extraServiceType: ""
+    # One replica on a ReadWriteOnce volume: the old pod must let go of it
+    # before the new one can mount it.
+    replicas: 1
+    strategy:
+      type: Recreate
+  edge:
+    extraServiceType: ""
+  gates:
+    # Executable gates run repository tests and compilers in a sandbox pod
+    # whose only egress control is a deny-all NetworkPolicy. flannel does not
+    # enforce NetworkPolicy; enabling this would let untrusted repository code
+    # reach shared-pg and the internet. Empty: gates reports executable gates
+    # unavailable and never falls back to running code in its own process.
+    analysisImage: ""
+    # No sandbox, so no ServiceAccount for it.
+    sandboxRbac: false
+  agent-runtime:
+    # Agent Runs execute commands in a workspace pod confined by NetworkPolicy.
+    # flannel does not enforce NetworkPolicy; enabling this would let untrusted
+    # repository code reach shared-pg and the internet. Without a ServiceAccount
+    # token agent-runtime finds no Kubernetes API, provisions no workspace, and
+    # StartRun refuses with FailedPrecondition.
+    rbac: false
+    automountServiceAccountToken: false
+
+# Sign-in through the azrty Zitadel (https://login.azrty.com). The platform's
+# zitadel-config runner writes the novaforge-oidc Secret (OIDC_ISSUER,
+# OIDC_CLIENT_ID, OIDC_REDIRECT_URI) into this namespace: a public client,
+# authorization code + PKCE, no client secret. Password sign-in stays on as
+# break-glass and for the nf CLI, which signs in with a password or a token.
+oidc:
+  existingSecret: novaforge-oidc
+  issuerHost: login.azrty.com
+  passwordLoginEnabled: true

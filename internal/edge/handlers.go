@@ -19,8 +19,11 @@ func Handlers(cfg Config) map[string]http.HandlerFunc {
 	h := map[string]http.HandlerFunc{}
 	addDeploymentHandlers(h, cfg.Git, cfg.Deployments)
 	if cfg.Identity != nil {
-		addIdentityHandlers(h, cfg.Identity)
+		addIdentityHandlers(h, cfg.Identity, !cfg.OIDC.PasswordLoginDisabled)
 	}
+	// Always mounted: the login page asks /auth/oidc/config whatever the
+	// deployment, and a deployment without SSO must say so, not answer 501.
+	addOIDCHandlers(h, cfg.Identity, cfg.OIDC)
 	if cfg.Git != nil {
 		addGitHandlers(h, cfg.Git)
 		addWorkHandlers(h, cfg.Git, cfg.Work, cfg.Reviews)
@@ -57,13 +60,24 @@ func Handlers(cfg Config) map[string]http.HandlerFunc {
 	return h
 }
 
+func writePasswordLoginDisabled(w http.ResponseWriter) {
+	WriteJSON(w, http.StatusForbidden, map[string]any{
+		"error":                  "password sign-in is disabled in this deployment; sign in with single sign-on",
+		"password_login_enabled": false,
+	})
+}
+
 func decode(r *http.Request, v any) error {
 	defer r.Body.Close()
 	return json.NewDecoder(r.Body).Decode(v)
 }
 
-func addIdentityHandlers(h map[string]http.HandlerFunc, c identityv1.IdentityServiceClient) {
+func addIdentityHandlers(h map[string]http.HandlerFunc, c identityv1.IdentityServiceClient, passwordLogin bool) {
 	h["register"] = func(w http.ResponseWriter, r *http.Request) {
+		if !passwordLogin {
+			writePasswordLoginDisabled(w)
+			return
+		}
 		var req struct{ Email, Username, Password string }
 		if err := decode(r, &req); err != nil {
 			WriteError(w, http.StatusBadRequest, err)
@@ -80,6 +94,13 @@ func addIdentityHandlers(h map[string]http.HandlerFunc, c identityv1.IdentitySer
 	}
 
 	h["login"] = func(w http.ResponseWriter, r *http.Request) {
+		// Refused here, before identity (which refuses too), so the answer is
+		// a plain 403: the login handler's failure path below marks every
+		// error as a TOTP challenge, and a disabled sign-in is not one.
+		if !passwordLogin {
+			writePasswordLoginDisabled(w)
+			return
+		}
 		var req struct {
 			Username, Password string
 			TOTPCode           string `json:"totp_code"`

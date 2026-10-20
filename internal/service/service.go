@@ -94,6 +94,22 @@ type Config struct {
 	HMACSecret string
 	SecretsKEK string
 
+	// Single sign-on through an OpenID Connect provider (the edge reads these;
+	// see edge.OIDCConfig). They come from an operator-provisioned Secret the
+	// chart names in oidc.existingSecret; all three empty is SSO off, and the
+	// edge refuses to start with only some of them set. The client is public —
+	// authorization code with PKCE — so there is no client secret to read.
+	OIDCIssuer      string
+	OIDCClientID    string
+	OIDCRedirectURI string
+	// OIDCButtonLabel is what the login page's SSO button says.
+	OIDCButtonLabel string
+	// PasswordLoginEnabled keeps username/password sign-in (and Register)
+	// alongside SSO. Identity enforces it and the edge reports it; both read
+	// the same variable, rendered from one chart value. It is on unless set to
+	// "false", so a deployment that predates SSO keeps the sign-in it had.
+	PasswordLoginEnabled bool
+
 	// GateAnalysisImage is an operator-selected digest, never repository input.
 	// Empty leaves executable gates unavailable rather than running them locally.
 	GateAnalysisImage string
@@ -150,6 +166,11 @@ func LoadConfig() Config {
 		JWTSecret:                  env("JWT_SECRET", ""),
 		HMACSecret:                 env("HMAC_SECRET", ""),
 		SecretsKEK:                 env("SECRETS_KEK", ""),
+		OIDCIssuer:                 env("OIDC_ISSUER", ""),
+		OIDCClientID:               env("OIDC_CLIENT_ID", ""),
+		OIDCRedirectURI:            env("OIDC_REDIRECT_URI", ""),
+		OIDCButtonLabel:            env("NF_OIDC_BUTTON_LABEL", "Sign in with azrty"),
+		PasswordLoginEnabled:       env("NF_PASSWORD_LOGIN_ENABLED", "true") != "false",
 		GateAnalysisImage:          env("NF_GATE_ANALYSIS_IMAGE", ""),
 		OpenBaoConfigFile:          env("NF_OPENBAO_CONFIG_FILE", ""),
 		MCPHTTPConfigFile:          env("NF_MCP_HTTP_CONFIG_FILE", ""),

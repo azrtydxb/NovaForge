@@ -76,6 +76,13 @@ paths:
 				}
 			}
 			b.WriteString("      responses:\n")
+			if r.OpID == "startOIDC" || r.OpID == "oidcCallback" {
+				// A browser navigation, not an API call: every outcome,
+				// failures included, is a redirect (success to the
+				// application, failure to the login page with ?oidc_error=).
+				b.WriteString("        \"302\":\n          description: Redirect\n")
+				continue
+			}
 			b.WriteString("        \"200\":\n          description: Success\n")
 			b.WriteString("        \"401\":\n          $ref: \"#/components/responses/Unauthorized\"\n")
 			b.WriteString("        \"403\":\n          $ref: \"#/components/responses/Forbidden\"\n")

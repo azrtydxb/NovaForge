@@ -173,3 +173,8 @@ func sign(secret, payload string) string {
 	m.Write([]byte(payload))
 	return base64.RawURLEncoding.EncodeToString(m.Sum(nil))
 }
+
+// EdgeOIDCService is the platform worker name the edge mints its token under
+// when it hands identity an external identity it has verified. Identity's
+// SignInExternal admits this name and nothing else.
+const EdgeOIDCService = "edge-oidc"

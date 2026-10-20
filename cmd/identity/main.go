@@ -75,6 +75,12 @@ func main() {
 	// never be admitted. gRPC clients connect lazily, so this does not make the
 	// two services' startup order matter.
 	grpcServer.HMACSecret = cfg.HMACSecret
+	// The same switch the edge reads: with it off, identity refuses Login and
+	// Register itself, so a caller that bypasses the edge cannot use them.
+	grpcServer.PasswordLoginEnabled = cfg.PasswordLoginEnabled
+	if !cfg.PasswordLoginEnabled {
+		log.Print("identity: password sign-in is disabled; users sign in through single sign-on")
+	}
 	if cfg.AgentsAddr == "" {
 		log.Print("identity: AGENTS_ADDR is unset; delegated run grant issuance is unavailable")
 	} else {

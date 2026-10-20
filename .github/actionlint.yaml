@@ -1,0 +1,5 @@
+# The azrty ARC runner scale set (arm64, on the OKE cluster). Self-hosted labels
+# are unknown to actionlint unless declared.
+self-hosted-runner:
+  labels:
+    - arc-azrtydxb

@@ -4,6 +4,13 @@ self-contained and works air-gapped. Point the secret at external endpoints and
 set datastores.enabled=false to use managed ones instead.
 */ -}}
 {{- if .Values.datastores.enabled }}
+{{- /*
+An external database replaces the bundled PostgreSQL entirely: its claim, its
+Deployment and its Service. Rendering it anyway would leave an idle database
+holding a volume that nothing reads, and a DSN in the shared secret pointing at
+it that the services no longer use.
+*/ -}}
+{{- if not .Values.externalDatabase.existingSecret }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -59,10 +66,30 @@ spec:
   selector: {app: {{ .Release.Name }}-postgres}
   ports: [{port: 5432, targetPort: 5432}]
 ---
+{{- end }}
+{{- if .Values.datastores.redis.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-redis-data
+  {{- if .Values.storage.pruneProtection }}
+  annotations: {sync.kuvryn.io/prune: disabled}
+  {{- end }}
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.datastores.redis.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources: {requests: {storage: {{ .Values.datastores.redis.persistence.size }}}}
+---
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata: {name: {{ .Release.Name }}-redis}
 spec:
+  {{- if .Values.datastores.redis.persistence.enabled }}
+  strategy: {type: RollingUpdate, rollingUpdate: {maxSurge: 0, maxUnavailable: 1}}
+  {{- end }}
   replicas: 1
   selector: {matchLabels: {app: {{ .Release.Name }}-redis}}
   template:
@@ -73,9 +100,17 @@ spec:
           image: {{ .Values.datastores.redis.image }}
           args: ["redis-server", "--appendonly", "yes"]
           ports: [{containerPort: 6379}]
+          {{- if .Values.datastores.redis.persistence.enabled }}
+          volumeMounts: [{name: data, mountPath: /data}]
+          {{- end }}
           readinessProbe:
             exec: {command: [redis-cli, ping]}
             initialDelaySeconds: 5
+      {{- if .Values.datastores.redis.persistence.enabled }}
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: {{ .Release.Name }}-redis-data}
+      {{- end }}
 ---
 apiVersion: v1
 kind: Service

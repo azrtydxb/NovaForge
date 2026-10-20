@@ -41,7 +41,10 @@ type Config struct {
 	Gates       gatesv1.GatesServiceClient
 	Deployments deploymentv1.DeploymentServiceClient
 	MCP         mcpv1.McpServiceClient
-	Handlers    map[string]http.HandlerFunc
+	// OIDC is single sign-on. Its zero value is SSO off with password login
+	// on, which is what every deployment had before SSO existed.
+	OIDC     OIDCConfig
+	Handlers map[string]http.HandlerFunc
 }
 
 // NewRouter builds the edge. Routing comes from the same table that generates
