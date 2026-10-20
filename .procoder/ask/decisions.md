@@ -917,3 +917,15 @@ to the user rather than done:
      chaining): a platform change affecting every tenant, separate effort.
    - Run code-executing workloads on a separate node pool or cluster that
      enforces policy.
+
+## /Volumes/DATA is full (2026-10-21)
+
+/Volumes/DATA is at 100% (317 MB free of 460 GB). A write failed part-way during
+the OIDC work and a git index lock was left behind by it. The Go build cache
+there (/Volumes/DATA/.cache/go-build) is 105 GB and entirely regenerable.
+This session moved its own builds to a cache on the system volume, so nothing of
+the user's was deleted.
+
+- Clear it: `go clean -cache` frees ~105 GB; first builds afterwards are slower.
+- Move it: set GOCACHE to the system volume (84 GB free) and clear the old one.
+- Leave it: the user frees space their own way.
