@@ -1,3 +1,47 @@
+# October 21 — second deployment: OKE at novaforge.azrty.com, Zitadel sign-in
+
+NovaForge runs on the azrty OKE cluster (arm64, CRI-O, flannel) at
+https://novaforge.azrty.com. Kuvryn Sync deploys it from `values-oke.yaml`; the
+"Publish to OKE" workflow builds images to OCIR and pins them through an
+app-opened PR. `docs/oke-deployment.md` lists the Secrets and the platform-side
+onboarding (azrty-infra #135, #136, #137).
+
+Proven on OKE:
+
+- Sign-in through Zitadel (login.azrty.com) only: public client, PKCE, verified ID
+  token; accounts link by (issuer, subject). A real user signed in and linked.
+  Register and password login answer 403.
+- A git clone, commit and push over HTTPS through the shared Envoy gateway; a
+  clone without credentials is refused.
+- Object storage is OCI Object Storage's S3 API (buckets `novaforge-ci`,
+  `novaforge-releases`), not a bundled MinIO.
+
+Known limitations on OKE, deliberately:
+
+- **Code execution is off**: no CI runner, no executable gates, no agent
+  workspaces. flannel enforces no NetworkPolicy, so the isolation those
+  features depend on would not exist. Starting an agent run is refused
+  (FailedPrecondition) and a pending CI job says no runner is connected.
+  Turning them on needs a CNI that enforces policy first.
+- Redis is bundled (`docker.io/library/redis:8`, anonymous Docker Hub pulls).
+
+Defects the first rollout exposed (each fixed, with a test seen red first):
+
+- Dependabot's TypeScript 7 bump merged green because CI never built `web/`, and
+  `npm ci` in the edge image refused it. The required `test` check now installs,
+  type-checks and builds the web app.
+- `blobstore.Options.UseSSL` existed but no caller set it, so every service spoke
+  plain HTTP to S3. There was no region either. `Config.BlobOptions` now carries both.
+- `BucketExists` is a HEAD, which OCI refuses to a bucket-scoped key that may
+  still read and write every object. The bucket is now checked by listing it.
+- `docker.io/minio/minio` refuses pulls. kw still runs only because its nodes cached `latest`;
+  **kw's MinIO will not come back after a reschedule onto a node without that
+  cache** — kw should move to the TrueNAS S3 service.
+- Redis could not create its append-only directory on a root-owned block
+  volume; it now runs as uid/fsGroup 999.
+- The LFS size limit rendered as `5.36870912e+09` (Helm float); now an integer,
+  with a test that no env value renders in scientific notation.
+
 # September 27 deployment ownership — Kuvryn Sync on kw
 
 NovaForge is now managed by Kuvryn Sync v0.7.1, following `main` and rendering
