@@ -978,3 +978,9 @@ isolation a follow-up; clear the Go build cache on /Volumes/DATA.
 **Question:** The user does not want builds and tests on the workstation; CI exists for that. The required `test` check gets real Postgres, Redis and S3 service containers so the datastore suites run in CI. For the agents' inner red/green loop: push a branch and wait for CI on every iteration, or run focused `go test` in a throwaway pod on kw (cache on a cluster volume, CI still the gate)?
 
 **Decided (2026-10-21):** pod on kw for the inner loop, with CI (real datastores) as the required gate.
+
+## 2026-10-21 — Fix the failures PR #32's CI exposed?
+
+- Fix all three: the mirror fixture creates `main` explicitly, CI's S3 endpoint becomes `127.0.0.1:9000`, and history is ordered at sub-second precision with a tie-break, using a test that fails first.
+- Fix only the real bug (graph history ordering).
+- Leave everything as is.

@@ -62,9 +62,10 @@ jobs:
         image: adobe/s3mock:5.2.3
         ports: ["9000:9090"]
     env:
-      TEST_DATABASE_URL: postgres://novaforge:novaforge@localhost:5432/novaforge?sslmode=disable
-      TEST_REDIS_URL: redis://localhost:6379
-      TEST_S3_ENDPOINT: localhost:9000
+      TEST_DATABASE_URL: postgres://novaforge:novaforge@127.0.0.1:5432/novaforge?sslmode=disable
+      TEST_REDIS_URL: redis://127.0.0.1:6379
+      # A literal address: the egress policy test builds a CIDR from it.
+      TEST_S3_ENDPOINT: 127.0.0.1:9000
       TEST_S3_ACCESS_KEY: ci
       TEST_S3_SECRET_KEY: ci-secret
       TEST_S3_BUCKET: novaforge-test
