@@ -10,17 +10,6 @@ spec:
   storageClassName: "longhorn"
   resources: {requests: {storage: 20Gi}}
 ---
-# Source: novaforge/templates/datastores.tpl
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: novaforge-minio-data
-  annotations: {sync.kuvryn.io/prune: disabled}
-spec:
-  accessModes: [ReadWriteOnce]
-  storageClassName: "longhorn"
-  resources: {requests: {storage: 20Gi}}
----
 # Source: novaforge/templates/repos-pvc.tpl
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -53,14 +42,6 @@ metadata: {name: novaforge-redis}
 spec:
   selector: {app: novaforge-redis}
   ports: [{port: 6379, targetPort: 6379}]
----
-# Source: novaforge/templates/datastores.tpl
-apiVersion: v1
-kind: Service
-metadata: {name: novaforge-minio}
-spec:
-  selector: {app: novaforge-minio}
-  ports: [{name: api, port: 9000, targetPort: 9000}, {name: console, port: 9001, targetPort: 9001}]
 ---
 # Source: novaforge/templates/services.tpl
 apiVersion: v1
@@ -357,43 +338,6 @@ spec:
           # Writable by the redis user, and it survives a container restart,
           # which the image layer did not.
           emptyDir: {}
----
-# Source: novaforge/templates/datastores.tpl
-apiVersion: apps/v1
-kind: Deployment
-metadata: {name: novaforge-minio}
-spec:
-  strategy: {type: RollingUpdate, rollingUpdate: {maxSurge: 0, maxUnavailable: 1}}
-  replicas: 1
-  selector: {matchLabels: {app: novaforge-minio}}
-  template:
-    metadata: {labels: {app: novaforge-minio}}
-    spec:
-      containers:
-        - name: minio
-          image: minio/minio:latest
-          args: ["server", "/data", "--console-address", ":9001"]
-          env:
-            - name: MINIO_ROOT_USER
-              value: null
-              valueFrom:
-                secretKeyRef:
-                  name: novaforge-secrets
-                  key: MINIO_ROOT_USER
-            - name: MINIO_ROOT_PASSWORD
-              value: null
-              valueFrom:
-                secretKeyRef:
-                  name: novaforge-secrets
-                  key: MINIO_ROOT_PASSWORD
-          ports: [{containerPort: 9000}, {containerPort: 9001}]
-          volumeMounts: [{name: data, mountPath: /data}]
-          readinessProbe:
-            httpGet: {path: /minio/health/live, port: 9000}
-            initialDelaySeconds: 10
-      volumes:
-        - name: data
-          persistentVolumeClaim: {claimName: novaforge-minio-data}
 ---
 # Source: novaforge/templates/services.tpl
 apiVersion: apps/v1
@@ -1548,6 +1492,12 @@ spec:
         - ports:
             - port: "8088"
               protocol: TCP
+    - toCIDR:
+        - "192.168.10.253/32"
+      toPorts:
+        - ports:
+            - port: "9000"
+              protocol: TCP
 ---
 # Source: novaforge/templates/networkpolicy.tpl
 apiVersion: cilium.io/v2
@@ -1568,6 +1518,12 @@ spec:
     - toEntities:
         - cluster
         - kube-apiserver
+    - toCIDR:
+        - "192.168.10.253/32"
+      toPorts:
+        - ports:
+            - port: "9000"
+              protocol: TCP
 ---
 # Source: novaforge/templates/networkpolicy.tpl
 apiVersion: cilium.io/v2

@@ -54,6 +54,10 @@ datastores:
 objectStorage:
   useSSL: false
   region: ""
+  # Where an object store outside the cluster listens, as [{host, port}] with an
+  # IPv4 address or a hostname. git-platform and ci-runner are air-gapped
+  # (networkPolicy) and may reach these, and nothing else may.
+  egress: []
 
 # A database outside the chart, e.g. a shared CloudNativePG cluster. When
 # existingSecret is set the bundled PostgreSQL is not rendered at all and every

@@ -53,3 +53,14 @@ rbac:
   create: false
 storage:
   pruneProtection: true
+# Object storage is the TrueNAS S3 service (buckets novaforge-ci and
+# novaforge-releases, user novaforge-kw limited to them); novaforge-secrets
+# carries its S3_ENDPOINT and key. The bundled MinIO is off: docker.io/minio/minio
+# refuses pulls, so it would not have come back after its next restart.
+datastores:
+  minio:
+    enabled: false
+objectStorage:
+  egress:
+    - host: 192.168.10.253
+      port: 9000

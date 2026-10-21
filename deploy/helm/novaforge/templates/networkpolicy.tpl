@@ -85,5 +85,37 @@ does not match, and the edge resolves its peers by name.
             - port: {{ $.Values.oidc.issuerPort | quote }}
               protocol: TCP
 {{- end }}
+{{- if and (has $name (list "git-platform" "ci-runner")) $.Values.objectStorage.egress }}
+{{- /*
+An object store outside the cluster (objectStorage.egress), e.g. the TrueNAS S3
+service on kw. git-platform (release assets, LFS) and ci-runner (artifacts,
+logs) are its only users; without this they are refused at start, which looks
+exactly like a missing bucket. A hostname also needs DNS, matched broadly for
+the reason given for the issuer above.
+*/ -}}
+{{- range $rule := $.Values.objectStorage.egress }}
+{{- if regexMatch "^[0-9.]+$" $rule.host }}
+    - toCIDR:
+        - {{ printf "%s/32" $rule.host | quote }}
+{{- else }}
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - {port: "53", protocol: ANY}
+          rules:
+            dns:
+              - matchPattern: "*"
+    - toFQDNs:
+        - matchName: {{ $rule.host | quote }}
+{{- end }}
+      toPorts:
+        - ports:
+            - port: {{ $rule.port | quote }}
+              protocol: TCP
+{{- end }}
+{{- end }}
 {{- end }}
 {{- end }}
