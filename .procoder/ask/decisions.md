@@ -929,3 +929,8 @@ the user's was deleted.
 - Clear it: `go clean -cache` frees ~105 GB; first builds afterwards are slower.
 - Move it: set GOCACHE to the system volume (84 GB free) and clear the old one.
 - Leave it: the user frees space their own way.
+
+**Decided (2026-10-21):** apply all — run both tofu applies, set the OCIR push
+secrets, merge the azrty-infra PR once its checks pass, publish and verify;
+ship OKE with code execution off (agents, executable gates, CI runners) and make
+isolation a follow-up; clear the Go build cache on /Volumes/DATA.
