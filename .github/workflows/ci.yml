@@ -8,8 +8,12 @@ name: CI
 # The datastore suites need TEST_DATABASE_URL, TEST_REDIS_URL and the S3
 # variables (hack/env.sh) and t.Skip without them, so here they skip: this
 # proves the module still compiles and its unit tests pass against a new SDK,
-# not the datastore paths — those stay on the kw cluster. The web app is not
-# built; internal/edge/dist ships a .gitkeep so the embed still compiles.
+# not the datastore paths — those stay on the kw cluster.
+#
+# The web app is installed, type-checked and built here, with the Node major
+# Dockerfile.edge uses. It was not, and Dependabot's TypeScript 7 bump merged
+# green while `npm ci` in the edge image refused it (typescript-eslint's peer
+# range stops below 6.1), so the first OKE publish failed on the edge image.
 
 on:
   push:
@@ -39,6 +43,15 @@ jobs:
           go-version-file: go.mod
       - run: go build ./...
       - run: go vet ./...
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: web
+        working-directory: web
+        run: |
+          npm ci
+          npm run typecheck
+          npm run build
       # Scoped to what a stock runner can run. Everything left out needs the
       # kw environment, not a code change, except one real bug:
       # - internal/deployment is excluded: its suites t.Fatal without
