@@ -946,3 +946,5 @@ isolation a follow-up; clear the Go build cache on /Volumes/DATA.
 ## 2026-10-21 — Open registration on novaforge.azrty.com
 
 **Question:** OKE ships with `oidc.passwordLoginEnabled: true`, so anyone on the internet can `POST /api/v1/auth/register`, then create organizations and push repositories into OCI Object Storage and the repos volume (verified with a throwaway account, `okecheck7197`). Setting it to false makes "Sign in with azrty" (Zitadel) the only way in and refuses Register; git and the CLI keep working through personal access tokens created after SSO sign-in. Keep password sign-in, or go SSO-only?
+
+**Decided (2026-10-21):** SSO-only on OKE (`oidc.passwordLoginEnabled: false`).

@@ -169,4 +169,8 @@ services:
 oidc:
   existingSecret: novaforge-oidc
   issuerHost: login.azrty.com
-  passwordLoginEnabled: true
+  # SSO only: novaforge.azrty.com is on the internet, and with password sign-in
+  # on, anyone could register and fill the object store and repos volume.
+  # Zitadel decides who gets in; git and nf use personal access tokens created
+  # after signing in.
+  passwordLoginEnabled: false

@@ -16,6 +16,8 @@ name: Publish to OKE
 #
 # Why that cannot loop: merging a pin changes only values-oke.yaml, and that
 # path is ignored below, so a pin is never re-published as if it were new code.
+# A values-only change (such as oidc.passwordLoginEnabled) is not published
+# either; Sync applies it from main with the images already pinned.
 # A commit that changes values-oke.yaml together with code still publishes.
 
 on:
@@ -23,6 +25,10 @@ on:
     branches: [main]
     paths-ignore:
       - deploy/helm/novaforge/values-oke.yaml
+      # Decision records and prose change no image, but each publish pins a new
+      # tag and rolls every OKE pod.
+      - ".procoder/**"
+      - "**/*.md"
   workflow_dispatch: {}
 
 permissions:
