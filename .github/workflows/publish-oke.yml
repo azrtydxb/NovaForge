@@ -8,13 +8,21 @@ name: Publish to OKE
 # The kw cluster is unaffected: it is promoted by hand (hack/build-images.sh +
 # hack/promote-kw.sh) from images on its own registry.
 #
-# Why the pin commit cannot loop: it is pushed with this workflow's GITHUB_TOKEN,
-# and GitHub never starts a workflow run from a commit pushed with that token.
-# A pin is therefore never re-published as if it were new code.
+# The pin lands through a pull request, not a push: main requires the "test"
+# check, which a direct push cannot carry (GitHub rejects it, GH006). The PR is
+# opened with the SDK-bump GitHub App's token rather than GITHUB_TOKEN, because
+# a PR opened with GITHUB_TOKEN starts no workflow, so "test" would never report
+# and auto-merge would wait forever.
+#
+# Why that cannot loop: merging a pin changes only values-oke.yaml, and that
+# path is ignored below, so a pin is never re-published as if it were new code.
+# A commit that changes values-oke.yaml together with code still publishes.
 
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - deploy/helm/novaforge/values-oke.yaml
   workflow_dispatch: {}
 
 permissions:
@@ -103,55 +111,65 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: write
+      contents: read
     steps:
+      - id: app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ vars.SDK_BUMP_APP_ID }}
+          private-key: ${{ secrets.SDK_BUMP_PRIVATE_KEY }}
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
           fetch-depth: 0
-      - name: Pin the published tag in values-oke.yaml
+          token: ${{ steps.app.outputs.token }}
+      - name: Open the pin pull request and enable auto-merge
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           set -euo pipefail
           short="${GITHUB_SHA::7}"
           values=deploy/helm/novaforge/values-oke.yaml
+          branch="deploy/pin-oke-${short}"
           git config user.name "novaforge ci"
           git config user.email "ci@novaforge.invalid"
-          # Rebuilt from origin on every attempt rather than rebased: a newer
-          # publish may have pinned in between, and a newer commit must win.
-          for attempt in 1 2 3 4 5; do
-            git fetch --quiet origin main
-            if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-              echo "$GITHUB_SHA is no longer on main; not pinning"
-              exit 0
+          git fetch --quiet origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "$GITHUB_SHA is no longer on main; not pinning"
+            exit 0
+          fi
+          git checkout --quiet --force -B "$branch" origin/main
+          read_tag() { awk '/^image:/{f=1;next} f&&/^  tag:/{print $2;exit} f&&/^[^ ]/{exit}' "$values"; }
+          current=$(read_tag)
+          # Never move the pin backwards: a slow publish of an older commit
+          # finishing after a newer one must not roll OKE back.
+          if [ -n "$current" ] && [ "$current" != "$short" ] \
+            && git cat-file -e "$current^{commit}" 2>/dev/null \
+            && git merge-base --is-ancestor "$GITHUB_SHA" "$current"; then
+            echo "values-oke already pins $current, which contains $short; not pinning"
+            exit 0
+          fi
+          sed -i -E "/^image:/,/^[^ ]/ s|^(  tag: ).*|\1${short}|" "$values"
+          if [ "$(read_tag)" != "$short" ]; then
+            echo "failed to write tag $short into $values" >&2
+            exit 1
+          fi
+          if git diff --quiet; then
+            echo "$values already pins $short"
+            exit 0
+          fi
+          git add "$values"
+          git commit --quiet -m "deploy: pin ${short} on oke" \
+            -m "Written by CI after the images were pushed to ${OCIR}* (built from ${GITHUB_SHA})."
+          git push --quiet --force origin "HEAD:${branch}"
+          if [ -z "$(gh pr list --head "$branch" --state open --json number -q '.[].number')" ]; then
+            gh pr create --head "$branch" --base main --title "deploy: pin ${short} on oke" \
+              --body "Pins the images CI pushed for ${GITHUB_SHA}. Kuvryn Sync deploys main to novaforge.azrty.com once this merges."
+          fi
+          gh pr merge "$branch" --auto --squash --delete-branch
+          # An older pin still open is superseded by this one.
+          for old in $(gh pr list --state open --json headRefName -q '.[].headRefName' | sed -n 's|^deploy/pin-oke-||p'); do
+            if [ "$old" != "$short" ]; then
+              gh pr close "deploy/pin-oke-$old" --delete-branch --comment "Superseded by ${branch}."
             fi
-            git checkout --quiet --force -B pin origin/main
-            current=$(awk '/^image:/{f=1;next} f&&/^  tag:/{print $2;exit} f&&/^[^ ]/{exit}' "$values")
-            # Never move the pin backwards: a slow publish of an older commit
-            # finishing after a newer one must not roll OKE back.
-            if [ -n "$current" ] && git cat-file -e "$current^{commit}" 2>/dev/null \
-              && git merge-base --is-ancestor "$GITHUB_SHA" "$current" && [ "$current" != "$short" ]; then
-              echo "values-oke already pins $current, which contains $short; not pinning"
-              exit 0
-            fi
-            sed -i -E "/^image:/,/^[^ ]/ s|^(  tag: ).*|\1${short}|" "$values"
-            got=$(awk '/^image:/{f=1;next} f&&/^  tag:/{print $2;exit} f&&/^[^ ]/{exit}' "$values")
-            if [ "$got" != "$short" ]; then
-              echo "failed to write tag $short into $values" >&2
-              exit 1
-            fi
-            if git diff --quiet; then
-              echo "$values already pins $short"
-              exit 0
-            fi
-            git add "$values"
-            git commit --quiet -m "deploy: pin ${short} on oke" \
-              -m "Written by CI after the images were pushed to ${OCIR}* (built from ${GITHUB_SHA})."
-            if git push --quiet origin HEAD:main; then
-              echo "pinned ${short}"
-              exit 0
-            fi
-            echo "push raced a newer commit (attempt $attempt); retrying"
-            sleep $((attempt * 5))
           done
-          echo "could not pin after 5 attempts" >&2
-          exit 1
