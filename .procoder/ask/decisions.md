@@ -940,3 +940,5 @@ isolation a follow-up; clear the Go build cache on /Volumes/DATA.
 **Question:** NovaForge's pods cannot schedule on OKE. The platform pool is a fixed 3 × (4 OCPU / 24 GB). Its nodes are 98–99% CPU-requested, about 0.1 CPU free in total, and NovaForge requests about 1.0 CPU and 2 GiB. The autoscaler covers only the preemptible CI pools, which are tainted `ci`. How should room be made?
 
 **Options:** (1) a 4th platform node (`node_count = 4` in azrty-infra `oci/variables.tf`, +4 OCPU / 24 GB of Ampere A1); (2) NovaForge tolerates the preemptible CI pool, so its pods can be evicted when a node is reclaimed; (3) shrink NovaForge's requests, which would not fit even at 10m per pod.
+
+**Decided (2026-10-21):** add a 4th platform node (`node_count = 4`).
