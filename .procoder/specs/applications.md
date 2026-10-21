@@ -47,7 +47,9 @@ uncoordinated changes where a reviewer needs one.
 - [S-2] An application overview. For each member: its default branch's latest
   CI state, open Engineering Runs, its latest release tag and recent commits.
   An overall state is the worst of the members. Members the viewer cannot
-  read are hidden and counted.
+  read are hidden and counted. An org member reads every repository of the
+  org, so this applies to outside collaborators limited to some repositories
+  (`authz.Scope.RepoLimited`).
 - [S-3] Search across an application: code and knowledge search over every
   readable member, ranked together.
 - [S-4] Composite releases. A release `<version>` records one commit per
@@ -64,10 +66,11 @@ uncoordinated changes where a reviewer needs one.
   unchanged) before any merge. The repositories are then merged, and on a
   failure part-way the ones already merged are restored. The progress is
   journalled, so a crash resumes the merge or the rollback.
-- [S-8] Agent Runs on an application-level Work Item. The workspace holds
-  every member the sponsor may write. The agent's grant names those
-  repositories, so it cannot write any other repository even under its
-  branch prefix. Its result is a change set.
+- [S-8] Agent Runs on an application-level Work Item. An Agent Run does not
+  clone: its tools call git-platform naming a repository on every call. So the
+  run is told the members the sponsor may write, and its grant names those
+  repositories, so it cannot write any other repository even under its branch
+  prefix. Its result is a change set.
 - [S-9] Repository-scoped grants: `capability.Grant` gains the set of
   repositories it applies to, and every new Agent Run, single-repository
   included, is issued a grant naming its repositories.
@@ -213,7 +216,9 @@ created_at, UNIQUE(application_id, number))`
 **work schema:** `work_items.application_id uuid NULL`. A Work Item has
 exactly one of `repo_id` and `application_id`.
 
-**capability:** `capability_grants.repo_ids uuid[] NULL`. NULL means "every
+**capability:** `capability_grants.repo_ids uuid[] NULL` (the table lives in
+the `gitplatform` schema, and grants are enforced there at push time, in
+`requireGrants` → `CanWriteRef`, which gains the repository check). NULL means "every
 repository in the org", which stays only for grants issued before this
 change; new grants always set it.
 
@@ -253,9 +258,9 @@ change; new grants always set it.
   says so; it is not an error.
 - **The org is deleted:** its applications, releases and change sets go with
   it (the existing `RepoDeletedEvent` / org-deletion cleanup is extended).
-- **An agent's workspace for an application with 100 members:** every member
-  the sponsor may write is cloned, shallow (depth 50), within the workspace
-  quota. When the quota is exceeded, the run fails saying so.
+- **An Agent Run on an application with 100 members:** the run's instructions
+  list only the members the sponsor may write, and its grant names exactly
+  those; nothing is cloned up front.
 
 ## Failure modes
 
@@ -292,8 +297,8 @@ change; new grants always set it.
 - [ ] [S-2] `TestApplicationOverviewOnTheCluster`, run on kw by the new
       applications e2e suite: the overview of a 3-member
       application shows each member's default-branch CI state from real runs,
-      open runs and latest tag; with one member unreadable to the viewer it is
-      absent and "1 hidden" is shown. `TestOverviewSaysUnavailableNotGreen`
+      open runs and latest tag; viewed by an outside collaborator limited to two of the
+      members, the third is absent and "1 hidden" is shown. `TestOverviewSaysUnavailableNotGreen`
       (internal/edge) asserts that a member whose CI call fails reads
       "unavailable" and the overall state "unknown". Fails if a failed member
       is dropped or counted as green.
@@ -311,8 +316,12 @@ change; new grants always set it.
 - [ ] [S-4] `TestCompareApplicationReleases` (internal/gitops): comparing
       `1.0.0` with `1.1.0` lists, per member, exactly the commits between the
       recorded SHAs. Fails if the range is taken from current heads.
-- [ ] [S-5] [S-6] `TestChangeSetGroupsRunsOfOneApplication` (internal/reviews,
-      real PostgreSQL): an application-level Work Item is created, runs on two
+- [ ] [S-5] `TestApplicationWorkItemHasNoRepository` (internal/work, real
+      PostgreSQL): a Work Item created on an application has an application
+      and no repository, keeps the org's `NF-n` key sequence, and one with both
+      or neither is refused. Fails if the exactly-one constraint is missing.
+- [ ] [S-6] `TestChangeSetGroupsRunsOfOneApplication` (internal/reviews,
+      real PostgreSQL): runs on two
       members join one change set, a run of a non-member is refused, and a
       second run on the same repository is refused. Fails if membership is not
       checked through git-platform.
