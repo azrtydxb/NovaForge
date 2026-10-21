@@ -964,8 +964,11 @@ isolation a follow-up; clear the Go build cache on /Volumes/DATA.
 ## 2026-10-21 — Approve the applications spec
 
 **Question:** Approve `.procoder/specs/applications.md` for planning and building? Design calls made in it beyond the interview answers:
+
 - git-platform owns applications, releases and the merge journal; work-reviews owns change sets.
 - A failed all-or-nothing merge restores refs, or pushes a revert commit if someone already pushed on top.
 - Every new Agent Run's grant names its repositories, which tightens today's org-wide branch-prefix grants.
 - Code graph queries stay per repository; only search spans the application.
 - An application holds at most 100 repositories.
+
+**Decided (2026-10-21):** approved as written; plan and build it.
