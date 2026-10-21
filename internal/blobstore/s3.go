@@ -31,6 +31,29 @@ type Options struct {
 	Region string
 }
 
+// bucketExists asks by listing at most one object rather than with
+// BucketExists. BucketExists is a HEAD on the bucket, which OCI Object
+// Storage refuses to a key scoped to its buckets although that key may list,
+// read and write every object in them; a listing needs only the object access
+// the services use anyway. A missing bucket still answers NoSuchBucket, so the
+// bundled MinIO is created on first start as before.
+func bucketExists(ctx context.Context, mc *minio.Client, bucket string) (bool, error) {
+	// ListObjects pages until the bucket is exhausted; cancelling after the
+	// first answer stops it there.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	for obj := range mc.ListObjects(ctx, bucket, minio.ListObjectsOptions{MaxKeys: 1}) {
+		if obj.Err != nil {
+			if minio.ToErrorResponse(obj.Err).Code == "NoSuchBucket" {
+				return false, nil
+			}
+			return false, obj.Err
+		}
+		break
+	}
+	return true, nil
+}
+
 // Client is a bucket-scoped object store.
 type Client struct {
 	mc     *minio.Client
@@ -48,7 +71,7 @@ func New(ctx context.Context, o Options) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("connect object storage: %w", err)
 	}
-	exists, err := mc.BucketExists(ctx, o.Bucket)
+	exists, err := bucketExists(ctx, mc, o.Bucket)
 	if err != nil {
 		return nil, fmt.Errorf("check bucket %s: %w", o.Bucket, err)
 	}
