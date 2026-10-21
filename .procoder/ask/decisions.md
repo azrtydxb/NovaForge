@@ -948,3 +948,15 @@ isolation a follow-up; clear the Go build cache on /Volumes/DATA.
 **Question:** OKE ships with `oidc.passwordLoginEnabled: true`, so anyone on the internet can `POST /api/v1/auth/register`, then create organizations and push repositories into OCI Object Storage and the repos volume (verified with a throwaway account, `okecheck7197`). Setting it to false makes "Sign in with azrty" (Zitadel) the only way in and refuses Register; git and the CLI keep working through personal access tokens created after SSO sign-in. Keep password sign-in, or go SSO-only?
 
 **Decided (2026-10-21):** SSO-only on OKE (`oidc.passwordLoginEnabled: false`).
+
+## 2026-10-21 — Applications (grouped repositories): shape of the first version
+
+**Questions** (spec `.procoder/specs/applications.md`): Is an application a group of separate repositories, one repository split into sub-projects, or both? May a repository belong to several applications? What does the first version include: a combined view, composite releases, cross-repository changes? Does access follow the application, or stay per repository?
+
+**Decided (2026-10-21):** separate repositories grouped (polyrepo); a repository belongs to at most one application; the first version includes the grouped view, composite releases and cross-repository changes; access stays per repository.
+
+## 2026-10-21 — Applications: cross-repository merge and release tagging
+
+**Questions:** Does a cross-repository change merge all-or-nothing, or repository by repository as each one's gates pass? Does an application release only record a commit per repository, or also tag each repository?
+
+**Decided (2026-10-21):** a cross-repository change merges all-or-nothing; an application release records each member's commit and tags each member repository.
