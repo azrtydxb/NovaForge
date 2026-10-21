@@ -46,7 +46,7 @@ PY
 import json,sys
 for p in json.load(sys.stdin)["proposals"]:
     if "BenchmarkAlloc" in p["work_item_goal"] and "B/op regressed" in p["work_item_goal"]:
-        assert "(32 -> 4096)" in p["work_item_goal"], "wrong measured allocation comparison"
+        assert "(32 -> 4096)" in p["work_item_goal"], "wrong measured allocation comparison: " + p["work_item_goal"]
         assert not p["assignee_id"] and not p["decision"], "proposal must await approval"
         print(p["work_item_key"])
         break
