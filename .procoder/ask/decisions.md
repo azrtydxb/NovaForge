@@ -972,3 +972,9 @@ isolation a follow-up; clear the Go build cache on /Volumes/DATA.
 - An application holds at most 100 repositories.
 
 **Decided (2026-10-21):** approved as written; plan and build it.
+
+## 2026-10-21 — Where tests and builds run
+
+**Question:** The user does not want builds and tests on the workstation; CI exists for that. The required `test` check gets real Postgres, Redis and S3 service containers so the datastore suites run in CI. For the agents' inner red/green loop: push a branch and wait for CI on every iteration, or run focused `go test` in a throwaway pod on kw (cache on a cluster volume, CI still the gate)?
+
+**Decided (2026-10-21):** pod on kw for the inner loop, with CI (real datastores) as the required gate.
