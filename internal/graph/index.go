@@ -205,6 +205,7 @@ func (s *Store) ReplaceFileIndex(ctx context.Context, fi FileIndex) error {
 				"author":        fi.Commit.Author,
 				"message":       fi.Commit.Message,
 				"changed_at":    fi.Commit.At.UTC().Format(time.RFC3339),
+				"indexed_at":    time.Now().UTC().Format(IndexedAtLayout),
 				"work_item_key": fi.Commit.WorkItemKey,
 			},
 		})
@@ -501,6 +502,18 @@ func (s *Store) queryNodes(ctx context.Context, sql string, args ...any) ([]Node
 // changed_at attribute, which is RFC 3339 in UTC and so sorts as text.
 func SortHistory(nodes []Node) {
 	sort.SliceStable(nodes, func(i, j int) bool {
-		return nodes[i].Attrs["changed_at"] > nodes[j].Attrs["changed_at"]
+		a, b := nodes[i].Attrs, nodes[j].Attrs
+		if a["changed_at"] != b["changed_at"] {
+			return a["changed_at"] > b["changed_at"]
+		}
+		// Git commit times are whole seconds, so commits made back to back
+		// tie; the one indexed later is the later change (pushes are indexed
+		// in order). Without this the database's row order decided, and CI
+		// named the earlier of two same-second commits as the last change.
+		return a["indexed_at"] > b["indexed_at"]
 	})
 }
+
+// IndexedAtLayout is fixed width, unlike RFC3339Nano, which drops trailing
+// zeros, so indexed_at values order correctly as strings.
+const IndexedAtLayout = "2006-01-02T15:04:05.000000000Z07:00"
