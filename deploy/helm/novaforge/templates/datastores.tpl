@@ -95,22 +95,29 @@ spec:
   template:
     metadata: {labels: {app: {{ .Release.Name }}-redis}}
     spec:
+      # The image's redis user. Without fsGroup a fresh block volume (OKE's
+      # oci-bv) is root-owned and Redis cannot create its append-only dir;
+      # the image's entrypoint only fixes ownership when it starts as root,
+      # which a restricted node runtime need not allow.
+      securityContext: {runAsUser: 999, runAsGroup: 999, fsGroup: 999}
       containers:
         - name: redis
           image: {{ .Values.datastores.redis.image }}
           args: ["redis-server", "--appendonly", "yes"]
           ports: [{containerPort: 6379}]
-          {{- if .Values.datastores.redis.persistence.enabled }}
           volumeMounts: [{name: data, mountPath: /data}]
-          {{- end }}
           readinessProbe:
             exec: {command: [redis-cli, ping]}
             initialDelaySeconds: 5
-      {{- if .Values.datastores.redis.persistence.enabled }}
       volumes:
         - name: data
+          {{- if .Values.datastores.redis.persistence.enabled }}
           persistentVolumeClaim: {claimName: {{ .Release.Name }}-redis-data}
-      {{- end }}
+          {{- else }}
+          # Writable by the redis user, and it survives a container restart,
+          # which the image layer did not.
+          emptyDir: {}
+          {{- end }}
 ---
 apiVersion: v1
 kind: Service
@@ -118,6 +125,7 @@ metadata: {name: {{ .Release.Name }}-redis}
 spec:
   selector: {app: {{ .Release.Name }}-redis}
   ports: [{port: 6379, targetPort: 6379}]
+{{- if .Values.datastores.minio.enabled }}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -181,4 +189,5 @@ metadata: {name: {{ .Release.Name }}-minio}
 spec:
   selector: {app: {{ .Release.Name }}-minio}
   ports: [{name: api, port: 9000, targetPort: 9000}, {name: console, port: 9001, targetPort: 9001}]
+{{- end }}
 {{- end }}

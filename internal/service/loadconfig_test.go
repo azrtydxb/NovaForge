@@ -27,7 +27,7 @@ func TestLoadConfigPopulatesEveryField(t *testing.T) {
 		"NF_OUTBOUND_DESTINATIONS": `[{"scheme":"https","host":"github.com","port":443,"cidrs":["140.82.112.0/20"]}]`,
 		"GIT_ADDR":                 "a:2", "WORK_ADDR": "a:3", "CI_ADDR": "a:4", "GATES_ADDR": "a:5",
 		"AGENTS_ADDR": "a:6", "GRAPH_ADDR": "a:7", "MCP_ADDR": "a:9", "S3_ENDPOINT": "a:8",
-		"S3_ACCESS_KEY": "k", "S3_SECRET_KEY": "s", "AI_ENDPOINT": "http://m/v1",
+		"S3_ACCESS_KEY": "k", "S3_SECRET_KEY": "s", "S3_USE_SSL": "true", "S3_REGION": "me-dubai-1", "AI_ENDPOINT": "http://m/v1",
 		"AI_API_KEY": "sk-x", "AI_PROVIDER_OPTIONS": `{"a":1}`, "AI_MODEL": "m",
 		"AI_MODEL_PRICES": `{"m":{"input_micros_per_million_tokens":1,"output_micros_per_million_tokens":1}}`,
 		"EMBED_ENDPOINT":  "http://m/v1", "EMBED_MODEL": "e",

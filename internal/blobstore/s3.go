@@ -25,6 +25,10 @@ type Options struct {
 	SecretKey string
 	Bucket    string
 	UseSSL    bool
+	// Region is the signing region. Empty lets the client ask the endpoint
+	// with GetBucketLocation, which MinIO answers; a store that signs for a
+	// fixed region (OCI Object Storage: its own region name) is named here.
+	Region string
 }
 
 // Client is a bucket-scoped object store.
@@ -39,6 +43,7 @@ func New(ctx context.Context, o Options) (*Client, error) {
 	mc, err := minio.New(o.Endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(o.AccessKey, o.SecretKey, ""),
 		Secure: o.UseSSL,
+		Region: o.Region,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("connect object storage: %w", err)

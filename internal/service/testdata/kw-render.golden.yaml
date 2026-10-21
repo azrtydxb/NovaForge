@@ -338,14 +338,25 @@ spec:
   template:
     metadata: {labels: {app: novaforge-redis}}
     spec:
+      # The image's redis user. Without fsGroup a fresh block volume (OKE's
+      # oci-bv) is root-owned and Redis cannot create its append-only dir;
+      # the image's entrypoint only fixes ownership when it starts as root,
+      # which a restricted node runtime need not allow.
+      securityContext: {runAsUser: 999, runAsGroup: 999, fsGroup: 999}
       containers:
         - name: redis
           image: redis:8
           args: ["redis-server", "--appendonly", "yes"]
           ports: [{containerPort: 6379}]
+          volumeMounts: [{name: data, mountPath: /data}]
           readinessProbe:
             exec: {command: [redis-cli, ping]}
             initialDelaySeconds: 5
+      volumes:
+        - name: data
+          # Writable by the redis user, and it survives a container restart,
+          # which the image layer did not.
+          emptyDir: {}
 ---
 # Source: novaforge/templates/datastores.tpl
 apiVersion: apps/v1

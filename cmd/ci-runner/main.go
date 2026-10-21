@@ -92,12 +92,7 @@ func main() {
 	defer rdb.Close()
 	go (events.Outbox{Pool: pool, Redis: rdb, Schema: "ci"}).Run(ctx)
 
-	blobs, err := blobstore.New(ctx, blobstore.Options{
-		Endpoint:  cfg.S3Endpoint,
-		AccessKey: cfg.S3AccessKey,
-		SecretKey: cfg.S3SecretKey,
-		Bucket:    artifactsBucket,
-	})
+	blobs, err := blobstore.New(ctx, cfg.BlobOptions(artifactsBucket))
 	if err != nil {
 		log.Fatalf("ci-runner: connect object storage: %v", err)
 	}

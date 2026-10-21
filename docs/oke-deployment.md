@@ -70,10 +70,10 @@ CRI-O on OKE runs in short-name enforcing mode, so every image is fully qualifie
 - The services are `dxb.ocir.io/axmcgpqk0w0z/azrty/novaforge-<svc>:<tag>` (`image.registry`,
   `image.repository`, and the new `image.namePrefix: novaforge-`). They are pulled with
   `imagePullSecrets: [ocir-pull]`.
-- The bundled datastores are `docker.io/library/redis:8` and `docker.io/minio/minio:latest`.
-  The nodes pull them from Docker Hub anonymously, which is subject to Docker Hub's pull
-  rate limit. Mirror them into OCIR if that becomes a problem. `minio:latest` is a mutable
-  tag, the same as on kw.
+- The one bundled datastore is `docker.io/library/redis:8`, pulled from Docker Hub
+  anonymously (subject to its pull rate limit; mirror it into OCIR if that becomes a
+  problem). There is no bundled MinIO on OKE: MinIO no longer publishes community images,
+  and `docker.io/minio/minio` refuses pulls, so the first rollout's MinIO pod never started.
 
 The nodes are arm64 (VM.Standard.A1.Flex), which matches what `hack/build-images.sh`
 builds. To build for OCIR:
@@ -170,7 +170,19 @@ EXISTS` succeeds when it is already there. Declare it on the `Database` resource
 Example shape (no real credentials):
 `postgresql://novaforge:<password>@shared-pg-rw.shared-pg.svc:5432/novaforge`.
 
-## Redis and MinIO: bundled, on oci-bv
+## Object storage: OCI Object Storage
+
+`datastores.minio.enabled: false`. Services reach OCI Object Storage's S3 API at the
+endpoint in `novaforge-secrets`, with `objectStorage.useSSL: true` and
+`objectStorage.region: me-dubai-1` (rendered as `S3_USE_SSL` and `S3_REGION`). The API
+answers only over HTTPS and only to requests signed for its own region; before these two
+settings existed, every service spoke plain HTTP to `S3_ENDPOINT`. The buckets
+`novaforge-ci` and `novaforge-releases` and the `novaforge-objects` user, whose policy is
+limited to those two buckets, are in azrty-infra `oci/novaforge.tf`. The policy grants
+`read buckets`, not `manage`, so the buckets must exist before the services start:
+`blobstore.New` creates a bucket only when it is missing.
+
+## Redis: bundled, on oci-bv
 
 oci-bv is block storage. It is ReadWriteOnce, and its smallest volume is 50Gi (OCI rounds
 smaller requests up).
@@ -178,10 +190,11 @@ smaller requests up).
 - `repos`: `storageClass: oci-bv`, `size: 50Gi`, and the new `accessMode: ReadWriteOnce`.
   OKE has no ReadWriteMany class, so git-platform runs as one replica with
   `strategy: Recreate`. A surge pod on another node could never attach the volume.
-- `datastores.minio`: `oci-bv`, 50Gi.
 - `datastores.redis.persistence` (new; off by default, so kw's Redis is unchanged): on,
   with `oci-bv` and 50Gi mounted at `/data`, so the event streams survive a reschedule.
-- `storage.pruneProtection: true` keeps Sync from pruning any of the three claims.
+  The pod runs as the image's redis user (uid and fsGroup 999): a fresh oci-bv volume is
+  root-owned, and the first rollout's Redis could not create its append-only directory.
+- `storage.pruneProtection: true` keeps Sync from pruning either claim.
 
 ## Model gateway
 
@@ -240,16 +253,15 @@ CiliumNetworkPolicies or cert-manager Certificates, because OKE renders neither.
 The platform repo provides all of them through SOPS. The chart references them by name
 only and renders none.
 
-| Secret               | Keys                                                                                                              | Used by                                                                                                             |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `novaforge-secrets`  | `JWT_SECRET`, `HMAC_SECRET`, `SECRETS_KEK` (32 bytes), `AI_API_KEY`                                               | Every service, via envFrom. `AI_API_KEY` is also a `secretKeyRef`. It is the bearer token for `api-ai.watteel.com`. |
-| `novaforge-secrets`  | `REDIS_URL` = `redis://novaforge-redis:6379`                                                                      | Every service                                                                                                       |
-| `novaforge-secrets`  | `S3_ENDPOINT` = `novaforge-minio:9000`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`                                          | Every service, for object storage (LFS, artifacts, releases)                                                        |
-| `novaforge-secrets`  | `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD` (the same pair as `S3_ACCESS_KEY` and `S3_SECRET_KEY`)                   | The bundled MinIO                                                                                                   |
-| `novaforge-secrets`  | optional: `SSH_HOST_KEY` (PEM), `MCP_TOKEN`, `EMBED_API_KEY`, `RERANK_ENDPOINT`, `RERANK_MODEL`, `RERANK_API_KEY` | git-platform (an ephemeral key is generated without it, and SSH is not exposed), mcp-server, engineering-graph      |
-| `novaforge-database` | `uri`: a PostgreSQL URL to `shared-pg-rw.shared-pg.svc:5432/novaforge` as role `novaforge`                        | Every service's `DATABASE_URL`                                                                                      |
-| `ocir-pull`          | `.dockerconfigjson` (type `kubernetes.io/dockerconfigjson`) for `dxb.ocir.io`                                     | Every NovaForge pod's `imagePullSecrets`                                                                            |
-| `novaforge-oidc`     | `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_REDIRECT_URI`: written by the zitadel-config runner, not SOPS              | edge (sign-in through Zitadel); identity reads the password-login flag only                                         |
+| Secret               | Keys                                                                                                                                   | Used by                                                                                                                                                                                                                                              |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `novaforge-secrets`  | `JWT_SECRET`, `HMAC_SECRET`, `SECRETS_KEK` (32 bytes), `AI_API_KEY`                                                                    | Every service, via envFrom. `AI_API_KEY` is also a `secretKeyRef`. It is the bearer token for `api-ai.watteel.com`.                                                                                                                                  |
+| `novaforge-secrets`  | `REDIS_URL` = `redis://novaforge-redis:6379`                                                                                           | Every service                                                                                                                                                                                                                                        |
+| `novaforge-secrets`  | `S3_ENDPOINT` = `<namespace>.compat.objectstorage.me-dubai-1.oraclecloud.com` (host only, no scheme), `S3_ACCESS_KEY`, `S3_SECRET_KEY` | Every service, for object storage: OCI Object Storage buckets `novaforge-ci` and `novaforge-releases`, through the customer secret key of `novaforge-objects` (`oci/novaforge.tf`). TLS and the region come from `objectStorage` in values-oke.yaml. |
+| `novaforge-secrets`  | optional: `SSH_HOST_KEY` (PEM), `MCP_TOKEN`, `EMBED_API_KEY`, `RERANK_ENDPOINT`, `RERANK_MODEL`, `RERANK_API_KEY`                      | git-platform (an ephemeral key is generated without it, and SSH is not exposed), mcp-server, engineering-graph                                                                                                                                       |
+| `novaforge-database` | `uri`: a PostgreSQL URL to `shared-pg-rw.shared-pg.svc:5432/novaforge` as role `novaforge`                                             | Every service's `DATABASE_URL`                                                                                                                                                                                                                       |
+| `ocir-pull`          | `.dockerconfigjson` (type `kubernetes.io/dockerconfigjson`) for `dxb.ocir.io`                                                          | Every NovaForge pod's `imagePullSecrets`                                                                                                                                                                                                             |
+| `novaforge-oidc`     | `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_REDIRECT_URI`: written by the zitadel-config runner, not SOPS                                   | edge (sign-in through Zitadel); identity reads the password-login flag only                                                                                                                                                                          |
 
 Leave these out of `novaforge-secrets`: `DATABASE_URL` (it would be overridden anyway) and
 `POSTGRES_PASSWORD` (there is no bundled PostgreSQL).

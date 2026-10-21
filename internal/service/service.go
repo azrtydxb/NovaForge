@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+
+	"github.com/novaforge/novaforge/internal/blobstore"
 )
 
 // Config is the environment every service is given by the Helm chart.
@@ -60,6 +62,13 @@ type Config struct {
 	S3Endpoint  string
 	S3AccessKey string
 	S3SecretKey string
+	// S3UseSSL and S3Region exist for an object store that is not the bundled
+	// MinIO, such as OCI Object Storage's S3 API on OKE: it answers only over
+	// HTTPS and signs for its own region. blobstore.Options always had UseSSL,
+	// but nothing set it, so every service spoke plain HTTP to whatever
+	// S3_ENDPOINT named.
+	S3UseSSL bool
+	S3Region string
 
 	AIEndpoint string
 	AIAPIKey   string
@@ -152,6 +161,8 @@ func LoadConfig() Config {
 		S3Endpoint:                 env("S3_ENDPOINT", ""),
 		S3AccessKey:                env("S3_ACCESS_KEY", ""),
 		S3SecretKey:                env("S3_SECRET_KEY", ""),
+		S3UseSSL:                   env("S3_USE_SSL", "") == "true",
+		S3Region:                   env("S3_REGION", ""),
 		AIEndpoint:                 env("AI_ENDPOINT", ""),
 		AIAPIKey:                   env("AI_API_KEY", ""),
 		AIProviderOptions:          env("AI_PROVIDER_OPTIONS", ""),
@@ -280,4 +291,18 @@ func envInt(k string, def int) int {
 		}
 	}
 	return def
+}
+
+// BlobOptions is how every service reaches object storage. The services
+// built these by hand and each left out UseSSL, so one place now carries
+// every connection field from the environment to the client.
+func (c Config) BlobOptions(bucket string) blobstore.Options {
+	return blobstore.Options{
+		Endpoint:  c.S3Endpoint,
+		AccessKey: c.S3AccessKey,
+		SecretKey: c.S3SecretKey,
+		Bucket:    bucket,
+		UseSSL:    c.S3UseSSL,
+		Region:    c.S3Region,
+	}
 }

@@ -24,7 +24,6 @@ var okeSecretContract = map[string][]string{
 	"novaforge-secrets": {
 		"JWT_SECRET", "HMAC_SECRET", "SECRETS_KEK", "AI_API_KEY",
 		"REDIS_URL", "S3_ENDPOINT", "S3_ACCESS_KEY", "S3_SECRET_KEY",
-		"MINIO_ROOT_USER", "MINIO_ROOT_PASSWORD",
 	},
 	"novaforge-database": {"uri"},
 	"ocir-pull":          {".dockerconfigjson"},

@@ -24,8 +24,8 @@ repos:
   size: 50Gi
   accessMode: ReadWriteOnce
 
-# PostgreSQL is the shared CNPG cluster (externalDatabase below); Redis and
-# MinIO stay bundled.
+# PostgreSQL is the shared CNPG cluster (externalDatabase below), object storage
+# is OCI Object Storage, and Redis stays bundled.
 datastores:
   enabled: true
   redis:
@@ -34,10 +34,15 @@ datastores:
       enabled: true
       storageClass: oci-bv
       size: 50Gi
+  # Object storage is OCI Object Storage's S3 API (oci/novaforge.tf: buckets
+  # novaforge-ci and novaforge-releases); novaforge-secrets carries its
+  # S3_ENDPOINT and customer secret key.
   minio:
-    image: docker.io/minio/minio:latest
-    storageClass: oci-bv
-    size: 50Gi
+    enabled: false
+
+objectStorage:
+  useSSL: true
+  region: me-dubai-1
 
 externalDatabase:
   # DSN for database novaforge on shared-pg-rw.shared-pg.svc:5432 — directly,

@@ -183,12 +183,7 @@ func main() {
 	if cfg.S3Endpoint == "" {
 		log.Println("git-platform: S3_ENDPOINT is unset; release assets cannot be stored or served")
 	} else {
-		blobs, err := blobstore.New(ctx, blobstore.Options{
-			Endpoint:  cfg.S3Endpoint,
-			AccessKey: cfg.S3AccessKey,
-			SecretKey: cfg.S3SecretKey,
-			Bucket:    releasesBucket,
-		})
+		blobs, err := blobstore.New(ctx, cfg.BlobOptions(releasesBucket))
 		if err != nil {
 			log.Fatalf("git-platform: connect object storage: %v", err)
 		}

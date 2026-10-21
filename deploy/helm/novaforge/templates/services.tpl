@@ -112,6 +112,16 @@ spec:
             {{- end }}
             - name: HEALTH_PORT
               value: "8090"
+            {{- /* Only for an object store that is not the bundled MinIO; the
+                   endpoint and keys stay in the shared Secret. */}}
+            {{- if $.Values.objectStorage.useSSL }}
+            - name: S3_USE_SSL
+              value: "true"
+            {{- end }}
+            {{- with $.Values.objectStorage.region }}
+            - name: S3_REGION
+              value: {{ . | quote }}
+            {{- end }}
             {{- if eq $name "gates" }}
             - name: NF_GATE_ANALYSIS_IMAGE
               value: {{ $svc.analysisImage | default "" | quote }}
