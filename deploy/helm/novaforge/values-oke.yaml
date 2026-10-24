@@ -131,6 +131,12 @@ runner:
   # shared-pg and the internet. CI runs are accepted and stay queued.
   orgId: ""
 
+# Requests sized from VPA recommendations on azrty-oke (2026-10-24): the VPA
+# target, memory plus 15% headroom, rounded. Only requests are set here; the
+# limits come from values.yaml unchanged.
+resources:
+  requests: { cpu: 20m, memory: 64Mi }
+
 services:
   git-platform:
     # The Gateway is the only way in; a LoadBalancer here would be a second,
@@ -160,6 +166,9 @@ services:
     # StartRun refuses with FailedPrecondition.
     rbac: false
     automountServiceAccountToken: false
+  engineering-graph:
+    resources:
+      requests: { cpu: 20m, memory: 96Mi }
 
 # Sign-in through the azrty Zitadel (https://login.azrty.com). The platform's
 # zitadel-config runner writes the novaforge-oidc Secret (OIDC_ISSUER,
