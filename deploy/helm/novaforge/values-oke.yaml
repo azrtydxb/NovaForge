@@ -14,7 +14,7 @@ image:
   # Build with hack/build-images.sh and the NF_REGISTRY_* overrides it
   # documents, then put the published commit tag here. Nothing has been pushed
   # to OCIR from this commit yet.
-  tag: d5edcb0
+  tag: f6b1bcb
   pullSecret: ocir-pull
 
 # oci-bv is block storage: ReadWriteOnce only, and OCI's smallest block volume
