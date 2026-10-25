@@ -368,7 +368,7 @@ spec:
       serviceAccountName: novaforge-agent-runtime
       containers:
         - name: agent-runtime
-          image: "192.168.10.131/novaforge/agent-runtime:golden"
+          image: "ant.kw.watteel.lab/oci-hosted/novaforge/agent-runtime:golden"
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef:
@@ -476,7 +476,7 @@ spec:
         - name: nexus-pull
       containers:
         - name: ci-runner
-          image: "192.168.10.131/novaforge/ci-runner:golden"
+          image: "ant.kw.watteel.lab/oci-hosted/novaforge/ci-runner:golden"
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef:
@@ -582,7 +582,7 @@ spec:
         - name: nexus-pull
       containers:
         - name: edge
-          image: "192.168.10.131/novaforge/edge:golden"
+          image: "ant.kw.watteel.lab/oci-hosted/novaforge/edge:golden"
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef:
@@ -704,7 +704,7 @@ spec:
       serviceAccountName: novaforge-engineering-graph
       containers:
         - name: engineering-graph
-          image: "192.168.10.131/novaforge/engineering-graph:golden"
+          image: "ant.kw.watteel.lab/oci-hosted/novaforge/engineering-graph:golden"
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef:
@@ -827,7 +827,7 @@ spec:
       serviceAccountName: novaforge-gates
       containers:
         - name: gates
-          image: "192.168.10.131/novaforge/gates:golden"
+          image: "ant.kw.watteel.lab/oci-hosted/novaforge/gates:golden"
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef:
@@ -960,7 +960,7 @@ spec:
         - name: nexus-pull
       containers:
         - name: git-platform
-          image: "192.168.10.131/novaforge/git-platform:golden"
+          image: "ant.kw.watteel.lab/oci-hosted/novaforge/git-platform:golden"
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef:
@@ -1108,7 +1108,7 @@ spec:
         - name: nexus-pull
       containers:
         - name: identity
-          image: "192.168.10.131/novaforge/identity:golden"
+          image: "ant.kw.watteel.lab/oci-hosted/novaforge/identity:golden"
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef:
@@ -1216,7 +1216,7 @@ spec:
         - name: nexus-pull
       containers:
         - name: mcp-server
-          image: "192.168.10.131/novaforge/mcp-server:golden"
+          image: "ant.kw.watteel.lab/oci-hosted/novaforge/mcp-server:golden"
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef:
@@ -1326,7 +1326,7 @@ spec:
         - name: nexus-pull
       containers:
         - name: work-reviews
-          image: "192.168.10.131/novaforge/work-reviews:golden"
+          image: "ant.kw.watteel.lab/oci-hosted/novaforge/work-reviews:golden"
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef:

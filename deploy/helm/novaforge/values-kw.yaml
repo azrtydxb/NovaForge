@@ -7,6 +7,9 @@ gitTLS:
     - novaforge.kw.watteel.lab
     - git.novaforge.kw.watteel.lab
 image:
+  # The service images are pulled from the kw Ant (oci-hosted replicates the
+  # images published for kw); the nodes hold its pull credential.
+  registry: ant.kw.watteel.lab/oci-hosted
   tag: 38e855a
 lfs:
   publicURL: https://git.novaforge.kw.watteel.lab:8443
