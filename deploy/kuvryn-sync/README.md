@@ -20,6 +20,10 @@ git push origin main
 Promotion refuses an unknown commit or edited values file. It verifies every
 service and the analysis sandbox at both Nexus connectors, requires matching
 manifest digests, and records the analysis digest with the application tag.
+The kw pods pull the service images from the kw Ant
+(`ant.kw.watteel.lab/oci-hosted/novaforge/<svc>`, `image.registry` in
+`values-kw.yaml`), so a promoted tag must also be present there; check it before
+pushing the promotion. The analysis sandbox digest is still pulled from Nexus.
 Build/promotion remain explicit operator steps: this repository currently has
 no image-building CI workflow. Merging application code alone does not select an
 unbuilt image. Configuration changes in the chart or kw values sync directly.
