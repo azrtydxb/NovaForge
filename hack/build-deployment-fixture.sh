@@ -5,6 +5,11 @@ cd "$(dirname "$0")/.."
 source hack/env.sh
 [ -z "$(git status --porcelain --untracked-files=no)" ] || { echo 'commit the tree before building the immutable deployment fixture' >&2; exit 1; }
 TAG="$(git rev-parse --short HEAD)"
+# The kw cluster pulls from its Ant, which replicates ant.azrty.com/oci-hosted.
+# Set both to publish there (DOCKER_CONFIG must then hold an ant.azrty.com
+# publish credential); unset, the image goes to Nexus as before.
+PUSH_REPO="${FIXTURE_PUSH_REPO:-$REGISTRY_PUSH/$REGISTRY_REPO}"
+PULL_REPO="${FIXTURE_PULL_REPO:-$REGISTRY_PULL/$REGISTRY_REPO}"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"; rm -f deploy/fixtures/approved.tgz' EXIT
 helm package deploy/fixtures/approved-app -d "$TMP" >/dev/null
@@ -29,9 +34,9 @@ buildctl --tlscacert "$BK_CERTS/ca.crt" --tlscert "$BK_CERTS/tls.crt" --tlskey "
  --opt filename=Dockerfile.deployment-runner --opt platform=linux/arm64 \
  --opt build-arg:GO_IMAGE="$GO_IMAGE" --opt build-arg:HELM_IMAGE="$HELM_IMAGE" --opt build-arg:RUNTIME_IMAGE="$RUNTIME_IMAGE" \
  --opt build-arg:CHART_ARCHIVE=deploy/fixtures/approved.tgz --opt build-arg:CHART_SHA256="$CHART_SHA" \
- --output "type=image,name=$REGISTRY_PUSH/$REGISTRY_REPO/deployment-runner:$TAG,push=true" \
+ --output "type=image,name=$PUSH_REPO/deployment-runner:$TAG,push=true" \
  --metadata-file "$TMP/result.json" --progress plain
-python3 - "$TMP/result.json" "$CHART_SHA" "$REGISTRY_PULL/$REGISTRY_REPO/deployment-runner" <<'PY'
+python3 - "$TMP/result.json" "$CHART_SHA" "$PULL_REPO/deployment-runner" <<'PY'
 import json,sys
 result=json.load(open(sys.argv[1]));print(json.dumps({'runner_image':sys.argv[3]+'@'+result['containerimage.digest'],'chart_sha256':sys.argv[2]}))
 PY

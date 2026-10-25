@@ -1,3 +1,5 @@
 image:
-  repository: 192.168.10.131/novaforge/runner
+  # kw pulls from its Ant: oci-hosted replicates what is published to
+  # ant.azrty.com/oci-hosted, and the nodes hold its pull credential.
+  repository: ant.kw.watteel.lab/oci-hosted/novaforge/runner
   digest: ""
