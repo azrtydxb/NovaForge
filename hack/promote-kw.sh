@@ -50,8 +50,10 @@ import os, pathlib, yaml
 p=pathlib.Path('deploy/helm/novaforge/values-kw.yaml')
 v=yaml.safe_load(p.read_text())
 v['image']['tag']=os.environ['TAG']
-v['services']['gates']['analysisImage']=os.environ['REGISTRY_PULL']+'/'+os.environ['REGISTRY_REPO']+'/gate-analysis@'+os.environ['ANALYSIS_DIGEST']
-p.write_text('# Desired kw release. Promote only images verified at the Nexus pull endpoint.\n'+yaml.safe_dump(v,sort_keys=False))
+# The sandbox is pulled from the same registry as the service images.
+registry=v['image'].get('registry') or os.environ['REGISTRY_PULL']
+v['services']['gates']['analysisImage']=registry+'/'+os.environ['REGISTRY_REPO']+'/gate-analysis@'+os.environ['ANALYSIS_DIGEST']
+p.write_text('# Desired kw release. Promote only images verified at the Nexus pull endpoint\n# and present on the kw Ant (image.registry).\n'+yaml.safe_dump(v,sort_keys=False))
 PY
 if command -v prettier >/dev/null; then prettier --write "$VALUES" >/dev/null; fi
 helm lint deploy/helm/novaforge -f "$VALUES"

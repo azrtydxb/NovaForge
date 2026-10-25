@@ -1,4 +1,5 @@
-# Desired kw release. Promote only images verified at the Nexus pull endpoint.
+# Desired kw release. Promote only images verified at the Nexus pull endpoint
+# and present on the kw Ant (image.registry).
 ai: {}
 gitTLS:
   ipAddresses:
@@ -49,7 +50,7 @@ services:
   edge:
     loadBalancerIP: 192.168.10.128
   gates:
-    analysisImage: 192.168.10.131/novaforge/gate-analysis@sha256:43eec871bc161f5ad91305461454172a0ae84f5abd522da9b7dd469b0a83f650
+    analysisImage: ant.kw.watteel.lab/oci-hosted/novaforge/gate-analysis@sha256:43eec871bc161f5ad91305461454172a0ae84f5abd522da9b7dd469b0a83f650
 secrets:
   existingSecret: novaforge-secrets
 rbac:
