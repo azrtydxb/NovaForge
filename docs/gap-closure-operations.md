@@ -51,10 +51,11 @@ does not prove storage reclamation.
    chart checksum. The runner image contains the approved chart and Helm binary.
    On kw, set `FIXTURE_PUSH_REPO=ant.azrty.com/oci-hosted/novaforge` and
    `FIXTURE_PULL_REPO=ant.kw.watteel.lab/oci-hosted/novaforge` with an
-   ant.azrty.com publish credential in `DOCKER_CONFIG`, and copy the artifact
-   (a `novaforge/runner` image, which the chart pulls from
-   `ant.kw.watteel.lab/oci-hosted/novaforge/runner`) to
-   `ant.azrty.com/oci-hosted/novaforge/runner` with `crane copy`.
+   ant.azrty.com publish credential in `DOCKER_CONFIG` (`hack/ant-auth.py
+ant.azrty.com "$DOCKER_CONFIG"` copies your docker login there). The artifact
+   is a `novaforge/runner` image, which the chart pulls from
+   `ant.kw.watteel.lab/oci-hosted/novaforge/runner`; `hack/build-images.sh`
+   already publishes it to `ant.azrty.com/oci-hosted/novaforge/runner`.
 2. Run `hack/prepare-deployment-fixture.py RUNNER_IMAGE@sha256:... ARTIFACT_DIGEST
 OUTPUT_DIRECTORY`. It prepares dedicated execution/target namespaces, exact
    roles, a Kubernetes secrets-engine binding and independently authenticated

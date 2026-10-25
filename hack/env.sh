@@ -9,6 +9,12 @@ export BK_CERTS="${BK_CERTS:-/private/tmp/claude-501/-Users-pascal-Development-N
 export REGISTRY_PUSH=192.168.10.131:5000
 export REGISTRY_PULL=192.168.10.131
 export REGISTRY_REPO=novaforge
+# kw pulls its service images from the kw Ant, whose oci-hosted feed replicates
+# ant.azrty.com/oci-hosted. hack/build-images.sh publishes there as well as to
+# Nexus, which the e2e suites and hack/deploy.sh still pull from. Set ANT_PUSH
+# empty to publish to Nexus only.
+export ANT_PUSH="${ANT_PUSH-ant.azrty.com/oci-hosted}"
+export ANT_PULL=ant.kw.watteel.lab/oci-hosted
 export REGISTRY_USER=ci
 export DOCKER_CONFIG="${DOCKER_CONFIG:-$BK_CERTS/dockercfg}"
 export NF_NAMESPACE=novaforge
