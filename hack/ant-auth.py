@@ -21,7 +21,9 @@ import sys
 def login(host):
     """Return the base64 user:secret for host from the operator's docker login."""
     source = (
-        pathlib.Path(os.environ.get("NF_ANT_DOCKER_CONFIG", pathlib.Path.home() / ".docker"))
+        pathlib.Path(
+            os.environ.get("NF_ANT_DOCKER_CONFIG", pathlib.Path.home() / ".docker")
+        )
         / "config.json"
     )
     config = json.loads(source.read_text()) if source.exists() else {}
@@ -40,7 +42,9 @@ def login(host):
         )
         if result.returncode == 0:
             found = json.loads(result.stdout)
-            return base64.b64encode(f"{found['Username']}:{found['Secret']}".encode()).decode()
+            return base64.b64encode(
+                f"{found['Username']}:{found['Secret']}".encode()
+            ).decode()
     sys.exit(
         f"ant-auth.py: no {host} credential in {source}; run `docker login {host}` with an "
         "account that can publish to oci-hosted, or set NF_ANT_DOCKER_CONFIG"

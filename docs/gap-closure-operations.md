@@ -52,7 +52,7 @@ does not prove storage reclamation.
    On kw, set `FIXTURE_PUSH_REPO=ant.azrty.com/oci-hosted/novaforge` and
    `FIXTURE_PULL_REPO=ant.kw.watteel.lab/oci-hosted/novaforge` with an
    ant.azrty.com publish credential in `DOCKER_CONFIG` (`hack/ant-auth.py
-   ant.azrty.com "$DOCKER_CONFIG"` copies your docker login there). The artifact
+ant.azrty.com "$DOCKER_CONFIG"` copies your docker login there). The artifact
    is a `novaforge/runner` image, which the chart pulls from
    `ant.kw.watteel.lab/oci-hosted/novaforge/runner`; `hack/build-images.sh`
    already publishes it to `ant.azrty.com/oci-hosted/novaforge/runner`.
