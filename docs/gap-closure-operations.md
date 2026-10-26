@@ -77,12 +77,16 @@ are verified against the target, have a signed expiry bounded by the attempt and
 any narrower run/grant authority, and are backed by revocable generated service
 accounts. Unqualified provider bindings remain refused.
 
-The qualification token combining the existing broker policy with the disposable
-deployment policy lasts 24 hours. After qualification, restore the original
-OpenBao operator Secret reference and remove the deployment configuration through
-Helm before revoking that temporary token. Revoke outstanding fixture leases,
-remove its provider mount/policy and dedicated namespaces/Secrets, and delete the
-fixture organization. Do not leave existing CI dependent on an expiring test token.
+The token combining the existing broker policy with the disposable deployment
+policy (`novaforge-openbao-deployment`) is a non-renewable orphan that lasts one
+year; the fixture raises the `token/` mount's max lease TTL to 8760h for it.
+NovaForge does not renew provider tokens, and while `values-kw.yaml` references
+this Secret, existing CI cert issuance depends on it, so rotate it before it
+expires (same policies, then update the Secret; gates re-reads the token file on
+every call). To remove the fixture, restore the original OpenBao operator Secret
+reference and remove the deployment configuration through Helm before revoking
+that token. Revoke outstanding fixture leases, remove its provider mount/policy
+and dedicated namespaces/Secrets, and delete the fixture organization.
 Real staging/production target onboarding remains separate operator configuration.
 
 The default acceptance harness now includes the three additional Git-host,
