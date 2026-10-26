@@ -79,11 +79,15 @@ existing=get("secret","novaforge-openbao")
 provider=json.loads(base64.b64decode(existing["data"]["config.json"]))
 # A provider token can only authorize one policy set, so retain the existing
 # token for existing bindings and add the fixture policy to it through a new
-# bounded token with the union of its existing policies.
+# token with the union of its existing policies. Existing CI cert issuance runs
+# on this token while the fixture is in place, and NovaForge never renews it, so
+# it is a one-year orphan (not tied to the root token) under a raised token-mount
+# ceiling; cleanup-gap-fixtures.py revokes it when the fixture is removed.
 old_token=base64.b64decode(existing["data"]["token"]).decode()
 lookup=bao(["write","-format=json","auth/token/lookup","-"],{"token":old_token})
 policies=sorted(set(lookup["data"]["policies"]+["novaforge-deploy-fixture"]))
-combined_token=bao(["write","-format=json","auth/token/create","-"],{"policies":policies,"ttl":"24h","renewable":False})["auth"]["client_token"]
+bao(["write","sys/auth/token/tune","-"],{"max_lease_ttl":"8760h"})
+combined_token=bao(["write","-format=json","auth/token/create-orphan","-"],{"policies":policies,"ttl":"8760h","renewable":False,"display_name":"novaforge-deployment"})["auth"]["client_token"]
 # Revoke the unused single-policy token immediately.
 bao(["write","-format=json","auth/token/revoke","-"],{"token":broker_token})
 mount="/etc/novaforge/operator/openbao"
