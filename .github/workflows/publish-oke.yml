@@ -87,7 +87,7 @@ jobs:
       - id: builder
         uses: azrtydxb/.github/actions/setup-builder@d021f2ca9fa3d6682085a7d069b7c8b1dc7b9b80 # main
       - name: Log in to OCIR
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: dxb.ocir.io
           username: ${{ secrets.OCIR_USERNAME }}
