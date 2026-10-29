@@ -74,7 +74,7 @@ echo "== 2. the credential is offered by a binding, and this run stores nothing 
 # job receives below cannot have come from one.
 LISTED="$(curl -fsS "$API/orgs/$ORG/secrets" -H "Authorization: Bearer $TOKEN")" || fail "listing secrets failed"
 printf '%s' "$LISTED" | grep -q "$SECRET_NAME" ||
-	fail "$SECRET_NAME is not offered in $ORG; the operator's binding is missing (see deploy/dev/openbao.yaml): $LISTED"
+	fail "$SECRET_NAME is not offered in $ORG; the operator's binding is missing (run hack/prepare-deployment-fixture.py; the provider is the shared OpenBao): $LISTED"
 printf '%s' "$LISTED" | python3 -c '
 import json, sys
 # Names only, never values: the listing is a catalogue, not a read.
@@ -160,7 +160,7 @@ done
 LOGS="$(/tmp/nf ci logs "$REPO" 2>&1 || true)"
 case "$LOGS" in
 *"no dynamic credential provider binding configured"*)
-	fail "the deployment has no provider binding for $ORG/$SECRET_NAME (see NF_OPENBAO_CONFIG_FILE and deploy/dev/openbao.yaml)"
+	fail "the deployment has no provider binding for $ORG/$SECRET_NAME (see NF_OPENBAO_CONFIG_FILE and hack/prepare-deployment-fixture.py)"
 	;;
 esac
 [ "$STATE" = "success" ] || fail "the brokered job did not succeed ($STATE): $LOGS"

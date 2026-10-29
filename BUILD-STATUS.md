@@ -1221,6 +1221,7 @@ intelligence audit above supersede resolved or reclassified entries:
   stream that does carry run deletions has run ids with no repository, so there is
   nothing routable to a repository's hooks. Closing it needs a publisher in
   `internal/ci` and `work-reviews`.
+- **Superseded on kw:** the provider is now the shared OpenBao cluster (`openbao.openbao.svc`); the per-app instance below stays only until decommissioned.
 - **The provider's unseal material lives beside it.** `novaforge-bao/openbao-init`
   holds the single unseal key and the root token in a Secret in the same
   namespace as the OpenBao it unseals, so anything that can read that namespace's

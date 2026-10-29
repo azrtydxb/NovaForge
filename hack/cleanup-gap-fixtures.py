@@ -7,6 +7,8 @@ import os
 import subprocess
 import urllib.request
 
+import bao as shared_bao
+
 k = ["kubectl", "--context", os.environ.get("KUBE_CONTEXT", "kw")]
 
 
@@ -78,40 +80,10 @@ token = api(
     {"username": users["author"], "password": users["author_password"]},
 )["session_token"]
 api("DELETE", "/orgs/" + users["org"], {"confirm_name": users["org"]})
-root = base64.b64decode(secret("openbao-init", "novaforge-bao")["root_token"]).decode()
 combined = base64.b64decode(secret("novaforge-openbao-deployment")["token"]).decode()
-
-
-def bao(args, data=None):
-    """Restrict provider cleanup to this fixture's engine, policy and token."""
-    script = 'read -r BAO_TOKEN\nexport BAO_TOKEN BAO_ADDR=https://openbao.novaforge-bao.svc:8200 BAO_CACERT=/tls/ca.crt\nexec bao "$@"\n'
-    payload = root + "\n" + (json.dumps(data) if data is not None else "")
-    result = subprocess.run(
-        k
-        + [
-            "-n",
-            "novaforge-bao",
-            "exec",
-            "-i",
-            "openbao-0",
-            "--",
-            "sh",
-            "-c",
-            script,
-            "fixture-cleanup",
-            *args,
-        ],
-        input=payload.encode(),
-        capture_output=True,
-        check=False,
-    )
-    if result.returncode:
-        raise RuntimeError("fixture provider cleanup refused")
-
-
-bao(["secrets", "disable", "novaforge-deploy"])
-bao(["policy", "delete", "novaforge-deploy-fixture"])
-bao(["write", "auth/token/revoke", "-"], {"token": combined})
+# The mount, role and policies belong to OpenTofu; only this fixture's token is ours.
+with shared_bao.session() as bao:
+    bao.call("POST", "auth/token/revoke", {"token": combined})
 for namespace in (
     "novaforge-deploy-exec",
     "novaforge-deploy-target",
@@ -133,6 +105,4 @@ command(
         "--ignore-not-found",
     ]
 )
-print(
-    "Removed fixture organization, provider mount/policy/token, namespaces and operator Secrets"
-)
+print("Removed fixture organization, provider token, namespaces and operator Secrets")

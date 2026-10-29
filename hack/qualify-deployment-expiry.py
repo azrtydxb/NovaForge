@@ -13,6 +13,8 @@ import subprocess
 import tempfile
 import time
 
+import bao as shared_bao
+
 k = ["kubectl", "--context", os.environ.get("KUBE_CONTEXT", "kw")]
 secret = json.loads(
     subprocess.check_output(
@@ -31,35 +33,14 @@ secret = json.loads(
 provider_token = base64.b64decode(secret["data"]["token"]).decode()
 
 
-def bao(arguments, data):
-    """Call the fixture policy with its token supplied on stdin."""
-    script = 'read -r BAO_TOKEN\nexport BAO_TOKEN BAO_ADDR=https://openbao.novaforge-bao.svc:8200 BAO_CACERT=/tls/ca.crt\nexec bao "$@"\n'
-    result = subprocess.run(
-        k
-        + [
-            "-n",
-            "novaforge-bao",
-            "exec",
-            "-i",
-            "openbao-0",
-            "--",
-            "sh",
-            "-c",
-            script,
-            "expiry-qualification",
-            *arguments,
-        ],
-        input=(provider_token + "\n" + json.dumps(data)).encode(),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    if result.returncode:
-        raise RuntimeError("fixture provider call refused")
-    return json.loads(result.stdout) if result.stdout.strip().startswith(b"{") else {}
+def bao(path, data):
+    """Call the fixture policy with its own token (not the admin token)."""
+    with shared_bao.session(provider_token) as client:
+        return client.call("POST", path, data)
 
 
 issued = bao(
-    ["write", "-format=json", "novaforge-deploy/creds/approved-fixture", "-"],
+    "novaforge-deploy/creds/approved-fixture",
     {"kubernetes_namespace": "novaforge-deploy-target", "ttl": "600s"},
 )
 lease = issued["lease_id"]
@@ -125,7 +106,4 @@ try:
             flush=True,
         )
 finally:
-    bao(
-        ["write", "-format=json", "sys/leases/revoke", "-"],
-        {"lease_id": lease, "sync": True},
-    )
+    bao("sys/leases/revoke", {"lease_id": lease, "sync": True})
