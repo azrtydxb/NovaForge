@@ -17,6 +17,8 @@ import sys
 import urllib.request
 import uuid
 
+import bao as shared_bao
+
 runner_image, artifact, outdir = sys.argv[1:]
 assert re.fullmatch(r"[^\s]+@sha256:[a-f0-9]{64}", runner_image)
 assert re.fullmatch(r"sha256:[a-f0-9]{64}", artifact)
@@ -48,39 +50,6 @@ def apply(data):
 
 def meta(name, namespace):
     return {"name": name, "namespace": namespace}
-
-
-root = base64.b64decode(
-    get("secret", "openbao-init", "novaforge-bao")["data"]["root_token"]
-).decode()
-
-
-def bao(args, data=None):
-    script = 'read -r BAO_TOKEN\nexport BAO_TOKEN BAO_ADDR=https://openbao.novaforge-bao.svc:8200 BAO_CACERT=/tls/ca.crt\nexec bao "$@"\n'
-    payload = root + "\n" + (json.dumps(data) if data is not None else "")
-    # Pass the program as an argument, the root credential and JSON on stdin.
-    result = subprocess.run(
-        k
-        + [
-            "-n",
-            "novaforge-bao",
-            "exec",
-            "-i",
-            "openbao-0",
-            "--",
-            "sh",
-            "-c",
-            script,
-            "bao-fixture",
-            *args,
-        ],
-        input=payload.encode(),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    if result.returncode:
-        raise RuntimeError("OpenBao fixture command failed: " + " ".join(args[:2]))
-    return json.loads(result.stdout) if result.stdout.strip().startswith(b"{") else {}
 
 
 for namespace in [execution, target]:
@@ -198,7 +167,7 @@ apply(
             "name": "openbao-issuer",
         },
         "subjects": [
-            {"kind": "ServiceAccount", "name": "default", "namespace": "novaforge-bao"}
+            {"kind": "ServiceAccount", "name": "openbao", "namespace": "openbao"}
         ],
     }
 )
@@ -236,36 +205,8 @@ apply(
         },
     }
 )
-mounts = bao(["secrets", "list", "-format=json"])
-if "novaforge-deploy/" not in mounts:
-    bao(["secrets", "enable", "-path=novaforge-deploy", "kubernetes"])
-bao(["write", "-format=json", "novaforge-deploy/config", "-"], {})
-bao(
-    ["write", "-format=json", "novaforge-deploy/roles/approved-fixture", "-"],
-    {
-        "allowed_kubernetes_namespaces": [target],
-        "kubernetes_role_name": "approved-fixture",
-        "kubernetes_role_type": "Role",
-        "token_default_ttl": "600s",
-        "token_max_ttl": "600s",
-    },
-)
-# The broker token has no role-management permission, only issuance plus scoped
-# lease lookup/revoke; this fixture does not reuse the provider root token.
-policy = 'path "novaforge-deploy/creds/approved-fixture" { capabilities = ["update"] }\npath "sys/leases/lookup" { capabilities = ["update"] }\npath "sys/leases/revoke" { capabilities = ["update"] }\n'
-bao(
-    ["write", "-format=json", "sys/policies/acl/novaforge-deploy-fixture", "-"],
-    {"policy": policy},
-)
-broker_token = bao(
-    ["write", "-format=json", "auth/token/create", "-"],
-    {
-        "policies": ["novaforge-deploy-fixture"],
-        "no_default_policy": True,
-        "ttl": "24h",
-        "renewable": False,
-    },
-)["auth"]["client_token"]
+# Mounts, roles, engine config and policies are owned by OpenTofu (internal-lab
+# kubernetes/openbao-tenants); this script only mints tokens from the admin token.
 edge = get("svc", "novaforge-edge")["status"]["loadBalancer"]["ingress"][0]["ip"]
 base = "http://" + edge + ":8080/api/v1"
 token = ""
@@ -334,27 +275,30 @@ apply(
 # Preserve existing provider bindings in a separate combined operator Secret.
 existing = get("secret", "novaforge-openbao")
 provider = json.loads(base64.b64decode(existing["data"]["config.json"]))
-# A provider token can only authorize one policy set, so retain the existing
-# token for existing bindings and add the fixture policy to it through a new
-# token with the union of its existing policies. Existing CI cert issuance runs
-# on this token while the fixture is in place, and NovaForge never renews it, so
-# it is a one-year orphan (not tied to the root token) under a raised token-mount
-# ceiling; cleanup-gap-fixtures.py revokes it when the fixture is removed.
-old_token = base64.b64decode(existing["data"]["token"]).decode()
-lookup = bao(["write", "-format=json", "auth/token/lookup", "-"], {"token": old_token})
-policies = sorted(set(lookup["data"]["policies"] + ["novaforge-deploy-fixture"]))
-bao(["write", "sys/auth/token/tune", "-"], {"max_lease_ttl": "8760h"})
-combined_token = bao(
-    ["write", "-format=json", "auth/token/create-orphan", "-"],
-    {
-        "policies": policies,
-        "ttl": "8760h",
-        "renewable": False,
-        "display_name": "novaforge-deployment",
-    },
-)["auth"]["client_token"]
-# Revoke the unused single-policy token immediately.
-bao(["write", "-format=json", "auth/token/revoke", "-"], {"token": broker_token})
+# A provider token can only authorize one policy set, so mint a token with the
+# union of the CI-issuer and fixture policies. NovaForge never renews it, so it
+# is a one-year non-renewable child of the admin token; cleanup-gap-fixtures.py
+# revokes it with the fixture. The mount's max TTL (tofu) must allow 8760h.
+policies = ["novaforge", "novaforge-deploy-fixture"]
+with shared_bao.session() as bao:
+    auth = bao.call(
+        "POST",
+        "auth/token/create",
+        {
+            "policies": policies,
+            "no_default_policy": True,
+            "ttl": "8760h",
+            "renewable": False,
+            "display_name": "novaforge-deployment",
+        },
+    )["auth"]
+combined_token = auth["client_token"]
+assert auth["lease_duration"] >= 8760 * 3600, (
+    "token TTL was capped below one year; raise the token auth max_lease_ttl in tofu"
+)
+provider["endpoint"] = shared_bao.ENDPOINT
+for binding in provider["bindings"]:
+    binding["path"] = re.sub(r"^pki/", "novaforge-pki/", binding["path"])
 mount = "/etc/novaforge/operator/openbao"
 provider["token_file"] = mount + "/token"
 provider["ca_file"] = mount + "/ca.crt"
@@ -381,8 +325,11 @@ apply(
         "apiVersion": "v1",
         "kind": "Secret",
         "metadata": meta("novaforge-openbao-deployment", ns),
-        "stringData": {"config.json": json.dumps(provider), "token": combined_token},
-        "data": {"ca.crt": existing["data"]["ca.crt"]},
+        "stringData": {
+            "config.json": json.dumps(provider),
+            "token": combined_token,
+            "ca.crt": shared_bao.admin_secret()[1],
+        },
     }
 )
 config = {

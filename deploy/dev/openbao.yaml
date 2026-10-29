@@ -1,3 +1,7 @@
+# SUPERSEDED on kw by the shared OpenBao cluster (https://openbao.openbao.svc:8200),
+# provisioned by internal-lab kubernetes/openbao and kubernetes/openbao-tenants.
+# Do not apply this for kw; it is kept only until novaforge-bao is decommissioned.
+#
 # A dynamic credential provider for NovaForge.
 #
 # The broker mints a job's credential from a provider and refuses to hand out a

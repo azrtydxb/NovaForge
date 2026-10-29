@@ -77,16 +77,24 @@ are verified against the target, have a signed expiry bounded by the attempt and
 any narrower run/grant authority, and are backed by revocable generated service
 accounts. Unqualified provider bindings remain refused.
 
-The token combining the existing broker policy with the disposable deployment
-policy (`novaforge-openbao-deployment`) is a non-renewable orphan that lasts one
-year; the fixture raises the `token/` mount's max lease TTL to 8760h for it.
-NovaForge does not renew provider tokens, and while `values-kw.yaml` references
-this Secret, existing CI cert issuance depends on it, so rotate it before it
-expires (same policies, then update the Secret; gates re-reads the token file on
+Provider mounts, roles, CA and policies (`novaforge-pki/`, `novaforge-deploy/`,
+policies `novaforge` and `novaforge-deploy-fixture`) live on the shared kw
+OpenBao and are owned by OpenTofu (internal-lab `kubernetes/openbao` and
+`kubernetes/openbao-tenants`); the hack scripts never create them. They reach it
+by `kubectl port-forward` using the scoped token in Secret `openbao/novaforge-admin`
+(`hack/bao.py`); there is no root token. Provision with
+`python3 hack/prepare-deployment-fixture.py <runner-image@digest> <artifact-digest> <outdir>`.
+
+The token combining the CI-issuer policy with the disposable deployment policy
+(`novaforge-openbao-deployment`) is a non-renewable child of the admin token that
+lasts one year. NovaForge does not renew provider tokens, and while
+`values-kw.yaml` references this Secret, existing CI cert issuance depends on it,
+so re-run the prepare script before it expires (gates re-reads the token file on
 every call). To remove the fixture, restore the original OpenBao operator Secret
-reference and remove the deployment configuration through Helm before revoking
-that token. Revoke outstanding fixture leases, remove its provider mount/policy
-and dedicated namespaces/Secrets, and delete the fixture organization.
+reference and remove the deployment configuration through Helm, then run
+`hack/cleanup-gap-fixtures.py`, which revokes that token. Revoke outstanding
+fixture leases and delete the fixture organization and dedicated
+namespaces/Secrets; the mount and policy stay (tofu-owned).
 Real staging/production target onboarding remains separate operator configuration.
 
 The default acceptance harness now includes the three additional Git-host,
@@ -103,14 +111,12 @@ unchanged; production unseal custody is an explicit separate readiness decision.
 
 ## Development CI issuer lifetime
 
-The dedicated OpenBao PKI fixture initially had a one-day root CA and expired on
-September 26. `python3 hack/renew-dev-ci-issuer.py` reports its identity and expiry.
-`--renew-expired` renews only the expired NovaForge CI fixture CA after checking
-that the mount has exactly its expected role and domain. The renewed CA lasts
-30 days; the existing leaf role remains 600 seconds by default and 3600 maximum.
-Old issuer history and development unseal custody are preserved. This is fixture
-maintenance, not a production PKI lifecycle design. Inspect expiry before running
-`secrets_test.sh`; do not classify an issuer rejection as a working credential.
+The CI issuer is `novaforge-pki/` on the shared OpenBao: a 10-year internal root
+CA owned by OpenTofu, so there is no periodic renewal (`renew-dev-ci-issuer.py`
+was removed). If issuance is rejected, check the CA with
+`openssl x509 -noout -enddate` on `novaforge-pki/cert/ca` (readable with the
+admin token) and fix it in tofu; do not classify an issuer rejection as a
+working credential.
 
 Provider errors with no returned lease handle intentionally retain an
 `issuance_unknown` cleanup record. Renewing the issuer does not erase that audit
