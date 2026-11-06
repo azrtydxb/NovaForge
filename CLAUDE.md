@@ -75,13 +75,14 @@ bash tests/e2e/crossorg_test.sh   # one organization's credentials reach nothing
 bash tests/e2e/airgap_test.sh     # agent-runtime reaches its model gateway and nothing outside the cluster
 ```
 
-`hack/env.local.sh` is untracked and holds `REGISTRY_PASSWORD` and `AI_API_KEY`. A fresh
+`hack/env.local.sh` is untracked and holds `REGISTRY_PASSWORD` (an Ant token, used by the
+registry API checks in `deploy.sh` and `promote-kw.sh`) and `AI_API_KEY`. A fresh
 clone must create it: `deploy.sh` refuses to run without the model-gateway credential,
 because a deployment that cannot reach a model looks configured and is not.
-`hack/build-images.sh` also publishes to the Kuvryn Ant (`ant.azrty.com/oci-hosted`) with
-your own `docker login ant.azrty.com`; it is deliberately not in `env.local.sh`, which
-`hack/e2e-in-cluster.sh` copies into a cluster pod. `ANT_PUSH= ./hack/build-images.sh`
-publishes to Nexus only.
+`hack/build-images.sh` publishes to the Kuvryn Ant (`ant.azrty.com/oci-hosted`) with
+your own `docker login ant.azrty.com -u x --password-stdin` (Ant personal access token or
+publish token); that login is deliberately not in `env.local.sh`, which
+`hack/e2e-in-cluster.sh` copies into a cluster pod.
 
 The e2e scripts reach the edge at its load balancer address. `hack/e2e-in-cluster.sh
 [suite...]` runs them from a pod inside the cluster instead — prefer it: the workstation's

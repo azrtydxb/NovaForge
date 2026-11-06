@@ -7,9 +7,9 @@ source hack/env.sh
 	exit 1
 }
 TAG="$(git rev-parse --short HEAD)"
-# The kw cluster pulls from its Ant, which replicates ant.azrty.com/oci-hosted.
-# Set both to publish there (DOCKER_CONFIG must then hold an ant.azrty.com
-# publish credential); unset, the image goes to Nexus as before.
+# The kw cluster pulls from its Ant replica of ant.azrty.com/oci-hosted.
+# Set both to publish elsewhere; unset, the image goes to the org Ant
+# (DOCKER_CONFIG must hold an ant.azrty.com publish credential, see hack/env.sh).
 PUSH_REPO="${FIXTURE_PUSH_REPO:-$REGISTRY_PUSH/$REGISTRY_REPO}"
 PULL_REPO="${FIXTURE_PULL_REPO:-$REGISTRY_PULL/$REGISTRY_REPO}"
 TMP="$(mktemp -d)"

@@ -78,10 +78,10 @@ spec:
     spec:
       serviceAccountName: $REL-runner
       imagePullSecrets:
-        - name: nexus-pull
+        - name: ant-pull
       containers:
         - name: runner
-          image: 192.168.10.131/novaforge/runner:$IMG_TAG
+          image: ant.kw.watteel.lab/oci-hosted/novaforge/runner:$IMG_TAG
           envFrom:
             - secretRef: {name: $REL-secrets}
           env:
@@ -90,7 +90,7 @@ spec:
             - {name: RUNNER_LABELS, value: "linux"}
             - {name: RUNNER_JOB_NAMESPACE, value: "$NS"}
             - {name: RUNNER_NAME, value: "e2e-runner"}
-            - {name: CI_DEFAULT_JOB_IMAGE, value: "192.168.10.131/novaforge/runner:$IMG_TAG"}
+            - {name: CI_DEFAULT_JOB_IMAGE, value: "ant.kw.watteel.lab/oci-hosted/novaforge/runner:$IMG_TAG"}
 YAML
 trap 'kubectl --context "$KUBE_CONTEXT" -n "$NS" delete deploy e2e-runner --ignore-not-found >/dev/null 2>&1; cleanup_org' EXIT
 kubectl --context "$KUBE_CONTEXT" -n "$NS" rollout status deploy/e2e-runner --timeout=180s >/dev/null || fail "the runner did not become ready"
@@ -132,12 +132,12 @@ jobs:
     artifacts:
       - out/report.txt
   test_history:
-    image: 192.168.10.131/novaforge/work-reviews:$IMG_TAG
+    image: ant.kw.watteel.lab/oci-hosted/novaforge/work-reviews:$IMG_TAG
     run: |
       cd history-fixture
       if go test -json -count=2; then exit 1; fi
   z_benchmark:
-    image: 192.168.10.131/novaforge/work-reviews:$IMG_TAG
+    image: ant.kw.watteel.lab/oci-hosted/novaforge/work-reviews:$IMG_TAG
     run: sh benchmark-fixture/run.sh "$IMG_TAG"
     artifacts: [benchmark-fixture/benchmarks.txt]
 YAML

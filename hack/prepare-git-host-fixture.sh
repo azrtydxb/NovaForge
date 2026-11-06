@@ -8,7 +8,7 @@ ns=novaforge-gap-fixture
 out="${1:?usage: prepare-git-host-fixture.sh <values-output>}"
 k() { kubectl --context "$KUBE_CONTEXT" "$@"; }
 k create namespace "$ns" --dry-run=client -o yaml | k apply -f - >/dev/null
-k -n novaforge get secret nexus-pull -o json | python3 -c 'import json,sys;d=json.load(sys.stdin);d["metadata"]={"name":"nexus-pull","namespace":"novaforge-gap-fixture"};print(json.dumps(d))' | k apply -f - >/dev/null
+k -n novaforge get secret ant-pull -o json | python3 -c 'import json,sys;d=json.load(sys.stdin);d["metadata"]={"name":"ant-pull","namespace":"novaforge-gap-fixture"};print(json.dumps(d))' | k apply -f - >/dev/null
 k -n "$ns" create configmap fixture --from-file=server.py=tests/fixtures/git-host/server.py --dry-run=client -o yaml | k apply -f - >/dev/null
 image="$(k -n novaforge get deploy novaforge-gates -o jsonpath='{.spec.template.spec.containers[0].image}')"
 script_sha="$(shasum -a 256 tests/fixtures/git-host/server.py | awk '{print $1}')"
@@ -25,7 +25,7 @@ spec:
       annotations: {fixture-script-sha: "$script_sha"}
     spec:
       automountServiceAccountToken: false
-      imagePullSecrets: [{name: nexus-pull}]
+      imagePullSecrets: [{name: ant-pull}]
       containers:
         - name: fixture
           image: $image

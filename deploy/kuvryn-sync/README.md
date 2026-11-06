@@ -18,16 +18,16 @@ git push origin main
 ```
 
 Promotion refuses an unknown commit or edited values file. It verifies every
-service and the analysis sandbox at both Nexus connectors, requires matching
-manifest digests, and records the analysis digest with the application tag.
-The kw pods pull the service images and the analysis sandbox from the kw Ant
+service and the analysis sandbox on the org Ant and its kw replica, requires
+matching manifest digests, and records the analysis digest with the application
+tag. The kw pods pull the service images and the analysis sandbox from the kw Ant
 (`ant.kw.watteel.lab/oci-hosted/novaforge/<svc>`, `image.registry` in
 `values-kw.yaml`). `hack/build-images.sh` publishes every image to
-`ant.azrty.com/oci-hosted/novaforge` as well as to Nexus, with the same digest,
-and kw's `oci-hosted` feed replicates it, so no copy is needed. That publish uses
-your own `docker login ant.azrty.com` (no cluster or CI secret holds an Ant
-publish credential; `NF_ANT_DOCKER_CONFIG` names another docker config
-directory). Check that the tag has replicated to the kw Ant before pushing the
+`ant.azrty.com/oci-hosted/novaforge`, and kw's `oci-hosted` feed replicates it, so
+no copy is needed. That publish uses your own
+`docker login ant.azrty.com -u x --password-stdin` with an Ant personal access
+token or publish token (no cluster or CI secret holds an Ant publish credential;
+`NF_ANT_DOCKER_CONFIG` names another docker config directory). Check that the tag has replicated to the kw Ant before pushing the
 promotion.
 Build/promotion remain explicit operator steps: this repository currently has
 no image-building CI workflow. Merging application code alone does not select an

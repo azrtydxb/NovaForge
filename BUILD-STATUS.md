@@ -752,8 +752,8 @@ Docker daemon — Docker Desktop's containerd store was found read-only and unus
 | Concern         | How it is done                                                                                                                     |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | Image build     | In-cluster BuildKit at `tcp://192.168.10.130:1234` over mTLS, `linux/arm64`                                                        |
-| Image push      | nexus `192.168.10.131:5000` (the only connector that accepts writes)                                                               |
-| Image pull      | nexus `192.168.10.131` on 443 (the only address the nodes trust)                                                                   |
+| Image push      | Kuvryn Ant `ant.azrty.com/oci-hosted` (the org Ant; kw's replica refuses pushes)                                                    |
+| Image pull      | kw Ant replica `ant.kw.watteel.lab/oci-hosted` (the address the nodes pull from)                                                   |
 | Test datastores | PostgreSQL 16 + pgvector, Redis 7, MinIO in namespace `novaforge-dev`, exposed as LoadBalancers so tests run against real services |
 | Models          | FastLLM proxy in-cluster, reached only through go-ai-sdk                                                                           |
 

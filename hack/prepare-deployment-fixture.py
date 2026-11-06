@@ -54,13 +54,13 @@ def meta(name, namespace):
 
 for namespace in [execution, target]:
     apply({"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": namespace}})
-pull = get("secret", "nexus-pull")
+pull = get("secret", "ant-pull")
 for namespace in [execution, target]:
     apply(
         {
             "apiVersion": "v1",
             "kind": "Secret",
-            "metadata": meta("nexus-pull", namespace),
+            "metadata": meta("ant-pull", namespace),
             "type": pull["type"],
             "data": pull["data"],
         }
@@ -349,7 +349,7 @@ config = {
                 "ChartPath": "/charts/approved.tgz",
                 "ArtifactValueKey": "image.digest",
                 "ServiceAccount": "deployment-runner",
-                "ImagePullSecrets": ["nexus-pull"],
+                "ImagePullSecrets": ["ant-pull"],
                 "CredentialPolicyRevision": "novaforge-deploy-fixture-v1",
             },
         }

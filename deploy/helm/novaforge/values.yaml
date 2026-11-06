@@ -1,12 +1,12 @@
-# Image coordinates. Nexus is a push/pull split: images are pushed to the
-# :5000 hosted connector but the nodes pull from 443, so the registry written
-# into pod specs is the pull address.
+# Image coordinates. Images are pushed to the org Ant (ant.azrty.com) but kw's
+# nodes pull from its read replica, so the registry written into pod specs is
+# the pull address.
 image:
-  registry: 192.168.10.131
+  registry: ant.kw.watteel.lab/oci-hosted
   repository: novaforge
   tag: dev # overridden per deploy with the commit sha; see hack/deploy.sh
   pullPolicy: IfNotPresent # safe because tags are immutable commit shas
-  pullSecret: nexus-pull
+  pullSecret: ant-pull
   # Prepended to each service's name to form the image name, so a registry
   # whose repositories are flat (OCIR: <namespace>/azrty/novaforge-<svc>) can be
   # addressed without renaming the services. Empty keeps <repository>/<svc>.

@@ -2,20 +2,24 @@
 export KUBE_CONTEXT=kw
 export BUILDKIT_HOST=tcp://192.168.10.130:1234
 export BK_CERTS="${BK_CERTS:-/private/tmp/claude-501/-Users-pascal-Development-NovaForge/5a8c3920-c543-4e9f-ad19-7fc324dd8240/scratchpad/bkcerts}"
-# Nexus is a push/pull split: writes are accepted only on the :5000 hosted
-# connector (443 answers 403), while the k3s nodes trust only 192.168.10.131
-# on 443, which is their configured pull-through mirror. So images are pushed
-# to one address and pulled from another — they are the same registry.
-export REGISTRY_PUSH=192.168.10.131:5000
-export REGISTRY_PULL=192.168.10.131
+# Images are a push/pull split on Kuvryn Ant: they are pushed to the org Ant
+# (ant.azrty.com), and kw pulls them from its read replica of the same oci-hosted
+# feed (the replica refuses pushes). Image names are <registry>/<repo>/<service>.
+# Publishing needs your own `docker login ant.azrty.com -u x --password-stdin`
+# with an Ant personal access token or publish token (hack/ant-auth.py copies it
+# into BuildKit's docker config); never put the token in the repository.
+export REGISTRY_PUSH=ant.azrty.com/oci-hosted
+export REGISTRY_PULL=ant.kw.watteel.lab/oci-hosted
 export REGISTRY_REPO=novaforge
-# kw pulls its service images from the kw Ant, whose oci-hosted feed replicates
-# ant.azrty.com/oci-hosted. hack/build-images.sh publishes there as well as to
-# Nexus, which the e2e suites and hack/deploy.sh still pull from. Set ANT_PUSH
-# empty to publish to Nexus only.
-export ANT_PUSH="${ANT_PUSH-ant.azrty.com/oci-hosted}"
-export ANT_PULL=ant.kw.watteel.lab/oci-hosted
-export REGISTRY_USER=ci
+# The host and the /v2 repository prefix of each registry, for the scripts that
+# call the registry API (https://$REGISTRY_PUSH_HOST/v2/$REGISTRY_PUSH_V2/<svc>/manifests/<tag>).
+export REGISTRY_PUSH_HOST="${REGISTRY_PUSH%%/*}"
+export REGISTRY_PULL_HOST="${REGISTRY_PULL%%/*}"
+export REGISTRY_PUSH_V2="${REGISTRY_PUSH#*/}/$REGISTRY_REPO"
+export REGISTRY_PULL_V2="${REGISTRY_PULL#*/}/$REGISTRY_REPO"
+# Basic-auth user for the registry API checks; REGISTRY_PASSWORD (an Ant token)
+# lives in the untracked hack/env.local.sh.
+export REGISTRY_USER=x
 export DOCKER_CONFIG="${DOCKER_CONFIG:-$BK_CERTS/dockercfg}"
 export NF_NAMESPACE=novaforge
 export NF_DEV_NAMESPACE=novaforge-dev

@@ -8,7 +8,7 @@ it never appears in `values-kw.yaml` and never fights the rendered release.
 ## What exists
 
 - Namespace `novaforge-tunnel`, Deployment `novaforge-cloudflared` (2 replicas,
-  digest-pinned image from the nexus mirror, non-root with `fsGroup 65532` —
+  digest-pinned image from the Ant mirror, non-root with `fsGroup 65532` —
   that group is what makes the `0440` token file readable; without it the
   connector CrashLoops with "permission denied" on its own token).
 - Secret `novaforge-cloudflared-token` holds the tunnel token. It is an

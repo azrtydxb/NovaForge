@@ -88,7 +88,7 @@ NF_REGISTRY_REPO=axmcgpqk0w0z/azrty NF_IMAGE_PREFIX=novaforge- ./hack/build-imag
 Then set `image.tag` in `values-oke.yaml` to the commit tag that was pushed. The tag in the
 file today names a commit that has not been pushed to OCIR. The OCIR repositories must
 exist, or the tenancy must allow them to be created on push. There is no
-`promote-oke.sh` yet. `hack/promote-kw.sh` checks kw's Nexus and nothing else.
+`promote-oke.sh` yet. `hack/promote-kw.sh` checks the org Ant and its kw replica and nothing else.
 
 ## Routing: one host for the app, Git and LFS
 

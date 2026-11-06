@@ -13,7 +13,7 @@ import (
 // promotion, so a promotion does not change the golden and anything else does.
 var kwGoldenSets = []string{
 	"--set", "image.tag=golden",
-	"--set", "services.gates.analysisImage=192.168.10.131/novaforge/gate-analysis@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+	"--set", "services.gates.analysisImage=ant.kw.watteel.lab/oci-hosted/novaforge/gate-analysis@sha256:0000000000000000000000000000000000000000000000000000000000000000",
 }
 
 // The kw release is driven by Kuvryn Sync from values-kw.yaml, so a chart

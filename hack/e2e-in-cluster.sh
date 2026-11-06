@@ -45,7 +45,7 @@ if [ "$(k get namespace "$RUNNER_NS" -o jsonpath='{.status.phase}' 2>/dev/null |
 	k wait --for=delete namespace/"$RUNNER_NS" --timeout=180s >/dev/null
 fi
 k create namespace "$RUNNER_NS" --dry-run=client -o yaml | k apply -f - >/dev/null
-k -n "$NS" get secret nexus-pull -o json |
+k -n "$NS" get secret ant-pull -o json |
 	python3 -c 'import json,sys; s=json.load(sys.stdin); m=s["metadata"]; s["metadata"]={"name":m["name"],"namespace":"'"$RUNNER_NS"'"}; print(json.dumps(s))' |
 	k apply -f - >/dev/null
 k apply -f - >/dev/null <<YAML
@@ -71,7 +71,7 @@ metadata:
 spec:
   serviceAccountName: e2e
   restartPolicy: Never
-  imagePullSecrets: [{name: nexus-pull}]
+  imagePullSecrets: [{name: ant-pull}]
   containers:
     - name: e2e
       image: $IMAGE
