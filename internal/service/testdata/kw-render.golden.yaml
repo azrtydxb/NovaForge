@@ -364,7 +364,7 @@ spec:
         app.kubernetes.io/component: agent-runtime
     spec:
       imagePullSecrets:
-        - name: nexus-pull
+        - name: ant-pull
       serviceAccountName: novaforge-agent-runtime
       containers:
         - name: agent-runtime
@@ -473,7 +473,7 @@ spec:
         app.kubernetes.io/component: ci-runner
     spec:
       imagePullSecrets:
-        - name: nexus-pull
+        - name: ant-pull
       containers:
         - name: ci-runner
           image: "ant.kw.watteel.lab/oci-hosted/novaforge/ci-runner:golden"
@@ -579,7 +579,7 @@ spec:
         app.kubernetes.io/component: edge
     spec:
       imagePullSecrets:
-        - name: nexus-pull
+        - name: ant-pull
       containers:
         - name: edge
           image: "ant.kw.watteel.lab/oci-hosted/novaforge/edge:golden"
@@ -700,7 +700,7 @@ spec:
       securityContext:
         fsGroup: 65532
       imagePullSecrets:
-        - name: nexus-pull
+        - name: ant-pull
       serviceAccountName: novaforge-engineering-graph
       containers:
         - name: engineering-graph
@@ -823,7 +823,7 @@ spec:
       securityContext:
         fsGroup: 65532
       imagePullSecrets:
-        - name: nexus-pull
+        - name: ant-pull
       serviceAccountName: novaforge-gates
       containers:
         - name: gates
@@ -840,7 +840,7 @@ spec:
             - name: HEALTH_PORT
               value: "8090"
             - name: NF_GATE_ANALYSIS_IMAGE
-              value: "192.168.10.131/novaforge/gate-analysis@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+              value: "ant.kw.watteel.lab/oci-hosted/novaforge/gate-analysis@sha256:0000000000000000000000000000000000000000000000000000000000000000"
             - name: GRPC_PORT
               value: "9096"
             - name: GIT_DATA_DIR
@@ -957,7 +957,7 @@ spec:
       securityContext:
         fsGroup: 65532
       imagePullSecrets:
-        - name: nexus-pull
+        - name: ant-pull
       containers:
         - name: git-platform
           image: "ant.kw.watteel.lab/oci-hosted/novaforge/git-platform:golden"
@@ -1105,7 +1105,7 @@ spec:
         app.kubernetes.io/component: identity
     spec:
       imagePullSecrets:
-        - name: nexus-pull
+        - name: ant-pull
       containers:
         - name: identity
           image: "ant.kw.watteel.lab/oci-hosted/novaforge/identity:golden"
@@ -1213,7 +1213,7 @@ spec:
         app.kubernetes.io/component: mcp-server
     spec:
       imagePullSecrets:
-        - name: nexus-pull
+        - name: ant-pull
       containers:
         - name: mcp-server
           image: "ant.kw.watteel.lab/oci-hosted/novaforge/mcp-server:golden"
@@ -1323,7 +1323,7 @@ spec:
         app.kubernetes.io/component: work-reviews
     spec:
       imagePullSecrets:
-        - name: nexus-pull
+        - name: ant-pull
       containers:
         - name: work-reviews
           image: "ant.kw.watteel.lab/oci-hosted/novaforge/work-reviews:golden"

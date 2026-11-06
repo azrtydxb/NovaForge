@@ -1,5 +1,5 @@
-# Desired kw release. Promote only images verified at the Nexus pull endpoint
-# and present on the kw Ant (image.registry).
+# Desired kw release. Promote only images verified on the org Ant
+# and its kw replica (image.registry).
 ai: {}
 gitTLS:
   ipAddresses:

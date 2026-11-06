@@ -32,21 +32,8 @@ for f in ("ca.crt", "tls.crt", "tls.key"):
 ' "$BK_CERTS"
 chmod 0600 "$BK_CERTS/tls.key"
 
-# buildctl pushes to nexus with the credentials in DOCKER_CONFIG, which points
-# inside $BK_CERTS. Without REGISTRY_PASSWORD the push fails with a 401 that
-# reads like a registry outage, so say what is actually missing.
-if [ -z "${REGISTRY_PASSWORD:-}" ]; then
-	echo "bk-certs.sh: REGISTRY_PASSWORD is unset; create hack/env.local.sh (see hack/env.sh)" >&2
-	exit 1
-fi
+# buildctl pushes with the credentials in DOCKER_CONFIG, which points inside
+# $BK_CERTS. hack/build-images.sh fills it from your own docker login to the Ant
+# (hack/ant-auth.py), so only the directory is created here.
 mkdir -p "$DOCKER_CONFIG"
-python3 - "$DOCKER_CONFIG/config.json" <<'PY'
-import base64, json, os, sys
-auth = base64.b64encode(f"{os.environ['REGISTRY_USER']}:{os.environ['REGISTRY_PASSWORD']}".encode()).decode()
-# Pushes go to the :5000 connector and pulls come from :443; both addresses are
-# the same registry and the same account, so both carry the credential.
-hosts = {os.environ["REGISTRY_PUSH"]: auth, os.environ["REGISTRY_PULL"]: auth}
-json.dump({"auths": {h: {"auth": a} for h, a in hosts.items()}}, open(sys.argv[1], "w"))
-PY
-chmod 0600 "$DOCKER_CONFIG/config.json"
-echo "bk-certs.sh: BuildKit certificates and registry credentials ready in $BK_CERTS"
+echo "bk-certs.sh: BuildKit certificates ready in $BK_CERTS"

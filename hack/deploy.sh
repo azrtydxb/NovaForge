@@ -20,9 +20,9 @@ fi
 
 kubectl --context "$KUBE_CONTEXT" create namespace "$NS" --dry-run=client -o yaml | kubectl --context "$KUBE_CONTEXT" apply -f -
 
-# The nodes pull from the 443 address, so the pull secret is keyed on it.
-kubectl --context "$KUBE_CONTEXT" -n "$NS" create secret docker-registry nexus-pull \
-	--docker-server="$REGISTRY_PULL" \
+# The nodes pull from kw's Ant replica, so the pull secret is keyed on its host.
+kubectl --context "$KUBE_CONTEXT" -n "$NS" create secret docker-registry ant-pull \
+	--docker-server="$REGISTRY_PULL_HOST" \
 	--docker-username="$REGISTRY_USER" \
 	--docker-password="${REGISTRY_PASSWORD:?set REGISTRY_PASSWORD}" \
 	--dry-run=client -o yaml | kubectl --context "$KUBE_CONTEXT" apply -f -
@@ -38,7 +38,7 @@ print(' '.join(yaml.safe_load(open('deploy/helm/novaforge/values.yaml'))['servic
 	code=$(curl -sk -o /dev/null -w '%{http_code}' \
 		-u "$REGISTRY_USER:$REGISTRY_PASSWORD" \
 		-H 'Accept: application/vnd.oci.image.manifest.v1+json' \
-		"https://$REGISTRY_PUSH/v2/$REGISTRY_REPO/$svc/manifests/$TAG")
+		"https://$REGISTRY_PUSH_HOST/v2/$REGISTRY_PUSH_V2/$svc/manifests/$TAG")
 	[ "$code" = "200" ] || missing="$missing $svc"
 done
 if [ -n "$missing" ]; then
@@ -61,7 +61,7 @@ fi
 ANALYSIS_DIGEST="$(curl -sk -o /dev/null -D - \
 	-u "$REGISTRY_USER:$REGISTRY_PASSWORD" \
 	-H 'Accept: application/vnd.oci.image.manifest.v1+json' \
-	"https://$REGISTRY_PUSH/v2/$REGISTRY_REPO/gate-analysis/manifests/$TAG" |
+	"https://$REGISTRY_PUSH_HOST/v2/$REGISTRY_PUSH_V2/gate-analysis/manifests/$TAG" |
 	tr -d '\r' | awk -F': ' 'tolower($1)=="docker-content-digest"{print $2}')"
 case "$ANALYSIS_DIGEST" in
 sha256:????????????????????????????????????????????????????????????????) ;;

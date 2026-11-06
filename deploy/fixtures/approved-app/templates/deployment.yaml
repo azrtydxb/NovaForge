@@ -14,7 +14,7 @@ spec:
       labels: {app: {{ .Release.Name }}}
     spec:
       automountServiceAccountToken: false
-      imagePullSecrets: [{name: nexus-pull}]
+      imagePullSecrets: [{name: ant-pull}]
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532

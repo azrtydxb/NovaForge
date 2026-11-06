@@ -276,7 +276,7 @@ with tempfile.TemporaryDirectory() as tmp:
                     "metadata": {"labels": {"app": runner}},
                     "spec": {
                         "serviceAccountName": rel + "-runner",
-                        "imagePullSecrets": [{"name": "nexus-pull"}],
+                        "imagePullSecrets": [{"name": "ant-pull"}],
                         "containers": [
                             {
                                 "name": "runner",
