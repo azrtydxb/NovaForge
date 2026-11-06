@@ -49,8 +49,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - run: go build ./...
@@ -80,14 +80,14 @@ jobs:
           - nf
           - gate-analysis
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
       # The runner pod's rootless BuildKit sidecar does the build, not dind.
       # BuildKit pushes with the docker CLI's credentials, so the OCIR login
       # below must stay in this job.
       - id: builder
-        uses: azrtydxb/.github/actions/setup-builder@d021f2ca9fa3d6682085a7d069b7c8b1dc7b9b80 # main
+        uses: azrtydxb/.github/actions/setup-builder@main
       - name: Log in to OCIR
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        uses: docker/login-action@v4
         with:
           registry: dxb.ocir.io
           username: ${{ secrets.OCIR_USERNAME }}
@@ -103,7 +103,7 @@ jobs:
         run: echo "sha=${GITHUB_SHA::7}" >>"$GITHUB_OUTPUT"
       # OKE nodes are arm64 and so is this runner: build natively.
       - name: Build and push ${{ matrix.svc }}
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        uses: docker/build-push-action@v7
         with:
           builder: ${{ steps.builder.outputs.name }}
           context: .
@@ -129,11 +129,11 @@ jobs:
       contents: read
     steps:
       - id: app
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ vars.SDK_BUMP_APP_ID }}
           private-key: ${{ secrets.SDK_BUMP_PRIVATE_KEY }}
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
