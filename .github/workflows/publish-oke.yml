@@ -1,7 +1,7 @@
 name: Publish to OKE
 
-# Builds NovaForge's images for arm64 on the azrty ARC runners (which run on the
-# OKE cluster itself), pushes them to OCIR, and pins the commit tag in
+# Builds NovaForge's images for arm64 on GitHub's native arm64 runners
+# (ubuntu-24.04-arm, free for public repositories), pushes them to OCIR, and pins the commit tag in
 # deploy/helm/novaforge/values-oke.yaml. Kuvryn Sync deploys main, so a green
 # main is the deployed state on novaforge.azrty.com.
 #
@@ -58,7 +58,7 @@ jobs:
 
   image:
     needs: verify
-    runs-on: arc-azrtydxb
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 90
     strategy:
       fail-fast: true
@@ -81,11 +81,9 @@ jobs:
           - gate-analysis
     steps:
       - uses: actions/checkout@v7
-      # The runner pod's rootless BuildKit sidecar does the build, not dind.
-      # BuildKit pushes with the docker CLI's credentials, so the OCIR login
-      # below must stay in this job.
-      - id: builder
-        uses: azrtydxb/.github/actions/setup-builder@main
+      # Native arm64 runner, so the Dockerfiles run as they are: nothing is
+      # emulated and nothing is cross-compiled.
+      - uses: docker/setup-buildx-action@v4
       - name: Log in to OCIR
         uses: docker/login-action@v4
         with:
@@ -105,7 +103,6 @@ jobs:
       - name: Build and push ${{ matrix.svc }}
         uses: docker/build-push-action@v7
         with:
-          builder: ${{ steps.builder.outputs.name }}
           context: .
           file: ${{ steps.df.outputs.file }}
           target: ${{ steps.df.outputs.target }}
