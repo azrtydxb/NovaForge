@@ -20,6 +20,11 @@ edge) echo "deploy/docker/Dockerfile.edge" ;;
 # repository contents: the merge gates and the maintenance scanners.
 gates | work-reviews) echo "deploy/docker/Dockerfile.analysis" ;;
 engineering-graph) echo "deploy/docker/Dockerfile.cgo" ;;
+# The semantic producer is an image without a cmd/ directory of its own: the
+# engineering-graph binary plus the SCIP indexers, run as its semantic-producer
+# subcommand. Name it explicitly to build it; its digest is pinned in the
+# novaforge-semantic-producer Secret, so it is not rebuilt with every release.
+semantic-producer) echo "deploy/docker/Dockerfile.semantic-producer" ;;
 # Services whose image needs the git binary at runtime.
 git-platform | runner | ci-runner) echo "deploy/docker/Dockerfile.git" ;;
 *) echo "deploy/docker/Dockerfile.static" ;;
