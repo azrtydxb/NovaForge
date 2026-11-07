@@ -37,6 +37,20 @@ The web application is embedded into the edge binary at image build time
 outside that image has an empty `internal/edge/dist/`, and the edge then says so on every
 page rather than serving a blank one.
 
+**Builds and tests do not run on the workstation.** The inner red/green loop runs
+in a pod on kw next to the dev datastores, against the working tree (uncommitted
+changes included), with the Go cache on a cluster volume:
+
+```bash
+./hack/test-in-cluster.sh -- go test ./internal/gitops/ -run TestMergeSet -count=1
+./hack/test-in-cluster.sh -- go vet ./...
+./hack/test-in-cluster.sh --down      # remove the pod; the cache volume stays
+```
+
+CI is the gate: the required `test` check runs the whole suite against real
+PostgreSQL (pgvector), Redis and S3 service containers, and builds the web app.
+The workstation's Go cache once grew to 105 GB and filled its disk.
+
 Tests run against **real** PostgreSQL, Redis and MinIO — no datastore is mocked anywhere.
 `source hack/env.sh` exports `TEST_DATABASE_URL`, `TEST_REDIS_URL` and the S3 variables
 pointing at the cluster's dev datastores. Without them the suites `t.Skip`, which looks

@@ -85,6 +85,12 @@ func scanNode(row pgx.Row) (Node, error) {
 // upsertNode inserts n, or updates the existing row sharing its (org_id,
 // kind, key) unique key, returning the row's real id — which may differ
 // from n.ID when an existing row already owned that key.
+// keepIndexedAt carries a node's first indexed_at through an upsert that
+// otherwise replaces its attributes. History is ordered by it within one
+// second (SortHistory), so re-indexing a commit must not make it look newer
+// than commits first indexed after it. A node without one gets nothing.
+const keepIndexedAt = `jsonb_strip_nulls(jsonb_build_object('indexed_at', graph.graph_nodes.attrs->'indexed_at'))`
+
 func upsertNode(ctx context.Context, q querier, orgID, repoID uuid.UUID, hasRepo bool, n Node) (Node, error) {
 	id := n.ID
 	if id == uuid.Nil {
@@ -101,7 +107,7 @@ func upsertNode(ctx context.Context, q querier, orgID, repoID uuid.UUID, hasRepo
 			INSERT INTO graph.graph_nodes (id, org_id, repo_id, kind, key, attrs)
 			VALUES ($1, $2, $3, $4, $5, $6::jsonb)
 			ON CONFLICT (org_id, kind, key) DO UPDATE
-			SET repo_id = EXCLUDED.repo_id, attrs = EXCLUDED.attrs
+			SET repo_id = EXCLUDED.repo_id, attrs = EXCLUDED.attrs || `+keepIndexedAt+`
 			RETURNING id, org_id, kind, key, attrs
 		`, id, orgID, repoID, n.Kind, n.Key, attrsRaw)
 	} else {
@@ -109,7 +115,7 @@ func upsertNode(ctx context.Context, q querier, orgID, repoID uuid.UUID, hasRepo
 			INSERT INTO graph.graph_nodes (id, org_id, kind, key, attrs)
 			VALUES ($1, $2, $3, $4, $5::jsonb)
 			ON CONFLICT (org_id, kind, key) DO UPDATE
-			SET attrs = EXCLUDED.attrs
+			SET attrs = EXCLUDED.attrs || `+keepIndexedAt+`
 			RETURNING id, org_id, kind, key, attrs
 		`, id, orgID, n.Kind, n.Key, attrsRaw)
 	}

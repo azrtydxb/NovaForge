@@ -150,6 +150,10 @@ func serveUpstream(t *testing.T, repoName string) upstream {
 
 	work := up.Worktree
 	runCmd(t, "", "git", "clone", up.authed, work)
+	// Cloning an empty repository leaves HEAD on the client's
+	// init.defaultBranch, which is main on some machines and master on CI's;
+	// the pushes below name main, so the fixture says so itself.
+	runCmd(t, work, "git", "symbolic-ref", "HEAD", "refs/heads/main")
 	writeFileHTTP(t, filepath.Join(work, "README.md"), "upstream\n")
 	runCmd(t, work, "git", "add", "README.md")
 	runCmd(t, work, "git", "-c", "user.email=a@b.c", "-c", "user.name=Up", "commit", "-m", "upstream first")
