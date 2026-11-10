@@ -122,6 +122,14 @@ spec:
             - name: S3_REGION
               value: {{ . | quote }}
             {{- end }}
+            {{- with $.Values.objectStorage.ciBucket }}
+            - name: S3_CI_BUCKET
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with $.Values.objectStorage.releasesBucket }}
+            - name: S3_RELEASES_BUCKET
+              value: {{ . | quote }}
+            {{- end }}
             {{- if eq $name "gates" }}
             - name: NF_GATE_ANALYSIS_IMAGE
               value: {{ $svc.analysisImage | default "" | quote }}

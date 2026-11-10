@@ -54,6 +54,10 @@ datastores:
 objectStorage:
   useSSL: false
   region: ""
+  # Bucket names, when the platform fixes them to something other than the
+  # defaults novaforge-ci and novaforge-releases. Empty keeps the default.
+  ciBucket: ""
+  releasesBucket: ""
   # Where an object store outside the cluster listens, as [{host, port}] with an
   # IPv4 address or a hostname. git-platform and ci-runner are air-gapped
   # (networkPolicy) and may reach these, and nothing else may.
