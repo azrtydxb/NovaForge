@@ -16,7 +16,7 @@ image:
   repository: axmcgpqk0w0z/azrty
   namePrefix: novaforge-
   # The commit tag CI pushed; the same tag prod pins, promoted to dev first.
-  tag: 96e721c
+  tag: 6fd17e0
   pullSecret: ocir-pull
 
 # oci-bv is block storage: ReadWriteOnce only, and OCI's smallest block volume
