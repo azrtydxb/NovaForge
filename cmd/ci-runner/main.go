@@ -92,7 +92,7 @@ func main() {
 	defer rdb.Close()
 	go (events.Outbox{Pool: pool, Redis: rdb, Schema: "ci"}).Run(ctx)
 
-	blobs, err := blobstore.New(ctx, cfg.BlobOptions(artifactsBucket))
+	blobs, err := blobstore.New(ctx, cfg.BlobOptions(bucketName("S3_CI_BUCKET", artifactsBucket)))
 	if err != nil {
 		log.Fatalf("ci-runner: connect object storage: %v", err)
 	}
@@ -201,6 +201,15 @@ func logInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServer
 // env returns the environment value for k, or def when it is unset.
 func env(k, def string) string {
 	if v := os.Getenv(k); v != "" {
+		return v
+	}
+	return def
+}
+
+// bucketName lets a deployment whose bucket names are fixed by its platform
+// (the dev environment prefixes them) override the default; unset keeps it.
+func bucketName(envVar, def string) string {
+	if v := os.Getenv(envVar); v != "" {
 		return v
 	}
 	return def

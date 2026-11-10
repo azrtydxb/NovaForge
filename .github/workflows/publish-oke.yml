@@ -2,8 +2,11 @@ name: Publish to OKE
 
 # Builds NovaForge's images for arm64 on GitHub's native arm64 runners
 # (ubuntu-24.04-arm, free for public repositories), pushes them to OCIR, and pins the commit tag in
-# deploy/helm/novaforge/values-oke.yaml. Kuvryn Sync deploys main, so a green
-# main is the deployed state on novaforge.azrty.com.
+# the dev and the prod values files. Kuvryn Sync deploys main, so a merged pin
+# is the deployed state: the dev pin (deploy/kuvryn-sync/oke-dev/values.yaml,
+# novaforge.dev.azrty.com) auto-merges, the prod pin
+# (deploy/helm/novaforge/values-oke.yaml, novaforge.azrty.com) is a pull request
+# that waits for a human to approve and merge it.
 #
 # The kw cluster is unaffected: it is promoted by hand (hack/build-images.sh +
 # hack/promote-kw.sh) from images on its own registry.
@@ -14,8 +17,8 @@ name: Publish to OKE
 # a PR opened with GITHUB_TOKEN starts no workflow, so "test" would never report
 # and auto-merge would wait forever.
 #
-# Why that cannot loop: merging a pin changes only values-oke.yaml, and that
-# path is ignored below, so a pin is never re-published as if it were new code.
+# Why that cannot loop: merging a pin changes only the two values files, and
+# those paths are ignored below, so a pin is never re-published as if it were new code.
 # A values-only change (such as oidc.passwordLoginEnabled) is not published
 # either; Sync applies it from main with the images already pinned.
 # A commit that changes values-oke.yaml together with code still publishes.
@@ -25,6 +28,7 @@ on:
     branches: [main]
     paths-ignore:
       - deploy/helm/novaforge/values-oke.yaml
+      - deploy/kuvryn-sync/oke-dev/values.yaml
       # Decision records and prose change no image, but each publish pins a new
       # tag and rolls every OKE pod.
       - ".procoder/**"
@@ -122,6 +126,19 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      # One image, two pins: a failure to open one must not stop the other.
+      fail-fast: false
+      matrix:
+        include:
+          - env: dev
+            values: deploy/kuvryn-sync/oke-dev/values.yaml
+            branch_prefix: deploy/pin-oke-dev-
+            auto_merge: "true"
+          - env: prod
+            values: deploy/helm/novaforge/values-oke.yaml
+            branch_prefix: deploy/pin-oke-
+            auto_merge: "false"
     permissions:
       contents: read
     steps:
@@ -135,14 +152,18 @@ jobs:
           ref: main
           fetch-depth: 0
           token: ${{ steps.app.outputs.token }}
-      - name: Open the pin pull request and enable auto-merge
+      - name: Open the ${{ matrix.env }} pin pull request
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
+          ENV_NAME: ${{ matrix.env }}
+          VALUES: ${{ matrix.values }}
+          BRANCH_PREFIX: ${{ matrix.branch_prefix }}
+          AUTO_MERGE: ${{ matrix.auto_merge }}
         run: |
           set -euo pipefail
           short="${GITHUB_SHA::7}"
-          values=deploy/helm/novaforge/values-oke.yaml
-          branch="deploy/pin-oke-${short}"
+          values="$VALUES"
+          branch="${BRANCH_PREFIX}${short}"
           git config user.name "novaforge ci"
           git config user.email "ci@novaforge.invalid"
           git fetch --quiet origin main
@@ -158,7 +179,7 @@ jobs:
           if [ -n "$current" ] && [ "$current" != "$short" ] \
             && git cat-file -e "$current^{commit}" 2>/dev/null \
             && git merge-base --is-ancestor "$GITHUB_SHA" "$current"; then
-            echo "values-oke already pins $current, which contains $short; not pinning"
+            echo "$values already pins $current, which contains $short; not pinning"
             exit 0
           fi
           sed -i -E "/^image:/,/^[^ ]/ s|^(  tag: ).*|\1${short}|" "$values"
@@ -171,17 +192,26 @@ jobs:
             exit 0
           fi
           git add "$values"
-          git commit --quiet -m "deploy: pin ${short} on oke" \
+          git commit --quiet -m "deploy: pin ${short} on oke ${ENV_NAME}" \
             -m "Written by CI after the images were pushed to ${OCIR}* (built from ${GITHUB_SHA})."
           git push --quiet --force origin "HEAD:${branch}"
           if [ -z "$(gh pr list --head "$branch" --state open --json number -q '.[].number')" ]; then
-            gh pr create --head "$branch" --base main --title "deploy: pin ${short} on oke" \
-              --body "Pins the images CI pushed for ${GITHUB_SHA}. Kuvryn Sync deploys main to novaforge.azrty.com once this merges."
+            if [ "$AUTO_MERGE" = "true" ]; then
+              body="Pins the images CI pushed for ${GITHUB_SHA} on dev. Kuvryn Sync deploys main to novaforge.dev.azrty.com once this merges."
+            else
+              body="Pins the images CI pushed for ${GITHUB_SHA} on prod, the same tag already pinned on dev. Not auto-merged: approve and merge it to deploy to novaforge.azrty.com."
+            fi
+            gh pr create --head "$branch" --base main --title "deploy: pin ${short} on oke ${ENV_NAME}" --body "$body"
           fi
-          gh pr merge "$branch" --auto --squash --delete-branch
-          # An older pin still open is superseded by this one.
-          for old in $(gh pr list --state open --json headRefName -q '.[].headRefName' | sed -n 's|^deploy/pin-oke-||p'); do
-            if [ "$old" != "$short" ]; then
-              gh pr close "deploy/pin-oke-$old" --delete-branch --comment "Superseded by ${branch}."
+          # Only the dev pin merges itself; the prod pin waits for a human.
+          if [ "$AUTO_MERGE" = "true" ]; then
+            gh pr merge "$branch" --auto --squash --delete-branch
+          fi
+          # An older pin of the same environment still open is superseded by this one.
+          # Prod branches are deploy/pin-oke-<7 hex>; dev ones deploy/pin-oke-dev-<7 hex>.
+          for old_branch in $(gh pr list --state open --json headRefName -q '.[].headRefName' \
+            | grep -E "^${BRANCH_PREFIX}[0-9a-f]{7}$" || true); do
+            if [ "$old_branch" != "$branch" ]; then
+              gh pr close "$old_branch" --delete-branch --comment "Superseded by ${branch}."
             fi
           done

@@ -183,7 +183,7 @@ func main() {
 	if cfg.S3Endpoint == "" {
 		log.Println("git-platform: S3_ENDPOINT is unset; release assets cannot be stored or served")
 	} else {
-		blobs, err := blobstore.New(ctx, cfg.BlobOptions(releasesBucket))
+		blobs, err := blobstore.New(ctx, cfg.BlobOptions(bucketName("S3_RELEASES_BUCKET", releasesBucket)))
 		if err != nil {
 			log.Fatalf("git-platform: connect object storage: %v", err)
 		}
@@ -446,4 +446,13 @@ func newCapFunc(grants *capability.Store, locks, archived, collaborator, mirrore
 		}
 		return byGrant(ctx, s, orgID, repo, refs)
 	}
+}
+
+// bucketName lets a deployment whose bucket names are fixed by its platform
+// (the dev environment prefixes them) override the default; unset keeps it.
+func bucketName(envVar, def string) string {
+	if v := os.Getenv(envVar); v != "" {
+		return v
+	}
+	return def
 }
