@@ -40,7 +40,7 @@ if [ "$(k -n "$RUNNER_NS" get pod "$POD" -o jsonpath='{.status.phase}' 2>/dev/nu
 	[ "$(k -n "$RUNNER_NS" get pod "$POD" -o jsonpath='{.spec.containers[0].image}' 2>/dev/null || true)" != "$IMAGE" ]; then
 	k -n "$RUNNER_NS" delete pod "$POD" --ignore-not-found --wait=true >/dev/null 2>&1 || true
 	k create namespace "$RUNNER_NS" --dry-run=client -o yaml | k apply -f - >/dev/null
-	k -n "$NS" get secret nexus-pull -o json |
+	k -n "$NS" get secret ant-pull -o json |
 		python3 -c 'import json,sys; s=json.load(sys.stdin); m=s["metadata"]; s["metadata"]={"name":m["name"],"namespace":"'"$RUNNER_NS"'"}; print(json.dumps(s))' |
 		k apply -f - >/dev/null
 	k apply -f - >/dev/null <<YAML
@@ -59,7 +59,7 @@ spec:
   restartPolicy: Never
   # The suites never call the Kubernetes API; no token is mounted.
   automountServiceAccountToken: false
-  imagePullSecrets: [{name: nexus-pull}]
+  imagePullSecrets: [{name: ant-pull}]
   containers:
     - name: runner
       image: $IMAGE
