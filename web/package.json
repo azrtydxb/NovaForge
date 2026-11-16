@@ -10,7 +10,7 @@
     "test": "node tests/run.mjs"
   },
   "dependencies": {
-    "@tanstack/react-query": "^5.106.1",
+    "@tanstack/react-query": "^5.107.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.18.5"
@@ -18,12 +18,12 @@
   "devDependencies": {
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
-    "@typescript-eslint/eslint-plugin": "^8.72.1",
-    "@typescript-eslint/parser": "^8.72.1",
-    "@vitejs/plugin-react": "^6.2.1",
+    "@typescript-eslint/eslint-plugin": "^8.72.2",
+    "@typescript-eslint/parser": "^8.72.2",
+    "@vitejs/plugin-react": "^6.3.0",
     "eslint": "^10.14.0",
     "typescript": "~6.0.3",
-    "typescript-eslint": "^8.72.1",
-    "vite": "^8.3.6"
+    "typescript-eslint": "^8.72.2",
+    "vite": "^8.3.8"
   }
 }
