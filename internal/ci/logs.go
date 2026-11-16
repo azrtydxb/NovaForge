@@ -24,6 +24,10 @@ const logStreamMaxLen = 100_000
 // directly, so the block is kept short to notice cancellation promptly.
 const tailPollInterval = 2 * time.Second
 
+// tailRetryDelay is how long Tail waits before reading again after Redis
+// returned an error, so an outage is ridden out instead of spun on.
+const tailRetryDelay = 250 * time.Millisecond
+
 // LogSink streams a job's live log lines through Redis while it runs, and
 // seals the finished log into object storage.
 type LogSink struct {
@@ -65,8 +69,11 @@ func (s *LogSink) Append(ctx context.Context, jobID uuid.UUID, line string) erro
 
 // Tail streams jobID's log lines starting after id from (use "0" to read
 // from the beginning) on the returned channel, which is closed when ctx is
-// cancelled. It is a live tail: entries appended after Tail starts are
-// delivered as they arrive, via a short-blocking XREAD loop.
+// cancelled, and only then. It is a live tail: entries appended after Tail
+// starts are delivered as they arrive, via a short-blocking XREAD loop. A
+// Redis error (a timeout, a dropped connection) does not end the tail: it
+// resumes after the last line delivered, so a closed channel always means the
+// caller cancelled, never that lines were silently lost.
 func (s *LogSink) Tail(ctx context.Context, jobID uuid.UUID, from string) (<-chan string, error) {
 	out := make(chan string)
 	go func() {
@@ -88,7 +95,11 @@ func (s *LogSink) Tail(ctx context.Context, jobID uuid.UUID, from string) (<-cha
 				if errors.Is(err, redis.Nil) || ctx.Err() != nil {
 					continue
 				}
-				return
+				select {
+				case <-time.After(tailRetryDelay):
+				case <-ctx.Done():
+				}
+				continue
 			}
 			for _, stream := range res {
 				for _, msg := range stream.Messages {
