@@ -3,7 +3,7 @@ module github.com/novaforge/novaforge
 go 1.26.0
 
 require (
-	github.com/azrtydxb/go-ai-sdk v0.9.1
+	github.com/azrtydxb/go-ai-sdk v0.10.0
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/go-jose/go-jose/v4 v4.1.9
