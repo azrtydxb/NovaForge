@@ -2,9 +2,10 @@ name: Publish to OKE
 
 # Builds NovaForge's images for arm64 on GitHub's native arm64 runners
 # (ubuntu-24.04-arm, free for public repositories), pushes them to OCIR, and pins the commit tag in
-# the dev and the prod values files. Kuvryn Sync deploys main, so a merged pin
-# is the deployed state: the dev pin (deploy/kuvryn-sync/oke-dev/values.yaml,
-# novaforge.dev.azrty.com) auto-merges, the prod pin
+# the dev and the prod values files. Kuvryn Sync deploys prod from main and dev
+# from the deploy/dev branch, which the deploy-ref job below moves once the dev pin
+# is on main (Kuvryn-Orbit#370), so a merged pin is the deployed state: the dev pin
+# (deploy/kuvryn-sync/oke-dev/values.yaml, novaforge.dev.azrty.com) auto-merges, the prod pin
 # (deploy/helm/novaforge/values-oke.yaml, novaforge.azrty.com) is a pull request
 # that waits for a human to approve and merge it.
 #
@@ -20,7 +21,8 @@ name: Publish to OKE
 # Why that cannot loop: merging a pin changes only the two values files, and
 # those paths are ignored below, so a pin is never re-published as if it were new code.
 # A values-only change (such as oidc.passwordLoginEnabled) is not published
-# either; Sync applies it from main with the images already pinned.
+# either; prod Sync applies it from main with the images already pinned, and
+# deploy-ref.yml moves deploy/dev across it for dev.
 # A commit that changes values-oke.yaml together with code still publishes.
 
 on:
@@ -64,6 +66,9 @@ jobs:
     needs: verify
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 90
+    # The tag every leg pushes and the pin job writes: the short commit sha.
+    outputs:
+      tag: ${{ steps.short.outputs.sha }}
     strategy:
       fail-fast: true
       matrix:
@@ -215,3 +220,19 @@ jobs:
               gh pr close "$old_branch" --delete-branch --comment "Superseded by ${branch}."
             fi
           done
+
+  # Dev (azrty-dev) syncs from the deploy/dev branch, not main (Kuvryn-Orbit#370). This
+  # moves deploy/dev along main once the dev pin above has merged, never past a commit
+  # whose images are not pinned yet, so oke-dev values and the images that read them sync
+  # together. It waits for both pin legs (a failed prod pin must not hold dev back); a
+  # failed build skips it, and a dev pin that never merges leaves deploy/dev where it is.
+  deploy-ref:
+    needs: [image, pin]
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.image.result == 'success' }}
+    permissions:
+      contents: write
+    uses: azrtydxb/.github/.github/workflows/reusable-deploy-ref.yml@main
+    with:
+      ref: deploy/dev
+      pins: ${{ needs.image.outputs.tag }}
+      deploy-only-paths: deploy/kuvryn-sync deploy/helm/novaforge .procoder :(glob)**/*.md
