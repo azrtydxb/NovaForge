@@ -1,0 +1,26 @@
+# Pushes that change only the values files, decision records or prose publish nothing
+# (publish-oke.yml paths-ignore), so its deploy-ref job never runs for them. This moves
+# deploy/dev (what dev Kuvryn Sync tracks) across such commits, and only while no commit
+# between deploy/dev and main still waits for its images (Kuvryn-Orbit#370).
+name: deploy-ref
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - deploy/helm/novaforge/values-oke.yaml
+      - deploy/kuvryn-sync/oke-dev/values.yaml
+      - ".procoder/**"
+      - "**/*.md"
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-ref:
+    permissions:
+      contents: write
+    uses: azrtydxb/.github/.github/workflows/reusable-deploy-ref.yml@main
+    with:
+      ref: deploy/dev
+      deploy-only-paths: deploy/kuvryn-sync deploy/helm/novaforge .procoder :(glob)**/*.md
